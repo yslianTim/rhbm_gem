@@ -285,7 +285,7 @@ BcdComponentBatch OrchestrateBcdComponents(
                 "; bracket-solves="+std::to_string(work.bracket_solves)+
                 "; qr-factorizations="+std::to_string(work.damping_qr_factorizations)+
                 "; active-set-iterations="+std::to_string(work.active_set_iterations)+
-                "; releases="+std::to_string(work.releases)+
+                "; releases="+std::to_string(work.working_set_releases)+
                 "; active-bound-occurrences="+std::to_string(work.active_bound_occurrences)+
                 (certified_without_steps ? "; no-step-endpoint-certified" : "")});
         if(fit.search.memory_estimate.status!=MemoryStatus::Pass)

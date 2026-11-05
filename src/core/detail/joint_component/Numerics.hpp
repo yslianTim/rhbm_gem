@@ -43,7 +43,7 @@ struct EvaluationContext
 };
 struct BoundedLmWork
 {
-    std::size_t subproblem_solves{},failed_subproblems{},active_set_iterations{},releases{},active_bound_occurrences{};
+    std::size_t subproblem_solves{},failed_subproblems{},active_set_iterations{},working_set_releases{},active_bound_occurrences{};
     std::size_t damping_solves{},bracket_solves{},damping_qr_factorizations{};
     double maximum_subproblem_kkt{unavailable};
     void Merge(const BoundedLmWork &);
@@ -166,7 +166,8 @@ struct LmTrial
     bool bounded_subproblem{};
     std::string subproblem_status;
     double subproblem_kkt_inf_norm{unavailable};
-    std::size_t active_set_iterations{},active_set_releases{};
+    std::size_t active_set_iterations{},working_set_releases{};
+    // Attained working bounds from the valid LM step; stationary-null bounds may be absent.
     std::vector<std::size_t> active_bound_indices;
     std::vector<double> active_bound_multipliers;
 };

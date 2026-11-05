@@ -11,11 +11,12 @@ struct ActiveSetStep
     bool valid{};
     std::string status;
     Eigen::VectorXd step,gradient,multipliers;
-    std::vector<bool> active;
+    // Solver working bounds, not an exhaustive mask of geometrically attained bounds.
+    std::vector<bool> working_bound_mask;
     double damping{},scaled_step_norm{},kkt_inf_norm{};
-    std::size_t iterations{},releases{};
+    std::size_t iterations{},working_set_releases{};
     std::size_t damping_solves{},bracket_solves{},bisection_solves{},damping_qr_factorizations{},
-        damping_active_set_iterations{},damping_releases{};
+        damping_active_set_iterations{},damping_working_set_releases{};
 };
 
 // Selects the LM damping so the same constrained subproblem also satisfies
@@ -30,12 +31,12 @@ struct BoundedLmDampingTrace
     int phase{};
     std::string status;
     Eigen::VectorXd step,gradient,multipliers;
-    std::vector<bool> active;
-    std::vector<std::vector<bool>> active_set_sequence;
+    std::vector<bool> working_bound_mask;
+    std::vector<std::vector<bool>> working_set_sequence;
     std::vector<Eigen::VectorXd> step_sequence,gradient_sequence;
     std::vector<double> kkt_tolerance_sequence;
-    std::vector<Eigen::Index> free_ranks;
-    std::size_t iterations{},releases{};
+    std::vector<Eigen::Index> free_subproblem_ranks;
+    std::size_t iterations{},working_set_releases{};
     double scaled_step_norm{},kkt_inf_norm{};
     bool valid{},within_trust_region{},search_accepted{};
 };

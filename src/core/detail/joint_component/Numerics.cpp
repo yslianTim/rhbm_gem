@@ -80,7 +80,7 @@ void BoundedLmWork::Merge(const BoundedLmWork & other)
     subproblem_solves+=other.subproblem_solves;
     failed_subproblems+=other.failed_subproblems;
     active_set_iterations+=other.active_set_iterations;
-    releases+=other.releases;
+    working_set_releases+=other.working_set_releases;
     active_bound_occurrences+=other.active_bound_occurrences;
     damping_solves+=other.damping_solves;
     bracket_solves+=other.bracket_solves;

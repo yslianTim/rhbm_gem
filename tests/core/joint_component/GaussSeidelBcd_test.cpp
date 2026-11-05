@@ -863,7 +863,7 @@ TEST(JointBcdSearchTest, ProductionBoundedSearchReleasesTheStartingUpperFace)
     ASSERT_EQ(result.blocks.size(),1u)<<result.reason;
     ASSERT_EQ(result.state.eta.size(),3);
     EXPECT_LE(result.state.eta.maxCoeff(),eta_max+1e-14);
-    EXPECT_GT(bounded_lm.releases,0u);
+    EXPECT_GT(bounded_lm.working_set_releases,0u);
     ASSERT_TRUE(result.final_sweep);
     EXPECT_TRUE(result.final_sweep->width_bound_applied);
     auto context=data.context; context.eta_upper_bound=eta_max;

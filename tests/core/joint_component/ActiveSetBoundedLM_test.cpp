@@ -20,8 +20,8 @@ TEST(ActiveSetBoundedLMTest, InteriorSolutionSatisfiesTrustRegionDampedKkt)
     const auto result=joint::SolveBoundedTrustRegionStep(j,r,d,upper,radius,0.5);
     ASSERT_TRUE(result.valid)<<result.status;
     EXPECT_NEAR(result.damping,0.5,1e-12);
-    EXPECT_FALSE(result.active[0]);
-    EXPECT_FALSE(result.active[1]);
+    EXPECT_FALSE(result.working_bound_mask[0]);
+    EXPECT_FALSE(result.working_bound_mask[1]);
     EXPECT_NEAR(result.step(0),1.0/(1.0+0.5),1e-13);
     EXPECT_NEAR(result.step(1),-2.0/(1.0+0.5*4.0),1e-13);
     EXPECT_LE(result.kkt_inf_norm,1e-10);
@@ -35,7 +35,7 @@ TEST(ActiveSetBoundedLMTest, UpperBoundarySolutionHasCorrectMultiplierSign)
     Eigen::VectorXd upper(1); upper<<0.5;
     const auto result=joint::SolveBoundedTrustRegionStep(j,r,d,upper,10.0,0.0);
     ASSERT_TRUE(result.valid)<<result.status;
-    EXPECT_TRUE(result.active[0]);
+    EXPECT_TRUE(result.working_bound_mask[0]);
     EXPECT_DOUBLE_EQ(result.step(0),0.5);
     EXPECT_NEAR(result.gradient(0),-1.5,1e-14);
     EXPECT_NEAR(result.multipliers(0),1.5,1e-14);
@@ -51,23 +51,23 @@ TEST(ActiveSetBoundedLMTest, ReleasesAnUpperActiveSetCoordinateWhenKktRequiresAn
     Eigen::VectorXd upper(1); upper<<0.0;
     const auto result=joint::SolveBoundedTrustRegionStep(j,r,d,upper,10.0,0.0);
     ASSERT_TRUE(result.valid)<<result.status;
-    EXPECT_FALSE(result.active[0]);
+    EXPECT_FALSE(result.working_bound_mask[0]);
     EXPECT_NEAR(result.step(0),-1.0,1e-14);
-    EXPECT_EQ(result.releases,1u);
+    EXPECT_EQ(result.working_set_releases,1u);
     const auto & trace=joint::BoundedLmWorkForTesting().damping_trace;
     ASSERT_EQ(trace.size(),1u);
-    ASSERT_EQ(trace[0].active_set_sequence.size(),2u);
+    ASSERT_EQ(trace[0].working_set_sequence.size(),2u);
     ASSERT_EQ(trace[0].step_sequence.size(),2u);
     ASSERT_EQ(trace[0].gradient_sequence.size(),2u);
     ASSERT_EQ(trace[0].kkt_tolerance_sequence.size(),2u);
-    ASSERT_EQ(trace[0].free_ranks.size(),1u);
-    EXPECT_TRUE(trace[0].active_set_sequence[0][0]);
-    EXPECT_FALSE(trace[0].active_set_sequence[1][0]);
+    ASSERT_EQ(trace[0].free_subproblem_ranks.size(),1u);
+    EXPECT_TRUE(trace[0].working_set_sequence[0][0]);
+    EXPECT_FALSE(trace[0].working_set_sequence[1][0]);
     EXPECT_EQ(Bits(trace[0].step_sequence[0](0)),Bits(0.0));
     EXPECT_EQ(Bits(trace[0].step_sequence[1](0)),Bits(0.0));
     EXPECT_EQ(Bits(trace[0].gradient_sequence[0](0)),Bits(1.0));
     EXPECT_EQ(Bits(trace[0].gradient_sequence[1](0)),Bits(0.0));
-    EXPECT_EQ(trace[0].free_ranks[0],1);
+    EXPECT_EQ(trace[0].free_subproblem_ranks[0],1);
     EXPECT_TRUE(trace[0].within_trust_region);
     EXPECT_TRUE(trace[0].search_accepted);
 }
@@ -78,9 +78,9 @@ TEST(ActiveSetBoundedLMTest, EnforcesSeveralUpperBoundsAndChecksTheirMultipliers
     Eigen::Vector3d r(-2.0,-3.0,1.0),d=Eigen::Vector3d::Ones(),upper(0.25,0.5,0.0);
     const auto result=joint::SolveBoundedTrustRegionStep(j,r,d,upper,10.0,0.0);
     ASSERT_TRUE(result.valid)<<result.status;
-    EXPECT_TRUE(result.active[0]);
-    EXPECT_TRUE(result.active[1]);
-    EXPECT_FALSE(result.active[2]);
+    EXPECT_TRUE(result.working_bound_mask[0]);
+    EXPECT_TRUE(result.working_bound_mask[1]);
+    EXPECT_FALSE(result.working_bound_mask[2]);
     EXPECT_NEAR(result.step(0),0.25,1e-14);
     EXPECT_NEAR(result.step(1),0.5,1e-14);
     EXPECT_NEAR(result.step(2),-1.0,1e-14);
@@ -95,7 +95,7 @@ TEST(ActiveSetBoundedLMTest, PreservesANearBoundaryStepAndVerifiesItsMultiplier)
     r<<-1.0; d<<1.0; upper<<1e-15;
     const auto result=joint::SolveBoundedTrustRegionStep(j,r,d,upper,1e-14,0.25);
     ASSERT_TRUE(result.valid)<<result.status;
-    EXPECT_TRUE(result.active[0]);
+    EXPECT_TRUE(result.working_bound_mask[0]);
     EXPECT_DOUBLE_EQ(result.step(0),upper(0));
     EXPECT_LT(result.gradient(0),0.0);
     EXPECT_GT(result.multipliers(0),0.0);
@@ -168,16 +168,16 @@ TEST(ActiveSetBoundedLMTest, BoundaryEarlyStopPreservesTheDampedStepAndKkt)
     ASSERT_EQ(result.damping_solves,trace.size());
     EXPECT_EQ(result.bracket_solves,2u);
     EXPECT_LT(result.bisection_solves,54u);
-    std::size_t active_iterations{},qr_factorizations{},releases{};
+    std::size_t active_iterations{},qr_factorizations{},working_set_releases{};
     for(const auto & attempt:trace)
     {
-        active_iterations+=attempt.active_set_sequence.size();
-        qr_factorizations+=attempt.free_ranks.size();
-        releases+=attempt.releases;
+        active_iterations+=attempt.working_set_sequence.size();
+        qr_factorizations+=attempt.free_subproblem_ranks.size();
+        working_set_releases+=attempt.working_set_releases;
     }
     EXPECT_EQ(result.damping_active_set_iterations,active_iterations);
     EXPECT_EQ(result.damping_qr_factorizations,qr_factorizations);
-    EXPECT_EQ(result.damping_releases,releases);
+    EXPECT_EQ(result.damping_working_set_releases,working_set_releases);
     EXPECT_EQ(Bits(trace[0].damping),Bits(0.0));
     EXPECT_EQ(Bits(trace[0].step(0)),Bits(1.0));
     EXPECT_EQ(Bits(trace[0].step(1)),Bits(-2.0));
@@ -186,17 +186,17 @@ TEST(ActiveSetBoundedLMTest, BoundaryEarlyStopPreservesTheDampedStepAndKkt)
     EXPECT_TRUE(trace[1].valid);
     EXPECT_FALSE(trace[0].within_trust_region);
     EXPECT_FALSE(trace[0].search_accepted);
-    ASSERT_EQ(trace[0].active_set_sequence.size(),1u);
-    EXPECT_FALSE(trace[0].active_set_sequence[0][0]);
-    EXPECT_FALSE(trace[0].active_set_sequence[0][1]);
+    ASSERT_EQ(trace[0].working_set_sequence.size(),1u);
+    EXPECT_FALSE(trace[0].working_set_sequence[0][0]);
+    EXPECT_FALSE(trace[0].working_set_sequence[0][1]);
     ASSERT_EQ(trace[0].step_sequence.size(),1u);
     EXPECT_EQ(Bits(trace[0].step_sequence[0](0)),Bits(0.0));
     EXPECT_EQ(Bits(trace[0].step_sequence[0](1)),Bits(0.0));
     ASSERT_EQ(trace[0].gradient_sequence.size(),1u);
     EXPECT_EQ(Bits(trace[0].gradient_sequence[0](0)),Bits(0.0));
     EXPECT_EQ(Bits(trace[0].gradient_sequence[0](1)),Bits(0.0));
-    ASSERT_EQ(trace[0].free_ranks.size(),1u);
-    EXPECT_EQ(trace[0].free_ranks[0],2);
+    ASSERT_EQ(trace[0].free_subproblem_ranks.size(),1u);
+    EXPECT_EQ(trace[0].free_subproblem_ranks[0],2);
     ASSERT_EQ(trace[0].kkt_tolerance_sequence.size(),1u);
     EXPECT_EQ(Bits(trace[0].kkt_tolerance_sequence[0]),
         Bits(2e-11*std::sqrt(2.0)*(std::sqrt(2.0)*std::sqrt(5.0))));
@@ -222,8 +222,8 @@ TEST(ActiveSetBoundedLMTest, CallWorkspaceResetsAcrossFullBoundaryFailureAndReco
     const auto boundary=joint::SolveBoundedTrustRegionStep(j,boundary_residual,d,
         boundary_upper,10.0,0.0);
     ASSERT_TRUE(boundary.valid)<<boundary.status;
-    EXPECT_TRUE(boundary.active[0]);
-    EXPECT_TRUE(boundary.active[1]);
+    EXPECT_TRUE(boundary.working_bound_mask[0]);
+    EXPECT_TRUE(boundary.working_bound_mask[1]);
     EXPECT_EQ(Bits(boundary.step(0)),Bits(.25));
     EXPECT_EQ(Bits(boundary.step(1)),Bits(.5));
 
@@ -242,7 +242,7 @@ TEST(ActiveSetBoundedLMTest, CallWorkspaceResetsAcrossFullBoundaryFailureAndReco
     EXPECT_EQ(Bits(recovered.gradient(1)),Bits(full.gradient(1)));
     EXPECT_EQ(Bits(recovered.multipliers(0)),Bits(full.multipliers(0)));
     EXPECT_EQ(Bits(recovered.multipliers(1)),Bits(full.multipliers(1)));
-    EXPECT_EQ(recovered.active,full.active);
+    EXPECT_EQ(recovered.working_bound_mask,full.working_bound_mask);
 }
 
 TEST(ActiveSetBoundedLMTest, InvalidDimensionsKeepTheSubproblemFailureReason)
@@ -311,7 +311,7 @@ TEST(ActiveSetBoundedLMTest, SmallJacobianWithNonstationaryGradientIsNotFrozen)
     const auto result=joint::SolveBoundedTrustRegionStep(j,r,d,upper,1.0,0.0);
     ASSERT_TRUE(result.valid)<<result.status;
     EXPECT_DOUBLE_EQ(result.step(1),upper(1));
-    EXPECT_TRUE(result.active[1]);
+    EXPECT_TRUE(result.working_bound_mask[1]);
     EXPECT_LT(result.gradient(1),-1e-9);
     EXPECT_GT(result.multipliers(1),0.0);
 }

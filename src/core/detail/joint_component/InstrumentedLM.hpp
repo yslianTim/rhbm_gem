@@ -196,7 +196,7 @@ LevenbergMarquardtSpace::Status InstrumentedLM<FunctorType, Scalar>::minimizeOne
       else {
         FVectorType gradient=bounded_jacobian.transpose()*bounded_response;
         for(Index i=0;i<n;++i)
-          if(bounded.active[static_cast<std::size_t>(i)] && wa1(i)>=Scalar(0))
+          if(bounded.working_bound_mask[static_cast<std::size_t>(i)] && wa1(i)>=Scalar(0))
             gradient(i)=(std::max)(Scalar(0),gradient(i));
         stationary=gradient.template lpNorm<Infinity>()<=parameters.gtol;
       }

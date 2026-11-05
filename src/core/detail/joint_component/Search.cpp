@@ -56,9 +56,9 @@ struct Profile
         bounded_lm_work.damping_qr_factorizations+=step.damping_qr_factorizations;
         if(!step.valid) {++bounded_lm_work.failed_subproblems; return;}
         bounded_lm_work.active_set_iterations+=step.iterations;
-        bounded_lm_work.releases+=step.releases;
-        for(std::size_t i=0;i<step.active.size();++i)
-            if(step.active[i]) ++bounded_lm_work.active_bound_occurrences;
+        bounded_lm_work.working_set_releases+=step.working_set_releases;
+        for(std::size_t i=0;i<step.working_bound_mask.size();++i)
+            if(step.working_bound_mask[i]) ++bounded_lm_work.active_bound_occurrences;
         if(std::isfinite(step.kkt_inf_norm))
             bounded_lm_work.maximum_subproblem_kkt=std::isfinite(bounded_lm_work.maximum_subproblem_kkt) ?
                 std::max(bounded_lm_work.maximum_subproblem_kkt,step.kkt_inf_norm) : step.kkt_inf_norm;
@@ -111,10 +111,10 @@ struct Profile
             lm.subproblem_status=last_bounded_subproblem->status;
             lm.subproblem_kkt_inf_norm=last_bounded_subproblem->kkt_inf_norm;
             lm.active_set_iterations=last_bounded_subproblem->iterations;
-            lm.active_set_releases=last_bounded_subproblem->releases;
-            for(std::size_t i=0;i<last_bounded_subproblem->active.size();++i)
+            lm.working_set_releases=last_bounded_subproblem->working_set_releases;
+            for(std::size_t i=0;i<last_bounded_subproblem->working_bound_mask.size();++i)
             {
-                if(!last_bounded_subproblem->active[i]) continue;
+                if(!last_bounded_subproblem->working_bound_mask[i]) continue;
                 lm.active_bound_indices.push_back(i);
                 lm.active_bound_multipliers.push_back(last_bounded_subproblem->multipliers(
                     static_cast<Eigen::Index>(i)));
@@ -198,7 +198,7 @@ struct Profile
 SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & initial_b,
     const EvaluationContext & context)
 {
-    const auto active_eta_max=context.eta_upper_bound;
+    const auto eta_upper_bound=context.eta_upper_bound;
     Profile profile{domain,y,context,{}, {},0,0,{}, {},{},{},{}};
     Vector eta=initial_b.array().log(); int accepted{};
     auto search=[&](auto & lm) {
@@ -220,12 +220,12 @@ SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & init
         return status;
     };
     Eigen::LevenbergMarquardtSpace::Status status;
-    if(!active_eta_max || !std::isfinite(*active_eta_max))
+    if(!eta_upper_bound || !std::isfinite(*eta_upper_bound))
     {
         profile.failure="invalid-width-upper-bound";
         status=Eigen::LevenbergMarquardtSpace::UserAsked;
     }
-    else if((eta.array()>*active_eta_max).any())
+    else if((eta.array()>*eta_upper_bound).any())
     {
         profile.failure="bounded-initial-width-infeasible";
         status=Eigen::LevenbergMarquardtSpace::UserAsked;
