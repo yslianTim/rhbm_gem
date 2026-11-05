@@ -90,7 +90,7 @@ struct Profile
         return cached.valid && cached.certificate.available && cached.certificate.feasible &&
             cached.certificate.kkt_passed && cached.certificate.width_bound_applied &&
             cached.certificate.width_bound_feasible &&
-            cached.certificate.width_bound_projected_kkt<=PracticalJointConvergenceCriteria.global_width_gradient;
+            cached.certificate.width_bound_projected_kkt<=PracticalJointConvergenceCriteria.global_eta_gradient;
     }
     bool retry() const {return evaluations<context.profile_budget && failure!="unrepresentable-step";}
     bool Trial(const Vector & accepted,const Vector & step,const Vector & diagonal,

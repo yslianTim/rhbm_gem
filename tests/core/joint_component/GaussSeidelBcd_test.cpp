@@ -45,7 +45,7 @@ void CheckSingleBlock(const std::string & topology,int atoms)
     EXPECT_EQ(result.fit.components.front().endpoint_certification_sweep,result.sweeps.size());
     EXPECT_EQ(result.fit.components.front().endpoint_certification_sweep,result.confirmed_stationarity_sweep);
     EXPECT_LE(result.sweeps.back().global_ac_kkt,policy.convergence_criteria.global_ac_kkt);
-    EXPECT_LE(result.sweeps.back().global_width_gradient_inf_norm,policy.convergence_criteria.global_width_gradient);
+    EXPECT_LE(result.sweeps.back().global_eta_gradient_inf_norm,policy.convergence_criteria.global_eta_gradient);
     EXPECT_LE(result.sweeps.back().cache_replay_error,2e-12);
     EXPECT_TRUE(result.assessment.primary.valid);
     EXPECT_TRUE(result.assessment.independent_replay.passed);
@@ -304,8 +304,8 @@ TEST(JointBcdSearchTest, IncrementalObjectiveQualifiesAtActiveWidthUpperBound)
     EXPECT_TRUE(e1.final_sweep->width_bound_applied);
     EXPECT_GT(e1.final_sweep->active_width_bound_count,0u);
     EXPECT_LE(e1.final_sweep->maximum_width_bound_violation,0.0);
-    EXPECT_LE(e1.final_sweep->projected_width_gradient_inf_norm,
-        n::PracticalJointConvergenceCriteria.global_width_gradient);
+    EXPECT_LE(e1.final_sweep->projected_eta_gradient_inf_norm,
+        n::PracticalJointConvergenceCriteria.global_eta_gradient);
     EXPECT_EQ(e1.work.objective_reconciliations,e1.sweep_count);
     EXPECT_GT(e1.work.incremental_objective_evaluations,0u);
     EXPECT_TRUE(std::all_of(e1.sweeps.begin(),e1.sweeps.end(),
@@ -422,8 +422,8 @@ TEST(JointBcdSearchTest, SignedCancellationQualifiesWhenOnlyKktGateIsSatisfied)
     EXPECT_EQ(result.fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
     ASSERT_TRUE(result.final_sweep);
     EXPECT_LE(result.final_sweep->global_ac_kkt,n::PracticalJointConvergenceCriteria.global_ac_kkt);
-    EXPECT_LE(result.final_sweep->stationarity_width_gradient_inf_norm,
-        n::PracticalJointConvergenceCriteria.global_width_gradient);
+    EXPECT_LE(result.final_sweep->stationarity_eta_gradient_inf_norm,
+        n::PracticalJointConvergenceCriteria.global_eta_gradient);
     EXPECT_EQ(result.confirmed_stationarity_sweep,result.sweep_count);
 }
 
@@ -535,8 +535,8 @@ TEST(JointBcdSearchTest, HardCaseIncrementalObjectiveAndReplayQualification)
             ASSERT_TRUE(result.final_sweep)<<fixture.name;
             EXPECT_LE(result.final_sweep->global_ac_kkt,
                 n::PracticalJointConvergenceCriteria.global_ac_kkt)<<fixture.name;
-            EXPECT_LE(result.final_sweep->stationarity_width_gradient_inf_norm,
-                n::PracticalJointConvergenceCriteria.global_width_gradient)<<fixture.name;
+            EXPECT_LE(result.final_sweep->stationarity_eta_gradient_inf_norm,
+                n::PracticalJointConvergenceCriteria.global_eta_gradient)<<fixture.name;
             EXPECT_EQ(result.fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed)<<fixture.name;
         }
         else
@@ -874,12 +874,12 @@ TEST(JointBcdSearchTest, ProductionBoundedSearchReleasesTheStartingUpperFace)
     ASSERT_TRUE(replay.available && replay.valid)<<replay.reason;
     EXPECT_TRUE(replay.width_bound_applied);
     EXPECT_TRUE(replay.width_bound_feasible);
-    EXPECT_DOUBLE_EQ(result.final_sweep->global_width_gradient_inf_norm,
+    EXPECT_DOUBLE_EQ(result.final_sweep->global_eta_gradient_inf_norm,
         primary.gradient.lpNorm<Eigen::Infinity>());
-    EXPECT_DOUBLE_EQ(result.final_sweep->projected_width_gradient_inf_norm,
+    EXPECT_DOUBLE_EQ(result.final_sweep->projected_eta_gradient_inf_norm,
         replay.independent_width_projected_kkt);
-    EXPECT_DOUBLE_EQ(result.final_sweep->stationarity_width_gradient_inf_norm,
-        result.final_sweep->projected_width_gradient_inf_norm);
+    EXPECT_DOUBLE_EQ(result.final_sweep->stationarity_eta_gradient_inf_norm,
+        result.final_sweep->projected_eta_gradient_inf_norm);
     EXPECT_EQ(result.final_sweep->active_width_bound_count,replay.active_width_bounds);
 }
 
@@ -915,9 +915,9 @@ TEST(JointBcdSearchTest, AssembledBoundedWidthStationarityUsesIndependentProject
         active_bound|=eta>=eta_max-1e-12;
     }
     EXPECT_TRUE(active_bound);
-    EXPECT_GT(raw_inf,n::PracticalJointConvergenceCriteria.global_width_gradient);
+    EXPECT_GT(raw_inf,n::PracticalJointConvergenceCriteria.global_eta_gradient);
     EXPECT_NEAR(*stationarity->value,projected_inf,1e-12);
-    EXPECT_LE(*stationarity->value,n::PracticalJointConvergenceCriteria.global_width_gradient);
+    EXPECT_LE(*stationarity->value,n::PracticalJointConvergenceCriteria.global_eta_gradient);
     EXPECT_EQ(stationarity->status,rhbm_gem::JointCheckStatus::Passed);
 }
 
@@ -1133,8 +1133,8 @@ TEST(JointBcdSearchTest, SearchResultAndIndependentCertificationStaySeparate)
     EXPECT_TRUE((quiet.state.beta.array()==diagnostic.state.beta.array()).all());
     EXPECT_DOUBLE_EQ(quiet.state.objective,diagnostic.state.objective);
     EXPECT_DOUBLE_EQ(quiet.final_sweep->global_ac_kkt,diagnostic.sweeps.back().global_ac_kkt);
-    EXPECT_DOUBLE_EQ(quiet.final_sweep->global_width_gradient_inf_norm,
-        diagnostic.sweeps.back().global_width_gradient_inf_norm);
+    EXPECT_DOUBLE_EQ(quiet.final_sweep->global_eta_gradient_inf_norm,
+        diagnostic.sweeps.back().global_eta_gradient_inf_norm);
     EXPECT_TRUE(resource_limited.resource_limited());
     EXPECT_EQ(resource_limited.verification_memory_estimate.status,n::MemoryStatus::Reject);
     EXPECT_EQ(resource_limited.resource_limit_reason(),
@@ -1243,13 +1243,13 @@ TEST(JointBcdSearchTest, KktStationarityCriteriaHaveInclusiveFiniteBoundaries)
     EXPECT_EQ(n::ClassifyBcdStationarity(
         std::nextafter(practical.global_ac_kkt,std::numeric_limits<double>::infinity()),0,true,practical),
         n::BcdStationarityState::NotStationary);
-    EXPECT_EQ(n::ClassifyBcdStationarity(0,practical.global_width_gradient,true,practical),
+    EXPECT_EQ(n::ClassifyBcdStationarity(0,practical.global_eta_gradient,true,practical),
         n::BcdStationarityState::ConfirmedStationary);
     EXPECT_EQ(n::ClassifyBcdStationarity(0,
-        std::nextafter(practical.global_width_gradient,0.0),true,practical),
+        std::nextafter(practical.global_eta_gradient,0.0),true,practical),
         n::BcdStationarityState::ConfirmedStationary);
     EXPECT_EQ(n::ClassifyBcdStationarity(0,
-        std::nextafter(practical.global_width_gradient,std::numeric_limits<double>::infinity()),true,practical),
+        std::nextafter(practical.global_eta_gradient,std::numeric_limits<double>::infinity()),true,practical),
         n::BcdStationarityState::NotStationary);
 
     const double nan=std::numeric_limits<double>::quiet_NaN();
@@ -1267,7 +1267,7 @@ TEST(JointBcdSearchTest, KktStationarityCriteriaHaveInclusiveFiniteBoundaries)
     EXPECT_FALSE(n::IsValidJointConvergenceCriteria(invalid));
     EXPECT_EQ(n::ClassifyBcdStationarity(0,0,true,invalid),
         n::BcdStationarityState::NotStationary);
-    invalid=practical; invalid.global_width_gradient=infinity;
+    invalid=practical; invalid.global_eta_gradient=infinity;
     EXPECT_FALSE(n::IsValidJointConvergenceCriteria(invalid));
 }
 TEST(JointBcdSearchTest, PracticalCriteriaDoNotQualifySweepsWithFailedBlocks)
@@ -1291,10 +1291,10 @@ TEST(JointBcdSearchTest, ProductionSearchDefaultsToValidatedPracticalCriteria)
 {
     const auto production=n::PracticalJointConvergenceCriteria;
     EXPECT_DOUBLE_EQ(production.global_ac_kkt,n::PracticalJointConvergenceCriteria.global_ac_kkt);
-    EXPECT_DOUBLE_EQ(production.global_width_gradient,n::PracticalJointConvergenceCriteria.global_width_gradient);
+    EXPECT_DOUBLE_EQ(production.global_eta_gradient,n::PracticalJointConvergenceCriteria.global_eta_gradient);
     const auto local=n::BcdSearchPolicy{}.convergence_criteria;
     EXPECT_DOUBLE_EQ(local.global_ac_kkt,n::StrictJointConvergenceCriteria.global_ac_kkt);
-    EXPECT_DOUBLE_EQ(local.global_width_gradient,n::StrictJointConvergenceCriteria.global_width_gradient);
+    EXPECT_DOUBLE_EQ(local.global_eta_gradient,n::StrictJointConvergenceCriteria.global_eta_gradient);
 }
 
 TEST(JointBcdSearchTest, KktOnlyConvergenceConfirmsAcrossCompleteSweepsAndCertifies)
@@ -1317,8 +1317,8 @@ TEST(JointBcdSearchTest, KktOnlyConvergenceConfirmsAcrossCompleteSweepsAndCertif
     EXPECT_GE(result.first_order_stationarity_sweep,2u);
     EXPECT_GE(result.confirmed_stationarity_sweep,2u);
     EXPECT_LE(result.final_sweep->global_ac_kkt,policy.convergence_criteria.global_ac_kkt);
-    EXPECT_LE(result.final_sweep->stationarity_width_gradient_inf_norm,
-        policy.convergence_criteria.global_width_gradient);
+    EXPECT_LE(result.final_sweep->stationarity_eta_gradient_inf_norm,
+        policy.convergence_criteria.global_eta_gradient);
     EXPECT_EQ(result.final_sweep->block_solves-result.final_sweep->accepted_blocks-
         result.final_sweep->unchanged_blocks,0u);
     ASSERT_TRUE(result.certification);

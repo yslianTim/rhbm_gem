@@ -119,7 +119,7 @@ JointCandidateDiagnostic CandidateDiagnostic(const BcdSearchResult & search, std
     JointCandidateDiagnostic out;
     out.convergence_criteria_id="practical-v2";
     out.global_ac_kkt_threshold=PracticalJointConvergenceCriteria.global_ac_kkt;
-    out.global_width_gradient_threshold=PracticalJointConvergenceCriteria.global_width_gradient;
+    out.global_eta_gradient_threshold=PracticalJointConvergenceCriteria.global_eta_gradient;
     const auto & state=search.state;
     bool finite_widths=state.eta.size()==static_cast<Eigen::Index>(atoms) && state.eta.allFinite();
     if(finite_widths) for(Eigen::Index atom=0;atom<state.eta.size();++atom)
@@ -140,8 +140,8 @@ JointCandidateDiagnostic CandidateDiagnostic(const BcdSearchResult & search, std
     {
         const auto & sweep=*search.final_sweep;
         if(std::isfinite(sweep.global_ac_kkt)) out.candidate_ac_kkt=sweep.global_ac_kkt;
-        if(std::isfinite(sweep.global_width_gradient_inf_norm))
-            out.candidate_width_gradient_inf_norm=sweep.global_width_gradient_inf_norm;
+        if(std::isfinite(sweep.global_eta_gradient_inf_norm))
+            out.candidate_eta_gradient_inf_norm=sweep.global_eta_gradient_inf_norm;
         if(std::isfinite(sweep.global_a_feasibility)) out.candidate_feasible=sweep.global_a_feasibility==0;
     }
     if(search.certification)

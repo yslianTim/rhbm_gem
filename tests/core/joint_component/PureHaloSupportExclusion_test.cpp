@@ -789,7 +789,7 @@ TEST(PureHaloSupportExclusionTest, PersistsVersionedDualDomainAndMedianProvenanc
     snapshot.evidence.push_back({"qualified-first-stage-donor-coverage",JointCheckStatus::Passed,
         JointEvidenceScope::AssembledGlobal,1.0,.95,"target-only-qualified-first-stage-widths"});
     const auto encoded=joint_result_io::Encode(snapshot);
-    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),23);
+    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),24);
     const auto encoded_root=boost::json::parse(encoded).as_object();
     const auto & median_json=encoded_root.at("halo_median_reconstruction").as_object();
     EXPECT_EQ(median_json.at("neighbor_count").as_int64(),4);

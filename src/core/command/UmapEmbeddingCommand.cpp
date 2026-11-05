@@ -451,7 +451,7 @@ bool WriteEmbedding(
         {"peeling_mode",prepared.peeling_mode},{"map_normalization",prepared.map_normalization=="unavailable" ? boost::json::value{}:boost::json::parse(prepared.map_normalization)},
         {"column_semantics",boost::json::object{
             {"amplitude 2nd",joint_estimator ? "Joint Gaussian amplitude A" : "Gaussian amplitude"},
-            {"width 2nd",joint_estimator ? "Joint shared Gaussian/charge-kernel width tau (stored as B)" : "Gaussian width"},
+            {"width 2nd",joint_estimator ? "Joint shared Gaussian/charge-kernel width tau" : "Gaussian width"},
             {"offset 2nd",joint_estimator ? "Joint charge-kernel coefficient C (not a Gaussian constant offset)" : "Gaussian constant offset"}}},
         {"standardization","sample-z-score; constant columns zero"},{"included_rows",prepared.feature_rows.size()},{"excluded_rows",prepared.excluded_rows},{"exclusions",exclusions}});
     metadata.close();

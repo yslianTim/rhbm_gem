@@ -129,8 +129,8 @@ struct IndependentReplayEvidence
         assembled_prediction_difference{unavailable},assembled_prediction_error_ratio{unavailable},
         assembled_objective_difference{unavailable},
         primary_objective{unavailable},primary_residual_norm{unavailable},independent_residual_norm{unavailable},
-        primary_ac_kkt{unavailable},independent_ac_kkt{unavailable},primary_width_gradient{unavailable},
-        independent_width_gradient{unavailable};
+        primary_ac_kkt{unavailable},independent_ac_kkt{unavailable},primary_eta_gradient{unavailable},
+        independent_eta_gradient{unavailable};
     std::string maximum_gradient_difference_atom_id,gradient_enclosure_failure_atom_id;
     double gradient_enclosure_failure_primary{unavailable},gradient_enclosure_failure_independent{unavailable},
         gradient_enclosure_failure_difference{unavailable},gradient_enclosure_failure_bound{unavailable},
@@ -216,7 +216,7 @@ std::vector<JointCheck> AssessmentEvidence(const Assessment &,JointEvidenceScope
 JointCheckStatus MergeConvergenceStatus(JointCheckStatus,JointCheckStatus);
 JointCheckStatus ConvergenceStatus(const std::vector<JointCheck> &,JointEvidenceScope,bool assembled=false);
 // Verifies an accepted endpoint using only the streaming objective, KKT,
-// width-gradient, and independent replay evidence. It never assesses global rank.
+// eta-gradient, and independent replay evidence. It never assesses global rank.
 Assessment VerifyJointEndpoint(const Domain &,VectorRef,const Evaluation &,
     const IndependentReplayEvidence &,const EvaluationContext &,
     const JointConvergenceCriteria & = StrictJointConvergenceCriteria);

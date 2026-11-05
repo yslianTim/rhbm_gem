@@ -84,7 +84,14 @@ def main() -> int:
                     assert atom["post_joint_local"] is None
             assert connection.execute("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('model_atom_local_potential','model_atom_posterior','model_atom_group_potential')").fetchone()[0] == 0
         assert saved == json.loads(payload)
-        assert saved["schema_version"] == 23
+        assert saved["schema_version"] == 24
+        assert saved["metadata"]["units"]["contract"] == "joint-kernel-map-units-v2"
+        assert saved["metadata"]["units"]["tau"] == "angstrom"
+        assert "B" not in saved["metadata"]["units"]
+        assert "tau" in saved["initialization"] and "b" not in saved["initialization"]
+        for component in saved["components"]:
+            if component["state"] is not None:
+                assert set(component["state"]) == {"ac", "tau", "log_tau", "eta_gradient", "objective"}
         assert saved["parameterization_contract"] == "target-only-pure-halo-support-exclusion-v1"
         assert saved["metadata"]["solver"]["search_method"] == "gauss-seidel-bcd"
         default_solver = saved["metadata"]["solver"]
@@ -159,7 +166,7 @@ def main() -> int:
             diagnostic = component["candidate_diagnostic"]
             assert diagnostic["convergence_criteria_id"] == "practical-v2"
             assert diagnostic["global_ac_kkt_threshold"] == 1e-7
-            assert diagnostic["global_width_gradient_threshold"] == 1e-9
+            assert diagnostic["global_eta_gradient_threshold"] == 1e-9
             assert "confirmed_log_width_change_threshold" not in diagnostic
             assert "candidate_log_width_change_inf_norm" not in diagnostic
             point = component["target_evidence"]
@@ -167,7 +174,7 @@ def main() -> int:
             assert all(key not in point for key in ("ranks", "atoms", "column_scales"))
             assert point["point_atoms"]
         assert "prediction" not in saved and "observations" not in saved
-        assert (root / "joint_atoms_example.csv").read_text().startswith("AtomID,ComponentID,A,B,C,")
+        assert (root / "joint_atoms_example.csv").read_text().startswith("AtomID,ComponentID,A,tau,C,")
         run("result_dump", "--printer", "gaus", "-d", database, "-k", "example", "-o", root)
         help_text = subprocess.run([executable, "--help"], capture_output=True, text=True, check=True).stdout
         if "umap_embedding" in help_text:

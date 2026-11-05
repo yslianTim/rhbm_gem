@@ -30,9 +30,9 @@ struct JointBcdProgress
     std::size_t profile_evaluations{},unchanged_blocks{},failed_blocks{},recovery_attempts{},recovery_successes{};
     double objective{std::numeric_limits<double>::quiet_NaN()};
     double global_ac_kkt{std::numeric_limits<double>::quiet_NaN()};
-    double width_gradient_inf_norm{std::numeric_limits<double>::quiet_NaN()};
+    double eta_gradient_inf_norm{std::numeric_limits<double>::quiet_NaN()};
     double projected_width_kkt{std::numeric_limits<double>::quiet_NaN()};
-    double maximum_target_width{std::numeric_limits<double>::quiet_NaN()};
+    double maximum_target_tau{std::numeric_limits<double>::quiet_NaN()};
 };
 
 struct JointProgressEvent
@@ -49,7 +49,7 @@ struct JointProgressEvent
     int accepted_updates{};
     int update_budget{};
     std::optional<double> accepted_objective;
-    std::optional<double> accepted_gradient_inf_norm;
+    std::optional<double> accepted_gradient_inf_norm; // Gradient in eta = log(tau).
     double elapsed_seconds{};
     std::string stop_reason;
     bool trusted_state{};

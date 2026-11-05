@@ -85,14 +85,14 @@ std::string BuildSecondStageSpotSummary(const ModelObject & model_object)
     const auto joint = CollectStageProvenance(population).estimator == "joint-components";
     summary << "Second-stage estimate summary by Spot:\nEstimator: "
         << CollectStageProvenance(population).estimator
-        << (joint ? "\nPopulation: selected targets excluding special atoms; A/B/C: Joint second-stage estimates; C(J): Joint charge coefficient; s.d.: between-atom dispersion" :
+        << (joint ? "\nPopulation: selected targets excluding special atoms; A/tau/C: Joint second-stage estimates; C(J): Joint charge coefficient; s.d.: between-atom dispersion" :
             "\nPopulation: selected targets excluding special atoms; s.d.: between-atom dispersion")
         << "\n| " << std::left << std::setw(kSpotColumnWidth) << "Spot"
         << " | " << std::setw(kValidColumnWidth) << "valid"
         << " | " << std::setw(kNotConvergedColumnWidth) << "not-converged"
         << " | " << std::setw(kUnavailableColumnWidth) << "unavailable"
         << " | " << std::setw(kParameterColumnWidth) << "A mean / s.d."
-        << " | " << std::setw(kParameterColumnWidth) << "B mean / s.d."
+        << " | " << std::setw(kParameterColumnWidth) << (joint ? "tau mean / s.d." : "B mean / s.d.")
         << " | " << std::setw(kParameterColumnWidth) << (joint ? "C(J) mean / s.d." : "C mean / s.d.")
         << " |";
     for (const auto & [spot, samples] : spots)

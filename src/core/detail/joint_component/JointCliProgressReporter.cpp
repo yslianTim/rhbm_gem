@@ -76,8 +76,8 @@ void JointCliProgressReporter::ShowProgress(const JointProgressEvent & event, bo
             << " | sweep=" << progress.sweep << '/' << progress.maximum_sweeps
             << " | obj=" << Scientific(progress.objective)
             << " | ac-kkt=" << Scientific(progress.global_ac_kkt)
-            << " | width-grad=" << Scientific(progress.width_gradient_inf_norm)
-            << " | width-kkt=" << Scientific(progress.projected_width_kkt)
+            << " | eta-grad=" << Scientific(progress.eta_gradient_inf_norm)
+            << " | eta-projected-kkt=" << Scientific(progress.projected_width_kkt)
             << " | accepted=" << progress.accepted_blocks
             << " | failed=" << progress.failed_blocks;
         detail << " | sweep=" << progress.sweep << '/' << progress.maximum_sweeps
@@ -88,7 +88,7 @@ void JointCliProgressReporter::ShowProgress(const JointProgressEvent & event, bo
             << " | local_accepted_updates=" << progress.local_accepted_updates
             << " | profile_evaluations=" << progress.profile_evaluations
             << " | recovery=" << progress.recovery_attempts << '/' << progress.recovery_successes
-            << " | max_B=" << Scientific(progress.maximum_target_width);
+            << " | max_tau=" << Scientific(progress.maximum_target_tau);
     }
     else
     {
@@ -97,7 +97,7 @@ void JointCliProgressReporter::ShowProgress(const JointProgressEvent & event, bo
             << " | accepted=" << event.accepted_updates << '/' << event.update_budget;
         if (event.accepted_objective) output << " | obj=" << Scientific(*event.accepted_objective);
         if (event.accepted_gradient_inf_norm)
-            output << " | gradient-inf=" << Scientific(*event.accepted_gradient_inf_norm);
+            output << " | eta-grad=" << Scientific(*event.accepted_gradient_inf_norm);
         detail << " | eval=" << event.profile_evaluations << '/' << event.profile_budget
             << " | accepted=" << event.accepted_updates << '/' << event.update_budget;
         if (event.accepted_objective) detail << " | obj=" << Scientific(*event.accepted_objective);

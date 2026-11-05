@@ -520,13 +520,13 @@ rg::JointAnalysisResult CurrentJointExample(bool with_halo=true)
 rg::JointAnalysisResult SavedJointExample() { return CurrentJointExample(); }
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV23RoundTripsUnqualifiedResult)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV24RoundTripsUnqualifiedResult)
 {
     namespace io=rg::joint_result_io;
     const auto result=CurrentJointExample();
     const auto encoded=io::Encode(result);
     const auto object=boost::json::parse(encoded).as_object();
-    EXPECT_EQ(boost::json::value_to<int>(object.at("schema_version")),23);
+    EXPECT_EQ(boost::json::value_to<int>(object.at("schema_version")),24);
     for(const auto key:{"fixed_halos","layout","legacy_global_rank_evidence","ranks"})
         EXPECT_FALSE(object.contains(key));
     EXPECT_FALSE(object.at("costs").as_object().contains("search_reference_seconds"));
@@ -550,12 +550,12 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV23RoundTripsUnqualifiedResult
     EXPECT_EQ(decoded.metadata.solver->bcd_local_search,rg::BcdBoundedLocalSearchName);
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV23RejectsOtherVersionsAndRetiredFields)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV24RejectsOtherVersionsAndRetiredFields)
 {
     namespace io=rg::joint_result_io;
     const auto encoded=io::Encode(CurrentJointExample());
     const auto current=boost::json::parse(encoded).as_object();
-    for(const int version:{3,18,19,20,21,22,99})
+    for(const int version:{2,3,18,19,20,21,22,23,25,99})
     {
         auto unsupported=current;
         unsupported["schema_version"]=version;
@@ -578,7 +578,68 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV23RejectsOtherVersionsAndReti
     EXPECT_THROW(io::Decode(boost::json::serialize(retired)),std::invalid_argument);
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV23RoundTripsQualifiedTargetWithoutHalo)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV24UsesTauAndRejectsLegacyOrMixedParameterKeys)
+{
+    namespace io=rg::joint_result_io;
+    auto result=CurrentJointExample();
+    rg::JointInitializationAtom atom;
+    atom.id="1"; atom.target=true; atom.original_tau=.5; atom.used_tau=.5;
+    result.initialization.atoms.push_back(atom);
+    const auto current=boost::json::parse(io::Encode(result)).as_object();
+    const auto & units=current.at("metadata").as_object().at("units").as_object();
+    EXPECT_EQ(units.at("contract"),"joint-kernel-map-units-v2");
+    EXPECT_EQ(units.at("tau"),"angstrom");
+    EXPECT_FALSE(units.contains("B"));
+    const auto decoded=io::Decode(boost::json::serialize(current));
+    EXPECT_EQ(decoded.initialization.tau,result.initialization.tau);
+    EXPECT_EQ(decoded.initialization.atoms.front().original_tau,atom.original_tau);
+    EXPECT_EQ(decoded.initialization.atoms.front().used_tau,atom.used_tau);
+    EXPECT_EQ(decoded.assembled_state->tau,result.assembled_state->tau);
+    EXPECT_EQ(decoded.assembled_state->log_tau,result.assembled_state->log_tau);
+    EXPECT_EQ(decoded.assembled_state->eta_gradient,result.assembled_state->eta_gradient);
+
+    for(const auto & keys:{std::array{"tau","b"},std::array{"log_tau","log_b"},
+        std::array{"eta_gradient","width_gradient"}})
+        for(bool assembled:{false,true}) for(bool replace:{false,true})
+        {
+            SCOPED_TRACE(keys[1]);
+            auto invalid=current;
+            auto & state=assembled ? invalid.at("assembled_state").as_object() :
+                invalid.at("components").as_array().front().as_object().at("state").as_object();
+            EXPECT_TRUE(state.contains(keys[0]));
+            EXPECT_FALSE(state.contains(keys[1]));
+            state[keys[1]]=state.at(keys[0]);
+            if(replace) state.erase(keys[0]);
+            EXPECT_THROW(io::Decode(boost::json::serialize(invalid)),std::invalid_argument);
+        }
+    for(const auto & keys:{std::array{"tau","b"},std::array{"original_tau","original_b"},
+        std::array{"used_tau","used_b"}})
+        for(bool replace:{false,true})
+        {
+            SCOPED_TRACE(keys[1]);
+            auto invalid=current;
+            auto & initialization=invalid.at("initialization").as_object();
+            auto & object=std::string_view(keys[0])=="tau" ? initialization :
+                initialization.at("atoms").as_array().front().as_object();
+            EXPECT_FALSE(object.contains(keys[1]));
+            object[keys[1]]=object.at(keys[0]);
+            if(replace) object.erase(keys[0]);
+            EXPECT_THROW(io::Decode(boost::json::serialize(invalid)),std::invalid_argument);
+        }
+    for(bool replace:{false,true})
+    {
+        auto invalid=current;
+        auto & invalid_units=invalid.at("metadata").as_object().at("units").as_object();
+        invalid_units["B"]="angstrom";
+        if(replace) invalid_units.erase("tau");
+        EXPECT_THROW(io::Decode(boost::json::serialize(invalid)),std::invalid_argument);
+    }
+    auto old_units=current;
+    old_units.at("metadata").as_object().at("units").as_object()["contract"]="joint-kernel-map-units-v1";
+    EXPECT_THROW(io::Decode(boost::json::serialize(old_units)),std::invalid_argument);
+}
+
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV24RoundTripsQualifiedTargetWithoutHalo)
 {
     namespace io=rg::joint_result_io;
     auto result=CurrentJointExample(false);
@@ -604,7 +665,7 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV23RoundTripsQualifiedTargetWi
     EXPECT_FALSE(decoded.halo_median_reconstruction);
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV23RoundTripsGeometryLocalHaloMedian)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV24RoundTripsGeometryLocalHaloMedian)
 {
     namespace io=rg::joint_result_io;
     auto result=CurrentJointExample();
@@ -649,7 +710,7 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV23RoundTripsGeometryLocalHalo
         std::vector<std::string>{"1"});
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV23PreservesUnavailableAndNullableDiagnostics)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV24PreservesUnavailableAndNullableDiagnostics)
 {
     namespace io=rg::joint_result_io;
     auto unavailable=CurrentJointExample();
@@ -690,7 +751,7 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV23PreservesUnavailableAndNull
     EXPECT_FALSE(round_trip.components.front().candidate_diagnostic->candidate_objective);
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV23RejectsRetiredDiagnosticsAndOldTargetContract)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV24RejectsRetiredDiagnosticsAndOldTargetContract)
 {
     namespace io=rg::joint_result_io;
     const auto current=boost::json::parse(io::Encode(CurrentJointExample())).as_object();
@@ -1013,9 +1074,9 @@ TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutE
     candidate.candidate_available=true;
     candidate.candidate_eta={-.7}; candidate.candidate_ac={999.125,-.3};
     candidate.candidate_objective=.0123; candidate.candidate_ac_kkt=.1;
-    candidate.candidate_width_gradient_inf_norm=.2; candidate.candidate_feasible=true;
+    candidate.candidate_eta_gradient_inf_norm=.2; candidate.candidate_feasible=true;
     candidate.convergence_criteria_id="practical-v2";
-    candidate.global_ac_kkt_threshold=1e-7; candidate.global_width_gradient_threshold=1e-9;
+    candidate.global_ac_kkt_threshold=1e-7; candidate.global_eta_gradient_threshold=1e-9;
     candidate.certification_status=rg::JointCheckStatus::Unavailable;
     candidate.endpoint_verification_status=rg::JointCheckStatus::Passed;
     candidate.numerical_qualification_status=rg::JointCheckStatus::Unavailable;
@@ -1024,12 +1085,24 @@ TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutE
     component.candidate_diagnostic=candidate;
 
     const auto json=boost::json::parse(io::Encode(record));
-    EXPECT_EQ(json.at("schema_version").as_int64(),23);
+    EXPECT_EQ(json.at("schema_version").as_int64(),24);
     const auto & saved_candidate=json.at("components").as_array()[0].at("candidate_diagnostic");
     EXPECT_EQ(saved_candidate.at("candidate_status").as_string(),"uncertified");
     EXPECT_EQ(saved_candidate.at("convergence_criteria_id").as_string(),"practical-v2");
     EXPECT_DOUBLE_EQ(saved_candidate.at("global_ac_kkt_threshold").as_double(),1e-7);
-    EXPECT_DOUBLE_EQ(saved_candidate.at("global_width_gradient_threshold").as_double(),1e-9);
+    EXPECT_DOUBLE_EQ(saved_candidate.at("global_eta_gradient_threshold").as_double(),1e-9);
+    for(const auto & keys:{std::array{"candidate_eta_gradient_inf_norm","candidate_width_gradient_inf_norm"},
+        std::array{"global_eta_gradient_threshold","global_width_gradient_threshold"}})
+        for(bool replace:{false,true})
+        {
+            auto invalid=json.as_object();
+            auto & diagnostic=invalid.at("components").as_array()[0]
+                .as_object().at("candidate_diagnostic").as_object();
+            EXPECT_FALSE(diagnostic.contains(keys[1]));
+            diagnostic[keys[1]]=diagnostic.at(keys[0]);
+            if(replace) diagnostic.erase(keys[0]);
+            EXPECT_THROW(io::Decode(boost::json::serialize(invalid)),std::invalid_argument);
+        }
     EXPECT_FALSE(saved_candidate.as_object().contains("confirmed_log_width_change_threshold"));
     EXPECT_FALSE(saved_candidate.as_object().contains("candidate_log_width_change_inf_norm"));
     const auto decoded=io::Decode(boost::json::serialize(json));
@@ -1058,13 +1131,13 @@ TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutE
         .as_object().at("candidate_diagnostic").as_object();
     strict_candidate["convergence_criteria_id"]="strict-v2";
     strict_candidate["global_ac_kkt_threshold"]=1e-10;
-    strict_candidate["global_width_gradient_threshold"]=1e-12;
+    strict_candidate["global_eta_gradient_threshold"]=1e-12;
     const auto strict_decoded=io::Decode(boost::json::serialize(strict_json));
     const auto strict_resaved=boost::json::parse(io::Encode(strict_decoded));
     const auto & strict_saved=strict_resaved.at("components").as_array()[0].at("candidate_diagnostic");
     EXPECT_EQ(strict_saved.at("convergence_criteria_id").as_string(),"strict-v2");
     EXPECT_DOUBLE_EQ(strict_saved.at("global_ac_kkt_threshold").as_double(),1e-10);
-    EXPECT_DOUBLE_EQ(strict_saved.at("global_width_gradient_threshold").as_double(),1e-12);
+    EXPECT_DOUBLE_EQ(strict_saved.at("global_eta_gradient_threshold").as_double(),1e-12);
 
     auto removed_metric=json.as_object();
     removed_metric.at("components").as_array()[0].as_object().at("candidate_diagnostic").as_object()
@@ -1087,7 +1160,7 @@ TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutE
     missing_current_criteria.at("components").as_array()[0].as_object()
         .at("candidate_diagnostic").as_object().erase("convergence_criteria_id");
     EXPECT_ANY_THROW(io::Decode(boost::json::serialize(missing_current_criteria)));
-    for(const auto key:{"global_ac_kkt_threshold","global_width_gradient_threshold"})
+    for(const auto key:{"global_ac_kkt_threshold","global_eta_gradient_threshold"})
     {
         auto missing_threshold=json.as_object();
         missing_threshold.at("components").as_array()[0].as_object().at("candidate_diagnostic").as_object()
@@ -1112,7 +1185,7 @@ TEST(DataObjectPersistenceTest, CandidateDiagnosticsRejectInvalidOrUntrustedChec
     component.candidate_diagnostic->candidate_objective=.1;
     component.candidate_diagnostic->convergence_criteria_id="practical-v2";
     component.candidate_diagnostic->global_ac_kkt_threshold=1e-7;
-    component.candidate_diagnostic->global_width_gradient_threshold=1e-9;
+    component.candidate_diagnostic->global_eta_gradient_threshold=1e-9;
     EXPECT_THROW(io::Encode(record),std::invalid_argument);
 
     component.state.reset(); record.assembled_state.reset(); record.objective.reset();
@@ -1128,7 +1201,7 @@ TEST(DataObjectPersistenceTest, CandidateDiagnosticsRejectInvalidOrUntrustedChec
 
     component.candidate_diagnostic->convergence_criteria_id="practical-v2";
     component.candidate_diagnostic->global_ac_kkt_threshold=std::numeric_limits<double>::infinity();
-    component.candidate_diagnostic->global_width_gradient_threshold=1e-9;
+    component.candidate_diagnostic->global_eta_gradient_threshold=1e-9;
     EXPECT_THROW(io::Encode(record),std::invalid_argument);
 }
 
@@ -1159,7 +1232,7 @@ TEST(DataObjectPersistenceTest, JointMetadataRejectsInvalidValuesAndOldDocuments
     malformed=boost::json::parse(io::Encode(record)).as_object();
     malformed.at("metadata").as_object().erase("map_sha256");
     EXPECT_THROW(io::Decode(boost::json::serialize(malformed)),std::exception);
-    auto old=boost::json::parse(io::Encode(record)).as_object(); old["schema_version"]=2;
+    auto old=boost::json::parse(io::Encode(record)).as_object(); old["schema_version"]=23;
     const auto old_text=boost::json::serialize(old);
     EXPECT_THROW(io::Decode(old_text),std::invalid_argument);
     data_test::ExecuteSql(path,"UPDATE model_joint_result SET result_json='"+old_text+"' WHERE key_tag='model';");
@@ -1169,7 +1242,7 @@ TEST(DataObjectPersistenceTest, JointMetadataRejectsInvalidValuesAndOldDocuments
     std::ifstream after_file(path,std::ios::binary);
     EXPECT_EQ(std::string((std::istreambuf_iterator<char>(after_file)),{}),before);
     auto wrong_units=boost::json::parse(io::Encode(record)).as_object();
-    wrong_units.at("metadata").as_object().at("units").as_object()["B"]="angstrom^2";
+    wrong_units.at("metadata").as_object().at("units").as_object()["tau"]="angstrom^2";
     EXPECT_THROW(io::Decode(boost::json::serialize(wrong_units)),std::invalid_argument);
 }
 

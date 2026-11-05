@@ -181,7 +181,7 @@ void ExpectLifecycle(const core::JointProblem & problem, const core::JointFitRes
                     progress.bcd->failed_blocks, progress.bcd->block_solves);
                 EXPECT_LE(progress.bcd->recovery_successes,
                     progress.bcd->recovery_attempts);
-                EXPECT_GT(progress.bcd->maximum_target_width, 0.0);
+                EXPECT_GT(progress.bcd->maximum_target_tau, 0.0);
             }
             else
             {
@@ -292,9 +292,9 @@ joint::JointProgressEvent MakeBcdEvent(joint::JointProgressPhase phase)
         .recovery_successes = 0,
         .objective = 1.25,
         .global_ac_kkt = .003,
-        .width_gradient_inf_norm = .004,
+        .eta_gradient_inf_norm = .004,
         .projected_width_kkt = 4e-7,
-        .maximum_target_width = .7};
+        .maximum_target_tau = .7};
     return event;
 }
 }
@@ -465,8 +465,8 @@ TEST(JointProgressTest, InfoProgressIsCompactAndThrottlesAcceptedUpdateRefreshes
     EXPECT_EQ(CountOccurrences(stdout_text, "\r"), 4u);
     EXPECT_EQ(CountOccurrences(stdout_text, "obj="), 5u); // Four progress rows and the summary.
     EXPECT_EQ(CountOccurrences(stdout_text, "ac-kkt="), 4u);
-    EXPECT_EQ(CountOccurrences(stdout_text, "width-grad="), 4u);
-    EXPECT_EQ(CountOccurrences(stdout_text, "width-kkt=4.000e-07"), 4u);
+    EXPECT_EQ(CountOccurrences(stdout_text, "eta-grad="), 4u);
+    EXPECT_EQ(CountOccurrences(stdout_text, "eta-projected-kkt=4.000e-07"), 4u);
     EXPECT_EQ(CountOccurrences(stdout_text, "accepted="), 4u);
     EXPECT_EQ(CountOccurrences(stdout_text, "failed="), 4u);
     EXPECT_NE(stdout_text.find("Component 1/1 completed | state_trusted=yes | stop=converged"),
@@ -511,14 +511,14 @@ TEST(JointProgressTest, DebugProgressRetainsDetailedDiagnostics)
     EXPECT_NE(stdout_text.find("local_accepted_updates=5"), std::string::npos);
     EXPECT_NE(stdout_text.find("profile_evaluations=22"), std::string::npos);
     EXPECT_NE(stdout_text.find("recovery=1/0"), std::string::npos);
-    EXPECT_NE(stdout_text.find("max_B=7.000e-01"), std::string::npos);
+    EXPECT_NE(stdout_text.find("max_tau=7.000e-01"), std::string::npos);
     EXPECT_EQ(stdout_text.find("max_log_width_step="), std::string::npos);
     EXPECT_EQ(stdout_text.find("eta_change="), std::string::npos);
     EXPECT_NE(stdout_text.find("Component detail"), std::string::npos);
     EXPECT_NE(stdout_text.find("evaluations=220 | accepted_updates=50 | stop=converged"), std::string::npos);
     EXPECT_EQ(CountOccurrences(stdout_text, "obj="), 3u);
     EXPECT_EQ(CountOccurrences(stdout_text, "ac-kkt="), 2u);
-    EXPECT_EQ(CountOccurrences(stdout_text, "width-grad="), 2u);
+    EXPECT_EQ(CountOccurrences(stdout_text, "eta-grad="), 2u);
     EXPECT_EQ(stdout_text.find("width_grad="), std::string::npos);
 }
 

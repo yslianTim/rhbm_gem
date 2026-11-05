@@ -45,7 +45,7 @@ struct BcdBlockFailureDiagnostics
         first_invalid_atom_id,first_invalid_parameter;
     std::optional<Eigen::Index> first_invalid_coefficient;
     std::optional<int> ac_free_design_rank,ac_linear_solve_count,ac_working_set_releases;
-    std::optional<double> first_invalid_coefficient_value,width_upper_bound,width_step_inf,
+    std::optional<double> first_invalid_coefficient_value,tau_upper_bound,eta_step_inf,
         lm_actual_decrease,lm_predicted_decrease,lm_ratio,weak_width_step_fraction,
         primal_feasibility,ac_scaled_projected_kkt,replay_prediction_discrepancy,
         replay_gradient_discrepancy,replay_kkt_discrepancy;
@@ -65,13 +65,13 @@ struct BcdSweepRecord
 {
     std::size_t sweep{};
     double objective_before{},objective_after{},global_a_feasibility{},global_ac_kkt{};
-    double global_width_gradient_inf_norm{},cache_replay_error{},objective_replay_error{},wall_seconds{};
-    double maximum_target_width{};
+    double global_eta_gradient_inf_norm{},cache_replay_error{},objective_replay_error{},wall_seconds{};
+    double maximum_target_tau{};
     bool objective_cache_refreshed{};
     bool width_bound_applied{};
-    double projected_width_gradient_inf_norm{unavailable},maximum_width_bound_violation{},
+    double projected_eta_gradient_inf_norm{unavailable},maximum_width_bound_violation{},
         boundary_gradient_max{},boundary_multiplier_max{},width_bound_complementarity{unavailable},
-        stationarity_width_gradient_inf_norm{unavailable};
+        stationarity_eta_gradient_inf_norm{unavailable};
     std::size_t active_width_bound_count{};
     bool coordinate_confirmation_available{};
     std::size_t block_solves{},profile_evaluations{},maximum_block_rows{},maximum_block_columns{},
@@ -175,7 +175,7 @@ struct BcdComponentResult
 };
 
 BcdStationarityState ClassifyBcdStationarity(
-    double ac_kkt,double width_gradient_inf,bool has_previous_complete_sweep,
+    double ac_kkt,double eta_gradient_inf,bool has_previous_complete_sweep,
     const JointConvergenceCriteria & = StrictJointConvergenceCriteria);
 bool ShouldAttemptBcdCertification(BcdStationarityState,std::size_t sweep,
     std::size_t & next_retry_sweep);

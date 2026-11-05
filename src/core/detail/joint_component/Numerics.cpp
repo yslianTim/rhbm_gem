@@ -69,7 +69,7 @@ void CaptureWidthBoundKkt(Certificate & certificate,const Vector & eta,const Vec
 bool IsValidJointConvergenceCriteria(const JointConvergenceCriteria & criteria)
 {
     return std::isfinite(criteria.global_ac_kkt) && criteria.global_ac_kkt>=0.0 &&
-        std::isfinite(criteria.global_width_gradient) && criteria.global_width_gradient>=0.0;
+        std::isfinite(criteria.global_eta_gradient) && criteria.global_eta_gradient>=0.0;
 }
 namespace {
 bool MeetsJointThreshold(double value,double threshold)
@@ -671,8 +671,8 @@ IndependentReplayEvidence CheckIndependentReplay(const Domain & domain,VectorRef
     out.available=true; out.valid=true; out.feasible=feasible;
     out.primary_ac_kkt=e.certificate.projected_kkt;
     out.independent_ac_kkt=(scaled_beta-projected).lpNorm<Eigen::Infinity>();
-    out.primary_width_gradient=e.gradient.lpNorm<Eigen::Infinity>();
-    out.independent_width_gradient=eta_gradient.lpNorm<Eigen::Infinity>();
+    out.primary_eta_gradient=e.gradient.lpNorm<Eigen::Infinity>();
+    out.independent_eta_gradient=eta_gradient.lpNorm<Eigen::Infinity>();
     if(policy.eta_upper_bound)
     {
         const auto primary_width=CalculateWidthBoundKkt(e.eta,e.gradient,*policy.eta_upper_bound);
@@ -682,9 +682,9 @@ IndependentReplayEvidence CheckIndependentReplay(const Domain & domain,VectorRef
         out.primary_width_projected_kkt=primary_width.projected;
         out.independent_width_projected_kkt=independent_width.projected;
         out.primary_width_kkt_passed=primary_width.feasible &&
-            MeetsJointThreshold(primary_width.projected,criteria.global_width_gradient);
+            MeetsJointThreshold(primary_width.projected,criteria.global_eta_gradient);
         out.independent_width_kkt_passed=independent_width.feasible &&
-            MeetsJointThreshold(independent_width.projected,criteria.global_width_gradient);
+            MeetsJointThreshold(independent_width.projected,criteria.global_eta_gradient);
         out.maximum_width_bound_violation=std::max(primary_width.violation,independent_width.violation);
         out.boundary_gradient_max=independent_width.boundary_gradient;
         out.boundary_multiplier_max=independent_width.multiplier;
@@ -767,7 +767,7 @@ IndependentReplayEvidence CheckIndependentReplay(const Domain & domain,VectorRef
         assembled_prediction && !out.assembled_prediction_passed ? "assembled-prediction-disagreement" :
         assembled_prediction && !out.assembled_objective_passed ? "assembled-objective-disagreement" :
         "replay-disagreement";
-    out.valid=std::isfinite(out.independent_ac_kkt) && std::isfinite(out.independent_width_gradient) &&
+    out.valid=std::isfinite(out.independent_ac_kkt) && std::isfinite(out.independent_eta_gradient) &&
         std::isfinite(out.objective_difference);
     if(!out.valid) {out.passed=false; out.reason="nonfinite-replay-evidence";}
     return out;
@@ -824,14 +824,14 @@ Assessment VerifyJointEndpoint(const Domain & domain,VectorRef y,const Evaluatio
     out.inner=replay.feasible && replay.primary_kkt_passed &&
         MeetsJointThreshold(replay.primary_ac_kkt,criteria.global_ac_kkt) &&
         replay.independent_kkt_passed && MeetsJointThreshold(replay.independent_ac_kkt,criteria.global_ac_kkt);
-    out.gradient=MeetsJointThreshold(endpoint.gradient.lpNorm<Eigen::Infinity>(),criteria.global_width_gradient) &&
-        MeetsJointThreshold(replay.primary_width_gradient,criteria.global_width_gradient) &&
-        MeetsJointThreshold(replay.independent_width_gradient,criteria.global_width_gradient) && replay.gradient_agrees;
+    out.gradient=MeetsJointThreshold(endpoint.gradient.lpNorm<Eigen::Infinity>(),criteria.global_eta_gradient) &&
+        MeetsJointThreshold(replay.primary_eta_gradient,criteria.global_eta_gradient) &&
+        MeetsJointThreshold(replay.independent_eta_gradient,criteria.global_eta_gradient) && replay.gradient_agrees;
     if(context.eta_upper_bound)
         out.gradient=replay.width_bound_applied && replay.width_bound_feasible && replay.primary_width_kkt_passed &&
             replay.independent_width_kkt_passed &&
-            MeetsJointThreshold(replay.primary_width_projected_kkt,criteria.global_width_gradient) &&
-            MeetsJointThreshold(replay.independent_width_projected_kkt,criteria.global_width_gradient) && replay.gradient_agrees;
+            MeetsJointThreshold(replay.primary_width_projected_kkt,criteria.global_eta_gradient) &&
+            MeetsJointThreshold(replay.independent_width_projected_kkt,criteria.global_eta_gradient) && replay.gradient_agrees;
     const bool replay_consistent=replay.valid && replay.prediction_passed && replay.residual_passed &&
         replay.objective_passed && replay.kkt_agrees && replay.gradient_agrees &&
         (!replay.assembled_prediction_available ||
@@ -840,7 +840,7 @@ Assessment VerifyJointEndpoint(const Domain & domain,VectorRef y,const Evaluatio
     out.numerical_qualified=out.endpoint_verified && out.gradient;
     out.failure=out.numerical_qualified ? "none" : !out.inner ? "global-ac-kkt-failed" :
         !replay_consistent ? (replay.reason.empty() ? "endpoint-verification-failed" : replay.reason) :
-        !out.gradient ? "global-width-gradient-failed" :
+        !out.gradient ? "global-eta-gradient-failed" :
         replay.reason.empty() ? "endpoint-verification-failed" : replay.reason;
     return out;
 }

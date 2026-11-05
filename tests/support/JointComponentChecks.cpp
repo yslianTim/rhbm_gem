@@ -314,7 +314,7 @@ j::object FitComponent(const ComponentView & view,const Vector & initial_tau,con
     auto assessment=runtime_json::Assessment(result.trusted_assessment ? *result.trusted_assessment : result.assessment);
     for(auto & field:assessment) fit[field.key()]=std::move(field.value());
     fit["component_id"]=view.id; fit["parent_atoms"]=Indices(view.atoms); fit["parent_rows"]=Indices(view.rows);
-    fit["context"]=ContextEvidence(context); fit["initial_b"]=Values(start);
+    fit["context"]=ContextEvidence(context); fit["initial_tau"]=Values(start);
     fit["usable_state"]=result.trusted_state.has_value(); fit["last_trusted_state"]=nullptr;
     fit["candidate_available"]=result.candidate_available;
     if(result.candidate_available)
@@ -323,7 +323,7 @@ j::object FitComponent(const ComponentView & view,const Vector & initial_tau,con
         const double objective=primary.certificate.available ? primary.certificate.objective : result.candidate_objective;
         j::object candidate{{"beta",Values(result.candidate_beta)},
             {"eta",Values(result.candidate_eta)},
-            {"b",Values(result.candidate_eta.array().exp().matrix())},
+            {"tau",Values(result.candidate_eta.array().exp().matrix())},
             {"objective",objective},{"valid",primary.valid}};
         if(primary.certificate.evaluated)
         {
@@ -331,7 +331,7 @@ j::object FitComponent(const ComponentView & view,const Vector & initial_tau,con
             candidate["kkt_passed"]=primary.certificate.kkt_passed;
             candidate["projected_kkt"]=runtime_json::Number(primary.certificate.projected_kkt);
             candidate["rss"]=runtime_json::Number(primary.certificate.rss);
-            candidate["b_gradient"]=Values(primary.gradient);
+            candidate["eta_gradient"]=Values(primary.gradient);
         }
         fit["candidate_state"]=std::move(candidate);
     }
@@ -363,17 +363,17 @@ j::object Assemble(const Domain & domain,const Vector & y,const ComponentPartiti
         if(fit.at("usable_state").as_bool())
         {
             const auto & endpoint=fit.at("last_trusted_state");
-            const auto beta=Parse(endpoint.at("beta")),tau=Parse(endpoint.at("b")),eta=Parse(endpoint.at("eta"));
+            const auto beta=Parse(endpoint.at("beta")),tau=Parse(endpoint.at("tau")),eta=Parse(endpoint.at("eta"));
             rhbm_gem::JointState state;
             state.ac.assign(beta.data(),beta.data()+beta.size());
             state.tau.assign(tau.data(),tau.data()+tau.size());
             state.log_tau.assign(eta.data(),eta.data()+eta.size());
-            const auto gradient=Parse(endpoint.at("b_gradient"));
+            const auto gradient=Parse(endpoint.at("eta_gradient"));
             state.eta_gradient.assign(gradient.data(),gradient.data()+gradient.size());
             child.state=std::move(state);
             const auto status=runtime_json::ParseStatus(fit.at("runtime_convergence"));
             for(const char * name:{"ac-feasibility","conditional-ac-optimality","independent-ac-optimality",
-                "independent-kkt-consistency","independent-replay","width-gradient-consistency",
+                "independent-kkt-consistency","independent-replay","eta-gradient-consistency",
                 "width-stationarity","endpoint-verification","numerical-qualification","accepted-state-integrity"})
                 child.evidence.push_back({name,status,rhbm_gem::core::JointEvidenceScope::ComponentLocal,{},{},{}});
             child.evidence.push_back({"complete-sweep-stationarity",child.search_completed ?
@@ -393,7 +393,7 @@ j::object Assemble(const Domain & domain,const Vector & y,const ComponentPartiti
     {out["runtime_failure"]="missing-trusted-component-state"; out["prediction"]=nullptr; out["objective"]=nullptr; return out;}
     auto assessment=runtime_json::Assessment(assembly.assessment);
     for(auto & field:assessment) out[field.key()]=std::move(field.value());
-    out["assembled_state"]=j::object{{"eta",Values(assembly.eta)},{"b",Values(assembly.eta.array().exp())},{"beta",Values(assembly.beta)},
+    out["assembled_state"]=j::object{{"eta",Values(assembly.eta)},{"tau",Values(assembly.eta.array().exp())},{"beta",Values(assembly.beta)},
         {"certificate",runtime_json::Certificate(assembly.raw.certificate)},{"valid",assembly.raw.valid}};
     out["assembled_state_preserved"]=true;
     out["assembled_rss"]=assembly.raw.valid ? j::value(assembly.raw.certificate.rss) : j::value(nullptr);

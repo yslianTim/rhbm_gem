@@ -228,23 +228,23 @@ std::vector<JointCheck> AssessmentEvidence(const Assessment & a,JointEvidenceSco
         std::isfinite(replay.kkt_difference) ? std::optional<double>(replay.kkt_difference) : std::nullopt,1e-13));
     out.push_back(check("independent-replay",evidence_available,replay.valid && replay.passed));
     out.back().reason=replay.reason.empty() ? a.failure : replay.reason;
-    out.push_back(check("width-gradient-consistency",evidence_available,replay.gradient_agrees,
+    out.push_back(check("eta-gradient-consistency",evidence_available,replay.gradient_agrees,
         std::isfinite(replay.gradient_difference) ? std::optional<double>(replay.gradient_difference) : std::nullopt));
     out.back().reason=replay.reason.empty() ? "per-coordinate-replay-enclosure" : replay.reason;
     const double width_stationarity_value=replay.width_bound_applied ?
         std::max(replay.primary_width_projected_kkt,replay.independent_width_projected_kkt) :
-        replay.primary_width_gradient;
+        replay.primary_eta_gradient;
     const bool width_stationarity_passed=replay.width_bound_applied ?
         replay.width_bound_feasible && replay.primary_width_kkt_passed && replay.independent_width_kkt_passed &&
             std::isfinite(replay.primary_width_projected_kkt) &&
             std::isfinite(replay.independent_width_projected_kkt) &&
-            replay.primary_width_projected_kkt<=a.convergence_criteria.global_width_gradient &&
-            replay.independent_width_projected_kkt<=a.convergence_criteria.global_width_gradient :
-        replay.primary_width_gradient<=a.convergence_criteria.global_width_gradient;
+            replay.primary_width_projected_kkt<=a.convergence_criteria.global_eta_gradient &&
+            replay.independent_width_projected_kkt<=a.convergence_criteria.global_eta_gradient :
+        replay.primary_eta_gradient<=a.convergence_criteria.global_eta_gradient;
     out.push_back(check("width-stationarity",evidence_available && a.primary.valid && a.primary.gradient.size()>0,
         width_stationarity_passed,
         std::isfinite(width_stationarity_value) ? std::optional<double>(width_stationarity_value) : std::nullopt,
-        a.convergence_criteria.global_width_gradient));
+        a.convergence_criteria.global_eta_gradient));
     if(replay.width_bound_applied) out.back().reason="independent-bound-aware-projected-width-kkt";
     if(replay.width_bound_applied)
     {
@@ -277,7 +277,7 @@ JointCheckStatus ConvergenceStatus(const std::vector<JointCheck> & evidence,Join
     auto status=JointCheckStatus::Passed;
     const std::vector<const char *> required{"ac-feasibility","conditional-ac-optimality",
         "independent-ac-optimality","independent-kkt-consistency","independent-replay",
-        "width-gradient-consistency","width-stationarity","endpoint-verification",
+        "eta-gradient-consistency","width-stationarity","endpoint-verification",
         "numerical-qualification"};
     for(const char * name:required)
     {

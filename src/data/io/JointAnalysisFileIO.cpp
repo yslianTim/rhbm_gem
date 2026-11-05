@@ -26,7 +26,7 @@ void WriteJointAnalysisResult(const JointAnalysisResult & result,
         csv_file.exceptions(std::ios::failbit|std::ios::badbit);
         json_file.open(json_path); csv_file.open(csv_path);
         json_file << json << '\n';
-        csv_file << "AtomID,ComponentID,A,B,C,StateAvailable,SearchCompleted,StopReason,RuntimeConvergence,SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,PointQuality\n"
+        csv_file << "AtomID,ComponentID,A,tau,C,StateAvailable,SearchCompleted,StopReason,RuntimeConvergence,SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,PointQuality\n"
             << std::setprecision(std::numeric_limits<double>::max_digits10);
 
         std::vector<std::pair<const JointAnalysisComponent *,std::size_t>> mapping(result.atom_ids.size());

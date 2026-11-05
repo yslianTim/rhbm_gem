@@ -5,7 +5,8 @@ namespace rhbm_gem::core::joint_component {
 struct JointConvergenceCriteria
 {
     double global_ac_kkt{};
-    double global_width_gradient{};
+    // Threshold for the bound-projected gradient in eta = log(tau).
+    double global_eta_gradient{};
 };
 
 inline constexpr JointConvergenceCriteria StrictJointConvergenceCriteria{1e-10,1e-12};

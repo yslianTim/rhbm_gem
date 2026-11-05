@@ -27,8 +27,8 @@ inline j::object Endpoint(const r::Endpoint & e)
 {
     auto out=Certificate(e.certificate);
     out["valid"]=e.valid; out["reason"]=e.reason; out["beta"]=Values(e.beta);
-    out["eta"]=Values(e.eta); out["b"]=Values(e.eta.array().exp()); out["b_gradient"]=Values(e.gradient);
-    out["b_gradient_inf"]=e.gradient.size() ? Number(e.gradient.lpNorm<Eigen::Infinity>()) : j::value(nullptr);
+    out["eta"]=Values(e.eta); out["tau"]=Values(e.eta.array().exp()); out["eta_gradient"]=Values(e.gradient);
+    out["eta_gradient_inf"]=e.gradient.size() ? Number(e.gradient.lpNorm<Eigen::Infinity>()) : j::value(nullptr);
     return out;
 }
 inline j::object DesignSpectrum(const r::Spectrum & s)
@@ -59,8 +59,8 @@ inline j::object Trust(const r::TrustEvidence & t)
             {"primary_ac_kkt",Number(replay.primary_ac_kkt)},
             {"independent_ac_kkt",Number(replay.independent_ac_kkt)},
             {"kkt_difference",Number(replay.kkt_difference)},
-            {"primary_width_gradient",Number(replay.primary_width_gradient)},
-            {"independent_width_gradient",Number(replay.independent_width_gradient)},
+            {"primary_eta_gradient",Number(replay.primary_eta_gradient)},
+            {"independent_eta_gradient",Number(replay.independent_eta_gradient)},
             {"gradient_difference",Number(replay.gradient_difference)},
             {"cancellation_ratio",Number(replay.cancellation_ratio)},{"reason",replay.reason}};
     }
@@ -106,8 +106,8 @@ inline j::object Assessment(const r::Assessment & a)
         {"primary_ac_kkt",Number(replay.primary_ac_kkt)},
         {"independent_ac_kkt",Number(replay.independent_ac_kkt)},
         {"kkt_difference",Number(replay.kkt_difference)},
-        {"primary_width_gradient",Number(replay.primary_width_gradient)},
-        {"independent_width_gradient",Number(replay.independent_width_gradient)},
+        {"primary_eta_gradient",Number(replay.primary_eta_gradient)},
+        {"independent_eta_gradient",Number(replay.independent_eta_gradient)},
         {"gradient_difference",Number(replay.gradient_difference)},
         {"cancellation_ratio",Number(replay.cancellation_ratio)},{"reason",replay.reason}};
     out["runtime_checks"]=j::object{{"ac_feasibility",replay.available && replay.feasible},
@@ -115,8 +115,8 @@ inline j::object Assessment(const r::Assessment & a)
         {"independent_ac_optimality",replay.independent_kkt_passed && replay.feasible},
         {"independent_kkt_consistency",replay.kkt_agrees},
         {"independent_replay",replay.valid && replay.passed},
-        {"width_gradient_consistency",replay.gradient_agrees},
-        {"width_stationarity",replay.primary_width_gradient<=1e-12},
+        {"eta_gradient_consistency",replay.gradient_agrees},
+        {"width_stationarity",replay.primary_eta_gradient<=1e-12},
         {"numerical_qualification",a.numerical_qualified}};
     return out;
 }

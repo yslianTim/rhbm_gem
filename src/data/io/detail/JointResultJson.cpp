@@ -174,14 +174,14 @@ std::vector<double> DiagnosticValues(const j::value & v)
 }
 Object State(const JointState & x)
 {
-    return {{"ac",j::value_from(x.ac)},{"b",j::value_from(x.tau)},{"log_b",j::value_from(x.log_tau)},
-        {"width_gradient",j::value_from(x.eta_gradient)},{"objective",x.objective}};
+    return {{"ac",j::value_from(x.ac)},{"tau",j::value_from(x.tau)},{"log_tau",j::value_from(x.log_tau)},
+        {"eta_gradient",j::value_from(x.eta_gradient)},{"objective",x.objective}};
 }
 JointState ReadState(const j::value & v)
 {
     const auto & o=v.as_object();
-    return {Read<std::vector<double>>(o,"ac"),Read<std::vector<double>>(o,"b"),
-        Read<std::vector<double>>(o,"log_b"),Read<std::vector<double>>(o,"width_gradient"),
+    return {Read<std::vector<double>>(o,"ac"),Read<std::vector<double>>(o,"tau"),
+        Read<std::vector<double>>(o,"log_tau"),Read<std::vector<double>>(o,"eta_gradient"),
         Read<double>(o,"objective")};
 }
 j::value OptionalState(const std::optional<JointState> & x) {return x ? j::value(State(*x)) : j::value(nullptr);}
@@ -196,10 +196,10 @@ Object CandidateDiagnostic(const JointCandidateDiagnostic & x)
         {"candidate_ac",j::value_from(x.candidate_ac)},
         {"candidate_objective",Number(x.candidate_objective)},
         {"candidate_ac_kkt",Number(x.candidate_ac_kkt)},
-        {"candidate_width_gradient_inf_norm",Number(x.candidate_width_gradient_inf_norm)},
+        {"candidate_eta_gradient_inf_norm",Number(x.candidate_eta_gradient_inf_norm)},
         {"convergence_criteria_id",x.convergence_criteria_id.empty() ? "strict-v2" : x.convergence_criteria_id},
         {"global_ac_kkt_threshold",x.global_ac_kkt_threshold.value_or(strict.global_ac_kkt)},
-        {"global_width_gradient_threshold",x.global_width_gradient_threshold.value_or(strict.global_width_gradient)},
+        {"global_eta_gradient_threshold",x.global_eta_gradient_threshold.value_or(strict.global_eta_gradient)},
         {"candidate_feasible",x.candidate_feasible ? j::value(*x.candidate_feasible) : j::value(nullptr)},
         {"certification_status",StatusText(x.certification_status)},
         {"endpoint_verification_status",StatusText(x.endpoint_verification_status)},
@@ -217,10 +217,10 @@ std::optional<JointCandidateDiagnostic> ReadCandidateDiagnostic(const j::value &
     x.candidate_ac=Read<std::vector<double>>(o,"candidate_ac");
     x.candidate_objective=OptionalNumber(o.at("candidate_objective"));
     x.candidate_ac_kkt=OptionalNumber(o.at("candidate_ac_kkt"));
-    x.candidate_width_gradient_inf_norm=OptionalNumber(o.at("candidate_width_gradient_inf_norm"));
+    x.candidate_eta_gradient_inf_norm=OptionalNumber(o.at("candidate_eta_gradient_inf_norm"));
     x.convergence_criteria_id=Read<std::string>(o,"convergence_criteria_id");
     x.global_ac_kkt_threshold=Read<double>(o,"global_ac_kkt_threshold");
-    x.global_width_gradient_threshold=Read<double>(o,"global_width_gradient_threshold");
+    x.global_eta_gradient_threshold=Read<double>(o,"global_eta_gradient_threshold");
     x.candidate_feasible=o.at("candidate_feasible").is_null() ? std::nullopt :
         std::optional<bool>(Read<bool>(o,"candidate_feasible"));
     x.certification_status=Status(o.at("certification_status"));
@@ -262,25 +262,25 @@ Object Initialization(const JointInitialization & x)
     for(const auto & a:x.atoms) atoms.emplace_back(Object{{"id",a.id},{"ols",Diagnostics(a.ols)},{"mdpde",Diagnostics(a.mdpde)},
         {"alpha",std::isfinite(a.alpha) ? j::value(a.alpha) : j::value(nullptr)},{"sample_count",a.sample_count},
         { "native_status",a.native_status ? j::value(*a.native_status) : j::value(nullptr)},{"reason",a.reason},
-        {"original_b",Number(a.original_tau)},{"used_b",Number(a.used_tau)},{"seed_source",a.seed_source},{"donor_count",a.donor_count},
+        {"original_tau",Number(a.original_tau)},{"used_tau",Number(a.used_tau)},{"seed_source",a.seed_source},{"donor_count",a.donor_count},
         {"first_stage_fit_qualified",a.first_stage_fit_qualified},
         {"first_stage_qualification",a.first_stage_qualification ?
             j::value(QualificationText(*a.first_stage_qualification)) : j::value(nullptr)},
         {"first_stage_recovery",a.first_stage_recovery ?
             FailedOnlyRecovery(*a.first_stage_recovery) : j::value(nullptr)}});
-    return {{"valid",x.valid},{"reason",x.reason},{"b",Diagnostics(x.tau)},{"atoms",std::move(atoms)},{"data_scope",x.data_scope}};
+    return {{"valid",x.valid},{"reason",x.reason},{"tau",Diagnostics(x.tau)},{"atoms",std::move(atoms)},{"data_scope",x.data_scope}};
 }
 JointInitialization ReadInitialization(const j::value & v)
 {
     const auto & o=v.as_object(); JointInitialization x;
-    RequireOnlyKeys(o,{"valid","reason","b","atoms","data_scope"},"unknown current Joint initialization field");
-    x.valid=Read<bool>(o,"valid"); x.reason=Read<std::string>(o,"reason"); x.tau=DiagnosticValues(o.at("b"));
+    RequireOnlyKeys(o,{"valid","reason","tau","atoms","data_scope"},"unknown current Joint initialization field");
+    x.valid=Read<bool>(o,"valid"); x.reason=Read<std::string>(o,"reason"); x.tau=DiagnosticValues(o.at("tau"));
     x.data_scope=Read<std::string>(o,"data_scope");
     for(const auto & item:o.at("atoms").as_array())
     {
         const auto & a=item.as_object(); JointInitializationAtom atom;
-        RequireOnlyKeys(a,{"id","ols","mdpde","alpha","sample_count","native_status","reason","original_b",
-            "used_b","seed_source","donor_count","first_stage_fit_qualified","first_stage_qualification",
+        RequireOnlyKeys(a,{"id","ols","mdpde","alpha","sample_count","native_status","reason","original_tau",
+            "used_tau","seed_source","donor_count","first_stage_fit_qualified","first_stage_qualification",
             "first_stage_recovery"},"unknown current FirstStage initialization field");
         atom.id=Read<std::string>(a,"id"); atom.reason=Read<std::string>(a,"reason");
         const auto ols=DiagnosticValues(a.at("ols")),mdpde=DiagnosticValues(a.at("mdpde"));
@@ -293,7 +293,7 @@ JointInitialization ReadInitialization(const j::value & v)
             atom.first_stage_qualification=Qualification(a.at("first_stage_qualification"));
         if(!a.at("first_stage_recovery").is_null())
             atom.first_stage_recovery=ReadFailedOnlyRecovery(a.at("first_stage_recovery"));
-        atom.original_tau=OptionalNumber(a.at("original_b")); atom.used_tau=OptionalNumber(a.at("used_b"));
+        atom.original_tau=OptionalNumber(a.at("original_tau")); atom.used_tau=OptionalNumber(a.at("used_tau"));
         atom.seed_source=Read<std::string>(a,"seed_source"); atom.donor_count=Read<std::size_t>(a,"donor_count");
         if(!a.at("native_status").is_null()) atom.native_status=Read<int>(a,"native_status");
         x.atoms.push_back(std::move(atom));
@@ -461,8 +461,8 @@ std::optional<JointHaloMedianSnapshot> ReadHaloMedianSnapshot(const j::value & v
 }
 Object Units()
 {
-    return {{"contract","joint-kernel-map-units-v1"},{"map_value","fit-map-unit"},
-        {"geometry","angstrom"},{"A","fit-map-unit*angstrom^3"},{"B","angstrom"},
+    return {{"contract","joint-kernel-map-units-v2"},{"map_value","fit-map-unit"},
+        {"geometry","angstrom"},{"A","fit-map-unit*angstrom^3"},{"tau","angstrom"},
         {"C","fit-map-unit*angstrom"}};
 }
 Object Metadata(const JointAnalysisMetadata & m)
@@ -582,24 +582,24 @@ void ValidateCandidateDiagnostic(const JointCandidateDiagnostic & x,std::size_t 
     const auto & strict=core::joint_component::StrictJointConvergenceCriteria;
     const auto & practical=core::joint_component::PracticalJointConvergenceCriteria;
     const bool default_criteria=x.convergence_criteria_id.empty() && !x.global_ac_kkt_threshold &&
-        !x.global_width_gradient_threshold;
+        !x.global_eta_gradient_threshold;
     const bool complete_criteria=!x.convergence_criteria_id.empty() && x.global_ac_kkt_threshold &&
-        x.global_width_gradient_threshold;
+        x.global_eta_gradient_threshold;
     Require(default_criteria || complete_criteria,"incomplete convergence criteria provenance");
     const auto & criteria_id=default_criteria ? std::string_view{"strict-v2"} :
         std::string_view{x.convergence_criteria_id};
     const auto ac_threshold=default_criteria ? strict.global_ac_kkt : *x.global_ac_kkt_threshold;
-    const auto width_threshold=default_criteria ? strict.global_width_gradient : *x.global_width_gradient_threshold;
+    const auto width_threshold=default_criteria ? strict.global_eta_gradient : *x.global_eta_gradient_threshold;
     const bool current_criteria=criteria_id=="strict-v2" || criteria_id=="practical-v2";
     Require(current_criteria,
         "invalid convergence criteria identifier");
     Require(std::isfinite(ac_threshold) && ac_threshold>0 && std::isfinite(width_threshold) && width_threshold>0,
         "invalid convergence criteria thresholds");
     if(criteria_id=="strict-v2")
-        Require(ac_threshold==strict.global_ac_kkt && width_threshold==strict.global_width_gradient,
+        Require(ac_threshold==strict.global_ac_kkt && width_threshold==strict.global_eta_gradient,
             "strict convergence criteria do not match their identifier");
     if(criteria_id=="practical-v2")
-        Require(ac_threshold==practical.global_ac_kkt && width_threshold==practical.global_width_gradient,
+        Require(ac_threshold==practical.global_ac_kkt && width_threshold==practical.global_eta_gradient,
             "practical convergence criteria do not match their identifier");
     Require(atoms<=std::numeric_limits<std::size_t>::max()/2,"candidate dimensions");
     if(x.candidate_available)
@@ -615,7 +615,7 @@ void ValidateCandidateDiagnostic(const JointCandidateDiagnostic & x,std::size_t 
     }
     else Require(x.candidate_eta.empty() && x.candidate_ac.empty() && !x.candidate_objective,
         "unavailable candidate contains parameters");
-    for(const auto * value:{&x.candidate_ac_kkt,&x.candidate_width_gradient_inf_norm})
+    for(const auto * value:{&x.candidate_ac_kkt,&x.candidate_eta_gradient_inf_norm})
         Require(!*value || (std::isfinite(**value) && **value>=0),"invalid candidate diagnostic value");
     Require((x.certification_status==JointCheckStatus::Passed)==trusted_state,
         "candidate certification disagrees with trusted state");
@@ -1028,7 +1028,7 @@ JointAnalysisResult DecodeCurrent(const Object & o)
         component.native_status=Read<int>(c,"native_status");
         if(!c.at("state").is_null())
         {
-            RequireOnlyKeys(c.at("state").as_object(),{"ac","b","log_b","width_gradient","objective"},
+            RequireOnlyKeys(c.at("state").as_object(),{"ac","tau","log_tau","eta_gradient","objective"},
                 "unknown current Joint state field");
                 component.state=ReadState(c.at("state"));
         }
@@ -1036,8 +1036,8 @@ JointAnalysisResult DecodeCurrent(const Object & o)
         {
             RequireOnlyKeys(c.at("candidate_diagnostic").as_object(),{"candidate_status","candidate_available",
                 "candidate_eta","candidate_ac","candidate_objective","candidate_ac_kkt",
-                "candidate_width_gradient_inf_norm","convergence_criteria_id","global_ac_kkt_threshold",
-                "global_width_gradient_threshold",
+                "candidate_eta_gradient_inf_norm","convergence_criteria_id","global_ac_kkt_threshold",
+                "global_eta_gradient_threshold",
                 "candidate_feasible","certification_status",
                 "endpoint_verification_status","numerical_qualification_status","verification_reason",
                 "resource_limit_reason"},"unknown current candidate diagnostic field");
@@ -1055,7 +1055,7 @@ JointAnalysisResult DecodeCurrent(const Object & o)
     }
     if(!o.at("assembled_state").is_null())
     {
-        RequireOnlyKeys(o.at("assembled_state").as_object(),{"ac","b","log_b","width_gradient","objective"},
+        RequireOnlyKeys(o.at("assembled_state").as_object(),{"ac","tau","log_tau","eta_gradient","objective"},
             "unknown current assembled state field");
         x.assembled_state=ReadState(o.at("assembled_state"));
     }

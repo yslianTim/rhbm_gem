@@ -286,7 +286,7 @@ TEST(JointComponentPartialSelectionTest, InitializationPreservesTargetHistoryAnd
         EXPECT_EQ(*fit.prediction,*prediction_before);
     EXPECT_EQ(saved.fitting_to_original_contributors,fit.problem->FittingToOriginalContributors());
     EXPECT_EQ(saved.fitting_to_original_rows,fit.problem->FittingToOriginalRows());
-    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),23);
+    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),24);
     const auto decoded=rhbm_gem::joint_result_io::Decode(encoded);
     ASSERT_TRUE(decoded.selection_domain); EXPECT_EQ(decoded.selection_domain->target_indices,(std::vector<std::size_t>{0}));
     ASSERT_TRUE(decoded.selection_domain->pure_halo_support_exclusion);
@@ -645,8 +645,8 @@ TEST(JointComponentPartialSelectionTest, StageAdapterUsesIdentityAndClearsMissin
     auto summary = core::BuildSecondStageSpotSummary(*f.model);
     EXPECT_NE(summary.find("joint-components"), std::string::npos);
     EXPECT_NE(summary.find("Second-stage estimate summary by Spot:"), std::string::npos);
-    EXPECT_NE(summary.find("A/B/C: Joint second-stage estimates"), std::string::npos);
-    EXPECT_NE(summary.find("\n| Spot | valid | not-converged | unavailable | A mean / s.d. | B mean / s.d. | C(J) mean / s.d. |"), std::string::npos);
+    EXPECT_NE(summary.find("A/tau/C: Joint second-stage estimates"), std::string::npos);
+    EXPECT_NE(summary.find("\n| Spot | valid | not-converged | unavailable | A mean / s.d. | tau mean / s.d. | C(J) mean / s.d. |"), std::string::npos);
     EXPECT_NE(summary.find("\n| CA   |     1 |             0 |           0 |"), std::string::npos);
     EXPECT_EQ(summary.find("\n| CB   |"), std::string::npos);
     const auto expectSummaryRowWidths = [](const std::string & output, bool unavailable) {

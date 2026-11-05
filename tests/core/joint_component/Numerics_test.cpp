@@ -1001,8 +1001,8 @@ TEST(JointComponentNumericsTest, PracticalStationarityCannotHidePerCoordinateRep
     EXPECT_FALSE(replay.gradient_agrees);
     EXPECT_FALSE(replay.passed);
     EXPECT_EQ(replay.reason,"per-coordinate-replay-enclosure");
-    EXPECT_GT(replay.primary_width_gradient,n::StrictJointConvergenceCriteria.global_width_gradient);
-    EXPECT_LE(replay.primary_width_gradient,n::PracticalJointConvergenceCriteria.global_width_gradient);
+    EXPECT_GT(replay.primary_eta_gradient,n::StrictJointConvergenceCriteria.global_eta_gradient);
+    EXPECT_LE(replay.primary_eta_gradient,n::PracticalJointConvergenceCriteria.global_eta_gradient);
     EXPECT_EQ(replay.maximum_gradient_difference_atom_id,"target-42");
     EXPECT_EQ(replay.gradient_enclosure_failure_atom_id,"target-42");
     EXPECT_DOUBLE_EQ(replay.gradient_enclosure_failure_primary,primary.gradient(0));
@@ -1014,8 +1014,8 @@ TEST(JointComponentNumericsTest, PracticalStationarityCannotHidePerCoordinateRep
     EXPECT_DOUBLE_EQ(replay.maximum_gradient_difference_independent,replay.gradient_enclosure_failure_independent);
     EXPECT_DOUBLE_EQ(replay.maximum_gradient_difference_bound,replay.gradient_enclosure_failure_bound);
     EXPECT_DOUBLE_EQ(replay.maximum_gradient_difference_ratio,replay.gradient_enclosure_failure_ratio);
-    EXPECT_DOUBLE_EQ(replay.primary_width_gradient,std::abs(primary.gradient(0)));
-    EXPECT_DOUBLE_EQ(replay.independent_width_gradient,std::abs(replay.gradient_enclosure_failure_independent));
+    EXPECT_DOUBLE_EQ(replay.primary_eta_gradient,std::abs(primary.gradient(0)));
+    EXPECT_DOUBLE_EQ(replay.independent_eta_gradient,std::abs(replay.gradient_enclosure_failure_independent));
     EXPECT_DOUBLE_EQ(replay.gradient_enclosure_failure_bound,
         1e-13+2e-9*std::abs(primary.gradient(0)));
     EXPECT_DOUBLE_EQ(replay.gradient_enclosure_failure_ratio,
@@ -1107,7 +1107,7 @@ TEST(JointComponentNumericsTest, BoundedReplayUsesProjectedWidthKktAndChecksFeas
     EXPECT_TRUE(outward_replay.width_bound_feasible);
     EXPECT_TRUE(outward_replay.primary_width_kkt_passed);
     EXPECT_TRUE(outward_replay.independent_width_kkt_passed)<<outward_replay.reason;
-    EXPECT_GT(outward_replay.primary_width_gradient,1e-12);
+    EXPECT_GT(outward_replay.primary_eta_gradient,1e-12);
     EXPECT_DOUBLE_EQ(outward_replay.primary_width_projected_kkt,0.0);
     EXPECT_DOUBLE_EQ(outward_replay.independent_width_projected_kkt,0.0);
     EXPECT_DOUBLE_EQ(*n::ProfileGradientInfinityNorm(outward,outward_context),0.0);

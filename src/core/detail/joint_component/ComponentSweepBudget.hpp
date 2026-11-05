@@ -25,7 +25,7 @@ public:
         if(IsValidJointConvergenceCriteria(criteria_) && std::isfinite(ac_kkt) && ac_kkt>=0 &&
             std::isfinite(projected_width_kkt) && projected_width_kkt>=0)
             quality=std::max(ac_kkt/criteria_.global_ac_kkt,
-                projected_width_kkt/criteria_.global_width_gradient);
+                projected_width_kkt/criteria_.global_eta_gradient);
         quality_[completed_%Window]=quality;
         ++completed_;
         recovery_pending_=recovery_pending;

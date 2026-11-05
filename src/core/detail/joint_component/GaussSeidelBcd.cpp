@@ -292,7 +292,7 @@ BcdBlockFailureDiagnostics FailureDiagnostics(const BcdSearchPolicy & policy,
     out.initial_profile_valid=profile.initial.valid;
     out.initial_profile_reason=profile.initial.reason;
     out.initial_profile_trusted=profile.initial_accepted;
-    out.width_upper_bound=context.eta_upper_bound ? std::optional<double>(std::exp(*context.eta_upper_bound)) : std::nullopt;
+    out.tau_upper_bound=context.eta_upper_bound ? std::optional<double>(std::exp(*context.eta_upper_bound)) : std::nullopt;
     const auto & certificate=profile.initial.certificate;
     out.solver_valid=certificate.linear_solver_valid;
     out.solver_reason=certificate.linear_solver_reason;
@@ -331,7 +331,7 @@ BcdBlockFailureDiagnostics FailureDiagnostics(const BcdSearchPolicy & policy,
             out.lm_actual_decrease=trial->lm->actual_decrease;
             out.lm_predicted_decrease=trial->lm->predicted_decrease;
             out.lm_ratio=trial->lm->ratio;
-            out.width_step_inf=trial->lm->step.size() ?
+            out.eta_step_inf=trial->lm->step.size() ?
                 trial->lm->step.lpNorm<Eigen::Infinity>() : 0.0;
             out.weak_width_step_fraction=trial->weak_width_step_fraction;
             out.width_bound_active=context.eta_upper_bound && trial->endpoint.eta.size()>0 &&
@@ -369,9 +369,9 @@ std::string FormatFailureDiagnostics(const BcdBlockFailureDiagnostics & d)
     out<<" ac_working_set_releases="; if(d.ac_working_set_releases) out<<*d.ac_working_set_releases; else out<<"unavailable";
     out<<" primal_feasibility="; if(d.primal_feasibility) out<<*d.primal_feasibility; else out<<"unavailable";
     out<<" ac_scaled_projected_kkt="; if(d.ac_scaled_projected_kkt) out<<*d.ac_scaled_projected_kkt; else out<<"unavailable";
-    out<<" width_upper_bound="; if(d.width_upper_bound) out<<*d.width_upper_bound; else out<<"unavailable";
+    out<<" tau_upper_bound="; if(d.tau_upper_bound) out<<*d.tau_upper_bound; else out<<"unavailable";
     out<<" width_bound_active="<<(d.width_bound_active ? "true" : "false")
-       <<" width_step_inf="; if(d.width_step_inf) out<<*d.width_step_inf; else out<<"unavailable";
+       <<" eta_step_inf="; if(d.eta_step_inf) out<<*d.eta_step_inf; else out<<"unavailable";
     out<<" lm_subproblem_status="<<(d.lm_subproblem_status.empty() ? "unavailable" : d.lm_subproblem_status)
        <<" lm_actual_decrease="; if(d.lm_actual_decrease) out<<*d.lm_actual_decrease; else out<<"unavailable";
     out<<" lm_predicted_decrease="; if(d.lm_predicted_decrease) out<<*d.lm_predicted_decrease; else out<<"unavailable";
@@ -391,12 +391,12 @@ std::string FormatFailureDiagnostics(const BcdBlockFailureDiagnostics & d)
 }
 }
 BcdStationarityState ClassifyBcdStationarity(
-    double ac_kkt,double width_gradient_inf,bool has_previous_complete_sweep,
+    double ac_kkt,double eta_gradient_inf,bool has_previous_complete_sweep,
     const JointConvergenceCriteria & criteria)
 {
     if(!IsValidJointConvergenceCriteria(criteria) || !std::isfinite(ac_kkt) || ac_kkt<0.0 ||
-        ac_kkt>criteria.global_ac_kkt || !std::isfinite(width_gradient_inf) || width_gradient_inf<0.0 ||
-        width_gradient_inf>criteria.global_width_gradient)
+        ac_kkt>criteria.global_ac_kkt || !std::isfinite(eta_gradient_inf) || eta_gradient_inf<0.0 ||
+        eta_gradient_inf>criteria.global_eta_gradient)
         return BcdStationarityState::NotStationary;
     return has_previous_complete_sweep ? BcdStationarityState::ConfirmedStationary :
         BcdStationarityState::CandidateStationary;
@@ -1027,21 +1027,21 @@ BcdSearchResult SearchBcdComponent(
         {out.reason="block-inner-invalid"; stop=true; break;}
         sweep.global_a_feasibility=global.certificate.feasible ? 0.0 : 1.0;
         sweep.global_ac_kkt=global.certificate.projected_kkt;
-        sweep.global_width_gradient_inf_norm=global.gradient.lpNorm<Eigen::Infinity>();
+        sweep.global_eta_gradient_inf_norm=global.gradient.lpNorm<Eigen::Infinity>();
         sweep.width_bound_applied=global.certificate.width_bound_applied;
-        sweep.projected_width_gradient_inf_norm=global.certificate.width_bound_applied ?
-            global.certificate.width_bound_projected_kkt : sweep.global_width_gradient_inf_norm;
+        sweep.projected_eta_gradient_inf_norm=global.certificate.width_bound_applied ?
+            global.certificate.width_bound_projected_kkt : sweep.global_eta_gradient_inf_norm;
         sweep.maximum_width_bound_violation=global.certificate.maximum_width_bound_violation;
         sweep.boundary_gradient_max=global.certificate.boundary_gradient_max;
         sweep.boundary_multiplier_max=global.certificate.boundary_multiplier_max;
         sweep.width_bound_complementarity=global.certificate.width_bound_complementarity;
         sweep.active_width_bound_count=global.certificate.active_width_bound_count;
-        sweep.maximum_target_width=out.state.eta.size() ? std::exp(out.state.eta.maxCoeff()) : 0.0;
+        sweep.maximum_target_tau=out.state.eta.size() ? std::exp(out.state.eta.maxCoeff()) : 0.0;
         sweep.coordinate_confirmation_available=sweep_index>0;
-        double stationarity_width_gradient=sweep.projected_width_gradient_inf_norm;
+        double stationarity_eta_gradient=sweep.projected_eta_gradient_inf_norm;
         if(sweep.width_bound_applied && !global.certificate.width_bound_feasible)
-            stationarity_width_gradient=std::numeric_limits<double>::infinity();
-        sweep.stationarity_width_gradient_inf_norm=stationarity_width_gradient;
+            stationarity_eta_gradient=std::numeric_limits<double>::infinity();
+        sweep.stationarity_eta_gradient_inf_norm=stationarity_eta_gradient;
         sweep.wall_seconds=Seconds(sweep_started); out.search_seconds+=sweep.wall_seconds;
         ++out.sweep_count; out.final_sweep=sweep;
         if(retain_diagnostics) out.sweeps.push_back(sweep);
@@ -1054,10 +1054,10 @@ BcdSearchResult SearchBcdComponent(
         sweep.objective_cache_refreshed=true;
         out.final_sweep=sweep;
         if(retain_diagnostics) out.sweeps.back()=sweep;
-        budget.Observe(sweep.global_ac_kkt,stationarity_width_gradient,sweep_had_block_failure);
+        budget.Observe(sweep.global_ac_kkt,stationarity_eta_gradient,sweep_had_block_failure);
         if(policy.production_progress) policy.production_progress(sweep);
         const auto stationarity=sweep_had_block_failure ? BcdStationarityState::NotStationary :
-            ClassifyBcdStationarity(sweep.global_ac_kkt,stationarity_width_gradient,
+            ClassifyBcdStationarity(sweep.global_ac_kkt,stationarity_eta_gradient,
                 sweep.coordinate_confirmation_available,policy.convergence_criteria);
         if(stationarity!=BcdStationarityState::NotStationary && out.first_order_stationarity_sweep==0)
             out.first_order_stationarity_sweep=sweep_index+1;
@@ -1108,7 +1108,7 @@ BcdSearchResult SearchBcdComponent(
             out.certification_sweep=out.sweep_count;
             if(out.certification->qualified() && out.final_sweep &&
                 ClassifyBcdStationarity(out.final_sweep->global_ac_kkt,
-                    out.final_sweep->stationarity_width_gradient_inf_norm,
+                    out.final_sweep->stationarity_eta_gradient_inf_norm,
                     out.final_sweep->coordinate_confirmation_available,policy.convergence_criteria)==
                         BcdStationarityState::ConfirmedStationary)
             {
@@ -1210,7 +1210,7 @@ std::optional<double> LastBcdObjective(const BcdSearchResult & result)
 
 std::optional<double> LastBcdGradient(const BcdSearchResult & result)
 {
-    if(result.final_sweep) return result.final_sweep->global_width_gradient_inf_norm;
+    if(result.final_sweep) return result.final_sweep->global_eta_gradient_inf_norm;
     return std::nullopt;
 }
 
@@ -1272,7 +1272,7 @@ BcdComponentResult SolveBcdComponent(
             event.update_budget=static_cast<int>(sweep.block_solves);
             event.elapsed_seconds=sweep.wall_seconds;
             event.accepted_objective=sweep.objective_after;
-            event.accepted_gradient_inf_norm=sweep.global_width_gradient_inf_norm;
+            event.accepted_gradient_inf_norm=sweep.global_eta_gradient_inf_norm;
             JointBcdProgress progress;
             progress.sweep=sweep.sweep;
             progress.maximum_sweeps=maximum_sweeps;
@@ -1286,9 +1286,9 @@ BcdComponentResult SolveBcdComponent(
             progress.recovery_successes=sweep.recovery_successes;
             progress.objective=sweep.objective_after;
             progress.global_ac_kkt=sweep.global_ac_kkt;
-            progress.width_gradient_inf_norm=sweep.global_width_gradient_inf_norm;
-            progress.projected_width_kkt=sweep.projected_width_gradient_inf_norm;
-            progress.maximum_target_width=sweep.maximum_target_width;
+            progress.eta_gradient_inf_norm=sweep.global_eta_gradient_inf_norm;
+            progress.projected_width_kkt=sweep.projected_eta_gradient_inf_norm;
+            progress.maximum_target_tau=sweep.maximum_target_tau;
             last_bcd_progress=progress;
             event.bcd=std::move(progress);
             observer(event);

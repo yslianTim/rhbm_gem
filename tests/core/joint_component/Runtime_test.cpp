@@ -156,7 +156,7 @@ TEST(JointComponentRuntimeTest, RuntimeConvergenceIsDerivedFromActualEvidenceNot
             }),fit.evidence.end());
         }
         for(const char * name:{"ac-feasibility","conditional-ac-optimality","independent-ac-optimality",
-            "independent-kkt-consistency","independent-replay","width-gradient-consistency",
+            "independent-kkt-consistency","independent-replay","eta-gradient-consistency",
             "width-stationarity","endpoint-verification","numerical-qualification"})
             EXPECT_NE(std::find_if(component.evidence.begin(),component.evidence.end(),[&](const auto & check) {
                 return check.name==name;
@@ -365,7 +365,7 @@ TEST(JointComponentRuntimeTest, TransientWidthFailureRecoversAndAssemblesQualifi
     EXPECT_EQ(search.work.bounded_lm.failed_subproblems,1u);
     ASSERT_TRUE(search.final_sweep);
     EXPECT_LE(search.final_sweep->global_ac_kkt,1e-7);
-    EXPECT_LE(search.final_sweep->projected_width_gradient_inf_norm,1e-9);
+    EXPECT_LE(search.final_sweep->projected_eta_gradient_inf_norm,1e-9);
     EXPECT_EQ(search.final_sweep->maximum_width_bound_violation,0.0);
     EXPECT_GT(search.confirmed_stationarity_sweep,0u);
     ASSERT_TRUE(search.certification);
@@ -427,7 +427,7 @@ TEST(JointComponentRuntimeTest, WidthRecoveryExhaustionAndUnqualifiedTerminalSta
     const auto early=RunRecoveryAssembly(true,false,2);
     EXPECT_EQ(early.search.recovery_successes,1u);
     ASSERT_TRUE(early.search.final_sweep);
-    EXPECT_GT(early.search.final_sweep->projected_width_gradient_inf_norm,1e-9);
+    EXPECT_GT(early.search.final_sweep->projected_eta_gradient_inf_norm,1e-9);
     EXPECT_FALSE(early.fit.components.front().state); EXPECT_FALSE(early.fit.assembled_state);
 
     const auto corrupt=RunRecoveryAssembly(true,false,200,true);

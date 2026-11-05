@@ -20,7 +20,7 @@ n::IndependentReplayEvidence PassingReplay()
     replay.primary_kkt_passed=true; replay.independent_kkt_passed=true;
     replay.prediction_passed=true; replay.residual_passed=true; replay.objective_passed=true;
     replay.kkt_agrees=true; replay.gradient_agrees=true;
-    replay.primary_width_gradient=0.; replay.independent_width_gradient=0.;
+    replay.primary_eta_gradient=0.; replay.independent_eta_gradient=0.;
     replay.primary_ac_kkt=0.; replay.independent_ac_kkt=0.;
     return replay;
 }
@@ -80,7 +80,7 @@ TEST(JointCompactAssessmentTest, PracticalCriteriaRelaxOnlyGlobalEndpointStation
     endpoint.certificate.projected_kkt=5e-8; endpoint.certificate.kkt_passed=false;
     auto replay=PassingReplay();
     replay.primary_ac_kkt=5e-8; replay.independent_ac_kkt=5e-8;
-    replay.primary_width_gradient=5e-10; replay.independent_width_gradient=5e-10;
+    replay.primary_eta_gradient=5e-10; replay.independent_eta_gradient=5e-10;
 
     const auto strict=n::VerifyJointEndpoint(domain,y,endpoint,replay,context,
         n::StrictJointConvergenceCriteria);
