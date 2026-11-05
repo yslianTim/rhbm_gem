@@ -474,7 +474,7 @@ rg::JointAnalysisResult CurrentJointExample(bool with_halo=true)
         2,1,1,with_halo ? 1u:0u,with_halo ? 1u:0u,0};
     result.initialization.valid=true;
     result.initialization.reason="valid-widths";
-    result.initialization.b={0.5};
+    result.initialization.tau={0.5};
     result.objective=0.012345678901234567;
     result.observation_scale=9;
     result.runtime_convergence=rg::JointCheckStatus::Failed;
@@ -655,7 +655,7 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV23PreservesUnavailableAndNull
     auto unavailable=CurrentJointExample();
     unavailable.components.clear();
     unavailable.initialization.valid=false;
-    unavailable.initialization.b.clear();
+    unavailable.initialization.tau.clear();
     unavailable.initialization.reason="width-calibration-unavailable";
     unavailable.assembled_state.reset();
     unavailable.objective.reset();

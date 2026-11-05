@@ -115,7 +115,7 @@ void SetExactMapForFixture(joint_partial_test::Fixture & f)
         {
             const auto squared=sim::SupportSquare(position,f.model->GetAtomList()[atom]->GetPosition());
             if(squared>6.25) continue;
-            const auto basis=n::EvaluateKernel(squared,f.b[atom],2.5);
+            const auto basis=n::EvaluateKernel(squared,f.tau[atom],2.5);
             value+=f.a[atom]*basis.gaussian+(atom==0 ? f.c[atom]*basis.charge : 0.0);
         }
         values[static_cast<std::size_t>(x+dims[0]*(y+dims[1]*z))]=value;
@@ -339,9 +339,9 @@ TEST(JointComponentPartialSelectionTest, CopyAndMoveCapturePreserveComponentPers
         atom.target=true;
         atom.first_stage_fit_qualified=true;
         atom.reason="valid-width";
-        atom.used_b=.5;
+        atom.used_tau=.5;
         initialization.atoms.push_back(std::move(atom));
-        initialization.b.push_back(.5);
+        initialization.tau.push_back(.5);
     }
 
     auto fit=core::FitJointComponentsInitialized(problem,initialization);
@@ -485,7 +485,7 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsSelectedTargetsOnceWi
 {
     auto f = joint_partial_test::Make("weak");
     std::vector<std::unique_ptr<rhbm_gem::AtomObject>> atoms;
-    f.a.clear(); f.b.clear(); f.c.clear();
+    f.a.clear(); f.tau.clear(); f.c.clear();
     for(int i=0;i<21;++i)
     {
         auto atom=std::make_unique<rhbm_gem::AtomObject>();
@@ -494,7 +494,7 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsSelectedTargetsOnceWi
         atom->SetChainID("A"); atom->SetComponentID("ALA");
         atom->SetAtomID(i==20 ? "CB" : "CA"+std::to_string(i));
         atoms.push_back(std::move(atom));
-        f.a.push_back(2.0); f.b.push_back(i==20 ? .3 : .5); f.c.push_back(.2);
+        f.a.push_back(2.0); f.tau.push_back(i==20 ? .3 : .5); f.c.push_back(.2);
     }
     f.model=std::make_unique<rhbm_gem::ModelObject>(std::move(atoms));
     f.model->SelectAtoms([](const auto & atom){return atom.GetSerialID()<=20;});
@@ -618,7 +618,7 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsSelectedTargetsOnceWi
         ASSERT_EQ(result.components[c].state.has_value(), direct.components[c].state.has_value());
         if (!direct.components[c].state) continue;
         EXPECT_EQ(result.components[c].state->ac, direct.components[c].state->ac);
-        EXPECT_EQ(result.components[c].state->b, direct.components[c].state->b);
+        EXPECT_EQ(result.components[c].state->tau, direct.components[c].state->tau);
         EXPECT_EQ(result.components[c].state->objective, direct.components[c].state->objective);
     }
 }
@@ -628,7 +628,7 @@ TEST(JointComponentPartialSelectionTest, StageAdapterUsesIdentityAndClearsMissin
     auto f = joint_partial_test::Make("all");
     const auto problem=core::BuildPureHaloSupportExclusionProblem(*f.map,*f.model);
     auto result=core::CaptureJointAnalysisResult(
-        second_stage_test::matched::joint_abc::FitBoundedJointComponentsForTesting(problem,f.b,2.0));
+        second_stage_test::matched::joint_abc::FitBoundedJointComponentsForTesting(problem,f.tau,2.0));
     ASSERT_EQ(result.atom_ids.size(), 2);
     std::swap(result.atom_ids[0], result.atom_ids[1]);
     auto & component = result.components.front();
@@ -640,7 +640,7 @@ TEST(JointComponentPartialSelectionTest, StageAdapterUsesIdentityAndClearsMissin
     const auto halo = rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(2));
     EXPECT_DOUBLE_EQ(target.GetFinalModel(rhbm_gem::FittingStage::Second).GetAmplitude(), component.state->ac[0]);
     EXPECT_DOUBLE_EQ(target.GetFinalModel(rhbm_gem::FittingStage::Second).GetOffset(), component.state->ac[1]);
-    EXPECT_DOUBLE_EQ(target.GetFinalModel(rhbm_gem::FittingStage::Second).GetWidth(), component.state->b[0]);
+    EXPECT_DOUBLE_EQ(target.GetFinalModel(rhbm_gem::FittingStage::Second).GetWidth(), component.state->tau[0]);
     EXPECT_EQ(halo.GetStageEstimate(rhbm_gem::FittingStage::Second).source.role, rhbm_gem::FittingRole::Halo);
     auto summary = core::BuildSecondStageSpotSummary(*f.model);
     EXPECT_NE(summary.find("joint-components"), std::string::npos);
@@ -737,7 +737,7 @@ TEST(JointComponentPartialSelectionTest, PostFitPeelingReconstructsGridNodesOuts
     auto f = joint_partial_test::Make("partial");
     SetExactMapForFixture(f);
     const auto problem = core::BuildPureHaloSupportExclusionProblem(*f.map, *f.model);
-    const auto fit=second_stage_test::matched::joint_abc::FitBoundedJointComponentsForTesting(problem,{f.b[0]},2.0);
+    const auto fit=second_stage_test::matched::joint_abc::FitBoundedJointComponentsForTesting(problem,{f.tau[0]},2.0);
     ASSERT_TRUE(fit.assembled_state) << fit.initialization.reason << " search=" << fit.search_completed
         << " components=" << fit.components.size()
         << (fit.components.empty() ? std::string{} : ", stop="+fit.components.front().stop_reason);
@@ -805,7 +805,7 @@ TEST(JointComponentPartialSelectionTest, ExcludedFitRowsRemainInOriginalPeelingD
     SetExactMapForFixture(f);
     const auto problem=core::BuildPureHaloSupportExclusionProblem(*f.map,*f.model);
     ASSERT_LT(problem.Input().row_ids.size(),problem.OriginalInput().row_ids.size());
-    const auto fit=second_stage_test::matched::joint_abc::FitBoundedJointComponentsForTesting(problem,{f.b[0]},2.0);
+    const auto fit=second_stage_test::matched::joint_abc::FitBoundedJointComponentsForTesting(problem,{f.tau[0]},2.0);
     ASSERT_TRUE(fit.assembled_state) << fit.initialization.reason;
     ASSERT_EQ(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
     auto snapshot=core::CaptureJointAnalysisResult(fit);
@@ -831,7 +831,7 @@ TEST(JointComponentPartialSelectionTest, PeelingIncludesDistantHaloThroughInterp
         std::make_unique<double[]>(111 * 61 * 61));
     SetExactMapForFixture(f);
     const auto problem = core::BuildPureHaloSupportExclusionProblem(*f.map, *f.model);
-    const auto fit=second_stage_test::matched::joint_abc::FitBoundedJointComponentsForTesting(problem,{f.b[0]},2.0);
+    const auto fit=second_stage_test::matched::joint_abc::FitBoundedJointComponentsForTesting(problem,{f.tau[0]},2.0);
     ASSERT_TRUE(fit.assembled_state) << fit.initialization.reason;
     ASSERT_EQ(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
     auto snapshot=core::CaptureJointAnalysisResult(fit);
@@ -886,7 +886,7 @@ TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextValidatesIde
     SetExactMapForFixture(f);
     const auto problem = core::BuildPureHaloSupportExclusionProblem(*f.map, *f.model);
     const auto snapshot = core::CaptureJointAnalysisResult(
-        second_stage_test::matched::joint_abc::FitBoundedJointComponentsForTesting(problem,f.b,2.0));
+        second_stage_test::matched::joint_abc::FitBoundedJointComponentsForTesting(problem,f.tau,2.0));
     f.model->EditAnalysis().ApplyJointResult(snapshot, "shared-context-test");
     for (std::size_t i=0;i<atom_ids.size();++i)
     {
@@ -1429,7 +1429,7 @@ TEST(JointComponentPartialSelectionTest, TargetOnlyPostprocessingRetainsFullCont
     auto f = joint_partial_test::Make("partial");
     SetExactMapForFixture(f);
     const auto problem = core::BuildPureHaloSupportExclusionProblem(*f.map, *f.model);
-    const auto fit=second_stage_test::matched::joint_abc::FitBoundedJointComponentsForTesting(problem,{f.b[0]},2.0);
+    const auto fit=second_stage_test::matched::joint_abc::FitBoundedJointComponentsForTesting(problem,{f.tau[0]},2.0);
     ASSERT_TRUE(fit.assembled_state) << fit.initialization.reason << " search=" << fit.search_completed
         << " components=" << fit.components.size()
         << (fit.components.empty() ? std::string{} : ", stop="+fit.components.front().stop_reason);
@@ -1555,7 +1555,7 @@ TEST(JointComponentPartialSelectionTest, JointFirstStageParallelWorkersPreserveS
         ASSERT_EQ(parallel.valid, serial.valid);
         EXPECT_EQ(parallel.reason, serial.reason);
         EXPECT_EQ(parallel.data_scope, serial.data_scope);
-        ASSERT_EQ(parallel.b, serial.b);
+        ASSERT_EQ(parallel.tau, serial.tau);
         ASSERT_EQ(parallel.atoms.size(), serial.atoms.size());
         for (std::size_t i = 0; i < parallel.atoms.size(); ++i)
         {
@@ -1570,8 +1570,8 @@ TEST(JointComponentPartialSelectionTest, JointFirstStageParallelWorkersPreserveS
             EXPECT_EQ(actual.target, expected.target);
             EXPECT_EQ(actual.first_stage_fit_qualified, expected.first_stage_fit_qualified);
             EXPECT_EQ(actual.reason, expected.reason);
-            EXPECT_EQ(actual.original_b, expected.original_b);
-            EXPECT_EQ(actual.used_b, expected.used_b);
+            EXPECT_EQ(actual.original_tau, expected.original_tau);
+            EXPECT_EQ(actual.used_tau, expected.used_tau);
             EXPECT_EQ(actual.seed_source, expected.seed_source);
             EXPECT_EQ(actual.donor_count, expected.donor_count);
             EXPECT_EQ(actual.first_stage_qualification, expected.first_stage_qualification);
@@ -1609,7 +1609,7 @@ TEST(JointComponentPartialSelectionTest, CompleteModelWidthSensitivityPropagates
     f.model->FindAtomPtr(1)->SetPosition(.13,.14,.12);
     SetExactMapForFixture(f);
     const auto problem=core::BuildPureHaloSupportExclusionProblem(*f.map,*f.model);
-    const auto fitted=second_stage_test::matched::joint_abc::FitBoundedJointComponentsForTesting(problem,f.b,2.0);
+    const auto fitted=second_stage_test::matched::joint_abc::FitBoundedJointComponentsForTesting(problem,f.tau,2.0);
     ASSERT_EQ(fitted.RuntimeConvergence(),JointCheckStatus::Passed);
     const auto baseline=core::CaptureJointAnalysisResult(fitted);
     struct Output
@@ -1621,7 +1621,7 @@ TEST(JointComponentPartialSelectionTest, CompleteModelWidthSensitivityPropagates
     const auto run=[&](double charge,double width) {
         auto snapshot=baseline;
         auto & state=*snapshot.components.front().state;
-        state.ac[0]=0.; state.ac[1]=charge; state.b[0]=width; state.log_b[0]=std::log(width);
+        state.ac[0]=0.; state.ac[1]=charge; state.tau[0]=width; state.log_tau[0]=std::log(width);
         snapshot.assembled_state=state;
         f.model->EditAnalysis().ApplyJointResult(snapshot,"controlled-width");
         for(int id:{1,2})

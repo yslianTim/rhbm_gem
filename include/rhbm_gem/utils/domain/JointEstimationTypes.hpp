@@ -91,7 +91,7 @@ struct JointInitializationAtom
     std::optional<int> native_status;
     bool target{},first_stage_fit_qualified{};
     std::string reason;
-    std::optional<double> original_b,used_b;
+    std::optional<double> original_tau,used_tau;
     std::string seed_source{"not-recorded"};
     std::size_t donor_count{};
     std::optional<RHBMSolveQualification> first_stage_qualification{};
@@ -149,13 +149,14 @@ struct JointInitialization
 {
     bool valid{};
     std::string reason;
-    std::vector<double> b;
+    std::vector<double> tau;
     std::vector<JointInitializationAtom> atoms;
     std::string data_scope{"caller-provided-widths"};
 };
 struct JointState
 {
-    std::vector<double> ac,b,log_b,width_gradient;
+    // tau = exp(eta); log_tau = eta; eta_gradient = dF/deta (not dF/dtau).
+    std::vector<double> ac,tau,log_tau,eta_gradient;
     // 0.5 * squared residual norm / parent ObservationScale() squared.
     double objective{};
 };
@@ -191,7 +192,7 @@ struct JointBlockConditioning
         profile_sigma_min,profile_sigma_max,profile_condition,
         profile_rank_threshold,profile_rank_threshold_margin_relative;
     std::optional<bool> free_ac_threshold_sensitive,projected_width_threshold_sensitive,profile_threshold_sensitive;
-    std::vector<double> local_widths,projected_width_column_norms;
+    std::vector<double> local_tau,projected_width_column_norms;
     std::string free_ac_status{"not-assessed"},free_ac_reason,
         projected_width_status{"not-assessed"},projected_width_reason,
         profile_status{"not-assessed"},profile_reason;

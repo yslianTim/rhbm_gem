@@ -65,8 +65,8 @@ void CheckSingleBlock(const std::string & topology,int atoms)
     for(std::size_t k=0;k<bounded.components.front().state->ac.size();++k)
         EXPECT_LE(std::abs(bounded.components.front().state->ac[k]-result.fit.components.front().state->ac[k]),
             1e-10*(1+std::abs(result.fit.components.front().state->ac[k])));
-    for(std::size_t k=0;k<bounded.components.front().state->log_b.size();++k)
-        EXPECT_LE(std::abs(bounded.components.front().state->log_b[k]-result.fit.components.front().state->log_b[k]),1e-10);
+    for(std::size_t k=0;k<bounded.components.front().state->log_tau.size();++k)
+        EXPECT_LE(std::abs(bounded.components.front().state->log_tau[k]-result.fit.components.front().state->log_tau[k]),1e-10);
     auto stopped_search=result.fit; stopped_search.search_completed=false;
     EXPECT_EQ(stopped_search.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
     for(const auto & sweep:result.sweeps)
@@ -826,7 +826,7 @@ TEST(JointBcdSearchTest, PreparedConditioningUsesValidatedContextWidthBound)
         const auto & right=explicit_bound.local_conditioning[block];
         EXPECT_EQ(left.active_width_bound_targets,right.active_width_bound_targets);
         EXPECT_EQ(left.local_projected_width_kkt,right.local_projected_width_kkt);
-        EXPECT_EQ(left.local_widths,right.local_widths);
+        EXPECT_EQ(left.local_tau,right.local_tau);
     }
     const auto rejected=[&](std::optional<double> context_bound,std::optional<double> policy_bound,
         const std::string & reason) {
@@ -906,10 +906,10 @@ TEST(JointBcdSearchTest, AssembledBoundedWidthStationarityUsesIndependentProject
     ASSERT_TRUE(fit.assembled_state.has_value());
     double projected_inf{},raw_inf{};
     bool active_bound{};
-    for(std::size_t atom=0;atom<fit.assembled_state->log_b.size();++atom)
+    for(std::size_t atom=0;atom<fit.assembled_state->log_tau.size();++atom)
     {
-        const double eta=fit.assembled_state->log_b[atom];
-        const double gradient=fit.assembled_state->width_gradient[atom];
+        const double eta=fit.assembled_state->log_tau[atom];
+        const double gradient=fit.assembled_state->eta_gradient[atom];
         projected_inf=std::max(projected_inf,std::abs(eta-std::min(eta-gradient,eta_max)));
         raw_inf=std::max(raw_inf,std::abs(gradient));
         active_bound|=eta>=eta_max-1e-12;

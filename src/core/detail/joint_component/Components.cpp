@@ -461,8 +461,8 @@ AssemblyResult AssembleComponents(const Domain & domain,VectorRef y,const Compon
             continue;
         }
         const auto & state=*component.state;
-        if(state.ac.size()!=2*view.atoms.size() || state.b.size()!=view.atoms.size() ||
-            state.log_b.size()!=view.atoms.size() || state.width_gradient.size()!=view.atoms.size())
+        if(state.ac.size()!=2*view.atoms.size() || state.tau.size()!=view.atoms.size() ||
+            state.log_tau.size()!=view.atoms.size() || state.eta_gradient.size()!=view.atoms.size())
         {
             out.available=false;
             if(out.mapping_reason.empty()) out.mapping_reason="invalid-component-state-dimensions";
@@ -470,7 +470,7 @@ AssemblyResult AssembleComponents(const Domain & domain,VectorRef y,const Compon
         }
         for(std::size_t a=0;a<view.atoms.size();++a)
         {
-            out.eta(view.atoms[a])=state.log_b[a];
+            out.eta(view.atoms[a])=state.log_tau[a];
             out.beta(2*view.atoms[a])=state.ac[2*a];
             out.beta(2*view.atoms[a]+1)=state.ac[2*a+1];
         }

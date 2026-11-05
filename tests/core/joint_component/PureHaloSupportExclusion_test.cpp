@@ -67,13 +67,13 @@ JointInitialization TargetInitialization()
 {
     JointInitialization initialization;
     initialization.valid=true;
-    initialization.b={.65};
+    initialization.tau={.65};
     JointInitializationAtom atom;
     atom.id="1";
     atom.target=true;
     atom.reason="valid-width";
-    atom.used_b=.65;
-    atom.original_b=.65;
+    atom.used_tau=.65;
+    atom.original_tau=.65;
     initialization.atoms.push_back(std::move(atom));
     initialization.reason="valid-widths";
     return initialization;
@@ -369,7 +369,7 @@ JointAnalysisResult QualifiedReconstructionSnapshot(const JointProblem & problem
     const auto targets=problem.OriginalInput().selection_domain->target_indices;
     result.components.front().atoms={targets.front()};
     result.components.front().state->ac={2.0,-.2};
-    result.components.front().state->b={.65};
+    result.components.front().state->tau={.65};
     result.components.front().search_completed=true;
     result.components.front().stop_reason="converged";
     result.assembled_state=result.components.front().state;
@@ -907,7 +907,7 @@ TEST(PureHaloSupportExclusionTest, ExtendedSearchQualifiesAssemblyAndFeedsEveryD
         namespace n=core::joint_component;
         ASSERT_TRUE(fit.problem);
         auto initialization=fit.initialization;
-        std::fill(initialization.b.begin(),initialization.b.end(),1.5);
+        std::fill(initialization.tau.begin(),initialization.tau.end(),1.5);
         const auto calibration=n::CalibrateGlobalWidth(initialization,"extension-workflow-test");
         const auto bounded=n::MakeBoundedInitialization(initialization,calibration);
         ASSERT_TRUE(bounded.available)<<bounded.reason;

@@ -64,7 +64,7 @@ void AssembleResult(const JointProblem & problem,const ProblemData & data,const 
         JointCheckStatus::Failed,JointEvidenceScope::ComponentLocal,{},{},certification.trust.reason});
 
     out.fit.problem=problem; out.fit.initialization.valid=true;
-    out.fit.initialization.reason="valid-widths"; out.fit.initialization.b=Values(out.state.eta.array().exp());
+    out.fit.initialization.reason="valid-widths"; out.fit.initialization.tau=Values(out.state.eta.array().exp());
     out.fit.components.push_back(std::move(component)); out.fit.search_completed=out.search_converged;
     out.fit.observation_scale=context.scale;
     out.fit.available_row_mask.assign(data.input->observations.size(),false);

@@ -110,8 +110,8 @@ JointTargetEvidence AssessTargetPointState(const JointProblem & problem,const Jo
     const auto & input=problem.Input();
     const bool layout_valid=LayoutMatchesScope(problem,layout,scope,original_rows);
     const bool dimensions=state && layout_valid && layout.full_atoms.size()<=std::numeric_limits<std::size_t>::max()/2 &&
-        state->ac.size()==2*layout.full_atoms.size() && state->b.size()==layout.full_atoms.size() &&
-        state->log_b.size()==layout.full_atoms.size();
+        state->ac.size()==2*layout.full_atoms.size() && state->tau.size()==layout.full_atoms.size() &&
+        state->log_tau.size()==layout.full_atoms.size();
     auto conditioning_index=BuildDiagnosticAtomIndex(input.atom_ids.size(),conditioning);
     const auto mark_missing_membership=[&](auto & index,const auto & blocks) {
         if(blocks.empty()) return;
@@ -127,7 +127,7 @@ JointTargetEvidence AssessTargetPointState(const JointProblem & problem,const Jo
     mark_missing_membership(conditioning_index,conditioning);
     const auto parameter_validity=[&](std::size_t index) {
         if(!dimensions) return JointCheckStatus::Unavailable;
-        const double amplitude=state->ac[2*index],width=state->b[index],log_width=state->log_b[index];
+        const double amplitude=state->ac[2*index],width=state->tau[index],log_width=state->log_tau[index];
         if(!std::isfinite(amplitude) || amplitude<0 || !std::isfinite(state->ac[2*index+1]) ||
             !std::isfinite(width) || !(width>0) || !std::isfinite(log_width))
             return JointCheckStatus::Failed;

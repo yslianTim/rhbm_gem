@@ -174,8 +174,8 @@ std::vector<double> DiagnosticValues(const j::value & v)
 }
 Object State(const JointState & x)
 {
-    return {{"ac",j::value_from(x.ac)},{"b",j::value_from(x.b)},{"log_b",j::value_from(x.log_b)},
-        {"width_gradient",j::value_from(x.width_gradient)},{"objective",x.objective}};
+    return {{"ac",j::value_from(x.ac)},{"b",j::value_from(x.tau)},{"log_b",j::value_from(x.log_tau)},
+        {"width_gradient",j::value_from(x.eta_gradient)},{"objective",x.objective}};
 }
 JointState ReadState(const j::value & v)
 {
@@ -262,19 +262,19 @@ Object Initialization(const JointInitialization & x)
     for(const auto & a:x.atoms) atoms.emplace_back(Object{{"id",a.id},{"ols",Diagnostics(a.ols)},{"mdpde",Diagnostics(a.mdpde)},
         {"alpha",std::isfinite(a.alpha) ? j::value(a.alpha) : j::value(nullptr)},{"sample_count",a.sample_count},
         { "native_status",a.native_status ? j::value(*a.native_status) : j::value(nullptr)},{"reason",a.reason},
-        {"original_b",Number(a.original_b)},{"used_b",Number(a.used_b)},{"seed_source",a.seed_source},{"donor_count",a.donor_count},
+        {"original_b",Number(a.original_tau)},{"used_b",Number(a.used_tau)},{"seed_source",a.seed_source},{"donor_count",a.donor_count},
         {"first_stage_fit_qualified",a.first_stage_fit_qualified},
         {"first_stage_qualification",a.first_stage_qualification ?
             j::value(QualificationText(*a.first_stage_qualification)) : j::value(nullptr)},
         {"first_stage_recovery",a.first_stage_recovery ?
             FailedOnlyRecovery(*a.first_stage_recovery) : j::value(nullptr)}});
-    return {{"valid",x.valid},{"reason",x.reason},{"b",Diagnostics(x.b)},{"atoms",std::move(atoms)},{"data_scope",x.data_scope}};
+    return {{"valid",x.valid},{"reason",x.reason},{"b",Diagnostics(x.tau)},{"atoms",std::move(atoms)},{"data_scope",x.data_scope}};
 }
 JointInitialization ReadInitialization(const j::value & v)
 {
     const auto & o=v.as_object(); JointInitialization x;
     RequireOnlyKeys(o,{"valid","reason","b","atoms","data_scope"},"unknown current Joint initialization field");
-    x.valid=Read<bool>(o,"valid"); x.reason=Read<std::string>(o,"reason"); x.b=DiagnosticValues(o.at("b"));
+    x.valid=Read<bool>(o,"valid"); x.reason=Read<std::string>(o,"reason"); x.tau=DiagnosticValues(o.at("b"));
     x.data_scope=Read<std::string>(o,"data_scope");
     for(const auto & item:o.at("atoms").as_array())
     {
@@ -293,7 +293,7 @@ JointInitialization ReadInitialization(const j::value & v)
             atom.first_stage_qualification=Qualification(a.at("first_stage_qualification"));
         if(!a.at("first_stage_recovery").is_null())
             atom.first_stage_recovery=ReadFailedOnlyRecovery(a.at("first_stage_recovery"));
-        atom.original_b=OptionalNumber(a.at("original_b")); atom.used_b=OptionalNumber(a.at("used_b"));
+        atom.original_tau=OptionalNumber(a.at("original_b")); atom.used_tau=OptionalNumber(a.at("used_b"));
         atom.seed_source=Read<std::string>(a,"seed_source"); atom.donor_count=Read<std::size_t>(a,"donor_count");
         if(!a.at("native_status").is_null()) atom.native_status=Read<int>(a,"native_status");
         x.atoms.push_back(std::move(atom));
@@ -570,11 +570,11 @@ void ValidateMetadata(const JointAnalysisMetadata & m)
 }
 void ValidateState(const JointState & x,std::size_t atoms)
 {
-    Require(x.ac.size()==2*atoms && x.b.size()==atoms && x.log_b.size()==atoms && x.width_gradient.size()==atoms,"state dimensions");
-    for(const auto * values:{&x.ac,&x.b,&x.log_b,&x.width_gradient})
+    Require(x.ac.size()==2*atoms && x.tau.size()==atoms && x.log_tau.size()==atoms && x.eta_gradient.size()==atoms,"state dimensions");
+    for(const auto * values:{&x.ac,&x.tau,&x.log_tau,&x.eta_gradient})
         for(double value:*values) Require(std::isfinite(value),"nonfinite state");
     for(std::size_t atom=0;atom<atoms;++atom)
-        Require(x.ac[2*atom]>=0 && x.b[atom]>0,"infeasible target parameters");
+        Require(x.ac[2*atom]>=0 && x.tau[atom]>0,"infeasible target parameters");
     Require(std::isfinite(x.objective),"nonfinite objective");
 }
 void ValidateCandidateDiagnostic(const JointCandidateDiagnostic & x,std::size_t atoms,bool trusted_state)
@@ -788,14 +788,14 @@ void Validate(const JointAnalysisResult & x)
     {
         Require(std::find(x.atom_ids.begin(),x.atom_ids.end(),atom.id)!=x.atom_ids.end() &&
             initialized.insert(atom.id).second,"initialization atom identity");
-        Require(!atom.original_b || std::isfinite(*atom.original_b),"nonfinite original initialization width provenance");
-        Require(!atom.used_b || (std::isfinite(*atom.used_b) && *atom.used_b>0),
+        Require(!atom.original_tau || std::isfinite(*atom.original_tau),"nonfinite original initialization width provenance");
+        Require(!atom.used_tau || (std::isfinite(*atom.used_tau) && *atom.used_tau>0),
             "invalid used initialization width provenance");
     }
     if(x.initialization.valid)
     {
-        Require(x.initialization.b.size()==targets.size(),"initial width dimensions");
-        for(const double width:x.initialization.b)
+        Require(x.initialization.tau.size()==targets.size(),"initial width dimensions");
+        for(const double width:x.initialization.tau)
             Require(std::isfinite(width) && width>0,"invalid initial width");
     }
     for(const auto & check:x.evidence)
@@ -829,7 +829,7 @@ void Validate(const JointAnalysisResult & x)
             "solver result is missing global width bound provenance");
     const auto validate_bound=[&](const JointState & state) {
         if(width_bound)
-            for(double width:state.b)
+            for(double width:state.tau)
                 Require(std::log(width)<=std::log(*width_bound),"state exceeds global width bound");
     };
     if(x.assembled_state)

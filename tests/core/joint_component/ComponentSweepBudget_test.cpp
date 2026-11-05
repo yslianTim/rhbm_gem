@@ -185,7 +185,7 @@ TEST(JointComponentSweepBudgetTest, ExtensionPreservesTheOriginalPathAndQualifie
     EXPECT_EQ(adaptive.TargetRuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
     ASSERT_TRUE(adaptive.assembled_state); ASSERT_TRUE(fixed.assembled_state);
     EXPECT_EQ(adaptive.assembled_state->ac,fixed.assembled_state->ac);
-    EXPECT_EQ(adaptive.assembled_state->b,fixed.assembled_state->b);
+    EXPECT_EQ(adaptive.assembled_state->tau,fixed.assembled_state->tau);
 }
 
 TEST(JointComponentSweepBudgetTest, UnqualifiedHardLimitAndMemoryRejectionCannotPublishComponentState)

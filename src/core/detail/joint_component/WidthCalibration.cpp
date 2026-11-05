@@ -39,7 +39,7 @@ WidthBoundCalibration CalibrateGlobalWidth(
 {
     WidthBoundCalibration result;
     result.dataset_identity=std::move(dataset_identity);
-    if(initialization.atoms.size()!=initialization.b.size())
+    if(initialization.atoms.size()!=initialization.tau.size())
     {
         result.unavailable_reason="initialization-record-size-mismatch";
         return result;
@@ -47,7 +47,7 @@ WidthBoundCalibration CalibrateGlobalWidth(
 
     for(std::size_t i=0;i<initialization.atoms.size();++i)
         if(initialization.atoms[i].target &&
-            (!std::isfinite(initialization.b[i]) || !(initialization.b[i]>0.0)))
+            (!std::isfinite(initialization.tau[i]) || !(initialization.tau[i]>0.0)))
         {
             result.unavailable_reason="invalid-target-initial-width";
             return result;
@@ -126,8 +126,8 @@ WidthBoundCalibration CalibrateGlobalWidth(
     for(std::size_t i=0;i<initialization.atoms.size();++i)
     {
         const auto & atom=initialization.atoms[i];
-        if(!atom.target || !std::isfinite(initialization.b[i]) || !(initialization.b[i]>0.0)) continue;
-        if(initialization.b[i]>*result.bmax4) ++result.initial_violations4;
+        if(!atom.target || !std::isfinite(initialization.tau[i]) || !(initialization.tau[i]>0.0)) continue;
+        if(initialization.tau[i]>*result.bmax4) ++result.initial_violations4;
     }
     result.status="Available";
     return result;
@@ -137,7 +137,7 @@ BoundedInitialization MakeBoundedInitialization(
     const JointInitialization & initialization, const WidthBoundCalibration & calibration)
 {
     BoundedInitialization result;
-    if(initialization.atoms.size()!=initialization.b.size())
+    if(initialization.atoms.size()!=initialization.tau.size())
     {
         result.reason="initialization-record-size-mismatch";
         return result;
@@ -148,13 +148,13 @@ BoundedInitialization MakeBoundedInitialization(
         return result;
     }
     result.bmax=*calibration.bmax4;
-    result.widths=initialization.b;
+    result.widths=initialization.tau;
     result.projections.reserve(calibration.target_count);
     for(std::size_t i=0;i<initialization.atoms.size();++i)
     {
         const auto & atom=initialization.atoms[i];
         if(!atom.target) continue;
-        const double initial=initialization.b[i];
+        const double initial=initialization.tau[i];
         double bounded=initial;
         if(std::isfinite(initial) && initial>result.bmax) bounded=result.bmax;
         const bool projected=bounded!=initial;
@@ -164,7 +164,7 @@ BoundedInitialization MakeBoundedInitialization(
             result.maximum_projection_magnitude=std::max(result.maximum_projection_magnitude,initial-bounded);
             result.widths[i]=bounded;
         }
-        result.projections.push_back({i,atom.id,atom.original_b,initial,bounded,projected});
+        result.projections.push_back({i,atom.id,atom.original_tau,initial,bounded,projected});
     }
     result.available=true;
     return result;

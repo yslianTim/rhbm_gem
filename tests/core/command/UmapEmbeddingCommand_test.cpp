@@ -851,7 +851,7 @@ TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNo
     JointInitialization initialization;
     initialization.valid=true;
     initialization.reason="valid-widths";
-    initialization.b=widths;
+    initialization.tau=widths;
     for(std::size_t atom_index=0;atom_index<fitting.atom_ids.size();++atom_index)
     {
         JointInitializationAtom atom;
@@ -862,8 +862,8 @@ TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNo
         atom.alpha=0.5;
         atom.sample_count=12;
         atom.reason=atom_index<20 ? "valid-width" : "median-fallback";
-        atom.original_b=atom_index<20 ? std::optional<double>{0.5} : std::nullopt;
-        atom.used_b=0.5;
+        atom.original_tau=atom_index<20 ? std::optional<double>{0.5} : std::nullopt;
+        atom.used_tau=0.5;
         atom.seed_source=atom_index<20 ? "fitted" : "median-fallback";
         atom.donor_count=atom_index<20 ? 0 : 20;
         atom.first_stage_fit_qualified=atom_index<20;

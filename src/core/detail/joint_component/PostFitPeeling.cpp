@@ -328,7 +328,7 @@ std::vector<std::pair<int, PostFitPeelingResult>> JointPostprocessingContext::Bu
         {
             if(full[k]>=represented.size() || represented[full[k]])
                 throw std::invalid_argument("Invalid target-only component mapping in peeling snapshot.");
-            represented[full[k]] = GaussianModel3D{c.state->ac[2*k], c.state->b[k], c.state->ac[2*k+1]};
+            represented[full[k]] = GaussianModel3D{c.state->ac[2*k], c.state->tau[k], c.state->ac[2*k+1]};
         }
     }
     if(pure_has_halos)

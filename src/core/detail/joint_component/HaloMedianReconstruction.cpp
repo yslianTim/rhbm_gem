@@ -64,10 +64,10 @@ std::map<std::size_t,GaussianModel3D> TargetPoints(const JointAnalysisResult & r
     {
         if (!component.state) continue;
         const auto & full=component.layout ? component.layout->full_atoms : component.atoms;
-        if (component.state->ac.size()!=2*full.size() || component.state->b.size()!=full.size())
+        if (component.state->ac.size()!=2*full.size() || component.state->tau.size()!=full.size())
             throw std::invalid_argument("Invalid Joint target state for Halo median reconstruction.");
         for (std::size_t k=0;k<full.size();++k)
-            if (!points.emplace(full[k],GaussianModel3D{component.state->ac[2*k],component.state->b[k],
+            if (!points.emplace(full[k],GaussianModel3D{component.state->ac[2*k],component.state->tau[k],
                 component.state->ac[2*k+1]}).second)
                 throw std::invalid_argument("Duplicate Joint target state for Halo median reconstruction.");
     }

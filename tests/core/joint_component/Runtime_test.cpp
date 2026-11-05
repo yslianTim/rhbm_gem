@@ -247,7 +247,7 @@ TEST(JointComponentRuntimeTest, GenericNumericalOutcomesAreNotPersistedAsFormalR
             if(fit.components[k].state) EXPECT_EQ(saved.components[k].state->ac,fit.components[k].state->ac);
         }
         EXPECT_THROW(io::Encode(saved),std::invalid_argument);
-        if(variant==3) EXPECT_TRUE(std::isnan(saved.initialization.b[0]));
+        if(variant==3) EXPECT_TRUE(std::isnan(saved.initialization.tau[0]));
     }
 }
 
@@ -264,8 +264,8 @@ TEST(JointComponentRuntimeTest, PositiveMapScalingPreservesKernelCoefficientUnit
     for(std::size_t i=0;i<original.assembled_state->ac.size();++i)
         EXPECT_NEAR(original.assembled_state->ac[i],divisor*normalized.assembled_state->ac[i],
             1e-10*(1+std::abs(original.assembled_state->ac[i])));
-    for(std::size_t i=0;i<original.assembled_state->b.size();++i)
-        EXPECT_NEAR(original.assembled_state->b[i],normalized.assembled_state->b[i],1e-10);
+    for(std::size_t i=0;i<original.assembled_state->tau.size();++i)
+        EXPECT_NEAR(original.assembled_state->tau[i],normalized.assembled_state->tau[i],1e-10);
     ASSERT_TRUE(original.prediction); ASSERT_TRUE(normalized.prediction);
     for(std::size_t i=0;i<original.prediction->size();++i)
         EXPECT_NEAR((*original.prediction)[i],divisor*(*normalized.prediction)[i],
@@ -300,7 +300,7 @@ TEST(JointComponentRuntimeTest, HistoricalLmFailureDoesNotVetoAVerifiedRecovered
     auto missing=component;
     std::erase_if(missing.evidence,[](const auto & check){return check.name=="accepted-state-integrity";});
     EXPECT_EQ(missing.RuntimeConvergence(),Status::Unavailable);
-    component.state->b[0]=std::numeric_limits<double>::quiet_NaN();
+    component.state->tau[0]=std::numeric_limits<double>::quiet_NaN();
     EXPECT_NE(component.RuntimeConvergence(),Status::Passed);
 }
 
@@ -395,8 +395,8 @@ TEST(JointComponentRuntimeTest, TransientWidthFailureRecoversAndAssemblesQualifi
     EXPECT_NEAR(*recovered.fit.objective,*baseline.fit.objective,1e-12);
     for(std::size_t i=0;i<recovered.fit.prediction->size();++i)
         EXPECT_NEAR((*recovered.fit.prediction)[i],(*baseline.fit.prediction)[i],1e-6);
-    for(std::size_t i=0;i<component.state->b.size();++i)
-        EXPECT_NEAR(component.state->b[i],baseline.fit.assembled_state->b[i],1e-6);
+    for(std::size_t i=0;i<component.state->tau.size();++i)
+        EXPECT_NEAR(component.state->tau[i],baseline.fit.assembled_state->tau[i],1e-6);
     for(std::size_t i=0;i<component.state->ac.size();++i)
         EXPECT_NEAR(component.state->ac[i],baseline.fit.assembled_state->ac[i],1e-5);
     const auto saved=core::CaptureJointAnalysisResult(recovered.fit);

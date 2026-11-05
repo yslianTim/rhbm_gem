@@ -55,18 +55,18 @@ std::vector<double> Values(const n::Vector & v) {return {v.data(),v.data()+v.siz
 bool ValidJointState(const JointState & state,std::size_t atoms)
 {
     if(atoms>std::numeric_limits<std::size_t>::max()/2 || state.ac.size()!=2*atoms ||
-        state.b.size()!=atoms || state.log_b.size()!=atoms || state.width_gradient.size()!=atoms ||
+        state.tau.size()!=atoms || state.log_tau.size()!=atoms || state.eta_gradient.size()!=atoms ||
         !std::isfinite(state.objective) || state.objective<0 ||
         !std::all_of(state.ac.begin(),state.ac.end(),[](double value){return std::isfinite(value);}) ||
-        !std::all_of(state.b.begin(),state.b.end(),[](double value){return std::isfinite(value) && value>0;}) ||
-        !std::all_of(state.log_b.begin(),state.log_b.end(),[](double value){return std::isfinite(value);}) ||
-        !std::all_of(state.width_gradient.begin(),state.width_gradient.end(),[](double value){return std::isfinite(value);}))
+        !std::all_of(state.tau.begin(),state.tau.end(),[](double value){return std::isfinite(value) && value>0;}) ||
+        !std::all_of(state.log_tau.begin(),state.log_tau.end(),[](double value){return std::isfinite(value);}) ||
+        !std::all_of(state.eta_gradient.begin(),state.eta_gradient.end(),[](double value){return std::isfinite(value);}))
         return false;
     for(std::size_t atom=0;atom<atoms;++atom)
     {
-        const double amplitude=state.ac[2*atom],width=state.b[atom];
+        const double amplitude=state.ac[2*atom],width=state.tau[atom];
         if(amplitude<0) return false;
-        const double saved_width=std::exp(state.log_b[atom]);
+        const double saved_width=std::exp(state.log_tau[atom]);
         if(!std::isfinite(saved_width) || !(saved_width>0) ||
             std::abs(saved_width-width)>8*std::numeric_limits<double>::epsilon()*width) return false;
     }
@@ -328,7 +328,7 @@ JointCheckStatus JointComponentResult::RuntimeConvergence() const
 JointCheckStatus JointFitResult::RuntimeConvergence() const
 {
     if(!assembled_state || !prediction || !objective || components.empty() ||
-        !ValidJointState(*assembled_state,assembled_state->b.size()) || !std::isfinite(*objective) || *objective<0 ||
+        !ValidJointState(*assembled_state,assembled_state->tau.size()) || !std::isfinite(*objective) || *objective<0 ||
         std::abs(assembled_state->objective-*objective)>8*std::numeric_limits<double>::epsilon()*
             std::max(1.0,std::abs(*objective)) ||
         prediction->size()!=available_row_mask.size() ||
@@ -666,7 +666,7 @@ JointFitResult detail::FitJointComponentsInitializedWithProgress(
     if(!input.selection_domain ||
         input.selection_domain->contributor_policy!=PureHaloSupportExclusionContributorPolicy)
         return invalid("joint-initialization-unavailable:missing-pure-exclusion-policy");
-    if(initialization.atoms.size()!=input.atom_ids.size() || initialization.b.size()!=input.atom_ids.size())
+    if(initialization.atoms.size()!=input.atom_ids.size() || initialization.tau.size()!=input.atom_ids.size())
         return invalid("joint-initialization-unavailable:target-mapping-mismatch");
     if(!initialization.valid) return invalid(initialization.reason);
     for(std::size_t atom=0;atom<input.atom_ids.size();++atom)
@@ -721,7 +721,7 @@ JointFitResult n::FitBcdComponentsImpl(const JointProblem & problem,const std::v
     if(data.construction_memory.status!=n::MemoryStatus::Pass)
     {
         JointFitResult out; out.problem=problem; out.solver_provenance=BcdSolverProvenance();
-        out.observation_scale=data.context.scale; out.initialization.b=initial_b;
+        out.observation_scale=data.context.scale; out.initialization.tau=initial_b;
         out.initialization.valid=initial_b.size()==data.domain.atoms.size() &&
             std::all_of(initial_b.begin(),initial_b.end(),[](double b){return std::isfinite(b) && b>0;});
         out.initialization.reason=out.initialization.valid ? "valid-widths" : "invalid-widths";
@@ -735,7 +735,7 @@ JointFitResult n::FitBcdComponentsImpl(const JointProblem & problem,const std::v
     }
     JointFitResult out; out.problem=problem;
     out.solver_provenance=BcdSolverProvenance();
-    out.observation_scale=data.context.scale; out.initialization.b=initial_b;
+    out.observation_scale=data.context.scale; out.initialization.tau=initial_b;
     out.initialization.valid=initial_b.size()==data.domain.atoms.size() &&
         std::all_of(initial_b.begin(),initial_b.end(),[](double b){return std::isfinite(b) && b>0;});
     out.initialization.reason=out.initialization.valid ? "valid-widths" : "invalid-widths";

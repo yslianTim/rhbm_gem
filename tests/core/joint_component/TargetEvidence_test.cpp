@@ -30,7 +30,7 @@ c::JointProblem MakeProblem(std::size_t atoms)
 rhbm_gem::JointState MakeState(std::size_t atoms)
 {
     rhbm_gem::JointState state;
-    state.ac.resize(2*atoms); state.b.assign(atoms,.7); state.log_b.assign(atoms,std::log(.7));
+    state.ac.resize(2*atoms); state.tau.assign(atoms,.7); state.log_tau.assign(atoms,std::log(.7));
     for(std::size_t atom=0;atom<atoms;++atom)
     {state.ac[2*atom]=.5; state.ac[2*atom+1]=.1;}
     state.objective=0.;

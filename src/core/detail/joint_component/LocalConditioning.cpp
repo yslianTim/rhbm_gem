@@ -136,8 +136,8 @@ LocalConditioningAssessment AssessBcdLocalConditioning(
     {MarkUnavailable(evidence,"nonfinite-local-state"); out.seconds=Seconds(started); return out;}
     if(!(context.scale>0) || !std::isfinite(context.scale))
     {MarkUnavailable(evidence,"invalid-scale"); out.seconds=Seconds(started); return out;}
-    evidence.local_widths.resize(static_cast<std::size_t>(eta.size()));
-    for(Eigen::Index k=0;k<eta.size();++k) evidence.local_widths[static_cast<std::size_t>(k)]=std::exp(eta(k));
+    evidence.local_tau.resize(static_cast<std::size_t>(eta.size()));
+    for(Eigen::Index k=0;k<eta.size();++k) evidence.local_tau[static_cast<std::size_t>(k)]=std::exp(eta(k));
 
     // Endpoint-face columns from constraint status, not the iterative solver's working set.
     std::vector<Eigen::Index> free_columns;

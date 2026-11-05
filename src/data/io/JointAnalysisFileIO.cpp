@@ -80,7 +80,7 @@ void WriteJointAnalysisResult(const JointAnalysisResult & result,
             else if(export_point)
             {
                 const auto & state=*component->state;
-                csv_file << state.ac[2*state_index] << ',' << state.b[state_index] << ',' << state.ac[2*state_index+1];
+                csv_file << state.ac[2*state_index] << ',' << state.tau[state_index] << ',' << state.ac[2*state_index+1];
             }
             else csv_file << ",,";
             csv_file << ',' << state_available << ',' << (component && component->search_completed)

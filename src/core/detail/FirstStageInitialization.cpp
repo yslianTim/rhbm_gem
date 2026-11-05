@@ -28,9 +28,9 @@ void ApplyJointSeedFallback(JointInitialization & initialization)
 {
     std::vector<double> donors;
     for(const auto & atom:initialization.atoms)
-        if(atom.target && atom.reason=="valid-width" && atom.original_b &&
-            std::isfinite(*atom.original_b) && *atom.original_b>0)
-            donors.push_back(*atom.original_b);
+        if(atom.target && atom.reason=="valid-width" && atom.original_tau &&
+            std::isfinite(*atom.original_tau) && *atom.original_tau>0)
+            donors.push_back(*atom.original_tau);
     std::sort(donors.begin(),donors.end());
     const double median=donors.empty() ? 0 : donors.size()%2 ? donors[donors.size()/2] :
         donors[donors.size()/2-1]+(donors[donors.size()/2]-donors[donors.size()/2-1])/2;
@@ -38,10 +38,10 @@ void ApplyJointSeedFallback(JointInitialization & initialization)
     for(std::size_t i=0;i<initialization.atoms.size();++i)
     {
         auto & atom=initialization.atoms[i];
-        if(atom.target && !(std::isfinite(initialization.b[i]) && initialization.b[i]>0) && !donors.empty())
-        {initialization.b[i]=median; atom.seed_source="median-fallback"; atom.donor_count=donors.size();}
-        const bool valid=std::isfinite(initialization.b[i]) && initialization.b[i]>0;
-        if(valid) atom.used_b=initialization.b[i];
+        if(atom.target && !(std::isfinite(initialization.tau[i]) && initialization.tau[i]>0) && !donors.empty())
+        {initialization.tau[i]=median; atom.seed_source="median-fallback"; atom.donor_count=donors.size();}
+        const bool valid=std::isfinite(initialization.tau[i]) && initialization.tau[i]>0;
+        if(valid) atom.used_tau=initialization.tau[i];
         if(atom.target) initialization.valid &= valid;
     }
     if(initialization.reason.empty())
@@ -81,7 +81,7 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
     FitOptions atom_options = options;
     atom_options.thread_size = 1;
     initialization.atoms.resize(workset.contributors.size());
-    initialization.b.assign(workset.contributors.size(), nan);
+    initialization.tau.assign(workset.contributors.size(), nan);
     for (std::size_t index = 0; index < workset.contributors.size(); ++index)
     {
         auto * atom = workset.contributors[index];
@@ -194,9 +194,9 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
                 editor.SetAtomStageEstimate(FittingStage::First, *atom, missing);
                 record.reason = missing.reason;
             }
-            if (std::isfinite(width)) record.original_b = width;
+            if (std::isfinite(width)) record.original_tau = width;
             record.seed_source = std::isfinite(width) && width > 0 ? "fitted" : "unavailable";
-            initialization.b[index] = width;
+            initialization.tau[index] = width;
             ++completed_count;
             if (!options.quiet_mode)
             {

@@ -88,9 +88,9 @@ void ExpectSameChecks(const std::vector<rhbm_gem::JointCheck> & left,
 void ExpectSameState(const rhbm_gem::JointState & left, const rhbm_gem::JointState & right)
 {
     EXPECT_EQ(left.ac, right.ac);
-    EXPECT_EQ(left.b, right.b);
-    EXPECT_EQ(left.log_b, right.log_b);
-    EXPECT_EQ(left.width_gradient, right.width_gradient);
+    EXPECT_EQ(left.tau, right.tau);
+    EXPECT_EQ(left.log_tau, right.log_tau);
+    EXPECT_EQ(left.eta_gradient, right.eta_gradient);
     EXPECT_DOUBLE_EQ(left.objective, right.objective);
 }
 
@@ -98,7 +98,7 @@ void ExpectSameFitNumerics(const core::JointFitResult & left, const core::JointF
 {
     EXPECT_EQ(left.initialization.valid, right.initialization.valid);
     EXPECT_EQ(left.initialization.reason, right.initialization.reason);
-    EXPECT_EQ(left.initialization.b, right.initialization.b);
+    EXPECT_EQ(left.initialization.tau, right.initialization.tau);
     EXPECT_EQ(left.search_completed, right.search_completed);
     EXPECT_EQ(left.available_row_mask, right.available_row_mask);
     EXPECT_EQ(left.prediction, right.prediction);

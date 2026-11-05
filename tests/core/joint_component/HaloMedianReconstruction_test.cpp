@@ -59,7 +59,7 @@ Fixture MakeFixture()
     result.runtime_convergence=JointCheckStatus::Passed;
     result.target_runtime_convergence=JointCheckStatus::Passed;
     result.initialization.valid=true;
-    result.initialization.b={1,1,1};
+    result.initialization.tau={1,1,1};
     result.components.emplace_back();
     auto & component=result.components.back();
     component.id="component";
@@ -126,7 +126,7 @@ TEST(HaloMedianReconstructionTest, AcceptsNotAssessedQualityButRejectsUnqualifie
 TEST(HaloMedianReconstructionTest, ExcludesInvalidWidthAndNonfiniteDonors)
 {
     auto invalid_width=MakeFixture();
-    invalid_width.result.components.front().state->b[0]=0.0;
+    invalid_width.result.components.front().state->tau[0]=0.0;
     const auto width_built=BuildHaloMedianReconstruction(
         invalid_width.model,invalid_width.problem,invalid_width.result,"invalid-width");
     ASSERT_TRUE(width_built.snapshot);
@@ -247,7 +247,7 @@ TEST(HaloMedianReconstructionTest, FullModelConditioningGuardsZeroContributionWi
 
         auto f=MakeFixture();
         auto & point=*f.result.components.front().state;
-        point.ac[0]=0.; point.ac[1]=charge; point.b[0]=.7;
+        point.ac[0]=0.; point.ac[1]=charge; point.tau[0]=.7;
         f.result.target_evidence->point_atoms[0].local_conditioning=
             evidence.point_atoms.front().local_conditioning;
         const auto guarded=BuildHaloMedianReconstruction(f.model,f.problem,f.result,"guarded");
@@ -264,7 +264,7 @@ TEST(HaloMedianReconstructionTest, FullModelConditioningGuardsZeroContributionWi
         EXPECT_EQ(admitted.size(),3u); // No amplitude-only exclusion in donor policy.
         if(charge==0)
         {
-            point.b[0]=4.;
+            point.tau[0]=4.;
             const auto bypassed=BuildHaloMedianReconstruction(f.model,f.problem,f.result,"counterfactual");
             EXPECT_DOUBLE_EQ(bypassed.snapshot->halos.front().width,3.0);
         }

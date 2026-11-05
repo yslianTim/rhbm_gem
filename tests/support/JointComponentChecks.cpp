@@ -366,10 +366,10 @@ j::object Assemble(const Domain & domain,const Vector & y,const ComponentPartiti
             const auto beta=Parse(endpoint.at("beta")),b=Parse(endpoint.at("b")),eta=Parse(endpoint.at("eta"));
             rhbm_gem::JointState state;
             state.ac.assign(beta.data(),beta.data()+beta.size());
-            state.b.assign(b.data(),b.data()+b.size());
-            state.log_b.assign(eta.data(),eta.data()+eta.size());
+            state.tau.assign(b.data(),b.data()+b.size());
+            state.log_tau.assign(eta.data(),eta.data()+eta.size());
             const auto gradient=Parse(endpoint.at("b_gradient"));
-            state.width_gradient.assign(gradient.data(),gradient.data()+gradient.size());
+            state.eta_gradient.assign(gradient.data(),gradient.data()+gradient.size());
             child.state=std::move(state);
             const auto status=runtime_json::ParseStatus(fit.at("runtime_convergence"));
             for(const char * name:{"ac-feasibility","conditional-ac-optimality","independent-ac-optimality",

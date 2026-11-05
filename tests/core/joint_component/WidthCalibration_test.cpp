@@ -14,15 +14,15 @@ JointInitialization ExampleInitialization()
 {
     JointInitialization initialization;
     initialization.valid=true;
-    initialization.b.resize(100);
-    for(std::size_t i=0;i<initialization.b.size();++i)
+    initialization.tau.resize(100);
+    for(std::size_t i=0;i<initialization.tau.size();++i)
     {
-        initialization.b[i]=static_cast<double>(i+1);
+        initialization.tau[i]=static_cast<double>(i+1);
         JointInitializationAtom atom;
         atom.id=std::to_string(i+1);
         atom.target=true;
-        atom.mdpde={1.0,initialization.b[i],0.0};
-        atom.original_b=initialization.b[i];
+        atom.mdpde={1.0,initialization.tau[i],0.0};
+        atom.original_tau=initialization.tau[i];
         atom.seed_source="fitted";
         atom.native_status=static_cast<int>(RHBMEstimationStatus::SUCCESS);
         atom.first_stage_fit_qualified=true;
@@ -39,11 +39,11 @@ JointInitialization QualifiedInitialization(std::size_t count)
     initialization.valid=true;
     for(std::size_t i=0;i<count;++i)
     {
-        initialization.b.push_back(static_cast<double>(i+1));
+        initialization.tau.push_back(static_cast<double>(i+1));
         JointInitializationAtom atom;
         atom.id=std::to_string(i+1); atom.target=true;
         atom.mdpde={1.0,static_cast<double>(i+1),0.0};
-        atom.original_b=initialization.b.back(); atom.seed_source="fitted";
+        atom.original_tau=initialization.tau.back(); atom.seed_source="fitted";
         atom.native_status=static_cast<int>(RHBMEstimationStatus::SUCCESS);
         atom.first_stage_fit_qualified=true;
         atom.first_stage_qualification=RHBMSolveQualification::NativeSuccess;
@@ -89,7 +89,7 @@ TEST(WidthCalibrationTest, UsesDeterministicType7QuantilesForSmallAndDuplicateSa
     auto input=QualifiedInitialization(20);
     const auto first=joint::CalibrateGlobalWidth(input,"duplicates");
     std::reverse(input.atoms.begin(),input.atoms.end());
-    std::reverse(input.b.begin(),input.b.end());
+    std::reverse(input.tau.begin(),input.tau.end());
     const auto second=joint::CalibrateGlobalWidth(input,"duplicates");
     ASSERT_EQ(first.status,"Available");
     ASSERT_EQ(second.status,"Available");
@@ -108,7 +108,7 @@ TEST(WidthCalibrationTest, ReportsEmptyAndOverflowAsCalibrationUnavailable)
 {
     auto input=ExampleInitialization();
     input.atoms.clear();
-    input.b.clear();
+    input.tau.clear();
     const auto empty=joint::CalibrateGlobalWidth(input,"empty");
     EXPECT_EQ(empty.status,"CalibrationUnavailable");
     EXPECT_EQ(empty.unavailable_reason,"no-qualified-first-stage-target-widths");
@@ -125,7 +125,7 @@ TEST(WidthCalibrationTest, ReportsEmptyAndOverflowAsCalibrationUnavailable)
 TEST(WidthCalibrationTest, ProducesOneGlobalBoundAndProjectsWithoutChangingStoredInitialization)
 {
     auto input=ExampleInitialization();
-    input.b[5]=1000.0;
+    input.tau[5]=1000.0;
     const auto original=input;
     const auto calibration=joint::CalibrateGlobalWidth(input,"global");
     ASSERT_EQ(calibration.status,"Available");
@@ -138,9 +138,9 @@ TEST(WidthCalibrationTest, ProducesOneGlobalBoundAndProjectsWithoutChangingStore
     EXPECT_EQ(projected.projection_count,1u);
     EXPECT_DOUBLE_EQ(projected.maximum_projection_magnitude,1000.0-*calibration.bmax4);
     EXPECT_DOUBLE_EQ(projected.widths[5],*calibration.bmax4);
-    EXPECT_DOUBLE_EQ(input.b[5],original.b[5]);
+    EXPECT_DOUBLE_EQ(input.tau[5],original.tau[5]);
     EXPECT_DOUBLE_EQ(input.atoms[5].mdpde[1],original.atoms[5].mdpde[1]);
-    EXPECT_DOUBLE_EQ(projected.widths[6],input.b[6]);
+    EXPECT_DOUBLE_EQ(projected.widths[6],input.tau[6]);
     ASSERT_EQ(projected.projections.size(),100u);
     EXPECT_DOUBLE_EQ(projected.projections[5].original_first_stage_width.value(),6.0);
 }
@@ -148,7 +148,7 @@ TEST(WidthCalibrationTest, ProducesOneGlobalBoundAndProjectsWithoutChangingStore
 TEST(WidthCalibrationTest, RejectsMalformedInitializationAndUnavailableCalibration)
 {
     auto input=ExampleInitialization();
-    input.b.pop_back();
+    input.tau.pop_back();
     EXPECT_EQ(joint::CalibrateGlobalWidth(input,"mismatch").unavailable_reason,
         "initialization-record-size-mismatch");
     auto valid=ExampleInitialization();
@@ -171,7 +171,7 @@ TEST(WidthCalibrationTest, RejectsSmallOrPoorlyCoveredDonorPopulationsAndInvalid
         "qualified-first-stage-target-coverage-below-0.95");
 
     auto invalid_start=QualifiedInitialization(20);
-    invalid_start.b[0]=std::numeric_limits<double>::quiet_NaN();
+    invalid_start.tau[0]=std::numeric_limits<double>::quiet_NaN();
     EXPECT_EQ(joint::CalibrateGlobalWidth(invalid_start,"invalid-start").unavailable_reason,
         "invalid-target-initial-width");
 }

@@ -503,7 +503,7 @@ TrustEvidence CheckReplay(const Domain & domain,VectorRef y,const Evaluation & e
     Vector projected=u-gradient;
     for (Eigen::Index k=0;k<e.beta.size();k+=2) projected(k)=std::max(0.0,projected(k));
     const double kkt=(u-projected).lpNorm<Eigen::Infinity>();
-    Vector width_gradient=Vector::Zero(e.eta.size());
+    Vector eta_gradient=Vector::Zero(e.eta.size());
     for (Eigen::Index a=0;a<e.eta.size();++a)
     {
         const double b=widths(a);
@@ -512,23 +512,23 @@ TrustEvidence CheckReplay(const Domain & domain,VectorRef y,const Evaluation & e
             if(p.square>2.5*2.5) continue;
             const double g=std::pow(2*M_PI*b*b,-1.5)*std::exp(-p.square/(2*b*b));
             const double dk=-std::sqrt(2/M_PI)/b*(p.square<1e-10 ? 1 : std::exp(-p.square/(2*b*b)));
-            width_gradient(a)+=(e.beta(2*a)*g*(p.square/(b*b)-3)+e.beta(2*a+1)*dk)*replay_residual(p.row)/scale/scale;
+            eta_gradient(a)+=(e.beta(2*a)*g*(p.square/(b*b)-3)+e.beta(2*a+1)*dk)*replay_residual(p.row)/scale/scale;
         }
     }
     if(context->eta_upper_bound)
     {
-        const auto bound=CalculateWidthBoundKkt(e.eta,width_gradient,*context->eta_upper_bound);
+        const auto bound=CalculateWidthBoundKkt(e.eta,eta_gradient,*context->eta_upper_bound);
         out.width_bound_feasible=bound.feasible;
     }
     const bool prediction_ok=((prediction-original_prediction).array().abs()<=
         2e-12+2e-13*original_prediction.array().abs()).all();
-    const bool gradient_ok=((width_gradient-e.gradient).array().abs()<=1e-13+2e-9*e.gradient.array().abs()).all();
+    const bool gradient_ok=((eta_gradient-e.gradient).array().abs()<=1e-13+2e-9*e.gradient.array().abs()).all();
     const double kkt_difference=std::abs(kkt-e.certificate.projected_kkt);
     out.prediction_passed=prediction_ok;
     out.gradient_passed=gradient_ok;
     out.kkt_difference=kkt_difference;
     out.prediction_difference=(prediction-original_prediction).lpNorm<Eigen::Infinity>();
-    out.gradient_difference=(width_gradient-e.gradient).lpNorm<Eigen::Infinity>();
+    out.gradient_difference=(eta_gradient-e.gradient).lpNorm<Eigen::Infinity>();
     out.cancellation_ratio=(absolute.array()/prediction.array().abs().max(1.0)).maxCoeff();
     const bool independent_kkt_ok=kkt<=1e-10;
     out.passed=prediction_ok && gradient_ok && independent_kkt_ok && kkt_difference<=1e-13 &&
@@ -641,7 +641,7 @@ IndependentReplayEvidence CheckIndependentReplay(const Domain & domain,VectorRef
     }
 
     Vector ac_gradient=Vector::Zero(e.beta.size()),ac_compensation=ac_gradient;
-    Vector width_gradient=Vector::Zero(atoms),width_compensation=width_gradient;
+    Vector eta_gradient=Vector::Zero(atoms),width_compensation=eta_gradient;
     const auto add_compensated=[](Vector & sum,Vector & compensation,Eigen::Index index,double value) {
         const double adjusted=value-compensation(index),next=sum(index)+adjusted;
         compensation(index)=(next-sum(index))-adjusted; sum(index)=next;
@@ -653,12 +653,12 @@ IndependentReplayEvidence CheckIndependentReplay(const Domain & domain,VectorRef
             const double residual=prediction(support.row)-y(support.row);
             add_compensated(ac_gradient,ac_compensation,2*atom,basis.gaussian*residual);
             add_compensated(ac_gradient,ac_compensation,2*atom+1,basis.charge*residual);
-            add_compensated(width_gradient,width_compensation,atom,
+            add_compensated(eta_gradient,width_compensation,atom,
                 (e.beta(2*atom)*basis.gaussian_log_width+e.beta(2*atom+1)*basis.charge_log_width)*
                     residual/scale/scale);
         }
     const Vector column_norms=column_norms_squared.array().sqrt();
-    if(!ac_gradient.allFinite() || !width_gradient.allFinite() || !column_norms.allFinite() ||
+    if(!ac_gradient.allFinite() || !eta_gradient.allFinite() || !column_norms.allFinite() ||
         (column_norms.array()<=0).any())
     {out.available=true; out.reason="rank-deficient-column"; return out;}
 
@@ -672,11 +672,11 @@ IndependentReplayEvidence CheckIndependentReplay(const Domain & domain,VectorRef
     out.primary_ac_kkt=e.certificate.projected_kkt;
     out.independent_ac_kkt=(scaled_beta-projected).lpNorm<Eigen::Infinity>();
     out.primary_width_gradient=e.gradient.lpNorm<Eigen::Infinity>();
-    out.independent_width_gradient=width_gradient.lpNorm<Eigen::Infinity>();
+    out.independent_width_gradient=eta_gradient.lpNorm<Eigen::Infinity>();
     if(policy.eta_upper_bound)
     {
         const auto primary_width=CalculateWidthBoundKkt(e.eta,e.gradient,*policy.eta_upper_bound);
-        const auto independent_width=CalculateWidthBoundKkt(e.eta,width_gradient,*policy.eta_upper_bound);
+        const auto independent_width=CalculateWidthBoundKkt(e.eta,eta_gradient,*policy.eta_upper_bound);
         out.width_bound_applied=true;
         out.width_bound_feasible=primary_width.feasible && independent_width.feasible;
         out.primary_width_projected_kkt=primary_width.projected;
@@ -721,7 +721,7 @@ IndependentReplayEvidence CheckIndependentReplay(const Domain & domain,VectorRef
     double maximum_gradient_difference{};
     for(Eigen::Index atom=0;atom<atoms;++atom)
     {
-        const double primary=e.gradient(atom),independent=width_gradient(atom);
+        const double primary=e.gradient(atom),independent=eta_gradient(atom);
         const double difference=std::abs(independent-primary);
         const double enclosure=1e-13+2e-9*std::abs(primary);
         if(atom==0 || difference>maximum_gradient_difference)

@@ -14,7 +14,7 @@ struct Fixture
 {
     std::unique_ptr<rhbm_gem::ModelObject> model;
     std::unique_ptr<rhbm_gem::MapObject> map;
-    std::vector<double> a,b,c;
+    std::vector<double> a,tau,c;
 };
 inline Fixture Make(const std::string & name)
 {
@@ -30,7 +30,7 @@ inline Fixture Make(const std::string & name)
         atom->SetAtomID(i==0 ? "CA" : "CB");
         atoms.push_back(std::move(atom));
         const auto index=static_cast<double>(i);
-        f.a.push_back(2+.3*index); f.b.push_back(name=="weak" && i==1 ? .3 : .5+.05*index); f.c.push_back(.2-.05*index);
+        f.a.push_back(2+.3*index); f.tau.push_back(name=="weak" && i==1 ? .3 : .5+.05*index); f.c.push_back(.2-.05*index);
     }
     f.model=std::make_unique<rhbm_gem::ModelObject>(std::move(atoms));
     f.model->SelectAtoms([&](const auto & atom) {return name=="all" || atom.GetSerialID()==1 || (name=="bridge" && atom.GetSerialID()==2);});
@@ -44,7 +44,7 @@ inline Fixture Make(const std::string & name)
         for(std::size_t i=0;i<x.size();++i)
         {
             const double square=core::simulation::SupportSquare(position,{x[i],0,0});
-            const auto kernel=core::joint_component::EvaluateKernel(square,f.b[i],2.5);
+            const auto kernel=core::joint_component::EvaluateKernel(square,f.tau[i],2.5);
             value+=f.a[i]*kernel.gaussian+f.c[i]*kernel.charge;
         }
         values[static_cast<std::size_t>(k+dims[0]*(y+dims[1]*z))]=value;
