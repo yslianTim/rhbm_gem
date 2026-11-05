@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "support/JointTestNumerics.hpp"
 #include "support/InstrumentedLM.hpp"
+#include "core/detail/joint_component/ActiveSetBoundedLM.hpp"
 #include "core/detail/joint_component/TiledQR.hpp"
 #include "support/CommandTestHelpers.hpp"
 #include "core/command/detail/SimulationGeometry.hpp"
