@@ -24,7 +24,7 @@ target_sources(rhbm_gem PRIVATE
     core/detail/joint_component/Numerics.cpp
     core/detail/joint_component/TiledDerivative.cpp
     core/detail/joint_component/LocalConditioning.cpp
-    core/detail/joint_component/LinearSolve.cpp
+    core/detail/joint_component/ConstrainedAcLeastSquares.cpp
     core/detail/joint_component/CompactSvd.cpp
     core/detail/joint_component/ActiveSetBoundedLM.cpp
     core/detail/joint_component/WidthCalibration.cpp

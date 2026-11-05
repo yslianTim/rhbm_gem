@@ -18,7 +18,7 @@ remain separate streaming checks and do not invoke a second global A/C solver.
 
 ## Local numerical utilities
 
-`LinearSolve`, `StructuralPartition`, `CompactSvd`, and `TiledDerivative`
+`ConstrainedAcLeastSquares`, `StructuralPartition`, `CompactSvd`, and `TiledDerivative`
 provide the local sparse solve, block structure, rank checks, and profile
 derivative calculations. Local conditioning uses bounded Gauss–Seidel BCD block
 workspace after the accepted endpoint. It reports conditional block evidence;

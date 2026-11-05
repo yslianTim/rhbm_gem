@@ -1,5 +1,5 @@
 #include "Numerics.hpp"
-#include "LinearSolve.hpp"
+#include "ConstrainedAcLeastSquares.hpp"
 #include <Eigen/SparseQR>
 #include <Eigen/QR>
 #include <algorithm>

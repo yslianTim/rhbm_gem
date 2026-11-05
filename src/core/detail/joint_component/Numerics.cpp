@@ -2,7 +2,7 @@
 #include "ResourceWork.hpp"
 #include "TiledDerivative.hpp"
 #include "CompactSvd.hpp"
-#include "LinearSolve.hpp"
+#include "ConstrainedAcLeastSquares.hpp"
 #include <algorithm>
 #include <cmath>
 #include <exception>

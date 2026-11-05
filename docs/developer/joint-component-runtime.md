@@ -240,7 +240,7 @@ identity without claiming that search ran or that a width bound was available.
 
 ## Source index
 
-- [LinearSolve.cpp](https://github.com/yslianTim/rhbm_gem/blob/develop/src/core/detail/joint_component/LinearSolve.cpp)
+- [ConstrainedAcLeastSquares.cpp](https://github.com/yslianTim/rhbm_gem/blob/develop/src/core/detail/joint_component/ConstrainedAcLeastSquares.cpp)
   implements Constrained A/C Active-set QR and its working-set transitions.
 - [ActiveSetBoundedLM.cpp](https://github.com/yslianTim/rhbm_gem/blob/develop/src/core/detail/joint_component/ActiveSetBoundedLM.cpp)
   implements the bounded LM trust-region subproblem and damping search.

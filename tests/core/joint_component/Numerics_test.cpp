@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include "core/detail/joint_component/TiledDerivative.hpp"
 #include "core/detail/joint_component/ResourceWork.hpp"
-#include "core/detail/joint_component/LinearSolve.hpp"
+#include "core/detail/joint_component/ConstrainedAcLeastSquares.hpp"
 #include "core/detail/joint_component/CompactSvd.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "support/JointSyntheticWorkload.hpp"
