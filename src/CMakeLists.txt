@@ -41,7 +41,7 @@ target_sources(rhbm_gem PRIVATE
     core/detail/StageSummary.cpp
     core/detail/FirstStageInitialization.cpp
     core/detail/FittingWorkset.cpp
-    core/detail/joint_component/JointGroupFitting.cpp
+    core/detail/GroupPotentialFitting.cpp
     core/detail/joint_component/HaloMedianReconstruction.cpp
     core/detail/joint_component/PostFitPeeling.cpp
     core/detail/gaussian_fit/GaussianModelOperations.cpp
