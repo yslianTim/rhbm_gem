@@ -1131,7 +1131,7 @@ TEST(PureHaloSupportExclusionTest, GridSubtractionCoversOverlapsHalosChargesAndS
 }
 
 
-TEST(PureHaloSupportExclusionTest, GridLocalRangesShareAlphaFitAndInformationDataset)
+TEST(PureHaloSupportExclusionTest, PostJointLocalUsesProductionDatasetForAlphaFitAndInformation)
 {
     auto fixture=ReconstructionOnlyFixture();
     auto values=std::make_unique<double[]>(fixture.map.GetMapValueArraySize());
@@ -1147,29 +1147,24 @@ TEST(PureHaloSupportExclusionTest, GridLocalRangesShareAlphaFitAndInformationDat
     const auto samples=prepared.BuildGaussianSamples();
     std::vector<double> responses; for(const auto & sample:samples) responses.push_back(sample.response);
     FitOptions options; options.quiet_mode=true;
-    std::size_t previous{};
-    for(double radius:{1.,1.5,2.})
-    {
-        const core::detail::PreparedLocalGaussianDesign design(samples,0.,radius);
-        const auto dataset=design.BuildDataset(responses,GaussianModel3D{0.,1.,0.});
-        const double alpha=core::detail::TrainLocalGaussianAlpha(dataset,1);
-        const auto reference=core::detail::EstimateLocalGaussianDataset(dataset,alpha,1,0.);
-        core::detail::JointPostprocessingMetrics metrics;
-        const auto result=core::detail::FitPostJointLocalTargetForTesting(context,fixture.model,1,peeling,options,metrics,radius);
-        ASSERT_EQ(result.status,EvidenceStatus::Available) << result.reason;
-        EXPECT_EQ(result.sample_count,peeling.samples.size());
-        EXPECT_EQ(result.corrected_sample_count,samples.size());
-        EXPECT_EQ(result.effective_sample_count,static_cast<std::size_t>(dataset.y.size()));
-        EXPECT_GT(result.effective_sample_count,previous); previous=result.effective_sample_count;
-        EXPECT_DOUBLE_EQ(result.fit.alpha_r,alpha);
-        EXPECT_EQ(result.fit.mdpde.GetModel().ToVector(),reference.mdpde.GetModel().ToVector());
-        const auto inverse=reference.fit_result->data_covariance.diagonal().cwiseInverse().eval();
-        const Eigen::Matrix2d precision=dataset.X.transpose()*inverse.asDiagonal()*dataset.X;
-        const Eigen::Vector2d moment=dataset.X.transpose()*(inverse.array()*dataset.y.array()).matrix();
-        ASSERT_TRUE(result.information);
-        EXPECT_TRUE(result.information->precision.isApprox(precision,1e-12));
-        EXPECT_TRUE(result.information->moment.isApprox(moment,1e-12));
-    }
+    const core::detail::PreparedLocalGaussianDesign design(samples,0.,1.0);
+    const auto dataset=design.BuildDataset(responses,GaussianModel3D{0.,1.,0.});
+    const double alpha=core::detail::TrainLocalGaussianAlpha(dataset,1);
+    const auto reference=core::detail::EstimateLocalGaussianDataset(dataset,alpha,1,0.);
+    core::detail::JointPostprocessingMetrics metrics;
+    const auto result=core::detail::FitPostJointLocalTarget(context,fixture.model,1,peeling,options,metrics);
+    ASSERT_EQ(result.status,EvidenceStatus::Available) << result.reason;
+    EXPECT_EQ(result.sample_count,peeling.samples.size());
+    EXPECT_EQ(result.corrected_sample_count,samples.size());
+    EXPECT_EQ(result.effective_sample_count,static_cast<std::size_t>(dataset.y.size()));
+    EXPECT_DOUBLE_EQ(result.fit.alpha_r,alpha);
+    EXPECT_EQ(result.fit.mdpde.GetModel().ToVector(),reference.mdpde.GetModel().ToVector());
+    const auto inverse=reference.fit_result->data_covariance.diagonal().cwiseInverse().eval();
+    const Eigen::Matrix2d precision=dataset.X.transpose()*inverse.asDiagonal()*dataset.X;
+    const Eigen::Vector2d moment=dataset.X.transpose()*(inverse.array()*dataset.y.array()).matrix();
+    ASSERT_TRUE(result.information);
+    EXPECT_TRUE(result.information->precision.isApprox(precision,1e-12));
+    EXPECT_TRUE(result.information->moment.isApprox(moment,1e-12));
 }
 
 TEST(PureHaloSupportExclusionTest, GridEvidenceTracksMapRevisionGeometryAndSnapshotLifetime)
@@ -1312,7 +1307,7 @@ TEST(PureHaloSupportExclusionTest, NonpositiveGridCorrectionsAreNotFailuresOrPha
     const auto peeling=context.BuildPostFitPeelingBatch(std::vector<std::size_t>{0}).front().second;
     FitOptions options; options.quiet_mode=true;
     core::detail::JointPostprocessingMetrics metrics;
-    const auto result=core::detail::FitPostJointLocalTargetForTesting(context,fixture.model,1,peeling,options,metrics);
+    const auto result=core::detail::FitPostJointLocalTarget(context,fixture.model,1,peeling,options,metrics);
     EXPECT_EQ(result.status,EvidenceStatus::Unavailable);
     EXPECT_EQ(result.reason,"insufficient-positive-responses");
     EXPECT_EQ(result.corrected_sample_count,peeling.samples.size());
@@ -1339,7 +1334,7 @@ TEST(PureHaloSupportExclusionTest, CoarseGridEqualRadiusObservationsFailIndepend
     const auto peeling=context.BuildPostFitPeelingBatch(std::vector<std::size_t>{0}).front().second;
     FitOptions options; options.quiet_mode=true;
     core::detail::JointPostprocessingMetrics metrics;
-    const auto result=core::detail::FitPostJointLocalTargetForTesting(context,fixture.model,1,peeling,options,metrics);
+    const auto result=core::detail::FitPostJointLocalTarget(context,fixture.model,1,peeling,options,metrics);
     EXPECT_EQ(result.sample_count,8u); EXPECT_EQ(result.effective_sample_count,8u);
     EXPECT_EQ(result.status,EvidenceStatus::Unavailable);
     EXPECT_EQ(result.reason,"rank-deficient-local-design");

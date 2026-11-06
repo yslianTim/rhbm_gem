@@ -126,6 +126,9 @@ struct PostJointLocalSampleFailure
     std::size_t global_grid_index{};
 };
 
+// Persisted Post-Joint Local estimation contract, in angstroms.
+inline constexpr double PostJointLocalFittingRadius{1.0};
+
 struct PostJointLocalResult
 {
     EstimateSource source;
@@ -137,7 +140,7 @@ struct PostJointLocalResult
     std::size_t sample_count{};
     std::size_t effective_sample_count{};
     std::size_t corrected_sample_count{}, positive_sample_count{};
-    double fitting_radius{1.0};
+    double fitting_radius{PostJointLocalFittingRadius};
     std::vector<PostJointLocalSampleFailure> sample_failures;
 };
 

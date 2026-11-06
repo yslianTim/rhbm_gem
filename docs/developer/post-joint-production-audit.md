@@ -9,6 +9,11 @@ at 2.5 Å, direct own-charge correction, and Local fitting at 1 Å. Joint,
 FirstStage, Two-Stage, Gaussian MDPDE and Group WEB algorithms are outside the
 change boundary. Stage JSON 5, SQLite 21 and Joint JSON 24 retain their shapes.
 
+`PostJointLocalFittingRadius` lives beside the persisted Local result type,
+so core fitting and data validation share one contract value. Strict equality
+is intentional: 1.0 is exactly representable in binary64 and survives current
+JSON/SQLite round-trips exactly. All recorded Local statuses require it.
+
 The previous delivery report was available in the ignored
 `build/release/grid-domain-validation/` directory. Both existing build caches
 had `BUILD_TESTING=OFF`; baseline builds explicitly enable testing with the

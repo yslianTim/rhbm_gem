@@ -4,8 +4,6 @@ namespace rhbm_gem::core::detail {
 
 // Radial ranges in angstroms. Signal and tail may overlap or leave a gap.
 inline constexpr double kSignalDistanceMax{ 1.0 };
-// Post-Joint candidate collection is 2 A; qualified Local fitting uses this range.
-inline constexpr double kPostJointFittingDistanceMax{ 1.0 };
 inline constexpr double kTailDistanceMin{ 1.2 };
 inline constexpr double kTailDistanceMax{ 2.0 };
 

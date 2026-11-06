@@ -1148,6 +1148,16 @@ TEST(JointComponentPartialSelectionTest, PostJointEvidenceAssessmentEnforcesAvai
     EXPECT_TRUE(valid.valid) << valid.reason;
     EXPECT_TRUE(valid.group_eligible);
 
+    for (const double radius : {1.5, 2.0})
+    {
+        auto experimental = result;
+        experimental.fitting_radius = radius;
+        experimental.effective_sample_count = 4;
+        const auto assessment = assessCurrent(experimental);
+        EXPECT_FALSE(assessment.valid) << radius;
+        EXPECT_FALSE(assessment.group_eligible) << radius;
+    }
+
     auto bad = result;
     EXPECT_FALSE(assess(bad, joint, nullptr).valid);
     auto unqualified = joint;
@@ -1592,18 +1602,18 @@ TEST(JointComponentPartialSelectionTest, CompleteModelWidthSensitivityPropagates
         out.samples=context.BuildPostJointLocalSamples(1,out.peeling.at(1));
         core::FitOptions options; options.quiet_mode=true;
         core::detail::JointPostprocessingMetrics metrics;
-        out.local=core::detail::FitPostJointLocalTargetForTesting(context,*f.model,1,out.peeling.at(1),options,metrics);
-        out.neighbor=core::detail::FitPostJointLocalTargetForTesting(context,*f.model,2,out.peeling.at(2),options,metrics);
+        out.local=core::detail::FitPostJointLocalTarget(context,*f.model,1,out.peeling.at(1),options,metrics);
+        out.neighbor=core::detail::FitPostJointLocalTarget(context,*f.model,2,out.peeling.at(2),options,metrics);
         auto nonfinite=out.peeling.at(1);
         for(auto & sample:nonfinite.samples) sample.response=std::numeric_limits<double>::infinity();
-        const auto invalid=core::detail::FitPostJointLocalTargetForTesting(context,*f.model,1,nonfinite,options,metrics);
+        const auto invalid=core::detail::FitPostJointLocalTarget(context,*f.model,1,nonfinite,options,metrics);
         EXPECT_EQ(invalid.status,EvidenceStatus::Unavailable);
         EXPECT_EQ(invalid.reason,"insufficient-positive-responses");
         EXPECT_FALSE(invalid.information);
         auto repeated=AtomLocalPotentialView::For(*f.model->FindAtomPtr(1)).GetRawSamplingEntriesView();
         for(auto & sample:repeated) sample.point.distance=.2;
         f.model->EditAnalysis().SetAtomLocalRawSamplingEntries(*f.model->FindAtomPtr(1),std::move(repeated));
-        const auto repeated_fit=core::detail::FitPostJointLocalTargetForTesting(
+        const auto repeated_fit=core::detail::FitPostJointLocalTarget(
             context,*f.model,1,out.peeling.at(1),options,metrics);
         EXPECT_EQ(repeated_fit.status,out.local.status);
         EXPECT_EQ(repeated_fit.reason,out.local.reason);

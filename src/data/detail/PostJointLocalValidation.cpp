@@ -123,7 +123,7 @@ PostJointLocalEvidenceAssessment AssessPostJointLocalResult(
     if (result.effective_sample_count > result.positive_sample_count ||
         result.positive_sample_count > result.corrected_sample_count ||
         result.corrected_sample_count > result.sample_count ||
-        !std::isfinite(result.fitting_radius) || result.fitting_radius<=0 || result.fitting_radius>2.0)
+        result.fitting_radius!=PostJointLocalFittingRadius)
         return Invalid("Post-Joint local sample counts/range mismatch.");
     if (peeling)
     {

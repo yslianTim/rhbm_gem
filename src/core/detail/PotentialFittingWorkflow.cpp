@@ -11,7 +11,6 @@
 #include "core/detail/GroupPotentialFitting.hpp"
 #include "core/detail/joint_component/ResourceWork.hpp"
 #include "data/detail/PostJointLocalValidation.hpp"
-#include "core/detail/gaussian_fit/FittingRanges.hpp"
 #include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
 #include "core/detail/second_stage/IterationProcess.hpp"
 #include "data/detail/JointStageAdapter.hpp"
@@ -43,19 +42,18 @@ bool SameSource(const EstimateSource & a, const EstimateSource & b)
     return a.method == b.method && a.atom_id == b.atom_id && a.component_id == b.component_id &&
         a.run_id == b.run_id && a.role == b.role;
 }
+}
 
 PostJointLocalResult FitPostJointLocalTarget(
     const JointPostprocessingContext & postprocessing, const ModelObject & model,
     int atom_id, const PostFitPeelingResult & peeling,
-    const FitOptions & options, JointPostprocessingMetrics & metrics,
-    double fitting_radius=kPostJointFittingDistanceMax)
+    const FitOptions & options, JointPostprocessingMetrics & metrics)
 {
     const auto atom = model.FindAtomPtr(atom_id);
     const auto local = AtomLocalPotentialView::For(*atom);
     const auto & joint = local.GetStageEstimate(FittingStage::Second);
     PostJointLocalResult result;
     result.source = joint.source;
-    result.fitting_radius=fitting_radius;
     result.sample_count = peeling.samples.size();
     result.status = EvidenceStatus::Ineligible;
     if (joint.source.method != EstimateMethod::JointComponents || joint.source.role != FittingRole::Target)
@@ -84,7 +82,7 @@ PostJointLocalResult FitPostJointLocalTarget(
     for (const auto & sample : gaussian_samples) responses.push_back(sample.response);
 
     const GaussianModel3D no_charge{0.0, 1.0, 0.0};
-    const PreparedLocalGaussianDesign design{gaussian_samples, 0.0, fitting_radius};
+    const PreparedLocalGaussianDesign design{gaussian_samples, 0.0, PostJointLocalFittingRadius};
     const auto dataset = design.BuildSelectedDataset(responses, no_charge);
     result.effective_sample_count = static_cast<std::size_t>(dataset.y.size());
     if (dataset.y.size() <= 2)
@@ -156,6 +154,7 @@ PostJointLocalResult FitPostJointLocalTarget(
     return result;
 }
 
+namespace {
 void LogJointInfo(const std::string & message)
 {
     Logger::FinishProgressLine();
@@ -177,13 +176,6 @@ void LogJointWarning(const std::string & message)
 }
 
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-PostJointLocalResult FitPostJointLocalTargetForTesting(
-    const JointPostprocessingContext & context, const ModelObject & model, int atom,
-    const PostFitPeelingResult & peeling, const FitOptions & options, JointPostprocessingMetrics & metrics, double radius)
-{
-    return FitPostJointLocalTarget(context, model, atom, peeling, options, metrics, radius);
-}
-
 JointWorkflowFitHook & JointWorkflowFitHookForTesting()
 {
     static thread_local JointWorkflowFitHook hook{};
