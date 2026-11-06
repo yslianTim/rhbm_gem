@@ -55,6 +55,23 @@ bool IsInsideNeighborCone(
 
 } // namespace
 
+bool IsInsideNeighborExclusion(
+    const std::array<double, 3> & sample_position,
+    const std::array<double, 3> & neighbor_position,
+    double exclusion_radius_squared)
+{
+    numeric_validation::RequireAllFinite(sample_position, "sample position");
+    numeric_validation::RequireAllFinite(neighbor_position, "neighbor position");
+    numeric_validation::RequireFiniteNonNegative(exclusion_radius_squared, "exclusion radius squared");
+    double distance_square{ 0.0 };
+    for (std::size_t axis = 0; axis < sample_position.size(); ++axis)
+    {
+        const auto difference{ sample_position.at(axis) - neighbor_position.at(axis) };
+        distance_square += difference * difference;
+    }
+    return distance_square < exclusion_radius_squared;
+}
+
 void FilterSamplingPointList(
     SamplingPointList & sample_point_list,
     const std::array<double, 3> & local_position,

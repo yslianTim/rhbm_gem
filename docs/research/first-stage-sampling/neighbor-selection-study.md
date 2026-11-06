@@ -48,3 +48,14 @@ calibration, QScore, JCE evidence and endpoint must retain exact numerical
 parity. Q0/S0 existing numerical evidence must also remain unchanged. FO/FQ
 will copy F0 raw samples and modify only `is_selected`, without changing
 geometry, interpolation, fitting radius, estimator or Production default.
+
+## E1: shared distance predicate
+
+`sample_filter::IsInsideNeighborExclusion` accepts the already squared exclusion
+radius and retains QScore's axis accumulation order and strict `<` comparison.
+Geometry validation rejects nonfinite inputs. Discovery, hydrogen exclusion,
+retry, shell success, interpolation and center weighting remain in QScore.
+48 focused SampleFilter/QScore tests passed, including three new boundary,
+off-grid and invalid-geometry tests and existing hydrogen/multiple-neighbor,
+empty-neighbor and retry cases. Crowded Q0 atom/calibration/JCE/QScore fields
+remain exactly equal after extraction.

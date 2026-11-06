@@ -2,6 +2,7 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/Constants.hpp>
+#include <rhbm_gem/utils/domain/SampleFilter.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 #include <algorithm>
 #include <cmath>
@@ -109,15 +110,8 @@ QScoreShellSamples SampleQScoreShell(
                 const auto & neighbor_position{
                     neighbor_atom->GetPositionRef()
                 };
-                double distance_square{ 0.0 };
-                for (std::size_t axis = 0; axis < candidate_point.size(); ++axis)
-                {
-                    const auto difference{
-                        candidate_point.at(axis) - neighbor_position.at(axis)
-                    };
-                    distance_square += difference * difference;
-                }
-                if (distance_square < exclusion_radius_square)
+                if (sample_filter::IsInsideNeighborExclusion(
+                        candidate_point, neighbor_position, exclusion_radius_square))
                 {
                     is_rejected = true;
                     break;

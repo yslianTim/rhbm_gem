@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <cmath>
 #include <limits>
 #include <vector>
 
@@ -304,4 +305,32 @@ TEST(SampleFilterTest, UsesReferencePositionForWorldSpaceSamplingPoints)
         { 10.0, 1.0, 0.0 }
     };
     EXPECT_EQ(GetSelectedPositions(point_list), expected_positions);
+}
+
+TEST(SampleFilterTest, NeighborExclusionUsesStrictSquaredDistanceBoundary)
+{
+    const std::array<double, 3> origin{ 0., 0., 0. };
+    const double radius = .9;
+    EXPECT_FALSE(sf::IsInsideNeighborExclusion({radius, 0., 0.}, origin, radius * radius));
+    EXPECT_TRUE(sf::IsInsideNeighborExclusion({std::nextafter(radius, 0.), 0., 0.}, origin, radius * radius));
+    EXPECT_FALSE(sf::IsInsideNeighborExclusion({std::nextafter(radius, 1.), 0., 0.}, origin, radius * radius));
+    EXPECT_FALSE(sf::IsInsideNeighborExclusion(origin, origin, 0.));
+}
+
+TEST(SampleFilterTest, NeighborExclusionHandlesOffGridAndMultipleCandidates)
+{
+    const std::array<double, 3> point{ .137, -.219, 1.153 };
+    EXPECT_FALSE(sf::IsInsideNeighborExclusion(point, {3.01, .27, -.13}, .81));
+    EXPECT_TRUE(sf::IsInsideNeighborExclusion(point, {.137, -.219, 1.653}, .81));
+}
+
+TEST(SampleFilterTest, NeighborExclusionRejectsNonfiniteGeometryAndInvalidRadius)
+{
+    const std::array<double, 3> origin{ 0., 0., 0. };
+    const auto nan = std::numeric_limits<double>::quiet_NaN();
+    const auto inf = std::numeric_limits<double>::infinity();
+    EXPECT_THROW(sf::IsInsideNeighborExclusion({nan, 0., 0.}, origin, .81), std::invalid_argument);
+    EXPECT_THROW(sf::IsInsideNeighborExclusion(origin, {0., inf, 0.}, .81), std::invalid_argument);
+    EXPECT_THROW(sf::IsInsideNeighborExclusion(origin, origin, nan), std::invalid_argument);
+    EXPECT_THROW(sf::IsInsideNeighborExclusion(origin, origin, -1.), std::invalid_argument);
 }
