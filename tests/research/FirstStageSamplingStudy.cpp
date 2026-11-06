@@ -1,6 +1,6 @@
 // Reproducible, single-process FirstStage/JCE study. No production instrumentation.
 #include "core/detail/FirstStageInitialization.hpp"
-#include "support/FirstStageSamplingFixture.hpp"
+#include "support/FirstStageSynthetic.hpp"
 #include "support/FibonacciNeighborSelection.hpp"
 #include "support/ResearchWidthInitialization.hpp"
 #include "core/detail/FittingWorkset.hpp"
@@ -247,8 +247,8 @@ int main(int argc,char ** argv)
         if (id=="F1" || id=="Q1" || id=="S1") policy.interpolation=d::MapInterpolationMethod::Trilinear;
         const bool real=argc==7,production=bound_mode=="production";
         if (real!=(scenario=="real")) throw std::invalid_argument("Real scenario requires model/map paths.");
-        auto model=real ? ReadModel(argv[5]) : second_stage_test::FirstStageStudyModel(scenario=="crowded" ? 1.4 : 5.5,replicate);
-        auto map=real ? ReadMap(argv[6]) : second_stage_test::FirstStageStudyMap(*model,scenario=="fine" ? .2 : .4,scenario=="noisy" ? .05 : 1e-4,replicate);
+        auto model=real ? ReadModel(argv[5]) : second_stage_test::FirstStageSyntheticModel(scenario=="crowded" ? 1.4 : 5.5,replicate);
+        auto map=real ? ReadMap(argv[6]) : second_stage_test::FirstStageSyntheticMap(*model,scenario=="fine" ? .2 : .4,scenario=="noisy" ? .05 : 1e-4,replicate);
         if (real)
             SelectRealTargets(*model);
         const auto problem=BuildPureHaloSupportExclusionProblem(*map,*model);

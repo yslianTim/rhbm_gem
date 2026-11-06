@@ -9,7 +9,7 @@
 
 namespace second_stage_test {
 // Known normalized Gaussian truth, with deterministic geometry/noise phases.
-inline std::unique_ptr<rhbm_gem::ModelObject> FirstStageStudyModel(double separation, int replicate)
+inline std::unique_ptr<rhbm_gem::ModelObject> FirstStageSyntheticModel(double separation, int replicate)
 {
     using namespace rhbm_gem;
     std::vector<std::unique_ptr<AtomObject>> atoms;
@@ -24,7 +24,7 @@ inline std::unique_ptr<rhbm_gem::ModelObject> FirstStageStudyModel(double separa
     auto model=std::make_unique<ModelObject>(std::move(atoms));
     model->SelectAllAtoms(); return model;
 }
-inline std::unique_ptr<rhbm_gem::MapObject> FirstStageStudyMap(const rhbm_gem::ModelObject & model,double spacing,double noise,int replicate)
+inline std::unique_ptr<rhbm_gem::MapObject> FirstStageSyntheticMap(const rhbm_gem::ModelObject & model,double spacing,double noise,int replicate)
 {
     using namespace rhbm_gem;
     namespace n = rhbm_gem::core::joint_component;

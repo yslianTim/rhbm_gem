@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "support/FirstStageSamplingFixture.hpp"
+#include "support/FirstStageSynthetic.hpp"
 #include "support/FibonacciNeighborSelection.hpp"
 #include "support/CommandTestHelpers.hpp"
 #include "core/detail/FirstStageInitialization.hpp"
@@ -67,8 +67,8 @@ TEST(JointSeedSensitivityTest, WidthTruthRecoveryAndQualificationAtTwoVoxelSpaci
 {
     for (double spacing:{.2,.4})
     {
-        auto source=second_stage_test::FirstStageStudyModel(5.5,0);
-        auto map=second_stage_test::FirstStageStudyMap(*source,spacing,1e-4,0);
+        auto source=second_stage_test::FirstStageSyntheticModel(5.5,0);
+        auto map=second_stage_test::FirstStageSyntheticMap(*source,spacing,1e-4,0);
         const auto problem=BuildPureHaloSupportExclusionProblem(*map,*source);
         for (const auto & policy:policies)
         {
@@ -94,8 +94,8 @@ TEST(JointSeedSensitivityTest, WidthTruthRecoveryAndQualificationAtTwoVoxelSpaci
 
 TEST(JointSeedSensitivityTest, ProductionAndCommonBoundsRetainCertifiedEquivalentEndpoints)
 {
-    auto source=second_stage_test::FirstStageStudyModel(5.5,0);
-    auto map=second_stage_test::FirstStageStudyMap(*source,.4,1e-4,0);
+    auto source=second_stage_test::FirstStageSyntheticModel(5.5,0);
+    auto map=second_stage_test::FirstStageSyntheticMap(*source,.4,1e-4,0);
     const auto problem=BuildPureHaloSupportExclusionProblem(*map,*source);
     std::vector<JointInitialization> initializations;
     std::vector<n::WidthBoundCalibration> calibrations;
@@ -133,8 +133,8 @@ TEST(JointSeedSensitivityTest, ProductionAndCommonBoundsRetainCertifiedEquivalen
 
 TEST(JointSeedSensitivityTest, ExperimentalSamplesPersistWithoutBecomingGridIdentities)
 {
-    auto model=second_stage_test::FirstStageStudyModel(5.5,0);
-    auto map=second_stage_test::FirstStageStudyMap(*model,.4,1e-4,0);
+    auto model=second_stage_test::FirstStageSyntheticModel(5.5,0);
+    auto map=second_stage_test::FirstStageSyntheticMap(*model,.4,1e-4,0);
     FitOptions options; options.quiet_mode=true;
     d::JointSeedSamplingReport report;
     d::RunJointComponentWorkflow(*map,*model,options,nullptr,policies[3],&report);
@@ -170,8 +170,8 @@ TEST(JointSeedSensitivityTest, ExperimentalSamplesPersistWithoutBecomingGridIden
 
 TEST(JointSeedSensitivityTest, FixedGeometryRelaxationIncreasesCrowdedWidthErrorAndContamination)
 {
-    auto source=second_stage_test::FirstStageStudyModel(1.4,0);
-    auto map=second_stage_test::FirstStageStudyMap(*source,.4,1e-4,0);
+    auto source=second_stage_test::FirstStageSyntheticModel(1.4,0);
+    auto map=second_stage_test::FirstStageSyntheticMap(*source,.4,1e-4,0);
     FitOptions options; options.quiet_mode=true;
     std::vector<double> rmse,contamination;
     for (int control=0;control<3;++control)
@@ -228,10 +228,10 @@ TEST(JointSeedSensitivityTest, NeighborControlEndpointsUseOriginalGridDownstream
     for (int control=0;control<3;++control)
     {
         // Keep the Production donor minimum; crowd only the first pair.
-        auto source=second_stage_test::FirstStageStudyModel(5.5,0);
+        auto source=second_stage_test::FirstStageSyntheticModel(5.5,0);
         source->FindAtomPtr(2)->SetPosition(1.53,.17,.19);
         ModelObject model(*source); model.EditAnalysis().InitializeFromSelection();
-        auto map=second_stage_test::FirstStageStudyMap(model,.4,1e-4,0);
+        auto map=second_stage_test::FirstStageSyntheticMap(model,.4,1e-4,0);
         const auto problem=BuildPureHaloSupportExclusionProblem(*map,model);
         const auto workset=d::MakeJointFittingWorkset(model,problem);
         d::RunJointSeedSamplingWorkflow(*map,model,workset.contributors,1,{},true,{});

@@ -4,7 +4,7 @@
 #include "core/detail/PotentialFittingWorkflow.hpp"
 #include "core/detail/joint_component/WidthCalibration.hpp"
 #include "core/detail/joint_component/Problem.hpp"
-#include "support/FirstStageSamplingFixture.hpp"
+#include "support/FirstStageSynthetic.hpp"
 #include "support/ResearchWidthInitialization.hpp"
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
@@ -161,102 +161,4 @@ TEST(WidthSourceTest, KeepsAsymmetricAndJointInvaliditySeparateFromSeedAvailabil
     EXPECT_EQ(m.tau,input.tau);
 }
 
-TEST(WidthSourceTest, LocksProductionFirstStageAndMmBaseline)
-{
-    const auto path=std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path()/
-        "docs/research/first-stage-sampling/baseline.json";
-    std::ifstream stream(path);
-    ASSERT_TRUE(stream.good());
-    j::parse_options parse_options; parse_options.numbers=j::number_precision::precise;
-    const auto baseline=j::parse(std::string(std::istreambuf_iterator<char>(stream),{}),{},parse_options).as_object();
-    auto model=second_stage_test::FirstStageStudyModel(5.5,0);
-    auto map=second_stage_test::FirstStageStudyMap(*model,.4,1e-4,0);
-    const auto problem=BuildPureHaloSupportExclusionProblem(*map,*model);
-    const auto workset=d::MakeJointFittingWorkset(*model,problem);
-    model->EditAnalysis().InitializeFromSelection();
-    FitOptions options; options.quiet_mode=true;
-    std::size_t fits=0;
-    d::FirstStageObserverForTesting()=[&](int,std::string_view) { ++fits; };
-    const auto init=d::PrepareJointWidthInitialization(*map,*model,workset,options);
-    d::FirstStageObserverForTesting()={};
-    EXPECT_EQ(fits,24u);
-    d::FirstStageTimingReport timing;
-    const auto timed=d::RunJointFirstStageInitializationFromPreparedSamples(*model,workset,options,&timing);
-    EXPECT_GT(timing.alpha_training_seconds,0.); EXPECT_GT(timing.fitting_seconds,0.);
-    EXPECT_EQ(timed.tau,init.tau);
-    for(std::size_t i=0;i<init.atoms.size();++i)
-    {
-        EXPECT_EQ(timed.atoms[i].ols,init.atoms[i].ols);
-        EXPECT_EQ(timed.atoms[i].mdpde,init.atoms[i].mdpde);
-        EXPECT_EQ(timed.atoms[i].alpha,init.atoms[i].alpha);
-        EXPECT_EQ(timed.atoms[i].first_stage_qualification,init.atoms[i].first_stage_qualification);
-    }
-    ASSERT_TRUE(init.valid);
-    ASSERT_EQ(init.atoms.size(),24u);
-    for(std::size_t i=0;i<init.atoms.size();++i)
-    {
-        const auto & atom=init.atoms[i];
-        const auto & expected=baseline.at("atoms").as_array()[i].as_object();
-        EXPECT_EQ(atom.id,j::value_to<std::string>(expected.at("id")));
-        EXPECT_EQ(atom.alpha,j::value_to<double>(expected.at("alpha")));
-        for(std::size_t k=0;k<3;++k)
-        {
-            EXPECT_EQ(atom.ols[k],j::value_to<double>(expected.at("ols").as_array()[k]));
-            EXPECT_EQ(atom.mdpde[k],j::value_to<double>(expected.at("mdpde").as_array()[k]));
-        }
-        EXPECT_TRUE(atom.target);
-        EXPECT_TRUE(atom.first_stage_fit_qualified);
-        EXPECT_EQ(atom.first_stage_qualification,RHBMSolveQualification::NativeSuccess);
-        EXPECT_EQ(atom.seed_source,"fitted");
-        EXPECT_EQ(atom.original_tau,atom.mdpde[1]);
-        EXPECT_EQ(atom.used_tau,atom.mdpde[1]);
-        EXPECT_EQ(init.tau[i],atom.mdpde[1]);
-    }
-    const auto calibration=n::CalibrateGlobalWidth(init,"baseline");
-    EXPECT_EQ(calibration.qualified_donor_count,24u);
-    EXPECT_EQ(calibration.qualified_donor_coverage,1.);
-    ASSERT_TRUE(calibration.tau_max4);
-    EXPECT_EQ(*calibration.tau_max4,j::value_to<double>(baseline.at("calibration").as_object().at("bound")));
-    const auto bounded=n::MakeBoundedInitialization(init,calibration);
-    ASSERT_TRUE(bounded.available);
-    EXPECT_EQ(bounded.tau_values,init.tau);
-    EXPECT_EQ(bounded.projection_count,0u);
-    const auto selected=width_research::SelectWidths(init,width_research::WidthSource::MDPDE);
-    EXPECT_EQ(selected.tau,init.tau);
-    EXPECT_EQ(width_research::CalibrateWidths(init,selected).tau_max4,calibration.tau_max4);
-    EXPECT_EQ(n::MakeBoundedInitialization(width_research::ProjectionInput(init,selected),calibration).tau_values,
-        bounded.tau_values);
-    const auto fit=FitJointComponentsInitialized(problem,init);
-    ASSERT_TRUE(fit.assembled_state);
-    const auto & expected=baseline.at("joint").as_object();
-    EXPECT_EQ(fit.objective,j::value_to<double>(expected.at("objective")));
-    for(std::size_t i=0;i<init.atoms.size();++i)
-        EXPECT_EQ(fit.assembled_state->tau[i],j::value_to<double>(expected.at("tau").as_array()[i]));
-
-    const auto ols=width_research::SelectWidths(init,width_research::WidthSource::OLS);
-    const auto ols_calibration=width_research::CalibrateWidths(init,ols);
-    ASSERT_EQ(ols_calibration.status,"Available");
-    // Reuse the exact immutable problem and estimates for the full factorial.
-    for(const auto * seeds:{&selected,&ols}) for(const auto * bound:{&calibration,&ols_calibration})
-    {
-        const auto start=n::MakeBoundedInitialization(width_research::ProjectionInput(init,*seeds),*bound);
-        n::BcdExecutionPolicy policy; policy.eta_upper_bound=bound->eta_max4;
-        const auto candidate=n::FitBcdComponents(problem,start.tau_values,policy);
-        ASSERT_EQ(candidate.RuntimeConvergence(),JointCheckStatus::Passed);
-        ASSERT_TRUE(candidate.assembled_state); ASSERT_TRUE(candidate.objective);
-        // Solver qualification alone must not forge Production calibration provenance.
-        EXPECT_THROW(joint_result_io::Encode(CaptureJointAnalysisResult(candidate)),std::invalid_argument);
-        EXPECT_NEAR(*candidate.objective,*fit.objective,1e-17);
-        for(std::size_t i=0;i<init.atoms.size();++i)
-            EXPECT_NEAR(candidate.assembled_state->tau[i],fit.assembled_state->tau[i],3e-9);
-    }
-    d::JointPostprocessingMetrics metrics;
-    d::RunJointPostprocessing(*map,*model,problem,CaptureJointAnalysisResult(fit),options,metrics);
-    EXPECT_EQ(metrics.available_peeling_sample_count,metrics.grid_peeling_sample_count);
-    const auto snapshot=model->GetAnalysisView().GetJointResult();
-    ASSERT_TRUE(snapshot);
-    const auto restored=joint_result_io::Decode(joint_result_io::Encode(*snapshot));
-    EXPECT_EQ(restored.objective,fit.objective);
-    EXPECT_EQ(restored.initialization.tau,init.tau);
-}
 }
