@@ -68,3 +68,13 @@ LocalPotentialEntry reconstruction, editor batch validation and Group evidence
 validation. MapObject is independent of ModelObject; map edits cannot notify an
 unrelated model. This existing ownership boundary needs explicit handling when
 reusing a model against changed map observations.
+
+## P1 sample contract
+
+Added PostJointGridObservation (Original row, global grid index, squared
+radius, raw voxel response, physical position) and a support-based collector.
+The collector rejects duplicate rows, invalid grid/mapping/geometry and missing
+or changed original observations. It returns stable Original-row order and
+includes the 2 Å boundary independently of the fitting mask. Production still
+uses the baseline downstream path in this phase. Release build and all 30
+selected grid-contract, Pure Exclusion and sampler tests pass.

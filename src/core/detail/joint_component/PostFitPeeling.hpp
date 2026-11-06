@@ -12,6 +12,11 @@
 namespace rhbm_gem::core::detail {
 struct HaloMedianBuildResult;
 
+inline constexpr double PostJointCandidateRadius = 2.0;
+std::vector<PostJointGridObservation> CollectPostJointGridObservations(
+    const MapObject &, const JointProblemInput &, std::size_t target,
+    const std::array<double,3> & target_position);
+
 struct JointPeelingContributor
 {
     int atom_id{};

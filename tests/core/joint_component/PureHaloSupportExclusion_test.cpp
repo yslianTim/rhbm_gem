@@ -1055,3 +1055,55 @@ TEST(PureHaloSupportExclusionTest, PublicEstimatorUsesPureExclusion)
     }));
 
 }
+
+TEST(PostJointGridContractTest, SelectsOriginalVoxelsAtInclusiveRadiusWithStableIdentity)
+{
+    for (const auto spacing : {std::array<double,3>{.5,.5,.5}, std::array<double,3>{.4,.7,1.0}})
+    for (const auto center : {std::array<double,3>{0.,0.,0.}, std::array<double,3>{.13,.21,-.17}})
+    {
+        std::vector<std::unique_ptr<AtomObject>> atoms;
+        for (int id=1;id<=2;++id)
+        {
+            auto atom=std::make_unique<AtomObject>();
+            atom->SetSerialID(id); atom->SetElement(Element::CARBON);
+            atom->SetPosition(id==1 ? center : std::array<double,3>{2.5,0.,0.});
+            atoms.push_back(std::move(atom));
+        }
+        ModelObject model(std::move(atoms));
+        model.SelectAtoms([](const auto & atom){return atom.GetSerialID()==1;});
+        auto values=std::make_unique<double[]>(9*9*5);
+        for(std::size_t grid=0;grid<9*9*5;++grid) values[grid]=static_cast<double>(grid)+.25;
+        MapObject map({9,9,5},spacing,{-2.,-2.,-1.},std::move(values));
+        const auto problem=BuildPureHaloSupportExclusionProblem(map,model);
+        const auto & input=problem.OriginalInput();
+        const auto collect=[&] { return core::detail::CollectPostJointGridObservations(map,input,0,center); };
+        const auto samples=collect();
+        const auto repeated=collect();
+        std::set<std::size_t> expected,actual;
+        for(std::size_t grid=0;grid<map.GetMapValueArraySize();++grid)
+            if(core::simulation::SupportSquare(map.GetGridPosition(grid),center)<=4.0) expected.insert(grid);
+        std::size_t last{}; bool first=true; bool outside_fitting=false;
+        for(std::size_t i=0;i<samples.size();++i)
+        {
+            const auto & sample=samples[i];
+            EXPECT_TRUE(first || last<sample.original_row_index);
+            first=false; last=sample.original_row_index;
+            EXPECT_TRUE(actual.insert(sample.global_grid_index).second);
+            EXPECT_EQ(input.row_ids.at(sample.original_row_index),std::to_string(sample.global_grid_index));
+            EXPECT_EQ(sample.position,map.GetGridPosition(sample.global_grid_index));
+            EXPECT_DOUBLE_EQ(sample.raw_response,map.GetMapValue(sample.global_grid_index));
+            EXPECT_DOUBLE_EQ(sample.squared_distance,core::simulation::SupportSquare(sample.position,center));
+            EXPECT_EQ(sample.global_grid_index,repeated[i].global_grid_index);
+            if(std::find(problem.FittingToOriginalRows().begin(),problem.FittingToOriginalRows().end(),
+                    sample.original_row_index)==problem.FittingToOriginalRows().end()) outside_fitting=true;
+        }
+        EXPECT_EQ(actual,expected); EXPECT_TRUE(outside_fitting);
+        auto malformed=input;
+        malformed.support[0].push_back(malformed.support[0].front());
+        EXPECT_THROW(core::detail::CollectPostJointGridObservations(map,malformed,0,center),std::invalid_argument);
+        malformed=input; malformed.row_ids[samples.front().original_row_index]="999999";
+        EXPECT_THROW(core::detail::CollectPostJointGridObservations(map,malformed,0,center),std::invalid_argument);
+        malformed=input; malformed.observations[samples.front().original_row_index]=std::numeric_limits<double>::quiet_NaN();
+        EXPECT_THROW(core::detail::CollectPostJointGridObservations(map,malformed,0,center),std::invalid_argument);
+    }
+}

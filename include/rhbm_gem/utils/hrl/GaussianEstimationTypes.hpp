@@ -49,6 +49,16 @@ struct LocalStageEstimate
     StageUncertainty uncertainty;
 };
 
+// An observation of the original map, independent of FirstStage sampling.
+struct PostJointGridObservation
+{
+    std::size_t original_row_index{};
+    std::size_t global_grid_index{};
+    double squared_distance{};
+    double raw_response{};
+    std::array<double,3> position{};
+};
+
 struct PeelingSampleEstimate
 {
     std::optional<double> response;

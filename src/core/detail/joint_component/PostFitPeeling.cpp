@@ -139,6 +139,39 @@ StencilAudit AuditStencil(const TricubicStencil & stencil, const MapObject & geo
 }
 }
 
+std::vector<PostJointGridObservation> CollectPostJointGridObservations(
+    const MapObject & map, const JointProblemInput & input, std::size_t target,
+    const std::array<double,3> & target_position)
+{
+    auto support = input.support.at(target);
+    std::sort(support.begin(), support.end(), [](const auto & a, const auto & b) { return a.row < b.row; });
+    std::vector<PostJointGridObservation> samples;
+    std::optional<std::size_t> previous;
+    for (const auto & entry : support)
+    {
+        if (previous == entry.row) throw std::invalid_argument("Duplicate Original support row.");
+        previous = entry.row;
+        if (entry.row >= input.row_ids.size() || entry.row >= input.observations.size() ||
+            !std::isfinite(entry.squared_distance) || entry.squared_distance < 0.0 || entry.squared_distance > 6.25)
+            throw std::invalid_argument("Invalid Original support identity.");
+        const auto grid = std::stoull(input.row_ids[entry.row]);
+        if (std::to_string(grid) != input.row_ids[entry.row] || grid >= map.GetMapValueArraySize())
+            throw std::invalid_argument("Invalid grid identity.");
+        const auto position = map.GetGridPosition(grid);
+        const double square = SquaredDistance(position, target_position);
+        if (!std::isfinite(square) || std::abs(square - entry.squared_distance) > 1.0e-12 * std::max(1.0,square))
+            throw std::invalid_argument("Original support geometry mismatch.");
+        if (entry.squared_distance > PostJointCandidateRadius * PostJointCandidateRadius) continue;
+        const double response = input.observations[entry.row];
+        if (!std::isfinite(response) || !std::isfinite(map.GetMapValue(grid)))
+            throw std::invalid_argument("missing-original-observation");
+        if (response != map.GetMapValue(grid))
+            throw std::invalid_argument("Original observation differs from current map.");
+        samples.push_back({entry.row,grid,entry.squared_distance,response,position});
+    }
+    return samples;
+}
+
 JointPeelingContributorUniverse BuildJointPeelingContributorUniverse(
     const ModelObject & model,const JointProblem & problem,const JointAnalysisResult & result)
 {
