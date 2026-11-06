@@ -97,3 +97,22 @@ math. OLS/MDPDE results, estimator implementation and persistence are untouched.
 Validation: Release build and CTest 21/21 (39.39 s); exact MDPDE seeds,
 original/used Width, qualification, fallback, calibration, projected starts,
 JCE state/objective and downstream regression remain passing.
+
+### C4 — retired tooling and consolidated test registration
+
+Removed FirstStageSamplingStudy.cpp, WidthInitializationStudy.hpp, all three
+study Python runners and FibonacciNeighborSelection.hpp; ResearchWidthInitialization
+was removed in C3 and the old FirstStageSamplingFixture was extracted once in C0.
+All eight requested original paths are absent. Removed the research executable,
+link and include CMake configuration. Renamed the retained sampling test file to
+FirstStageSampling_test.cpp. Permanent synthetic support now keeps only the
+separation and spacing needed by production regressions; retired phase/noise
+controls were removed with exact fixture parity preserved.
+
+Validation: Release all-target build and CTest 21/21 (38.76 s). Registration
+covers all 1,092 enabled GoogleTests (initial registry verified at 1,105), zero
+disabled, missing or unexpected duplicate coverage. All 83 remaining *_test.cpp
+files are in compile_commands.json; no uncompiled test source. The generated
+Ninja target inventory contains no study target. No retired symbols remain in
+src/include/tests/cmake. Numerical baseline remains exact; no tolerances or
+CTest timeout/qualification settings changed.

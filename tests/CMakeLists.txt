@@ -193,7 +193,7 @@ set(JOINT_COMPONENT_CONTRACT_TEST_SOURCES
 )
 
 set(JOINT_COMPONENT_WORKFLOW_TEST_SOURCES
-    core/joint_component/SeedSampling_test.cpp
+    core/joint_component/FirstStageSampling_test.cpp
     core/joint_component/Runtime_test.cpp
     core/joint_component/Progress_test.cpp
     core/joint_component/PartialSelection_test.cpp
@@ -289,11 +289,6 @@ target_include_directories(rhbm_tests PRIVATE
 )
 
 add_dependencies(tests_all rhbm_tests)
-
-# Explicit research target; never installed or run by ordinary CTest.
-add_executable(first_stage_sampling_study EXCLUDE_FROM_ALL research/FirstStageSamplingStudy.cpp)
-target_link_libraries(first_stage_sampling_study PRIVATE rhbm_gem CompilerFlags)
-target_include_directories(first_stage_sampling_study PRIVATE "${PROJECT_SOURCE_DIR}/src" "${PROJECT_SOURCE_DIR}/tests")
 
 # Shared test-only helpers compile into the test executable.
 target_sources(rhbm_tests PRIVATE

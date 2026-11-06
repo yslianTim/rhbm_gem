@@ -8,8 +8,8 @@
 #include <vector>
 
 namespace second_stage_test {
-// Known normalized Gaussian truth, with deterministic geometry/noise phases.
-inline std::unique_ptr<rhbm_gem::ModelObject> FirstStageSyntheticModel(double separation, int replicate)
+// Known normalized Gaussian truth for isolated/crowded production regressions.
+inline std::unique_ptr<rhbm_gem::ModelObject> FirstStageSyntheticModel(double separation)
 {
     using namespace rhbm_gem;
     std::vector<std::unique_ptr<AtomObject>> atoms;
@@ -17,14 +17,14 @@ inline std::unique_ptr<rhbm_gem::ModelObject> FirstStageSyntheticModel(double se
     {
         auto atom=std::make_unique<AtomObject>();
         atom->SetSerialID(i+1); atom->SetElement(Element::CARBON);
-        atom->SetPosition(.13+.07*replicate+separation*(i%4),.17-.03*replicate+separation*((i/4)%3),
-            .19+.11*replicate+separation*(i/12));
+        atom->SetPosition(.13+separation*(i%4),.17+separation*((i/4)%3),
+            .19+separation*(i/12));
         atoms.push_back(std::move(atom));
     }
     auto model=std::make_unique<ModelObject>(std::move(atoms));
     model->SelectAllAtoms(); return model;
 }
-inline std::unique_ptr<rhbm_gem::MapObject> FirstStageSyntheticMap(const rhbm_gem::ModelObject & model,double spacing,double noise,int replicate)
+inline std::unique_ptr<rhbm_gem::MapObject> FirstStageSyntheticMap(const rhbm_gem::ModelObject & model,double spacing)
 {
     using namespace rhbm_gem;
     namespace n = rhbm_gem::core::joint_component;
@@ -37,7 +37,7 @@ inline std::unique_ptr<rhbm_gem::MapObject> FirstStageSyntheticMap(const rhbm_ge
     for (int z=0;z<dims[2];++z) for (int y=0;y<dims[1];++y) for (int x=0;x<dims[0];++x)
     {
         const std::array<double,3> p{origin[0]+x*spacing,origin[1]+y*spacing,origin[2]+z*spacing};
-        double value=noise*std::sin(2.13*x+1.57*y+.73*z+.37*replicate);
+        double value=1e-4*std::sin(2.13*x+1.57*y+.73*z);
         for (std::size_t i=0;i<model.GetAtomList().size();++i)
         {
             const auto q=model.GetAtomList()[i]->GetPosition(); double square=0;

@@ -72,8 +72,8 @@ j::object SampleFingerprint(const LocalPotentialSampleList & samples)
 TEST(FirstStageInitializationTest, ExactProductionBaselineAndCertifiedEndpoint)
 {
     const auto baseline=Baseline();
-    auto model=second_stage_test::FirstStageSyntheticModel(5.5,0);
-    auto map=second_stage_test::FirstStageSyntheticMap(*model,.4,1e-4,0);
+    auto model=second_stage_test::FirstStageSyntheticModel(5.5);
+    auto map=second_stage_test::FirstStageSyntheticMap(*model,.4);
     const auto problem=BuildPureHaloSupportExclusionProblem(*map,*model);
     const auto workset=d::MakeJointFittingWorkset(*model,problem);
     model->EditAnalysis().InitializeFromSelection();
@@ -164,8 +164,8 @@ TEST(FirstStageInitializationTest, ExactRawSamplingAcrossWorkersAndCrowdedSelect
     j::array captured;
     for(double separation:{5.5,1.4})
     {
-        auto model=second_stage_test::FirstStageSyntheticModel(separation,0);
-        auto map=second_stage_test::FirstStageSyntheticMap(*model,.4,1e-4,0);
+        auto model=second_stage_test::FirstStageSyntheticModel(separation);
+        auto map=second_stage_test::FirstStageSyntheticMap(*model,.4);
         model->EditAnalysis().InitializeFromSelection();
         const auto workset=d::MakeTwoStageFittingWorkset(*model);
         std::vector<LocalPotentialSampleList> serial;
@@ -228,8 +228,8 @@ TEST(FirstStageInitializationTest, WidthTruthRecoveryAndQualificationAtTwoVoxelS
 {
     for (double spacing:{.2,.4})
     {
-        auto source=second_stage_test::FirstStageSyntheticModel(5.5,0);
-        auto map=second_stage_test::FirstStageSyntheticMap(*source,spacing,1e-4,0);
+        auto source=second_stage_test::FirstStageSyntheticModel(5.5);
+        auto map=second_stage_test::FirstStageSyntheticMap(*source,spacing);
         const auto problem=BuildPureHaloSupportExclusionProblem(*map,*source);
         {
             ModelObject model(*source); model.EditAnalysis().InitializeFromSelection();
@@ -253,8 +253,8 @@ TEST(FirstStageInitializationTest, WidthTruthRecoveryAndQualificationAtTwoVoxelS
 
 TEST(FirstStageInitializationTest, RawSamplingPersistenceAndGridInvalidationIndependence)
 {
-    auto model=second_stage_test::FirstStageSyntheticModel(5.5,0);
-    auto map=second_stage_test::FirstStageSyntheticMap(*model,.4,1e-4,0);
+    auto model=second_stage_test::FirstStageSyntheticModel(5.5);
+    auto map=second_stage_test::FirstStageSyntheticMap(*model,.4);
     FitOptions options; options.quiet_mode=true;
     d::RunJointComponentWorkflow(*map,*model,options);
     ASSERT_TRUE(model->GetAnalysisView().GetJointResult());
