@@ -15,17 +15,15 @@ using rhbm_gem::core::detail::PostJointLocalSamples;
 using rhbm_gem::JointAnalysisResult;
 using rhbm_gem::PostFitPeelingResult;
 
-// Small abstract grid evidence for editor/eligibility tests that do not own a map.
-inline void AssignGridObservationsForTesting(PostFitPeelingResult & peeling,
-    const LocalPotentialSampleList & raw, const std::array<double,3> & center = {})
+// Synthetic line-grid observations for editor/eligibility fixtures without a map.
+// Map integration tests use the Original support collector instead.
+inline rhbm_gem::PostJointGridObservation MakeGridObservation(
+    std::size_t row, std::size_t grid, double distance, double response,
+    const std::array<double,3> & center = {})
 {
-    if (peeling.samples.size()!=raw.size()) throw std::invalid_argument("Test sample count mismatch.");
-    for (std::size_t i=0;i<raw.size();++i)
-    {
-        auto position=center;
-        position[0]+=raw[i].point.distance;
-        peeling.samples[i].observation={i,i,raw[i].point.distance*raw[i].point.distance,raw[i].response,position};
-    }
+    auto position=center;
+    position[0]+=distance;
+    return {row,grid,distance*distance,response,position};
 }
 
 inline JointPostprocessingContext MakeJointPostprocessingContext(

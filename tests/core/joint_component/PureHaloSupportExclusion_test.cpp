@@ -1,7 +1,9 @@
 #include <gtest/gtest.h>
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include "support/CommandTestHelpers.hpp"
+#include "io/sqlite/SQLiteWrapper.hpp"
 #include <boost/json.hpp>
+#include <boost/system/system_error.hpp>
 
 #include "core/detail/FirstStageInitialization.hpp"
 #include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
@@ -1134,9 +1136,11 @@ TEST(PureHaloSupportExclusionTest, GridSubtractionCoversOverlapsHalosChargesAndS
 TEST(PureHaloSupportExclusionTest, PostJointLocalUsesProductionDatasetForAlphaFitAndInformation)
 {
     auto fixture=ReconstructionOnlyFixture();
+    const auto center=fixture.model.FindAtomPtr(1)->GetPosition();
     auto values=std::make_unique<double[]>(fixture.map.GetMapValueArraySize());
     for(std::size_t grid=0;grid<fixture.map.GetMapValueArraySize();++grid)
-        values[grid]=fixture.map.GetMapValue(grid)+.001*std::sin(static_cast<double>(grid));
+        values[grid]=core::simulation::SupportSquare(fixture.map.GetGridPosition(grid),center)<=.1 ? -1. :
+            fixture.map.GetMapValue(grid)+.001*std::sin(static_cast<double>(grid));
     fixture.map.SetMapValueArray(std::move(values));
     const auto problem=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
     const auto snapshot=QualifiedReconstructionSnapshot(problem,fixture.model);
@@ -1145,19 +1149,42 @@ TEST(PureHaloSupportExclusionTest, PostJointLocalUsesProductionDatasetForAlphaFi
     const auto peeling=context.BuildPostFitPeelingBatch(std::vector<std::size_t>{0}).front().second;
     const auto prepared=context.BuildPostJointLocalSamples(1,peeling);
     const auto samples=prepared.BuildGaussianSamples();
-    std::vector<double> responses; for(const auto & sample:samples) responses.push_back(sample.response);
     FitOptions options; options.quiet_mode=true;
-    const core::detail::PreparedLocalGaussianDesign design(samples,0.,1.0);
-    const auto dataset=design.BuildDataset(responses,GaussianModel3D{0.,1.,0.});
+    RHBMMemberDataset dataset;
+    dataset.X=RHBMDesignMatrix::Zero(static_cast<Eigen::Index>(samples.size()),2);
+    dataset.y=RHBMResponseVector::Zero(static_cast<Eigen::Index>(samples.size()));
+    Eigen::Index retained{};
+    std::size_t positive{},nonpositive{};
+    for(const auto & sample:samples)
+    {
+        ASSERT_TRUE(std::isfinite(sample.response));
+        if(sample.response<=0.) { ++nonpositive; continue; }
+        ++positive;
+        if(sample.point.distance>1.0) continue;
+        dataset.X(retained,0)=1.;
+        dataset.X(retained,1)=-.5*sample.point.distance*sample.point.distance;
+        dataset.y(retained)=std::log(sample.response);
+        ++retained;
+    }
+    dataset.X.conservativeResize(retained,2);
+    dataset.y.conservativeResize(retained);
+    ASSERT_GT(nonpositive,0u);
+    ASSERT_GT(retained,2);
+    ASSERT_EQ(Eigen::ColPivHouseholderQR<RHBMDesignMatrix>(dataset.X).rank(),2);
     const double alpha=core::detail::TrainLocalGaussianAlpha(dataset,1);
     const auto reference=core::detail::EstimateLocalGaussianDataset(dataset,alpha,1,0.);
     core::detail::JointPostprocessingMetrics metrics;
     const auto result=core::detail::FitPostJointLocalTarget(context,fixture.model,1,peeling,options,metrics);
     ASSERT_EQ(result.status,EvidenceStatus::Available) << result.reason;
+    EXPECT_DOUBLE_EQ(result.fitting_radius,1.0);
     EXPECT_EQ(result.sample_count,peeling.samples.size());
     EXPECT_EQ(result.corrected_sample_count,samples.size());
+    EXPECT_EQ(result.positive_sample_count,positive);
+    EXPECT_TRUE(result.sample_failures.empty());
     EXPECT_EQ(result.effective_sample_count,static_cast<std::size_t>(dataset.y.size()));
+    EXPECT_LT(result.effective_sample_count,result.positive_sample_count);
     EXPECT_DOUBLE_EQ(result.fit.alpha_r,alpha);
+    EXPECT_EQ(result.fit.ols.GetModel().ToVector(),reference.ols.GetModel().ToVector());
     EXPECT_EQ(result.fit.mdpde.GetModel().ToVector(),reference.mdpde.GetModel().ToVector());
     const auto inverse=reference.fit_result->data_covariance.diagonal().cwiseInverse().eval();
     const Eigen::Matrix2d precision=dataset.X.transpose()*inverse.asDiagonal()*dataset.X;
@@ -1291,6 +1318,34 @@ TEST(PureHaloSupportExclusionTest, GridPersistenceRejectsForeignIdentitiesAndInv
         ASSERT_TRUE(saved.fixed_charge); ASSERT_TRUE(reference.fixed_charge);
         EXPECT_DOUBLE_EQ(saved.fixed_charge->coefficient,reference.fixed_charge->coefficient);
         EXPECT_DOUBLE_EQ(saved.fixed_charge->width,reference.fixed_charge->width);
+    }
+
+    // A saved posterior cannot make a non-production Local radius eligible.
+    for(const auto & radius:boost::json::array{1.5,2.0,0.0,-1.0,std::nextafter(1.0,2.0),"nan","+inf","-inf"})
+    {
+        auto document=original;
+        auto & atoms=document.at("atoms").as_array();
+        const auto found=std::find_if(atoms.begin(),atoms.end(),[](const auto & atom) {
+            return !atom.at("post_joint_local").is_null();
+        });
+        ASSERT_NE(found,atoms.end());
+        found->at("post_joint_local").at("fitting_radius")=radius;
+        const auto invalid=boost::json::serialize(document);
+        ModelObject invalid_model(fixture.model);
+        if(radius.is_string())
+            EXPECT_THROW(stage_result_io::Decode(invalid_model,invalid),boost::system::system_error);
+        else
+            EXPECT_THROW(stage_result_io::Decode(invalid_model,invalid),std::invalid_argument);
+        SQLiteWrapper database(directory.path()/"model.sqlite");
+        database.Prepare("UPDATE model_stage_result SET result_json=? WHERE key_tag=?");
+        database.Bind(1,invalid);
+        database.Bind(2,std::string("grid-group"));
+        database.StepOnce();
+        database.Finalize();
+        if(radius.is_string())
+            EXPECT_THROW(repository.LoadModel("grid-group"),boost::system::system_error);
+        else
+            EXPECT_THROW(repository.LoadModel("grid-group"),std::invalid_argument);
     }
 }
 

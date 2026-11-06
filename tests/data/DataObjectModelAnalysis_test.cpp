@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <cmath>
 
 #include <array>
 #include <limits>
@@ -1826,8 +1827,10 @@ TEST(DataObjectModelAnalysisTest, JointUpdatesInvalidateDependentResultsAcrossTh
         stage.uncertainty.covariance = Eigen::Matrix3d::Identity();
         editor.SetAtomStageEstimate(rg::FittingStage::Second, *atom, stage);
         rg::PostFitPeelingResult peeling;
-        peeling.source = stage.source; peeling.samples = {{1, {}, {}}, {2, {}, {}}};
-        second_stage_test::postprocessing::AssignGridObservationsForTesting(peeling,view.GetRawSamplingEntriesView(),atom->GetPosition());
+        peeling.source = stage.source;
+        peeling.samples = {
+            {1, {}, second_stage_test::postprocessing::MakeGridObservation(0,0,.1,2,atom->GetPosition())},
+            {2, {}, second_stage_test::postprocessing::MakeGridObservation(1,1,.2,3,atom->GetPosition())}};
         editor.SetAtomPostFitPeeling(*atom, peeling);
         rg::PostJointLocalResult local;
         local.source = stage.source;
@@ -1895,8 +1898,11 @@ TEST(DataObjectModelAnalysisTest, PostJointLocalResultHasIndependentJointEndpoin
     editor.SetAtomLocalRawSamplingEntries(atom, raw);
     rg::PostFitPeelingResult peeling;
     peeling.source = rg::AtomLocalPotentialView::For(atom).GetStageEstimate(rg::FittingStage::Second).source;
-    peeling.samples = {{1.5, {}, {}}, {1.4, {}, {}}, {1.3, {}, {}}, {1.2, {}, {}}};
-    second_stage_test::postprocessing::AssignGridObservationsForTesting(peeling,rg::AtomLocalPotentialView::For(atom).GetRawSamplingEntriesView(),atom.GetPosition());
+    peeling.samples = {
+        {1.5, {}, second_stage_test::postprocessing::MakeGridObservation(0,0,.1,2,atom.GetPosition())},
+        {1.4, {}, second_stage_test::postprocessing::MakeGridObservation(1,1,.2,3,atom.GetPosition())},
+        {1.3, {}, second_stage_test::postprocessing::MakeGridObservation(2,2,.3,4,atom.GetPosition())},
+        {1.2, {}, second_stage_test::postprocessing::MakeGridObservation(3,3,.4,5,atom.GetPosition())}};
     editor.SetAtomPostFitPeeling(atom, peeling);
 
     rg::PostJointLocalResult local;
@@ -1915,6 +1921,28 @@ TEST(DataObjectModelAnalysisTest, PostJointLocalResultHasIndependentJointEndpoin
     local.information = rg::RHBMInformation{Eigen::Matrix2d::Identity(), Eigen::Vector2d::Ones()};
     editor.SetAtomPostJointLocalResult(atom, local);
 
+    for (const auto status : {rg::EvidenceStatus::Available, rg::EvidenceStatus::Unavailable, rg::EvidenceStatus::Ineligible})
+    {
+        auto production = local;
+        production.status = status;
+        if (status != rg::EvidenceStatus::Available)
+        {
+            production.reason = "test-local-evidence-unavailable";
+            production.information.reset();
+        }
+        ASSERT_NO_THROW(editor.SetAtomPostJointLocalResult(atom,production));
+        for (const double radius : {1.5, 2.0, 0.0, -1.0, std::nextafter(1.0,2.0),
+                std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity(),
+                -std::numeric_limits<double>::infinity()})
+        {
+            auto rejected = production;
+            rejected.fitting_radius = radius;
+            EXPECT_THROW(editor.SetAtomPostJointLocalResult(atom,rejected),std::invalid_argument);
+            EXPECT_DOUBLE_EQ(rg::AtomLocalPotentialView::For(atom).GetPostJointLocalResult()->fitting_radius,1.0);
+        }
+    }
+    editor.SetAtomPostJointLocalResult(atom,local);
+
     const auto view = rg::AtomLocalPotentialView::For(atom);
     ASSERT_TRUE(view.GetPostJointLocalResult());
     ASSERT_TRUE(model->GetAnalysisView().GetJointResult());
@@ -1928,7 +1956,6 @@ TEST(DataObjectModelAnalysisTest, PostJointLocalResultHasIndependentJointEndpoin
     EXPECT_DOUBLE_EQ(view.GetFinalModel(rg::FittingStage::Second).GetAmplitude(), 2);
 
     editor.SetAtomLocalRawSamplingEntries(atom, raw);
-    second_stage_test::postprocessing::AssignGridObservationsForTesting(peeling,rg::AtomLocalPotentialView::For(atom).GetRawSamplingEntriesView(),atom.GetPosition());
     editor.SetAtomPostFitPeeling(atom, peeling);
     editor.SetAtomPostJointLocalResult(atom, local);
     auto changed = view.GetStageEstimate(rg::FittingStage::Second);
@@ -1966,8 +1993,10 @@ TEST(DataObjectModelAnalysisTest, StageGettersProjectOnePointAndJointSamplesCann
     editor.SetAtomLocalRawSamplingEntries(atom, {{2, {.1, {0,0,0}, true}}, {4, {.2, {1,0,0}, true}}});
     rg::PostFitPeelingResult peeling;
     peeling.source = view.GetStageEstimate(rg::FittingStage::Second).source;
-    peeling.samples = {{1, {}, {}}, {2, {}, {}}}; peeling.neighbor_count = 3;
-    second_stage_test::postprocessing::AssignGridObservationsForTesting(peeling,rg::AtomLocalPotentialView::For(atom).GetRawSamplingEntriesView(),atom.GetPosition());
+    peeling.samples = {
+        {1, {}, second_stage_test::postprocessing::MakeGridObservation(0,0,.1,2,atom.GetPosition())},
+        {2, {}, second_stage_test::postprocessing::MakeGridObservation(1,1,.2,4,atom.GetPosition())}};
+    peeling.neighbor_count = 3;
     editor.SetAtomPostFitPeeling(atom, peeling);
     EXPECT_THROW(editor.SetAtomLocalPeelingSamplingEntries(atom, {}), std::invalid_argument);
     EXPECT_THROW(editor.SetAtomLocalNeighborCountForPeeling(atom, 99), std::invalid_argument);

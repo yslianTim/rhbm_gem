@@ -795,7 +795,7 @@ TEST(UmapEmbeddingCommandTest, ExcludesMissingRequiredFeaturesAndAllowsMissingAn
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include "data/detail/JointStageAdapter.hpp"
 #include "core/detail/joint_component/Numerics.hpp"
-#include "support/JointPostprocessingTestHelpers.hpp"
+#include <rhbm_gem/data/object/MapObject.hpp>
 #include "core/detail/joint_component/HaloMedianReconstruction.hpp"
 TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNoInputFiles)
 {
@@ -892,6 +892,8 @@ TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNo
     snapshot.metadata.grid_spacing={.25,.25,.25};
     snapshot.metadata.origin={0.,-2.5,-2.5};
     snapshot.metadata.map_normalization=rg::JointMapNormalization{false,false,1};
+    const rg::MapObject grid_geometry(snapshot.metadata.grid_size,
+        snapshot.metadata.grid_spacing,snapshot.metadata.origin);
     std::map<int, LocalPotentialSampleList> original_peeling;
     for (const auto & atom : model->GetAtomList())
         original_peeling[atom->GetSerialID()] = rg::AtomLocalPotentialView::For(*atom).GetPeelingSamplingEntries(false);
@@ -903,13 +905,15 @@ TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNo
         if(view.GetStageEstimate(rg::FittingStage::Second).source.role!=rg::FittingRole::Target) continue;
         rg::PostFitPeelingResult peeling; peeling.source=view.GetStageEstimate(rg::FittingStage::Second).source;
         for(const auto & sample:original_peeling.at(atom->GetSerialID())) peeling.samples.push_back({sample.response,{},{}});
-        second_stage_test::postprocessing::AssignGridObservationsForTesting(peeling,view.GetRawSamplingEntriesView(),atom->GetPosition());
-        for(auto & sample:peeling.samples)
+        const auto contributor=static_cast<std::size_t>(std::find(snapshot.atom_ids.begin(),snapshot.atom_ids.end(),
+            std::to_string(atom->GetSerialID()))-snapshot.atom_ids.begin());
+        const auto & input=problem.OriginalInput();
+        for(std::size_t i=0;i<peeling.samples.size();++i)
         {
-            const auto contributor=static_cast<std::size_t>(std::find(snapshot.atom_ids.begin(),snapshot.atom_ids.end(),
-                std::to_string(atom->GetSerialID()))-snapshot.atom_ids.begin());
-            sample.observation.original_row_index+=12*contributor;
-            sample.observation.global_grid_index=std::stoull(snapshot.row_ids[sample.observation.original_row_index]);
+            const auto & support=input.support[contributor][i];
+            const auto grid=std::stoull(input.row_ids[support.row]);
+            peeling.samples[i].observation={support.row,grid,support.squared_distance,
+                input.observations[support.row],grid_geometry.GetGridPosition(grid)};
         }
         if(atom->GetSerialID()==2) {peeling.samples[1].response.reset(); peeling.samples[1].reason="outside-joint-domain";}
         model->EditAnalysis().SetAtomPostFitPeeling(*atom,peeling);

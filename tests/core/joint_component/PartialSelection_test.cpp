@@ -5,6 +5,7 @@
 #include <rhbm_gem/data/io/JointAnalysisFileIO.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <algorithm>
+#include <cmath>
 #include <fstream>
 #include <iterator>
 #include <limits>
@@ -1109,22 +1110,18 @@ TEST(JointComponentPartialSelectionTest, PostJointEvidenceAssessmentEnforcesAvai
     joint.source = {EstimateMethod::JointComponents, "1", "component", "validation-run", FittingRole::Target};
     joint.point = GaussianModel3D{2.0, 0.5, -0.1};
     joint.convergence = JointCheckStatus::Passed;
-    LocalPotentialSampleList raw(4);
-    for (std::size_t i = 0; i < raw.size(); ++i)
-        raw[i].point.distance = 0.1 + 0.2 * static_cast<double>(i);
-    raw.back().point.distance=1.2;
+    const std::array<double,4> distances{.1,.3,.5,1.2};
     PostFitPeelingResult peeling;
     peeling.source = joint.source;
-    peeling.samples.resize(raw.size());
-    for (auto & sample : peeling.samples) sample.response = 1.0;
-    postprocessing_test::AssignGridObservationsForTesting(peeling,raw);
+    for (std::size_t i=0;i<distances.size();++i)
+        peeling.samples.push_back({1.0,{},postprocessing_test::MakeGridObservation(i,i,distances[i],0.0)});
 
     PostJointLocalResult result;
     result.source = joint.source;
     result.status = EvidenceStatus::Available;
     result.reason.clear();
     result.fixed_charge = {joint.point->GetOffset(), joint.point->GetWidth()};
-    result.sample_count = raw.size();
+    result.sample_count = peeling.samples.size();
     result.corrected_sample_count=result.positive_sample_count=result.sample_count;
     result.effective_sample_count = 3;
     result.fit.alpha_r = 0.2;
@@ -1148,14 +1145,31 @@ TEST(JointComponentPartialSelectionTest, PostJointEvidenceAssessmentEnforcesAvai
     EXPECT_TRUE(valid.valid) << valid.reason;
     EXPECT_TRUE(valid.group_eligible);
 
-    for (const double radius : {1.5, 2.0})
+    for (const auto status : {EvidenceStatus::Available, EvidenceStatus::Unavailable, EvidenceStatus::Ineligible})
     {
-        auto experimental = result;
-        experimental.fitting_radius = radius;
-        experimental.effective_sample_count = 4;
-        const auto assessment = assessCurrent(experimental);
-        EXPECT_FALSE(assessment.valid) << radius;
-        EXPECT_FALSE(assessment.group_eligible) << radius;
+        auto evidence = result;
+        evidence.status = status;
+        if (status != EvidenceStatus::Available)
+        {
+            evidence.reason = "test-local-evidence-unavailable";
+            evidence.information.reset();
+        }
+        const auto production = assessCurrent(evidence);
+        EXPECT_TRUE(production.valid) << production.reason;
+        EXPECT_EQ(production.group_eligible, status == EvidenceStatus::Available);
+        for (const double radius : {1.5, 2.0, 0.0, -1.0, std::nextafter(1.0,2.0),
+                std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity(),
+                -std::numeric_limits<double>::infinity()})
+        {
+            auto experimental = evidence;
+            experimental.fitting_radius = radius;
+            // Keep the wider dataset counts consistent to isolate policy rejection.
+            if (radius >= 1.2) experimental.effective_sample_count = 4;
+            const auto assessment = assessCurrent(experimental);
+            EXPECT_FALSE(assessment.valid) << radius;
+            EXPECT_FALSE(assessment.group_eligible) << radius;
+            EXPECT_EQ(assessment.reason,"Post-Joint local sample counts/range mismatch.");
+        }
     }
 
     auto bad = result;
@@ -1192,7 +1206,7 @@ TEST(JointComponentPartialSelectionTest, PostJointEvidenceAssessmentEnforcesAvai
     bad = result; bad.information->moment(0) = std::numeric_limits<double>::infinity();
     EXPECT_FALSE(assessCurrent(bad).valid);
     bad = result;
-    bad.sample_failures = {{0, raw[0].point.distance, "invalid"}, {0, raw[0].point.distance, "duplicate"}};
+    bad.sample_failures = {{0, distances[0], "invalid"}, {0, distances[0], "duplicate"}};
     EXPECT_FALSE(assessCurrent(bad).valid);
     bad = result; bad.fixed_charge.width += 0.01;
     EXPECT_FALSE(assessCurrent(bad).valid);
@@ -1243,19 +1257,16 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInforma
         (void)unused;
         const auto & stage = AtomLocalPotentialView::For(*model.FindAtomPtr(id))
             .GetStageEstimate(FittingStage::Second);
-        LocalPotentialSampleList raw;
         PostFitPeelingResult peeling;
         peeling.source = stage.source;
         for (int sample_index = 0; sample_index < 6; ++sample_index)
         {
-            LocalPotentialSample sample;
-            sample.point.distance = 0.12 + 0.15 * sample_index;
-            sample.response = 2.0 + 0.1 * id + 0.02 * sample_index;
-            raw.push_back(sample);
-            peeling.samples.push_back({sample.response, {}, {}});
+            const double distance = 0.12 + 0.15 * sample_index;
+            const double response = 2.0 + 0.1 * id + 0.02 * sample_index;
+            const auto row = static_cast<std::size_t>(sample_index);
+            peeling.samples.push_back({response, {}, postprocessing_test::MakeGridObservation(
+                row,row,distance,response,model.FindAtomPtr(id)->GetPosition())});
         }
-        postprocessing_test::AssignGridObservationsForTesting(peeling,raw,model.FindAtomPtr(id)->GetPosition());
-        editor.SetAtomLocalRawSamplingEntries(*model.FindAtomPtr(id), std::move(raw));
         peelings.emplace_back(id, std::move(peeling));
 
         PostJointLocalResult local;
@@ -1696,16 +1707,15 @@ TEST(JointComponentPartialSelectionTest, WeakJointWidthPolicyComparisonUsesOnlyQ
     const std::array<double,5> widths{.4,.5,.7,.6,.8};
     for(int id=1;id<=5;++id)
     {
-        LocalPotentialSampleList raw(6); PostFitPeelingResult peeling;
+        PostFitPeelingResult peeling;
         peeling.source=stages[id].source;
-        for(std::size_t i=0;i<raw.size();++i)
+        for(std::size_t i=0;i<6;++i)
         {
             const auto index=static_cast<double>(i);
-            raw[i].point.distance=.1+.15*index; raw[i].response=2.+.01*index;
-            peeling.samples.push_back({raw[i].response,{},{}});
+            const double distance=.1+.15*index,response=2.+.01*index;
+            peeling.samples.push_back({response,{},postprocessing_test::MakeGridObservation(
+                i,i,distance,response,model.FindAtomPtr(id)->GetPosition())});
         }
-        postprocessing_test::AssignGridObservationsForTesting(peeling,raw,model.FindAtomPtr(id)->GetPosition());
-        editor.SetAtomLocalRawSamplingEntries(*model.FindAtomPtr(id),std::move(raw));
         peelings.emplace_back(id,std::move(peeling));
         PostJointLocalResult local;
         local.source=stages[id].source; local.fixed_charge={0.,stages[id].point->GetWidth()};
