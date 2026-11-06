@@ -161,3 +161,27 @@ Width information when charge depends on Width.
 truth is available. The opposite donor-coverage changes across datasets do
 not establish robust improvement. Reproduce real runs/audits with
 `python3 tests/research/run_neighbor_selection_study.py --real-only`.
+
+## E5: decision and acceptance
+
+This is Case D in the tested crowded geometry: both relaxations worsen truth
+recovery, and FO is less damaging than FQ. Production remains F0. The 30-degree
+cone is beneficial in these tests; this does not establish that 30 degrees is
+universally optimal. Ownership-only is not supported as a replacement. The
+QScore distance rule increases row coverage but lowers target specificity and
+increases Width/Amplitude bias here. FQ reproduces much of Q0's crowded
+regression while preserving Fibonacci geometry/responses, supporting selection
+as a substantial cause. It does not isolate every Q0 factor or prove selection
+is the sole cause: Q0 additionally changes shell radii, geometry, counts,
+center and adaptive retry.
+
+No adaptive refill is implemented. The prerequisite truth advantage is absent,
+and contamination rather than shortage of observations dominates this case.
+No optimizer, fitting radius, qualification, calibration, public policy/CLI,
+Two-Stage or downstream numerical rule was changed. Real-map inconsistency and
+FQ's bound-sensitive 6Z6U endpoint further argue against promotion.
+
+The runner stores shared mask/neighbor/contamination diagnostics once per
+scenario and policy-specific fit/contamination summaries separately. Reaggregation
+verified that compaction preserved every numerical field. Detailed observations
+and logs remain reproducible build artifacts; only compact evidence is committed.

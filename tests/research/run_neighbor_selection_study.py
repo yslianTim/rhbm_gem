@@ -51,9 +51,14 @@ def selection_summary(atoms):
                 'fo_new_rejections': sum(r[5] and not r[6] for r in rr),
                 'fq_new_rejections': sum(r[5] and not r[7] for r in rr),
                 'fo_fq_differences': sum(r[6] != r[7] for r in rr),
+                'fq_rejected_vs_fo': sum(r[6] and not r[7] for r in rr),
                 'shared_qscore_vs_full_differences': sum(r[7] != r[8] for r in rr),
                 'shared_inclusion_violations': sum((not r[8] and r[6]) or (not r[6] and r[5]) for r in rr)}
     out = {domain: counts([r for r in rows if domain == 'raw' or r[0] <= 1.]) for domain in ('raw', 'fitting')}
+    assert out['raw']['shared_inclusion_violations'] == 0
+    assert out['fitting']['fq_new_rejections'] == 0
+    assert out['fitting']['fq_rejected_vs_fo'] == 0
+    assert out['fitting']['shared_qscore_vs_full_differences'] == 0
     out['per_atom_counts'] = [{'id': a['id'], 'phase': a['_phase'],
         'raw': counts(a['neighbor_selection']['observations']),
         'fitting': counts([r for r in a['neighbor_selection']['observations'] if r[0]<=1.])}
@@ -203,6 +208,15 @@ def main():
                     assert a['id'] == b['id']
                     assert a['neighbor_selection'] == b['neighbor_selection'], 'Real fixed geometry/response parity'
             section[policy] = cell
+        # Store policy-independent masks/counts/contamination groups once per dataset.
+        common_selection = section['F0']['selection'].copy()
+        policy_fields = ('per_atom', 'contamination_absolute_width_error_correlation')
+        for key in policy_fields:
+            common_selection.pop(key, None)
+        for policy in POLICIES:
+            diagnostic = section[policy]['selection']
+            section[policy]['selection'] = {k: diagnostic[k] for k in policy_fields if k in diagnostic}
+        section['selection_diagnostics'] = common_selection
         section['Q0_external_reference'] = [old['runs'][f'{scenario if args.real_only else scenario+"-r"+str(phase)}-Q0-production'] for phase in range(1 if args.real_only else 3)]
         if args.real_only:
             section['provenance'] = provenance
