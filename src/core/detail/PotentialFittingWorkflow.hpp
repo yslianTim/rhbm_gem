@@ -7,6 +7,7 @@
 #include <vector>
 
 namespace rhbm_gem::core { struct JointFitResult; }
+namespace rhbm_gem { struct JointAnalysisResult; }
 
 namespace rhbm_gem::core::detail {
 
@@ -32,5 +33,9 @@ void RunJointComponentWorkflow(
     MapObject & map, ModelObject & model, const FitOptions & options,
     JointPostprocessingMetrics * metrics = nullptr,
     const JointSeedSamplingPolicy & policy = {}, JointSeedSamplingReport * sampling_report = nullptr);
+
+void RunJointPostprocessing(
+    MapObject &, ModelObject &, const JointProblem &, JointAnalysisResult,
+    const FitOptions &, JointPostprocessingMetrics &);
 
 } // namespace rhbm_gem::core::detail

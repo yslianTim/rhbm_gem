@@ -222,3 +222,50 @@ TEST(JointSeedSensitivityTest, FixedGeometryRelaxationIncreasesCrowdedWidthError
     EXPECT_LT(rmse[0],rmse[1]); EXPECT_LT(rmse[1],rmse[2]);
     EXPECT_LT(contamination[0],contamination[1]); EXPECT_LT(contamination[1],contamination[2]);
 }
+
+TEST(JointSeedSensitivityTest, NeighborControlEndpointsUseOriginalGridDownstreamAndPersistMasks)
+{
+    for (int control=0;control<3;++control)
+    {
+        // Keep the Production donor minimum; crowd only the first pair.
+        auto source=second_stage_test::FirstStageStudyModel(5.5,0);
+        source->FindAtomPtr(2)->SetPosition(1.53,.17,.19);
+        ModelObject model(*source); model.EditAnalysis().InitializeFromSelection();
+        auto map=second_stage_test::FirstStageStudyMap(model,.4,1e-4,0);
+        const auto problem=BuildPureHaloSupportExclusionProblem(*map,model);
+        const auto workset=d::MakeJointFittingWorkset(model,problem);
+        d::RunJointSeedSamplingWorkflow(*map,model,workset.contributors,1,{},true,{});
+        if (control)
+            for (const auto * atom:workset.contributors)
+            {
+                auto raw=AtomLocalPotentialView::For(*atom).GetRawSamplingEntries(false);
+                second_stage_test::ApplyFibonacciNeighborSelection(raw,
+                    second_stage_test::FibonacciNeighborMasks(*atom,model,raw),control==2);
+                model.EditAnalysis().SetAtomLocalRawSamplingEntries(*atom,std::move(raw));
+            }
+        FitOptions options; options.quiet_mode=true;
+        const auto init=d::RunJointFirstStageInitializationFromPreparedSamples(model,workset,options);
+        const auto fit=FitJointComponentsInitialized(problem,init);
+        ASSERT_EQ(fit.RuntimeConvergence(),JointCheckStatus::Passed);
+        ASSERT_EQ(fit.TargetRuntimeConvergence(),JointCheckStatus::Passed);
+        const auto raw=AtomLocalPotentialView::For(*workset.contributors[0]).GetRawSamplingEntries(false);
+        d::JointPostprocessingMetrics metrics;
+        d::RunJointPostprocessing(*map,model,problem,CaptureJointAnalysisResult(fit),options,metrics);
+        EXPECT_EQ(metrics.available_peeling_sample_count,metrics.grid_peeling_sample_count);
+        const auto view=AtomLocalPotentialView::For(*workset.contributors[0]);
+        ASSERT_TRUE(view.GetPostFitPeeling()); ASSERT_TRUE(view.GetPostJointLocalResult());
+        EXPECT_EQ(view.GetPostJointLocalResult()->status,EvidenceStatus::Available);
+        command_test::ScopedTempDir directory("neighbor-selection-persistence");
+        DataRepository repository(directory.path()/"samples.sqlite");
+        repository.SaveModel(model,"control"); auto restored=repository.LoadModel("control");
+        const auto saved=AtomLocalPotentialView::For(*restored->FindAtomPtr(1)).GetRawSamplingEntries(false);
+        ASSERT_EQ(saved.size(),raw.size());
+        for (std::size_t k=0;k<raw.size();++k)
+        {
+            EXPECT_EQ(saved[k].point.position,raw[k].point.position);
+            EXPECT_EQ(saved[k].point.distance,raw[k].point.distance);
+            EXPECT_EQ(saved[k].response,raw[k].response);
+            EXPECT_EQ(saved[k].point.is_selected,raw[k].point.is_selected);
+        }
+    }
+}

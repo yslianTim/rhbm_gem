@@ -141,6 +141,17 @@ def main():
         assert all(summary['joint'][key] for key in ('kkt_passed', 'replay_passed', 'endpoint_passed'))
         summary['initialization_peak_rss_bytes'] = data['initialization_peak_rss_bytes']
         summary['jce_peak_rss_bytes'] = data['jce_peak_rss_bytes']
+        def quantiles(values):
+            values = sorted(v for v in values if v is not None)
+            def quantile(p):
+                position = p * (len(values)-1)
+                lo = math.floor(position)
+                hi = math.ceil(position)
+                return values[lo] + (values[hi]-values[lo])*(position-lo)
+            return {str(p): quantile(p) for p in (.5, .9, .95, .99)}
+        summary['initial_width_quantiles'] = quantiles(data.get('initial_tau', [a['mdpde'][1] for a in data['atoms']]))
+        summary['final_width_quantiles'] = quantiles(data['joint']['tau'])
+        summary['bounded_projection_count'] = data.get('bounded_projection_count', data['calibration']['initial_violations'])
         output['runs'][path.stem] = summary
         return data
 

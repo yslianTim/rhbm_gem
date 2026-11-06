@@ -261,6 +261,14 @@ void RunJointComponentWorkflow(
         fit.costs.initialization_seconds = initialization_seconds;
         return CaptureJointAnalysisResult(std::move(fit));
     }();
+    RunJointPostprocessing(map, model, problem, std::move(snapshot), options, postprocessing_metrics);
+}
+
+void RunJointPostprocessing(
+    MapObject & map, ModelObject & model, const JointProblem & problem, JointAnalysisResult snapshot,
+    const FitOptions & options, JointPostprocessingMetrics & postprocessing_metrics)
+{
+    postprocessing_metrics = {};
     snapshot.metadata.grid_size=map.GetGridSize();
     snapshot.metadata.grid_spacing=map.GetGridSpacing();
     snapshot.metadata.origin=map.GetOrigin();

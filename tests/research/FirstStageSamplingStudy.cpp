@@ -348,16 +348,20 @@ int main(int argc,char ** argv)
             records.push_back(saved);
         }
         output["atoms"]=records;
+        output["initial_tau"]=Values(init.tau);
         const auto calibration=n::CalibrateGlobalWidth(init,"study");
         j::object calibrated{{"status",calibration.status},{"reason",calibration.unavailable_reason},
             {"donors",calibration.qualified_donor_count},{"coverage",calibration.qualified_donor_coverage},
             {"fallback",calibration.fallback_count},{"native",calibration.native_success_count},
             {"refined",calibration.refined_success_count},{"unqualified",calibration.unqualified_count},
+            {"invalid_width",calibration.invalid_width_count},
             {"initial_violations",calibration.initial_violations4}};
         if (calibration.tau_max4) calibrated["bound"]=*calibration.tau_max4;
         if (calibration.p95) { calibrated["p50"]=*calibration.median_width; calibrated["p90"]=*calibration.p90;
             calibrated["p95"]=*calibration.p95; calibrated["p99"]=*calibration.p99; }
         output["calibration"]=calibrated;
+        if (calibration.tau_max4)
+            output["bounded_projection_count"]=n::MakeBoundedInitialization(init,calibration).projection_count;
         double initial_objective=0.;
         for (double y:problem.Input().observations) initial_objective+=(y/problem.ObservationScale())*(y/problem.ObservationScale())/2.;
         output["initial_objective"]=initial_objective; // Production BCD starts with A=C=0.
@@ -380,10 +384,12 @@ int main(int argc,char ** argv)
         output["qscore"]=CalculateQScoreForAtom(atom,*map,*model,1.,0.);
         output["total_seconds"]=Seconds(start);
         // Validate the unchanged downstream workflow independently of timing above.
-        if (production && (id=="F0" || id=="F1" || id=="Q0" || id=="Q1"))
+        if (production && (id=="F0" || id=="FO" || id=="FQ" || id=="F1" || id=="Q0" || id=="Q1"))
         {
             const auto downstream_start=Clock::now(); d::JointPostprocessingMetrics metrics;
-            d::RunJointComponentWorkflow(*map,*model,options,&metrics,policy);
+            if (id=="FO" || id=="FQ")
+                d::RunJointPostprocessing(*map,*model,problem,CaptureJointAnalysisResult(fit),options,metrics);
+            else d::RunJointComponentWorkflow(*map,*model,options,&metrics,policy);
             const auto & snapshot=*model->GetAnalysisView().GetJointResult();
             std::size_t local_count=0,group_count=0;
             for (const auto * target:workset.contributors)
