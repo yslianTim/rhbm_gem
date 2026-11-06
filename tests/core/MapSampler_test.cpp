@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <algorithm>
 #include <cstddef>
 #include <memory>
 #include <string>
@@ -334,11 +335,23 @@ TEST(MapSamplerTest, SharedTricubicStencilPreservesClampAndEffectiveWeights)
             return map.GetMapValue(p[0], p[1], p[2]);
         });
         double reference = 0, weight_sum = 0;
-        for (const auto & [node, weight] : detail::TricubicWeights(stencil))
+        std::array<std::array<double,4>,3> weights{};
+        for(std::size_t axis=0;axis<3;++axis)
         {
-            EXPECT_LT(node, map.GetMapValueArraySize());
-            reference += weight * map.GetMapValue(node);
-            weight_sum += weight;
+            const double t=stencil.local[axis], t2=t*t, t3=t2*t;
+            weights[axis]={-.5*t+t2-.5*t3,1.-2.5*t2+1.5*t3,
+                .5*t+2.*t2-1.5*t3,-.5*t2+.5*t3};
+        }
+        for(int i=-1;i<3;++i) for(int j=-1;j<3;++j) for(int k=-1;k<3;++k)
+        {
+            const std::array<int,3> node{std::clamp(stencil.base[0]+i,0,stencil.dimensions[0]-1),
+                std::clamp(stencil.base[1]+j,0,stencil.dimensions[1]-1),
+                std::clamp(stencil.base[2]+k,0,stencil.dimensions[2]-1)};
+            EXPECT_EQ(stencil.Node(i,j,k),node);
+            const double weight=weights[0][static_cast<std::size_t>(i+1)]*
+                weights[1][static_cast<std::size_t>(j+1)]*weights[2][static_cast<std::size_t>(k+1)];
+            reference+=weight*map.GetMapValue(node[0],node[1],node[2]);
+            weight_sum+=weight;
         }
         EXPECT_NEAR(value, reference, 1e-13);
         EXPECT_NEAR(weight_sum, 1, 1e-14);

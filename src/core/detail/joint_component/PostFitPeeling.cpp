@@ -141,6 +141,8 @@ JointPostprocessingContext::JointPostprocessingContext(
         throw std::invalid_argument("Post-fit peeling requires a target-only Pure Exclusion problem.");
     if (snapshot.parameterization_contract!=JointPureHaloSupportExclusionParameterizationContract)
         throw std::invalid_argument("Post-fit peeling requires a target-only Pure Exclusion snapshot.");
+    if (!IsQualifiedJointAnalysisResult(snapshot))
+        throw std::invalid_argument("Post-fit peeling requires a qualified Joint endpoint.");
     if (m_metrics) ++m_metrics->snapshot_identity_validation_count;
     if (snapshot.atom_ids != input.atom_ids)
         throw std::invalid_argument("Joint peeling snapshot identity mismatch.");
@@ -288,7 +290,7 @@ std::vector<std::pair<int, PostFitPeelingResult>> JointPostprocessingContext::Bu
 
     std::optional<HaloMedianBuildResult> rebuilt_halo_medians;
     const HaloMedianBuildResult * halo_medians=m_halo_medians;
-    if (!halo_medians && result.target_evidence)
+    if (result.halo_median_reconstruction && (!halo_medians || !halo_medians->snapshot) && result.target_evidence)
     {
         try
         {

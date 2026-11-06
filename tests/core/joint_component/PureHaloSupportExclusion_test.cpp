@@ -1089,6 +1089,8 @@ TEST(PureHaloSupportExclusionTest, GridSubtractionCoversOverlapsHalosChargesAndS
         if(halos) snapshot.halo_median_reconstruction=core::detail::BuildHaloMedianReconstruction(
             model,problem,snapshot,"grid-reference").TakeSnapshot();
         data_internal::ApplyJointStageEstimates(model,snapshot,"grid-reference");
+        auto uncertified=snapshot; uncertified.search_completed=false;
+        EXPECT_THROW(postprocessing_test::MakeJointPostprocessingContext(map,model,problem,uncertified),std::invalid_argument);
         const auto context=postprocessing_test::MakeJointPostprocessingContext(map,model,problem,snapshot);
         const auto batch=context.BuildPostFitPeelingBatch(problem.OriginalInput().selection_domain->target_indices);
         ASSERT_EQ(batch.size(),2u);
@@ -1320,4 +1322,40 @@ TEST(PureHaloSupportExclusionTest, NonpositiveGridCorrectionsAreNotFailuresOrPha
     EXPECT_FALSE(result.information);
     fixture.model.EditAnalysis().SetAtomPostFitPeeling(*fixture.model.FindAtomPtr(1),peeling);
     EXPECT_NO_THROW(fixture.model.EditAnalysis().SetAtomPostJointLocalResult(*fixture.model.FindAtomPtr(1),result));
+}
+
+TEST(PureHaloSupportExclusionTest, CoarseGridEqualRadiusObservationsFailIndependentLocalRank)
+{
+    auto fixture=BoundaryFixture();
+    MapObject map({2,2,2},{1.,1.,1.},{-.5,-.5,-.5});
+    auto values=std::make_unique<double[]>(8);
+    std::fill_n(values.get(),8,1.);
+    map.SetMapValueArray(std::move(values));
+    const auto problem=BuildPureHaloSupportExclusionProblem(map,fixture.model);
+    // Controlled endpoint evidence isolates Local qualification from the JCE solver.
+    const auto snapshot=QualifiedReconstructionSnapshot(problem,fixture.model);
+    data_internal::ApplyJointStageEstimates(fixture.model,snapshot,"coarse-grid");
+    const auto context=postprocessing_test::MakeJointPostprocessingContext(map,fixture.model,problem,snapshot);
+    const auto peeling=context.BuildPostFitPeelingBatch(std::vector<std::size_t>{0}).front().second;
+    FitOptions options; options.quiet_mode=true;
+    core::detail::JointPostprocessingMetrics metrics;
+    const auto result=core::detail::FitPostJointLocalTargetForTesting(context,fixture.model,1,peeling,options,metrics);
+    EXPECT_EQ(result.sample_count,8u); EXPECT_EQ(result.effective_sample_count,8u);
+    EXPECT_EQ(result.status,EvidenceStatus::Unavailable);
+    EXPECT_EQ(result.reason,"rank-deficient-local-design");
+    EXPECT_FALSE(result.information);
+}
+
+TEST(PureHaloSupportExclusionTest, TransferredHaloWorkspaceCannotHideForeignReconstruction)
+{
+    auto fixture=BoundaryFixture();
+    const auto problem=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
+    auto snapshot=QualifiedReconstructionSnapshot(problem,fixture.model);
+    auto workspace=core::detail::BuildHaloMedianReconstruction(fixture.model,problem,snapshot,"reconstruction-only-run");
+    snapshot.halo_median_reconstruction=workspace.TakeSnapshot();
+    snapshot.halo_median_reconstruction->halos.front().amplitude+=1.;
+    data_internal::ApplyJointStageEstimates(fixture.model,snapshot,"reconstruction-only-run");
+    const auto context=postprocessing_test::MakeJointPostprocessingContext(
+        fixture.map,fixture.model,problem,snapshot,nullptr,&workspace);
+    EXPECT_THROW(context.BuildPostFitPeelingBatch(std::vector<std::size_t>{0}),std::invalid_argument);
 }

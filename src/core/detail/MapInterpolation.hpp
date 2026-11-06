@@ -4,28 +4,19 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
-#include <map>
 
 namespace rhbm_gem::core::detail {
 struct TricubicStencil
 {
     std::array<int, 3> base, dimensions;
     std::array<double, 3> local;
-    std::array<int, 3> UnclampedNode(int i, int j, int k) const
-    {
-        return {base[0] + i, base[1] + j, base[2] + k};
-    }
     std::array<int, 3> Node(int i, int j, int k) const
     {
         return {std::clamp(base[0] + i, 0, dimensions[0] - 1),
             std::clamp(base[1] + j, 0, dimensions[1] - 1),
             std::clamp(base[2] + k, 0, dimensions[2] - 1)};
     }
-    std::size_t Index(const std::array<int, 3> & p) const
-    {
-        return static_cast<std::size_t>(p[0]) + static_cast<std::size_t>(dimensions[0]) *
-            (static_cast<std::size_t>(p[1]) + static_cast<std::size_t>(dimensions[1]) * static_cast<std::size_t>(p[2]));
-    }
+
 };
 inline TricubicStencil MakeTricubicStencil(const MapObject & map, const std::array<double, 3> & position)
 {
@@ -72,19 +63,6 @@ double InterpolateTricubic(const TricubicStencil & stencil, Read read)
     }
 
     return CubicInterpolate(temp_z[0], temp_z[1], temp_z[2], temp_z[3], local.at(2));
-}
-
-// Merge clamped duplicate nodes before testing whether a node affects a sample.
-inline std::map<std::size_t, double> TricubicWeights(const TricubicStencil & stencil)
-{
-    std::array<std::array<double, 4>, 3> weights;
-    for (std::size_t axis = 0; axis < 3; ++axis)
-        for (std::size_t node = 0; node < 4; ++node)
-            weights[axis][node] = CubicInterpolate(node == 0, node == 1, node == 2, node == 3, stencil.local[axis]);
-    std::map<std::size_t, double> result;
-    for (int i = -1; i < 3; ++i) for (int j = -1; j < 3; ++j) for (int k = -1; k < 3; ++k)
-        result[stencil.Index(stencil.Node(i, j, k))] += weights[0][static_cast<std::size_t>(i + 1)] * weights[1][static_cast<std::size_t>(j + 1)] * weights[2][static_cast<std::size_t>(k + 1)];
-    return result;
 }
 
 inline LocalPotentialSampleList BuildLocalPotentialSampleList(

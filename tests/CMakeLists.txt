@@ -313,6 +313,11 @@ set_tests_properties(rhbm_tests_joint_component_numerical PROPERTIES
     LABELS "core;domain:core;intent:algorithm;joint:numerical" TIMEOUT 180
     ENVIRONMENT "OMP_NUM_THREADS=1")
 
+# The unoptimized 300-atom replay fixture needs more time than Release.
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set_tests_properties(rhbm_tests_joint_component_numerical PROPERTIES TIMEOUT 900)
+endif()
+
 set(joint_persistence_test_patterns
     DataObjectPersistenceTest.JointCurrentSchemaV24*
     DataObjectPersistenceTest.JointResultsRoundTripCopyClearAndReplaceAtomically

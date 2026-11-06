@@ -123,6 +123,14 @@ all cryo-EM noise. Neighbor/Halo subtraction is independently covered by the
 numerical tests; this statistical experiment conditions on the true endpoint
 and does not estimate Halo uncertainty.
 
+Trial t=0..15 uses A=2+0.2 sin(1.7t), tau=w[1+0.08 cos(1.1t)],
+C=+0.2 for even t and -0.2 for odd t, and center (a,0.37a,-0.23a).
+The 0.35 Å map is 19³ with origin (-3.15,-3.15,-3.15); the 0.7 Å map is
+11³ with origin (-3.5,-3.5,-3.5). The same innovation field is paired across
+radii. Width variability in the CSV is the SD of width error, not the
+unconditional spread of the intentionally varied truth widths. Posterior
+coverage uses the 2D beta-coordinate 95% chi-square threshold 5.991464547.
+
 Legacy comparison recreates the single-Target baseline Fibonacci map sampling
 and tricubic own-charge field, then uses the same Gaussian estimator and 1 Å
 range. Grid variants use the production Peeling/correction and Local fitting
@@ -137,10 +145,15 @@ the common PreparedLocalGaussianDesign API defines the explicit radial range.
 |A RMSE|0.121849|0.098797|0.152310|0.501155|
 |tau bias (Å)|0.002373|0.000476|0.023456|0.115998|
 |tau RMSE (Å)|0.016132|0.012598|0.057009|0.214714|
+|Within-configuration tau error SD, pooled RMS (Å)|0.012357|0.012237|0.023061|0.049525|
+|OLS A RMSE on qualified cases|0.100552|0.090896|0.195406|0.467861|
+|OLS tau RMSE on qualified cases (Å)|0.013382|0.012490|0.057429|0.211591|
+|Mean Local alpha|0.23841|0.34811|0.35783|0.38854|
 |Positive retained / radius candidates|99.98%|99.77%|93.42%|86.49%|
 |Available synthetic groups / 48|48/48|48/48|48/48|48/48|
 |Posterior nominal 95% ellipse coverage|6.25%|44.59%|27.81%|13.67%|
 |Local beta MSE / mean working covariance trace|64.82|2.20|58.14|316.33|
+|Posterior beta MSE / mean posterior covariance trace|67.99|4.56|119.49|673.52|
 |Mean information condition|59.62|68.35|24.60|19.59|
 
 Groups contain the 16 qualified synthetic members per configuration and use
@@ -164,6 +177,11 @@ grid outcomes (one at 1 Å, two at 1.5 Å) are `local-mdpde-unqualified`.
 Working covariance is conditional and diagonal by observation. The experiment
 shows substantial overconfidence even at 1 Å, especially with correlated noise;
 the legacy Fibonacci interpolation has still worse dependence/calibration.
+At grid 1 Å, posterior ellipse coverage is 239/384 (62.24%) with independent
+noise and 103/383 (26.89%) with correlated noise; Local beta MSE divided by
+mean working covariance trace is 1.65 and 3.29 respectively. Every variant
+has trials selecting alpha at the upper boundary 1.0; means alone do not
+establish stable alpha selection. Per-configuration values are in the CSV.
 These are measured limitations, not a claim that voxels are independent or
 that any nominal 95% coverage is calibrated. Joint charge and Halo uncertainty
 remain conditioned out. Changing the Group statistical model is out of scope.
@@ -216,3 +234,144 @@ The real files were subsequently located through `local/run_example.sh` in
 `/Users/yslian/data`; the earlier negative search applied only to the project
 folders searched. A paired real-map baseline was rebuilt from an ordinary
 `git archive` source directory (not a Git worktree) at the initial commit.
+
+## P6 real-map paired benchmark
+
+6Z6U / EMD-11103 unsharpened map, all 70,190 model atoms retained; selected
+non-H chain A sequence IDs 30–50: 181 Targets. Map 480³, spacing 0.4920000076 Å.
+The workflow normalizes the map and supplies reference Gaussian parameters;
+Q-score calculation is omitted because it does not enter Joint/Local fitting.
+The archived initial source and final source use Release, Apple Clang, Eigen,
+ROOT and OpenMP. The temporary baseline build disables optional UMAP/experimental
+commands, which are absent from this benchmark and do not affect fitting.
+Three paired independent processes per implementation, one numerical thread,
+no concurrent builds/tests during measurement. Times include phase bookkeeping,
+not external file import. They are wall times on this machine.
+
+All six runs qualify. The 181 Target A/tau/C floating-point bit patterns match
+across all runs (SHA-256 of big-endian doubles ordered by Atom ID:
+`a5a57ea3ac5f6f20b1958c1a6e37dc4196d2e23f15c11ae8498b21e703acefdf`).
+Joint objective is exactly 0.01566223279243328; Original rows 32,933, Fitting rows
+19,757, reconstructed Halos 314. No optimizer, BCD, KKT or replay implementation
+was changed.
+
+| Median phase | Baseline seconds | Grid 1 Å seconds |
+|---|---:|---:|
+| Context | 0.005714291 | 0.004159625 |
+| Peeling | 0.605913083 | 0.030749875 |
+| Own charge / preparation | 0.030867829 | 0.007354877 |
+| Local alpha | 0.571445703 | 0.346706747 |
+| Local fit | 0.005666874 | 0.002600571 |
+| Group alpha | 0.000000208 | 0.000000292 |
+| Group WEB | 0.000129289 | 0.000132541 |
+| Total postprocessing | 1.222804708 | 0.410749625 |
+
+Median total postprocessing falls 66.4% (2.98x faster); Peeling is
+19.7x and own-charge preparation 4.20x faster.
+This comparison retains a 1 Å fitting range: it measures the observation-domain
+change and interpolation removal. Separate P4 radius timings quantify the cost
+of expanding to 1.5/2 Å.
+Group WEB changes by 0.003 ms in absolute median time;
+sub-millisecond timings do not establish a general WEB speed change.
+
+Peeling availability: baseline 36,200/36,200 Fibonacci samples; final
+50,936/50,936 voxel observations. Retained Local solver rows total 13,505 vs
+6,344. Both have 178/181 qualified Local results and 25/85 available Groups.
+Both exclude two invalid Local parameter outcomes and one unqualified MDPDE.
+The identities change: 401 and 523 gain eligibility; 671 and 735 lose it;
+737 remains unavailable. Failures never enter Group inference. These correspond
+to TYR C, SER OG, ASP CB, LYS CE and LYS NZ in the input atom-site records;
+the latter two have alternate occupancy 0.5 and high temperature factors.
+Those attributes are observations, not demonstrated causes of failure.
+Median available tau is 0.65357 vs 0.63716 Å; no real-map truth is known, so
+these differences are not accuracy claims. On members qualified in both paths,
+Target 400 changes from tau 0.14173 to 0.60954 Å. Some targets and Groups change
+substantially despite unchanged aggregate coverage; see the member data.
+
+Median measured process peak RSS: 1,498,513,408 B vs 1,498,923,008 B
+(+409,600 B, +0.03%). This includes map import and is not isolated
+to postprocessing. Median largest sampled postprocessing RSS increase is
+17,596,416 B vs 9,601,024 B (baseline range
+17,383,424–20,938,752 B; final range 9,437,184–9,732,096 B).
+Allocation reuse makes snapshot deltas variable. Estimated postprocessing payload
+falls 19,451,926 B to 8,658,344 B
+(55.5%). No material RSS growth or dense observation-by-atom allocation was observed.
+
+Detailed evidence: [phase/RSS repeats](post-joint-grid-real-performance.csv),
+[Local and Joint points](post-joint-grid-real-local.csv),
+[Group means, MDPDE, member IDs, posterior covariance and fixed charge](post-joint-grid-real-groups.json).
+Real-map inference conditions on fitted Joint and reconstructed Halo profiles;
+these data do not calibrate charge/Halo uncertainty or Group coverage.
+
+### Overlapping Targets and Halo misspecification
+
+An additional paired study uses spacing 0.3 Å, a 31x21x21 map at origin
+(-3,-3,-3), two off-grid/overlapping Targets at (0.13,0.21,-0.07) and
+(1.5,0.1,0), and an optional Halo at (3,0,0). Target charges are -0.3/+0.2.
+Trial t uses A1=2+0.2 sin(1.7t), tau1=0.4[1+0.05 cos(1.1t)],
+A2=3+0.15 cos(1.3t), tau2=0.8[1+0.05 sin(0.7t)]. Independent additive noise
+has SD 0.5% of Target 1's Gaussian peak, seed 8128+t. The source endpoints
+are controlled true Target points, not newly optimized noisy endpoints.
+All 16 trials/radius/Target remain numerically qualified.
+
+The no-Halo and exact-median Halo cases produce identical error summaries,
+confirming that overlap, signed charge and correctly reconstructed Halo signals
+are removed consistently. With exact subtraction, Target 1 width RMSE is
+0.00143/0.02388/0.23306 Å for 1/1.5/2 Å; Target 2 is
+0.00764/0.00393/0.01098 Å. The broad Target benefits at 1.5 Å but not uniformly
+at 2 Å, while narrow-peak tail bias remains substantial.
+
+In the misspecified case the actual Halo has A=1.2 times the Target median,
+tau=1.15 times the median and C=median+0.1; Peeling deliberately retains the
+required qualified-Target median rule. Target 1 width bias becomes
++0.00240/+0.05007/+0.34183 Å, and Target 2 +0.07199/+0.07931/+0.19921 Å.
+These controlled offsets measure sensitivity, not a probabilistic Halo
+uncertainty model. They reinforce rejection of 2 Å and show that 1 Å fitting
+does not remove all Halo-model risk. Full data are in the
+[overlap/Halo CSV](post-joint-grid-overlap-statistics.csv).
+
+### Final regression scope
+
+Post-Joint contexts reject uncertified Joint runs. Halo reconstruction is
+revalidated even when the build workspace has already transferred its snapshot;
+a stale workspace cannot bypass parameter/donor/run provenance checks. Coarse
+equal-radius voxels fail Local rank qualification independently of upstream
+flags. Retired unclamped-node/index/weight helpers are removed from the shared
+interpolation header; FirstStage interpolation itself is unchanged and its
+clamp/weight regression now uses an independent closed-form reference in tests.
+No temporary statistical driver or benchmark instrumentation remains in
+production or test sources.
+
+Final Release build and all 21 CTest groups pass (37.72 s); final Debug build
+and all 21 groups pass (446.57 s). Both use BUILD_TESTING=ON, C++20 and the
+existing dependency set. Builds use `--parallel 4`; final CTest uses
+`--parallel 1`, OMP_NUM_THREADS=2, OMP_THREAD_LIMIT=4 and
+VECLIB_MAXIMUM_THREADS=1. Tests with explicit OpenMP settings remain capped
+at four threads. Debug's unoptimized 300-atom numerical/replay test initially
+exceeded its 180 s timeout; its final measured time is 233.60 s. The numerical
+CTest group now has a Debug-only 900 s timeout, with Release still 180 s;
+solver budgets, assertions and qualification thresholds are unchanged.
+The initial documentation links are repaired, and the Eigen restoration test
+passes with the documented two-thread environment. Final logs reside under
+the ignored `build/release/grid-domain-validation/` directory.
+
+### Production decision and limits
+
+Grid Peeling, direct own-charge evaluation, unified Local datasets and the
+new grid evidence/persistence contract are adopted. Post-Joint interpolation
+is fully removed. Candidate observations remain inclusive at 2 Å; the
+production fit uses the validated interim 1 Å range. The 2 Å candidate fails
+truth recovery, tail bias and covariance checks despite numerical solvability.
+Group eligibility and its statistical kernels retain their existing rules.
+No CLI experiment switch, legacy fallback, temporary study driver or new
+dependency remains. FirstStage and Two-Stage retain their 1 Å semantics.
+
+Measured remaining risks are coarse-grid rank failure, low-SNR positive-tail
+selection bias, overconfident covariance under correlated observations, and
+sensitivity to Halo median misspecification. Rank/SPD qualification ensures
+legal numerical evidence; it does not certify width identifiability or nominal
+coverage. The real-map case establishes a performance improvement for this
+selection, not truth accuracy or scaling to every whole-model selection.
+Joint endpoint and charge/Halo reconstruction uncertainty remain conditional
+inputs. A broader covariance model or a different tail estimator requires
+separate statistical work; this change does not claim to resolve either.
