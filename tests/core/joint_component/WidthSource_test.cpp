@@ -93,6 +93,46 @@ TEST(WidthSourceTest, ReportsUnavailableWithoutDonorsAndDoesNotFallbackHalos)
     EXPECT_EQ(gate.atoms[0].donor_exclusion,"unqualified-first-stage");
 }
 
+TEST(WidthSourceTest, KeepsSeedAndCalibrationOrthogonalAndProjectsOnlyWorkingValues)
+{
+    const auto input=SourceFixture();
+    const auto m=width_research::SelectWidths(input,width_research::WidthSource::MDPDE);
+    const auto o=width_research::SelectWidths(input,width_research::WidthSource::OLS);
+    const auto cm=width_research::CalibrateWidths(input,m),co=width_research::CalibrateWidths(input,o);
+    ASSERT_EQ(cm.status,"Available"); ASSERT_EQ(co.status,"Available");
+    EXPECT_EQ(cm.tau_max4,n::CalibrateGlobalWidth(input,"production").tau_max4);
+    EXPECT_EQ(cm.p95,width_research::CalibrateWidths(input,m,true).p95);
+    EXPECT_EQ(co.p95,width_research::CalibrateWidths(input,o,true).p95);
+    const auto mm=n::MakeBoundedInitialization(width_research::ProjectionInput(input,m),cm);
+    const auto om=n::MakeBoundedInitialization(width_research::ProjectionInput(input,o),cm);
+    const auto mo=n::MakeBoundedInitialization(width_research::ProjectionInput(input,m),co);
+    const auto oo=n::MakeBoundedInitialization(width_research::ProjectionInput(input,o),co);
+    EXPECT_EQ(mm.tau_max,om.tau_max); EXPECT_EQ(mo.tau_max,oo.tau_max);
+    EXPECT_EQ(mm.tau_values,mo.tau_values); EXPECT_EQ(om.tau_values,oo.tau_values);
+    auto extreme=o; extreme.tau[0]=10.; extreme.atoms[0].used=10.;
+    const auto projected=n::MakeBoundedInitialization(width_research::ProjectionInput(input,extreme),cm);
+    EXPECT_EQ(projected.projection_count,1u); EXPECT_EQ(projected.tau_values[0],*cm.tau_max4);
+    EXPECT_EQ(extreme.tau[0],10.); EXPECT_EQ(input.atoms[0].ols[1],.5);
+}
+
+TEST(WidthSourceTest, RetainsSourceSpecificDonorsMinimumCoverageAndMatchedCohort)
+{
+    auto input=SourceFixture(); input.atoms[0].ols[1]=0.;
+    auto o=width_research::SelectWidths(input,width_research::WidthSource::OLS);
+    auto m=width_research::SelectWidths(input,width_research::WidthSource::MDPDE);
+    const auto co=width_research::CalibrateWidths(input,o);
+    EXPECT_EQ(co.qualified_donor_count,23u); EXPECT_EQ(co.fallback_count,1u);
+    EXPECT_EQ(co.qualified_donor_coverage,23./24.); EXPECT_EQ(co.status,"Available");
+    EXPECT_EQ(width_research::CalibrateWidths(input,m).qualified_donor_count,24u);
+    EXPECT_EQ(width_research::CalibrateWidths(input,m,true).qualified_donor_count,23u);
+    input.atoms[1].ols[1]=0.; o=width_research::SelectWidths(input,width_research::WidthSource::OLS);
+    EXPECT_EQ(width_research::CalibrateWidths(input,o).unavailable_reason,
+        "qualified-first-stage-target-coverage-below-0.95");
+    input=SourceFixture(19); o=width_research::SelectWidths(input,width_research::WidthSource::OLS);
+    EXPECT_EQ(width_research::CalibrateWidths(input,o).unavailable_reason,
+        "too-few-qualified-first-stage-target-widths");
+}
+
 TEST(WidthSourceTest, LocksProductionFirstStageAndMmBaseline)
 {
     const auto path=std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path()/
@@ -138,6 +178,11 @@ TEST(WidthSourceTest, LocksProductionFirstStageAndMmBaseline)
     ASSERT_TRUE(bounded.available);
     EXPECT_EQ(bounded.tau_values,init.tau);
     EXPECT_EQ(bounded.projection_count,0u);
+    const auto selected=width_research::SelectWidths(init,width_research::WidthSource::MDPDE);
+    EXPECT_EQ(selected.tau,init.tau);
+    EXPECT_EQ(width_research::CalibrateWidths(init,selected).tau_max4,calibration.tau_max4);
+    EXPECT_EQ(n::MakeBoundedInitialization(width_research::ProjectionInput(init,selected),calibration).tau_values,
+        bounded.tau_values);
     const auto fit=FitJointComponentsInitialized(problem,init);
     ASSERT_TRUE(fit.assembled_state);
     const auto & expected=baseline.at("joint").as_object();

@@ -71,3 +71,27 @@ Ten focused baseline/selection/calibration tests pass, covering deterministic
 source choice, original-record immutability, nonfinite/zero/negative Widths,
 parameter validity versus Width validity, same-source fallback, unavailable
 source pools, Target/Halo roles and the existing donor-minimum contract.
+
+## S2: orthogonal execution
+
+The existing explicit research executable accepts the research ID `width`.
+It builds one const problem, samples/trains/fits once, then constructs both
+source selections and both calibrations. MM uses the actual Production wrapper;
+OM/MO/OO call the same Production BCD implementation with an explicit bound.
+No public CLI/FitOptions flag is added. The only Production source extraction
+is `CalibrateQualifiedWidthDonors`: unchanged minimum/coverage/Type-7/4*p95/log
+math, shared after caller-specific eligibility. Production donor selection is
+unchanged. OLS calibration is labeled research with the common MDPDE gate.
+An intersection-cohort control is produced whenever donor sets differ.
+
+Twelve focused tests pass. Fresh coarse-phase-0 MM matches original atom,
+calibration and complete JCE evidence/state exactly. All four cells converge
+in two component sweeps; MM/OM share 1.8782695995625727 A and MO/OO share
+1.8780533642794233 A bounds. Unprojected seeds match by source. The runner
+asserts these factorial invariants and exact repeated common-bound endpoints.
+First-sweep diagnostics use the existing observer, without a numerical solver
+change. A/C start at zero, so the shared initial objective is uninformative
+about Width seed quality. Solver timing starts at `SolverConfigured`, after
+calibration/projection, for every cell. MM's wrapper repeats its inexpensive
+Production calibration internally to preserve exact Production provenance;
+this validation overhead is outside solver timing.

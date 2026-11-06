@@ -2,6 +2,7 @@
 #include "core/detail/FirstStageInitialization.hpp"
 #include "support/FirstStageSamplingFixture.hpp"
 #include "support/FibonacciNeighborSelection.hpp"
+#include "support/ResearchWidthInitialization.hpp"
 #include "core/detail/FittingWorkset.hpp"
 #include "core/detail/PotentialFittingWorkflow.hpp"
 #include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
@@ -131,15 +132,9 @@ void SelectRealTargets(ModelObject & model)
         if (atom->GetElement()!=Element::HYDROGEN && count++<120) model.SetAtomSelected(atom->GetSerialID(),true);
 }
 
-j::object AuditEndpoints(const JointProblem & problem,const std::filesystem::path & directory,
-    const std::string & prefix)
+j::object AuditEndpoint(const JointProblem & problem,const j::object & reference_fit,
+    const j::object & fit,double bound)
 {
-    const auto read=[](const std::filesystem::path & path) {
-        std::ifstream stream(path);
-        return j::parse(std::string(std::istreambuf_iterator<char>(stream),{})).as_object();
-    };
-    const auto reference=read(directory/(prefix+"-F0-production.json"));
-    const auto & reference_fit=reference.at("joint").as_object();
     const auto predict=[&](const j::object & fit) {
         std::vector<double> prediction(problem.Input().observations.size(),0.);
         const auto & tau=fit.at("tau").as_array(), & ac=fit.at("ac").as_array();
@@ -153,6 +148,59 @@ j::object AuditEndpoints(const JointProblem & problem,const std::filesystem::pat
         return prediction;
     };
     const auto reference_prediction=predict(reference_fit);
+    const auto prediction=predict(fit);
+    double prediction_difference=0.,objective=0.;
+    for (std::size_t row=0;row<prediction.size();++row)
+    {
+        prediction_difference=std::max(prediction_difference,std::abs(prediction[row]-reference_prediction[row]));
+        const double residual=(prediction[row]-problem.Input().observations[row])/problem.ObservationScale();
+        objective+=residual*residual/2.;
+    }
+    const auto & tau=fit.at("tau").as_array(), & ac=fit.at("ac").as_array();
+    j::array changed; double maximum_tau_difference=0.,maximum_ac_difference=0.; std::size_t active_widths=0;
+    for(std::size_t k=0;k<ac.size();++k)
+        maximum_ac_difference=std::max(maximum_ac_difference,
+            std::abs(j::value_to<double>(ac[k])-j::value_to<double>(reference_fit.at("ac").as_array()[k])));
+    for (std::size_t atom=0;atom<tau.size();++atom)
+    {
+        const double t=j::value_to<double>(tau[atom]),a=j::value_to<double>(ac[2*atom]),c=j::value_to<double>(ac[2*atom+1]);
+        if (t>=bound*(1.-1e-10)) ++active_widths;
+        const double difference=std::abs(t-j::value_to<double>(reference_fit.at("tau").as_array()[atom]));
+        maximum_tau_difference=std::max(maximum_tau_difference,difference);
+        if (difference<=1e-6 && problem.Input().atom_ids[atom]!="221") continue;
+        double norm_square=0.,signal_square=0.,objective_contribution=0.,minimum_square=std::numeric_limits<double>::infinity();
+        for (const auto & support:problem.Input().support[atom])
+        {
+            const auto kernel=n::EvaluateKernel(support.squared_distance,t,2.5);
+            const double derivative=(a*kernel.d_gaussian_d_log_tau+c*kernel.d_charge_d_log_tau)/problem.ObservationScale();
+            norm_square+=derivative*derivative; minimum_square=std::min(minimum_square,support.squared_distance);
+            const double signal=(a*kernel.gaussian+c*kernel.charge)/problem.ObservationScale();
+            const double residual=(prediction[support.row]-problem.Input().observations[support.row])/problem.ObservationScale();
+            signal_square+=signal*signal;
+            objective_contribution+=residual*signal-.5*signal*signal;
+        }
+        changed.push_back(j::object{{"id",problem.Input().atom_ids[atom]},{"tau",t},{"difference",difference},
+            {"amplitude",a},{"charge",c},{"minimum_support_radius",std::sqrt(minimum_square)},
+            {"normalized_width_column_norm",std::sqrt(norm_square)},{"active_bound",t>=bound*(1.-1e-10)},
+            {"normalized_signal_norm",std::sqrt(signal_square)},{"objective_minus_without_atom",objective_contribution}});
+    }
+    return j::object{{"objective_recomputed",objective},
+        {"objective_recompute_error",objective-j::value_to<double>(fit.at("objective"))},
+        {"prediction_max_difference",prediction_difference},
+        {"normalized_prediction_max_difference",prediction_difference/problem.ObservationScale()},
+        {"maximum_tau_difference",maximum_tau_difference},{"maximum_ac_difference",maximum_ac_difference},
+        {"active_widths",active_widths},{"changed_widths",changed}};
+}
+
+j::object AuditEndpoints(const JointProblem & problem,const std::filesystem::path & directory,
+    const std::string & prefix)
+{
+    const auto read=[](const std::filesystem::path & path) {
+        std::ifstream stream(path);
+        return j::parse(std::string(std::istreambuf_iterator<char>(stream),{})).as_object();
+    };
+    const auto reference=read(directory/(prefix+"-F0-production.json"));
+    const auto & reference_fit=reference.at("joint").as_object();
     j::array states;
     for (const auto & entry:std::filesystem::directory_iterator(directory))
     {
@@ -160,46 +208,17 @@ j::object AuditEndpoints(const JointProblem & problem,const std::filesystem::pat
         if (!name.starts_with(prefix+"-") || entry.path().extension()!=".json") continue;
         const auto data=read(entry.path()); const auto & fit=data.at("joint").as_object();
         if (!fit.contains("tau")) continue;
-        const auto prediction=predict(fit); double prediction_difference=0.,objective=0.;
-        for (std::size_t row=0;row<prediction.size();++row)
-        {
-            prediction_difference=std::max(prediction_difference,std::abs(prediction[row]-reference_prediction[row]));
-            const double residual=(prediction[row]-problem.Input().observations[row])/problem.ObservationScale();
-            objective+=residual*residual/2.;
-        }
-        const auto & tau=fit.at("tau").as_array(), & ac=fit.at("ac").as_array();
-        j::array changed; double maximum_tau_difference=0.; std::size_t active_widths=0;
         const double bound=data.contains("common_bound") ? j::value_to<double>(data.at("common_bound")) :
             j::value_to<double>(data.at("calibration").as_object().at("bound"));
-        for (std::size_t atom=0;atom<tau.size();++atom)
-        {
-            const double t=j::value_to<double>(tau[atom]),a=j::value_to<double>(ac[2*atom]),c=j::value_to<double>(ac[2*atom+1]);
-            if (t>=bound*(1.-1e-10)) ++active_widths;
-            const double difference=std::abs(t-j::value_to<double>(reference_fit.at("tau").as_array()[atom]));
-            maximum_tau_difference=std::max(maximum_tau_difference,difference);
-            if (difference<=1e-6) continue;
-            double norm_square=0.,minimum_square=std::numeric_limits<double>::infinity();
-            for (const auto & support:problem.Input().support[atom])
-            {
-                const auto kernel=n::EvaluateKernel(support.squared_distance,t,2.5);
-                const double derivative=(a*kernel.d_gaussian_d_log_tau+c*kernel.d_charge_d_log_tau)/problem.ObservationScale();
-                norm_square+=derivative*derivative; minimum_square=std::min(minimum_square,support.squared_distance);
-            }
-            changed.push_back(j::object{{"id",problem.Input().atom_ids[atom]},{"tau",t},{"difference",difference},
-                {"amplitude",a},{"charge",c},{"minimum_support_radius",std::sqrt(minimum_square)},
-                {"normalized_width_column_norm",std::sqrt(norm_square)}});
-        }
-        states.push_back(j::object{{"file",name},{"objective_recomputed",objective},
-            {"objective_recompute_error",objective-j::value_to<double>(fit.at("objective"))},
-            {"prediction_max_difference",prediction_difference},
-            {"normalized_prediction_max_difference",prediction_difference/problem.ObservationScale()},
-            {"maximum_tau_difference",maximum_tau_difference},{"active_widths",active_widths},{"changed_widths",changed}});
+        auto audit=AuditEndpoint(problem,reference_fit,fit,bound); audit["file"]=name;
+        states.push_back(std::move(audit));
     }
     std::sort(states.begin(),states.end(),[](const auto & left,const auto & right) {
         return left.as_object().at("file").as_string()<right.as_object().at("file").as_string();
     });
     return {{"reference",prefix+"-F0-production.json"},{"states",states}};
 }
+#include "WidthInitializationStudy.hpp"
 }
 
 int main(int argc,char ** argv)
@@ -207,7 +226,7 @@ int main(int argc,char ** argv)
     try
     {
         if (argc!=5 && argc!=7) throw std::invalid_argument(
-            "Usage: first_stage_sampling_study output.json scenario[:replicate] F0|FO|FQ|F1|Q0|Q1|Q8|S0|S1 production|common_bound [model.cif map.map]");
+            "Usage: first_stage_sampling_study output.json scenario[:replicate] F0|FO|FQ|F1|Q0|Q1|Q8|S0|S1|width production|common_bound [model.cif map.map]");
         if (std::string(argv[2])=="audit" && argc==7)
         {
             auto model=ReadModel(argv[5]); auto map=ReadMap(argv[6]); SelectRealTargets(*model);
@@ -224,7 +243,7 @@ int main(int argc,char ** argv)
             throw std::invalid_argument("Unknown study scenario.");
         d::JointSeedSamplingPolicy policy;
         if (id=="Q0" || id=="Q1" || id=="Q8") policy.sampling=d::JointSeedSamplingMethod::QScoreSpiralShells;
-        else if (id!="F0" && id!="FO" && id!="FQ" && id!="F1" && id!="S0" && id!="S1") throw std::invalid_argument("Unknown study policy.");
+        else if (id!="F0" && id!="FO" && id!="FQ" && id!="F1" && id!="S0" && id!="S1" && id!="width") throw std::invalid_argument("Unknown study policy.");
         if (id=="F1" || id=="Q1" || id=="S1") policy.interpolation=d::MapInterpolationMethod::Trilinear;
         const bool real=argc==7,production=bound_mode=="production";
         if (real!=(scenario=="real")) throw std::invalid_argument("Real scenario requires model/map paths.");
@@ -238,7 +257,17 @@ int main(int argc,char ** argv)
         FitOptions options; options.quiet_mode=true;
         const auto init_start=Clock::now();
         d::JointSeedSamplingReport report;
+        double sampling_seconds=0.,fitting_seconds=0.;
         const auto init=[&] {
+            if(id=="width")
+            {
+                d::RunJointSeedSamplingWorkflow(*map,*model,workset.contributors,1,{},true,policy,&report);
+                sampling_seconds=Seconds(init_start);
+                const auto fitting_start=Clock::now();
+                auto initialization=d::RunJointFirstStageInitializationFromPreparedSamples(*model,workset,options);
+                fitting_seconds=Seconds(fitting_start);
+                return initialization;
+            }
             if (id=="FO" || id=="FQ")
             {
                 d::RunJointSeedSamplingWorkflow(*map,*model,workset.contributors,1,{},true,policy,&report);
@@ -302,7 +331,18 @@ int main(int argc,char ** argv)
                 {"qualified",record.first_stage_fit_qualified},{"reason",record.reason},{"seed_source",record.seed_source},
                 {"working_information",WorkingInformation(dataset,view.GetGaussianResult(FittingStage::First))}};
             if (!real) saved["truth"]=Values({1.5+.02*static_cast<double>(i),.35+.005*static_cast<double>(i)});
-            if (id=="F0" || id=="FO" || id=="FQ")
+            if(id=="width")
+            {
+                saved["original_tau"]=record.original_tau ? Number(*record.original_tau) : j::value(nullptr);
+                saved["used_tau"]=record.used_tau ? Number(*record.used_tau) : j::value(nullptr);
+                saved["native_status"]=record.native_status ? j::value(*record.native_status) : j::value(nullptr);
+                saved["qualification"]=record.first_stage_qualification ?
+                    j::value(static_cast<int>(*record.first_stage_qualification)) : j::value(nullptr);
+                saved["target"]=record.target; saved["fallback_donors"]=record.donor_count;
+                if(record.first_stage_recovery) saved["recovery"]=j::object{
+                    {"accepted",record.first_stage_recovery->accepted},{"reason",record.first_stage_recovery->reason}};
+            }
+            if (id=="F0" || id=="FO" || id=="FQ" || id=="width")
             {
                 const auto masks=second_stage_test::FibonacciNeighborMasks(*workset.contributors[i],*model,raw);
                 j::array observations,shells;
@@ -349,6 +389,15 @@ int main(int argc,char ** argv)
         }
         output["atoms"]=records;
         output["initial_tau"]=Values(init.tau);
+        if(id=="width")
+        {
+            output["sampling_seconds"]=sampling_seconds;
+            output["alpha_training_and_fitting_seconds"]=fitting_seconds;
+            RunWidthStudy(output,init,problem,*map,*model,workset,options,real);
+            output["total_seconds"]=Seconds(start); output["peak_rss_bytes"]=PeakRssBytes();
+            std::ofstream stream(argv[1]); stream << j::serialize(output) << '\n';
+            return 0;
+        }
         const auto calibration=n::CalibrateGlobalWidth(init,"study");
         j::object calibrated{{"status",calibration.status},{"reason",calibration.unavailable_reason},
             {"donors",calibration.qualified_donor_count},{"coverage",calibration.qualified_donor_coverage},

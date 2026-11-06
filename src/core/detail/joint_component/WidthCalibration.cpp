@@ -34,6 +34,52 @@ std::optional<double> BoundFrom(double p95, double multiplier)
 }
 }
 
+WidthBoundCalibration CalibrateQualifiedWidthDonors(
+    WidthBoundCalibration result, std::vector<double> donors)
+{
+    result.qualified_donor_count=donors.size();
+    result.qualified_donor_coverage=result.target_count ?
+        static_cast<double>(result.qualified_donor_count)/static_cast<double>(result.target_count) : 0.0;
+    if(donors.empty())
+    {
+        result.unavailable_reason="no-qualified-first-stage-target-widths";
+        return result;
+    }
+    if(donors.size()<MinimumQualifiedWidthDonors)
+    {
+        result.unavailable_reason="too-few-qualified-first-stage-target-widths";
+        return result;
+    }
+    if(result.qualified_donor_coverage<MinimumQualifiedDonorCoverage)
+    {
+        result.unavailable_reason="qualified-first-stage-target-coverage-below-0.95";
+        return result;
+    }
+
+    std::sort(donors.begin(),donors.end());
+    result.minimum_width=donors.front();
+    result.maximum_width=donors.back();
+    result.median_width=QuantileType7(donors,0.5);
+    result.p90=QuantileType7(donors,0.90);
+    result.p95=QuantileType7(donors,0.95);
+    result.p99=QuantileType7(donors,0.99);
+    result.tau_max4=BoundFrom(*result.p95,4.0);
+    if(!result.tau_max4)
+    {
+        result.unavailable_reason="global-width-bound-overflow-or-invalid-log-bound";
+        result.p95.reset();
+        result.p99.reset();
+        result.median_width.reset();
+        result.p90.reset();
+        result.minimum_width.reset();
+        result.maximum_width.reset();
+        return result;
+    }
+    result.eta_max4=std::log(*result.tau_max4);
+    result.status="Available";
+    return result;
+}
+
 WidthBoundCalibration CalibrateGlobalWidth(
     const JointInitialization & initialization, std::string dataset_identity)
 {
@@ -84,45 +130,8 @@ WidthBoundCalibration CalibrateGlobalWidth(
         else ++result.excluded_donor_reasons[exclusion];
     }
 
-    result.qualified_donor_count=donors.size();
-    result.qualified_donor_coverage=result.target_count ?
-        static_cast<double>(result.qualified_donor_count)/static_cast<double>(result.target_count) : 0.0;
-    if(donors.empty())
-    {
-        result.unavailable_reason="no-qualified-first-stage-target-widths";
-        return result;
-    }
-    if(donors.size()<MinimumQualifiedWidthDonors)
-    {
-        result.unavailable_reason="too-few-qualified-first-stage-target-widths";
-        return result;
-    }
-    if(result.qualified_donor_coverage<MinimumQualifiedDonorCoverage)
-    {
-        result.unavailable_reason="qualified-first-stage-target-coverage-below-0.95";
-        return result;
-    }
-
-    std::sort(donors.begin(),donors.end());
-    result.minimum_width=donors.front();
-    result.maximum_width=donors.back();
-    result.median_width=QuantileType7(donors,0.5);
-    result.p90=QuantileType7(donors,0.90);
-    result.p95=QuantileType7(donors,0.95);
-    result.p99=QuantileType7(donors,0.99);
-    result.tau_max4=BoundFrom(*result.p95,4.0);
-    if(!result.tau_max4)
-    {
-        result.unavailable_reason="global-width-bound-overflow-or-invalid-log-bound";
-        result.p95.reset();
-        result.p99.reset();
-        result.median_width.reset();
-        result.p90.reset();
-        result.minimum_width.reset();
-        result.maximum_width.reset();
-        return result;
-    }
-    result.eta_max4=std::log(*result.tau_max4);
+    result=CalibrateQualifiedWidthDonors(std::move(result),std::move(donors));
+    if(result.status!="Available") return result;
     for(std::size_t i=0;i<initialization.atoms.size();++i)
     {
         const auto & atom=initialization.atoms[i];

@@ -106,4 +106,40 @@ inline JointInitialization ProjectionInput(const JointInitialization & original,
     }
     return out;
 }
+
+inline rhbm_gem::core::joint_component::WidthBoundCalibration CalibrateWidths(
+    const JointInitialization & original,const WidthSelection & selected,bool matched_cohort=false)
+{
+    namespace n=rhbm_gem::core::joint_component;
+    if(selected.source==WidthSource::MDPDE && !matched_cohort)
+        return n::CalibrateGlobalWidth(original,"production-MDPDE");
+    n::WidthBoundCalibration out;
+    out.dataset_identity=std::string("research-")+SourceName(selected.source)+
+        (matched_cohort ? "-matched-cohort" : "-common-MDPDE-qualification-gate");
+    if(!selected.available)
+    { out.unavailable_reason="invalid-target-initial-width"; return out; }
+    const auto other=matched_cohort ? SelectWidths(original,selected.source==WidthSource::MDPDE ?
+        WidthSource::OLS : WidthSource::MDPDE) : WidthSelection{};
+    std::vector<double> donors;
+    for(std::size_t i=0;i<selected.atoms.size();++i)
+    {
+        const auto & atom=selected.atoms[i]; if(!atom.target) continue;
+        ++out.target_count;
+        const auto & record=original.atoms[i];
+        const auto qualification=FirstStageQualification(record.native_status,record.first_stage_fit_qualified,
+            record.first_stage_qualification,record.first_stage_recovery);
+        if(atom.common_gate && qualification==RHBMSolveQualification::NativeSuccess) ++out.native_success_count;
+        else if(atom.common_gate && qualification==RHBMSolveQualification::RefinedSuccess) ++out.refined_success_count;
+        else ++out.unqualified_count;
+        if(!atom.width_valid) ++out.invalid_width_count;
+        if(atom.donor_exclusion=="median-fallback") ++out.fallback_count;
+        if(record.reason.starts_with("initialization-exception")) ++out.initialization_failure_count;
+        if(atom.calibration_donor && (!matched_cohort || other.atoms[i].calibration_donor)) donors.push_back(atom.raw);
+        else ++out.excluded_donor_reasons[atom.calibration_donor ? "outside-matched-cohort" : atom.donor_exclusion];
+    }
+    out=n::CalibrateQualifiedWidthDonors(std::move(out),std::move(donors));
+    if(out.tau_max4) for(std::size_t i=0;i<selected.atoms.size();++i)
+        if(selected.atoms[i].target && selected.tau[i]>*out.tau_max4) ++out.initial_violations4;
+    return out;
+}
 }
