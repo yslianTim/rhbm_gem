@@ -116,6 +116,11 @@ counts and fixed charge. Grid peeling requires its Joint snapshot; available
 Halo-subtracted responses require reconstruction provenance. Old raw-index
 Post-Joint records are rejected, with no compatibility reader.
 
+The persisted Local `fitting_radius` must equal exactly 1.0 Å for Available,
+Unavailable and Ineligible records. It records the estimation contract and
+does not select a runtime policy. Editor updates, persistence validation and
+Group eligibility use the same check; the field and schema versions are kept.
+
 The numerical and statistical range assessment is recorded in the
 [production decision record](post-joint-grid-validation.md). Information and
 Group covariance remain conditional working quantities; voxel count alone does not

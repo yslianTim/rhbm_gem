@@ -85,3 +85,57 @@ and unavailable semantics, not only the numerical solver.
 No branch or worktree is created, no Notion document is accessed or changed,
 and no temporary benchmark executable is added to the repository. Existing
 unrelated worktrees are left intact.
+
+## Consolidated verification
+
+The cleanup removes the runtime radius parameter and its test-only wrapper,
+the five research datasets, nine count-only metrics and the raw-to-grid test
+adapter. The existing internal production function is now the direct test
+entry. Contributor and Local sample state remain for the audited validation
+and numerical-reference responsibilities. Workspace naming is updated to
+Peeling without changing its formula. No solver or statistical model is changed.
+
+| Check | Baseline | Consolidated |
+| --- | --- | --- |
+| Release build / CTest | Pass; 21/21, 40.38 s | Pass; 21/21, 40.45 s |
+| Debug build / CTest | Pass; 21/21, 458.22 s | Pass; 21/21, 462.47 s |
+| Enabled GoogleTest registration | 1,071 covered, zero missing | 1,071 covered, zero missing |
+| Estimated sparse Peeling workspace | 2,372,456 B | 2,372,456 B |
+| Estimated peak payload | 4,748,808 B | 4,748,808 B |
+| Median clean postprocessing, three Release processes | 0.036966125 s | 0.036803584 s |
+
+Three final independent processes exactly match saved Joint/Stage numerical
+evidence and the four-member Group reference. This includes endpoints,
+objective, grid responses/identities, Local estimates/information/qualification,
+and Group posterior/covariance/fixed charge. Generated UUIDs are normalized
+while preserving their repetition pattern; cross-payload run bindings are also
+checked directly. Elapsed-time fields and the expected software source/build
+fingerprint changes are excluded from numerical parity. Configuration and
+map/model identity remain compared. Independent scalar replay agrees for all
+24,740 charge/corrected observations in each of two workflow fixtures; the
+production correction arithmetic is unchanged.
+
+The independent 1 Å dataset reference includes nonpositive responses and checks
+alpha, OLS/MDPDE, rank, count and information. Formal validation and editor tests
+accept 1.0 and reject wider, zero, negative, adjacent binary64 and nonfinite
+radii for Available, Unavailable and Ineligible evidence. JSON/SQLite tests
+reject modified radii even with a saved Group posterior. The shared test
+instrumentation, FirstStage interpolation references, legacy rejection,
+registration guard and existing Debug timeout remain intact.
+
+Workflow phase RSS after Group has medians 58,146,816 B and 58,572,800 B;
+the largest sampled increase has medians 7,569,408 B and 7,716,864 B. These are
+snapshots, not isolated production peaks. Whole regression-process peak RSS
+medians are 234,209,280 B and 253,411,328 B, including expanded persistence
+negative tests, so those process peaks do not represent identical production
+workloads. No isolated real-map peak or Group phase benchmark is claimed.
+The historical radius study is not rerun. Detailed local evidence and the
+delivery report remain in the ignored validation directory.
+
+The final broad radius search also found pre-existing unused
+`tests/support/JointHaloObservationExclusion.hpp/.cpp`: only its CMake source
+registration and a header include remain, with no callers of its analysis
+functions. Its radius grid concerns JCE Halo exclusion masks and coverage
+shells, not Post-Joint Local fitting. This unrelated dead test support is
+reported separately and left unchanged under the surgical-change boundary;
+its removal is not needed to enforce the production Local policy.
