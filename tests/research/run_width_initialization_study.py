@@ -46,6 +46,9 @@ def truth_summary(atoms):
     out['paired'] = {'mean': stats.mean(ds), 'median': stats.median(ds),
                      'improvement_fraction': stats.mean(d < 0 for d in ds),
                      'unchanged_fraction': stats.mean(d == 0 for d in ds),
+                     'tie_tolerance_A': 1e-12,
+                     'improvement_fraction_beyond_tolerance': stats.mean(d < -1e-12 for d in ds),
+                     'unchanged_fraction_within_tolerance': stats.mean(abs(d) <= 1e-12 for d in ds),
                      'worst_OLS_regression': max(ds), 'worst_MDPDE_regression': -min(ds),
                      'outliers': sorted(paired, key=lambda x: x['delta'], reverse=True)[:5],
                      'all_deltas': ds}

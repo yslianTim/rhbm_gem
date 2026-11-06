@@ -2,6 +2,7 @@
 #include "core/detail/FirstStageInitialization.hpp"
 #include "core/detail/FittingWorkset.hpp"
 #include "core/detail/joint_component/WidthCalibration.hpp"
+#include "core/detail/joint_component/Problem.hpp"
 #include "support/FirstStageSamplingFixture.hpp"
 #include "support/ResearchWidthInitialization.hpp"
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
@@ -147,7 +148,11 @@ TEST(WidthSourceTest, LocksProductionFirstStageAndMmBaseline)
     const auto workset=d::MakeJointFittingWorkset(*model,problem);
     model->EditAnalysis().InitializeFromSelection();
     FitOptions options; options.quiet_mode=true;
+    std::size_t fits=0;
+    d::FirstStageObserverForTesting()=[&](int,std::string_view) { ++fits; };
     const auto init=d::PrepareJointWidthInitialization(*map,*model,workset,options);
+    d::FirstStageObserverForTesting()={};
+    EXPECT_EQ(fits,24u);
     ASSERT_TRUE(init.valid);
     ASSERT_EQ(init.atoms.size(),24u);
     for(std::size_t i=0;i<init.atoms.size();++i)
@@ -189,5 +194,21 @@ TEST(WidthSourceTest, LocksProductionFirstStageAndMmBaseline)
     EXPECT_EQ(fit.objective,j::value_to<double>(expected.at("objective")));
     for(std::size_t i=0;i<init.atoms.size();++i)
         EXPECT_EQ(fit.assembled_state->tau[i],j::value_to<double>(expected.at("tau").as_array()[i]));
+
+    const auto ols=width_research::SelectWidths(init,width_research::WidthSource::OLS);
+    const auto ols_calibration=width_research::CalibrateWidths(init,ols);
+    ASSERT_EQ(ols_calibration.status,"Available");
+    // Reuse the exact immutable problem and estimates for the full factorial.
+    for(const auto * seeds:{&selected,&ols}) for(const auto * bound:{&calibration,&ols_calibration})
+    {
+        const auto start=n::MakeBoundedInitialization(width_research::ProjectionInput(init,*seeds),*bound);
+        n::BcdExecutionPolicy policy; policy.eta_upper_bound=bound->eta_max4;
+        const auto candidate=n::FitBcdComponents(problem,start.tau_values,policy);
+        ASSERT_EQ(candidate.RuntimeConvergence(),JointCheckStatus::Passed);
+        ASSERT_TRUE(candidate.assembled_state); ASSERT_TRUE(candidate.objective);
+        EXPECT_NEAR(*candidate.objective,*fit.objective,1e-17);
+        for(std::size_t i=0;i<init.atoms.size();++i)
+            EXPECT_NEAR(candidate.assembled_state->tau[i],fit.assembled_state->tau[i],3e-9);
+    }
 }
 }
