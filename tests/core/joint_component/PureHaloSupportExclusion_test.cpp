@@ -852,6 +852,49 @@ TEST(PureHaloSupportExclusionTest, RunsFullPureWorkflowWithGeometryLocalHaloSour
     EXPECT_EQ(halo.GetStageEstimate(FittingStage::Second).source.role,FittingRole::Halo);
     EXPECT_FALSE(halo.GetStageEstimate(FittingStage::Second).point);
 
+    boost::json::array local_evidence;
+    for (const auto * atom : fixture.model.GetSelectedAtoms())
+    {
+        const auto view=AtomLocalPotentialView::For(*atom);
+        const auto & local_result=view.GetPostJointLocalResult();
+        if (!local_result) continue;
+        const auto & r=*local_result;
+        boost::json::object row{{"atom",atom->GetSerialID()},{"samples",r.sample_count},
+            {"retained",r.effective_sample_count},{"reason",r.reason},{"alpha",r.fit.alpha_r},
+            {"ols_A",r.fit.ols.GetModel().GetAmplitude()},{"ols_tau",r.fit.ols.GetModel().GetWidth()},
+            {"mdpde_A",r.fit.mdpde.GetModel().GetAmplitude()},{"mdpde_tau",r.fit.mdpde.GetModel().GetWidth()}};
+        if (r.information)
+        {
+            Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> spectrum(r.information->precision);
+            row["information_condition"]=spectrum.eigenvalues().maxCoeff()/spectrum.eigenvalues().minCoeff();
+        }
+        local_evidence.push_back(std::move(row));
+    }
+    RecordProperty("local_evidence",boost::json::serialize(local_evidence));
+    boost::json::array group_evidence;
+    for (const auto key:fixture.model.GetAnalysisView().CollectAtomGroupKeys())
+    {
+        const auto & summary=fixture.model.GetAnalysisView().GetGroupParameterSummary(key);
+        if (!summary) continue;
+        boost::json::object row{{"eligible",summary->eligible_count},{"reason",summary->reason}};
+        if (summary->inference)
+        {
+            const auto & g=*summary->inference;
+            row["alpha"]=g.alpha_g;
+            row["mean_A"]=g.mean.GetAmplitude(); row["mean_tau"]=g.mean.GetWidth();
+            row["mdpde_A"]=g.mdpde.GetAmplitude(); row["mdpde_tau"]=g.mdpde.GetWidth();
+        }
+        group_evidence.push_back(std::move(row));
+    }
+    RecordProperty("group_evidence",boost::json::serialize(group_evidence));
+    const boost::json::object timings{{"context",metrics.context_construction_seconds},
+        {"peeling",metrics.peeling_seconds},{"charge",metrics.charge_correction_seconds},
+        {"local_alpha",metrics.local_alpha_training_seconds},{"local_fit",metrics.local_mdpde_fitting_seconds},
+        {"group_alpha",metrics.group_alpha_training_seconds},{"web",metrics.group_web_seconds},
+        {"total",metrics.total_postprocessing_seconds},{"available",metrics.available_peeling_sample_count},
+        {"unavailable",metrics.unavailable_peeling_sample_count}};
+    RecordProperty("postprocessing",boost::json::serialize(timings));
+
     EXPECT_GT(metrics.estimated_context_lookup_bytes,0u);
     EXPECT_GT(metrics.estimated_peeling_result_bytes,0u);
     EXPECT_GE(metrics.estimated_peak_postprocessing_payload_bytes,metrics.estimated_peeling_result_bytes);
