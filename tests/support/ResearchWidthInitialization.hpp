@@ -2,7 +2,6 @@
 #include "core/detail/joint_component/WidthCalibration.hpp"
 #include <algorithm>
 #include <cmath>
-#include <limits>
 #include <stdexcept>
 
 namespace width_research {

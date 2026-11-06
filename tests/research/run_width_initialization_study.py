@@ -8,11 +8,10 @@ import os
 from pathlib import Path
 import statistics as stats
 import subprocess
-from run_first_stage_sampling_study import shared_equal
+from run_first_stage_sampling_study import shared_equal, summarize
 
 ROOT = Path(__file__).resolve().parents[2]
 DOCS = ROOT / 'docs/research/first-stage-sampling'
-CELLS = ('MM', 'OM', 'MO', 'OO')
 
 
 def digest(value):
@@ -145,6 +144,17 @@ def main():
             data = json.loads(path.read_text())
             validate_factorial(data)
             parity = {}
+            # Committed evidence also supports fresh checkouts without old build artifacts.
+            prior_atoms = previous_neighbor['real' if real else 'synthetic'][scenario]['F0']['atoms']
+            expected_atoms = [{k: v for k, v in a.items() if k != '_phase'}
+                              for a in prior_atoms if a['_phase'] == phase]
+            assert shared_equal(expected_atoms, data['atoms']), f'Committed FirstStage parity {name}'
+            mm = data['runs']['MM']
+            summary_input = dict(data, policy='F0', calibration=data['calibrations']['MDPDE'],
+                                 joint=mm['joint'], joint_seconds=mm['solver_seconds'])
+            expected_summary = previous_neighbor['runs'][f'{name}-F0-production']
+            assert summarize(summary_input)['joint'] == expected_summary['joint'], f'Committed JCE summary parity {name}'
+            parity['committed-FirstStage-and-JCE-summary'] = True
             for reference_path in (build / f'neighbor-selection-study/{name}-F0-production.json',
                                    build / f'first-stage-study/{name}-F0-production.json',
                                    DOCS / ('baseline.json' if name == 'coarse-r0' else 'baseline-6z6u.json' if name == '6z6u' else 'no-baseline')):
