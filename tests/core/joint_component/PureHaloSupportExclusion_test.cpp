@@ -1,4 +1,6 @@
 #include <gtest/gtest.h>
+#include <rhbm_gem/data/io/DataRepository.hpp>
+#include "support/CommandTestHelpers.hpp"
 #include <boost/json.hpp>
 
 #include "core/detail/FirstStageInitialization.hpp"
@@ -1166,4 +1168,156 @@ TEST(PureHaloSupportExclusionTest, GridLocalRangesShareAlphaFitAndInformationDat
         EXPECT_TRUE(result.information->precision.isApprox(precision,1e-12));
         EXPECT_TRUE(result.information->moment.isApprox(moment,1e-12));
     }
+}
+
+TEST(PureHaloSupportExclusionTest, GridEvidenceTracksMapRevisionGeometryAndSnapshotLifetime)
+{
+    for(int mutation=0;mutation<5;++mutation)
+    {
+        auto fixture=WorkflowFixture(true);
+        FitOptions options; options.quiet_mode=true;
+        core::detail::RunJointComponentWorkflow(fixture.map,fixture.model,options);
+        auto * target=fixture.model.FindAtomPtr(1);
+        const auto view=AtomLocalPotentialView::For(*target);
+        ASSERT_TRUE(view.GetPostJointLocalResult());
+        ASSERT_TRUE(view.GetPostFitPeeling());
+        const auto count=view.GetPostFitPeeling()->samples.size();
+        auto foreign_metadata=fixture.model.GetAnalysisView().GetJointResult()->metadata;
+        foreign_metadata.origin[0]+=1.;
+        EXPECT_THROW(fixture.model.EditAnalysis().UpdateJointMetadata(foreign_metadata),std::invalid_argument);
+        EXPECT_TRUE(view.GetPostFitPeeling());
+        fixture.model.EditAnalysis().SetAtomLocalRawSamplingEntries(*target,{});
+        EXPECT_EQ(view.GetPostFitPeeling()->samples.size(),count);
+        EXPECT_TRUE(view.GetPostJointLocalResult());
+        MapObject independent_map(fixture.map);
+        independent_map.ClearMapValueArray();
+        EXPECT_TRUE(view.GetPostJointLocalResult());
+        ModelObject copy(fixture.model);
+        if(mutation==0) fixture.map.ClearMapValueArray();
+        else if(mutation==1) fixture.map.MapValueArrayNormalization();
+        else if(mutation==2)
+        {
+            auto values=std::make_unique<double[]>(fixture.map.GetMapValueArraySize());
+            fixture.map.SetMapValueArray(std::move(values));
+        }
+        else if(mutation==3)
+        {
+            auto position=target->GetPosition(); position[0]+=.1; target->SetPosition(position);
+        }
+        else fixture.model.EditAnalysis().SetJointResult(*fixture.model.GetAnalysisView().GetJointResult());
+        EXPECT_FALSE(fixture.model.GetAnalysisView().GetJointResult().has_value() &&
+            AtomLocalPotentialView::For(*target).GetPostFitPeeling().has_value());
+        if(mutation<=2)
+        {
+            EXPECT_FALSE(view.IsAvailable());
+            EXPECT_FALSE(copy.GetAnalysisView().GetJointResult());
+            EXPECT_FALSE(AtomLocalPotentialView::For(*copy.FindAtomPtr(1)).IsAvailable());
+        }
+        else EXPECT_FALSE(view.IsAvailable() && view.GetPostJointLocalResult().has_value());
+    }
+}
+
+TEST(PureHaloSupportExclusionTest, GridPersistenceRejectsForeignIdentitiesAndInvalidPairings)
+{
+    auto fixture=WorkflowFixture(true);
+    for(auto * atom:fixture.model.GetSelectedAtoms())
+    {
+        atom->SetComponentKey(1); atom->SetAtomKey(7);
+    }
+    auto values=std::make_unique<double[]>(fixture.map.GetMapValueArraySize());
+    for(std::size_t grid=0;grid<fixture.map.GetMapValueArraySize();++grid)
+    {
+        const auto position=fixture.map.GetGridPosition(grid);
+        for(const auto & atom:fixture.model.GetAtomList())
+        {
+            const int id=atom->GetSerialID();
+            const auto point=id==2 ? GaussianModel3D{.4,.8,.1} : id==3 ? GaussianModel3D{.3,.9,-.1} :
+                GaussianModel3D{2.+.2*std::sin(static_cast<double>(id)),.65+.05*std::cos(static_cast<double>(id)),-.2};
+            values[grid]+=ReferenceContribution(core::simulation::SupportSquare(position,atom->GetPosition()),point);
+        }
+    }
+    fixture.map.SetMapValueArray(std::move(values));
+    FitOptions options; options.quiet_mode=true;
+    core::detail::RunJointComponentWorkflow(fixture.map,fixture.model,options);
+    const auto keys=fixture.model.GetAnalysisView().CollectAtomGroupKeys();
+    ASSERT_EQ(keys.size(),1u);
+    const auto & group=fixture.model.GetAnalysisView().GetGroupParameterSummary(keys.front());
+    ASSERT_TRUE(group && group->inference) << (group ? group->reason:"no group");
+    EXPECT_GE(group->eligible_count,18u);
+    const auto text=stage_result_io::Encode(fixture.model);
+    const auto original=boost::json::parse(text);
+    for(int mutation=0;mutation<7;++mutation)
+    {
+        auto document=original;
+        auto & atoms=document.at("atoms").as_array();
+        auto found=std::find_if(atoms.begin(),atoms.end(),[](const auto & atom){return !atom.at("peeling").is_null();});
+        ASSERT_NE(found,atoms.end());
+        auto & sample=found->at("peeling").at("samples").as_array().front();
+        if(mutation==0) sample.at("grid")=999999999;
+        else if(mutation==1) sample.at("original_row")=999999999;
+        else if(mutation==2) sample.at("squared_distance")=4.0001;
+        else if(mutation==3) sample.at("position").as_array()[0]=9999.;
+        else if(mutation==4) sample.at("reason")="unavailable-with-response";
+        else if(mutation==5) found->at("post_joint_local").at("samples")=1;
+        else found->at("post_joint_local").at("fixed_charge").as_array()[1]=100.;
+        ModelObject rejected(fixture.model);
+        EXPECT_THROW(stage_result_io::Decode(rejected,boost::json::serialize(document)),std::invalid_argument);
+    }
+    auto old=original; old.at("version")=4;
+    ModelObject rejected(fixture.model);
+    EXPECT_THROW(stage_result_io::Decode(rejected,boost::json::serialize(old)),std::invalid_argument);
+    ModelObject restored(fixture.model);
+    ASSERT_NO_THROW(stage_result_io::Decode(restored,text));
+    const auto round_trip=stage_result_io::Encode(restored);
+    auto expected=boost::json::parse(text),actual=boost::json::parse(round_trip);
+    const auto sort_groups=[](auto & document) {
+        auto & groups=document.at("groups").as_array();
+        std::sort(groups.begin(),groups.end(),[](const auto & left,const auto & right) {
+            return boost::json::value_to<std::uint64_t>(left.at("key"))<boost::json::value_to<std::uint64_t>(right.at("key"));
+        });
+    };
+    sort_groups(expected); sort_groups(actual);
+    EXPECT_TRUE(expected==actual);
+    const command_test::ScopedTempDir directory{"grid_group_roundtrip"};
+    DataRepository repository(directory.path()/"model.sqlite");
+    ASSERT_NO_THROW(repository.SaveModel(fixture.model,"grid-group"));
+    const auto loaded=repository.LoadModel("grid-group");
+    const auto & loaded_group=loaded->GetAnalysisView().GetGroupParameterSummary(keys.front());
+    ASSERT_TRUE(loaded_group && loaded_group->inference);
+    EXPECT_EQ(loaded_group->member_ids,group->member_ids);
+    for(std::size_t i=0;i<group->inference->member_results.size();++i)
+    {
+        const auto & reference=group->inference->member_results[i];
+        const auto & saved=loaded_group->inference->member_results[i];
+        EXPECT_EQ(saved.posterior.GetModel().ToVector(),reference.posterior.GetModel().ToVector());
+        EXPECT_EQ(*saved.parameter_covariance,*reference.parameter_covariance);
+        ASSERT_TRUE(saved.fixed_charge); ASSERT_TRUE(reference.fixed_charge);
+        EXPECT_DOUBLE_EQ(saved.fixed_charge->coefficient,reference.fixed_charge->coefficient);
+        EXPECT_DOUBLE_EQ(saved.fixed_charge->width,reference.fixed_charge->width);
+    }
+}
+
+TEST(PureHaloSupportExclusionTest, NonpositiveGridCorrectionsAreNotFailuresOrPhantomSolverRows)
+{
+    auto fixture=BoundaryFixture();
+    auto values=std::make_unique<double[]>(fixture.map.GetMapValueArraySize());
+    std::fill_n(values.get(),fixture.map.GetMapValueArraySize(),-1.);
+    fixture.map.SetMapValueArray(std::move(values));
+    const auto problem=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
+    const auto snapshot=QualifiedReconstructionSnapshot(problem,fixture.model);
+    data_internal::ApplyJointStageEstimates(fixture.model,snapshot,"reconstruction-only-run");
+    const auto context=postprocessing_test::MakeJointPostprocessingContext(fixture.map,fixture.model,problem,snapshot);
+    const auto peeling=context.BuildPostFitPeelingBatch(std::vector<std::size_t>{0}).front().second;
+    FitOptions options; options.quiet_mode=true;
+    core::detail::JointPostprocessingMetrics metrics;
+    const auto result=core::detail::FitPostJointLocalTargetForTesting(context,fixture.model,1,peeling,options,metrics);
+    EXPECT_EQ(result.status,EvidenceStatus::Unavailable);
+    EXPECT_EQ(result.reason,"insufficient-positive-responses");
+    EXPECT_EQ(result.corrected_sample_count,peeling.samples.size());
+    EXPECT_EQ(result.positive_sample_count,0u);
+    EXPECT_EQ(result.effective_sample_count,0u);
+    EXPECT_TRUE(result.sample_failures.empty());
+    EXPECT_FALSE(result.information);
+    fixture.model.EditAnalysis().SetAtomPostFitPeeling(*fixture.model.FindAtomPtr(1),peeling);
+    EXPECT_NO_THROW(fixture.model.EditAnalysis().SetAtomPostJointLocalResult(*fixture.model.FindAtomPtr(1),result));
 }

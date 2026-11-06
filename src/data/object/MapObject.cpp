@@ -103,11 +103,13 @@ void MapObject::SetMapValueArray(std::unique_ptr<double[]> map_value_array)
                     "The map value array will be replaced by new inserted data.");
     }
     m_map_value_array = std::move(map_value_array);
+    ++*m_observation_revision;
     RecomputeStatistics();
 }
 
 void MapObject::ClearMapValueArray()
 {
+    ++*m_observation_revision;
     std::fill_n(m_map_value_array.get(), m_voxel_size, 0.0);
     RecomputeStatistics();
 }
@@ -259,6 +261,7 @@ std::optional<double> MapObject::MapValueArrayNormalization()
                     "The standard deviation of map value array is zero, skip normalization.");
         return std::nullopt;
     }
+    ++*m_observation_revision;
     const double divisor = m_map_value_sd;
     for (size_t i = 0; i < static_cast<size_t>(m_voxel_size); i++)
     {

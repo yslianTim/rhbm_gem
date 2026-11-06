@@ -10,6 +10,9 @@ namespace rhbm_gem {
 
 class MapObject
 {
+    friend class ModelAnalysisData;
+    // Shared only with analyses of this map; map copies get independent revisions.
+    std::shared_ptr<std::size_t> m_observation_revision{std::make_shared<std::size_t>(0)};
     std::string m_key_tag;
     size_t m_voxel_size;
     double m_map_value_mean, m_map_value_min, m_map_value_max, m_map_value_sd;

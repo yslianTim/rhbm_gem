@@ -12,6 +12,7 @@ namespace rhbm_gem {
 class AtomObject;
 class LocalPotentialEntry;
 class ModelObject;
+class MapObject;
 
 class ModelAnalysisData
 {
@@ -30,6 +31,9 @@ public:
     static const ModelAnalysisData & Of(const ModelObject & model_object);
 
     std::optional<JointAnalysisResult> joint_result;
+    std::shared_ptr<const std::size_t> source_map_revision;
+    std::size_t source_map_generation{};
+    void BindMapObservations(const MapObject &);
     void Clear();
     AtomGroupPotentialEntry & AtomGroupEntry();
     const AtomGroupPotentialEntry & AtomGroupEntry() const;

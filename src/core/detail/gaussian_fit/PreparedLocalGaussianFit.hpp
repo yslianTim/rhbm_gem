@@ -35,6 +35,11 @@ public:
         double range_min,
         double range_max);
 
+    // Exact retained rows, including an empty dataset when no response is positive.
+    RHBMMemberDataset BuildSelectedDataset(
+        const std::vector<double> & sample_response_list,
+        const GaussianModel3D & offset_model) const;
+
     RHBMMemberDataset BuildDataset(
         const std::vector<double> & sample_response_list,
         const GaussianModel3D & offset_model) const;

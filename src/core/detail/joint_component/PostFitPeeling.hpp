@@ -7,7 +7,6 @@
 #include <optional>
 #include <span>
 #include <string>
-#include <unordered_map>
 #include <vector>
 namespace rhbm_gem::core::detail {
 struct HaloMedianBuildResult;
@@ -21,7 +20,7 @@ struct JointPeelingContributor
 {
     int atom_id{};
     std::array<double,3> position{};
-    std::optional<std::size_t> contributor_index;
+    std::size_t contributor_index{};
     bool target{};
     bool reconstruction_eligible{};
 };
@@ -47,10 +46,9 @@ struct JointPostprocessingMetrics
     std::size_t halo_median_geometry_local_halos{};
     std::size_t halo_median_unavailable_halos{};
     std::size_t estimated_reconstruction_workspace_bytes{};
-    std::size_t raw_peeling_sample_count{};
+    std::size_t grid_peeling_sample_count{};
     std::size_t available_peeling_sample_count{};
     std::size_t unavailable_peeling_sample_count{};
-    std::size_t mapping_mismatch_samples{};
     std::size_t missing_contributor_samples{};
     std::size_t other_peeling_failure_samples{};
     std::size_t tail_target_count{};

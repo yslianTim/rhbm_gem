@@ -12,13 +12,15 @@ namespace rhbm_gem {
 
 class AtomObject;
 class ModelObject;
+class MapObject;
 
 class ModelAnalysisEditor
 {
     ModelObject & m_model_object;
 
 public:
-    // Attach diagnostics to already-published stages; saving validates consistency.
+    void BindJointMapObservations(const MapObject &);
+    // Replacing diagnostics invalidates downstream grid evidence.
     void SetJointResult(JointAnalysisResult result);
     // Publish snapshot endpoints atomically, then retain the diagnostic snapshot.
     void ApplyJointResult(JointAnalysisResult result, const std::string & run_id);

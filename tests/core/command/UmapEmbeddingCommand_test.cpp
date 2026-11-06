@@ -381,6 +381,7 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
     {
         atom->SetPosition(positions[static_cast<std::size_t>(atom->GetSerialID() - 1)]);
     }
+    geometry_model->EditAnalysis().InitializeFromSelection();
     geometry_model->SelectAtoms([](const rg::AtomObject & atom)
     {
         return atom.GetSerialID() == 1 || atom.GetSerialID() == 7;
@@ -795,6 +796,7 @@ TEST(UmapEmbeddingCommandTest, ExcludesMissingRequiredFeaturesAndAllowsMissingAn
 #include "data/detail/JointStageAdapter.hpp"
 #include "core/detail/joint_component/Numerics.hpp"
 #include "support/JointPostprocessingTestHelpers.hpp"
+#include "core/detail/joint_component/HaloMedianReconstruction.hpp"
 TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNoInputFiles)
 {
     command_test::ScopedTempDir dir{"joint_umap_saved"};
@@ -809,10 +811,15 @@ TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNo
         if(a!=0) original.selection_domain->target_indices.push_back(a);
         for(int k=0;k<12;++k)
         {
-            const double square=0.02+0.1*k;
+            const int serial=model->GetAtomList()[a]->GetSerialID();
+            const int x=3*serial+(k==0 ? 2:k==1 ? 6:0);
+            const int y=k<2 ? 10:10+k%5+1;
+            const int z=k<2 ? 10:10+k/5+1;
+            const double dx=.25*(x-3*serial),dy=.25*(y-10),dz=.25*(z-10);
+            const double square=dx*dx+dy*dy+dz*dz;
             const auto kernel=rhbm_gem::core::joint_component::EvaluateKernel(square,0.5,2.5);
             original.support.back().push_back({original.observations.size(),square});
-            original.row_ids.push_back(std::to_string(original.observations.size()));
+            original.row_ids.push_back(std::to_string(x+100*(y+21*z)));
             original.observations.push_back(2*kernel.gaussian-0.1*kernel.charge);
         }
     }
@@ -879,9 +886,11 @@ TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNo
     const auto problem=JointProblem(std::move(fitting)).WithReconstructionDomain(
         std::move(original),fitting_to_original_contributors,std::move(fitting_to_original_rows));
     auto snapshot=CaptureJointAnalysisResult(FitJointComponentsInitialized(problem,initialization));
-    snapshot.evidence.push_back({std::string(rg::JointHaloMedianReconstructionEvidenceName),
-        rg::JointCheckStatus::Unavailable,rg::JointEvidenceScope::AssembledGlobal,{}, {},
-        "test fixture has no geometry-local donor reconstruction"});
+    snapshot.halo_median_reconstruction=rg::core::detail::BuildHaloMedianReconstruction(
+        *model,problem,snapshot,"saved-joint-umap").TakeSnapshot();
+    snapshot.metadata.grid_size={100,21,21};
+    snapshot.metadata.grid_spacing={.25,.25,.25};
+    snapshot.metadata.origin={0.,-2.5,-2.5};
     snapshot.metadata.map_normalization=rg::JointMapNormalization{false,false,1};
     std::map<int, LocalPotentialSampleList> original_peeling;
     for (const auto & atom : model->GetAtomList())
@@ -893,19 +902,19 @@ TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNo
         const auto view=rg::AtomLocalPotentialView::For(*atom);
         if(view.GetStageEstimate(rg::FittingStage::Second).source.role!=rg::FittingRole::Target) continue;
         rg::PostFitPeelingResult peeling; peeling.source=view.GetStageEstimate(rg::FittingStage::Second).source;
-        for(const auto & sample:original_peeling.at(atom->GetSerialID())) peeling.samples.push_back({sample.response,{}});
+        for(const auto & sample:original_peeling.at(atom->GetSerialID())) peeling.samples.push_back({sample.response,{},{}});
         second_stage_test::postprocessing::AssignGridObservationsForTesting(peeling,view.GetRawSamplingEntriesView(),atom->GetPosition());
         for(auto & sample:peeling.samples)
         {
-            const auto base=12*static_cast<std::size_t>(atom->GetSerialID()-1);
-            sample.observation.original_row_index+=base; sample.observation.global_grid_index+=base;
+            const auto contributor=static_cast<std::size_t>(std::find(snapshot.atom_ids.begin(),snapshot.atom_ids.end(),
+                std::to_string(atom->GetSerialID()))-snapshot.atom_ids.begin());
+            sample.observation.original_row_index+=12*contributor;
+            sample.observation.global_grid_index=std::stoull(snapshot.row_ids[sample.observation.original_row_index]);
         }
         if(atom->GetSerialID()==2) {peeling.samples[1].response.reset(); peeling.samples[1].reason="outside-joint-domain";}
         model->EditAnalysis().SetAtomPostFitPeeling(*atom,peeling);
     }
     const auto path=dir.path()/"joint.sqlite";
-    {rg::DataRepository repository(path); repository.SaveModel(*model,"model");}
-    model->EditAnalysis().ClearJointResult();
     {rg::DataRepository repository(path); repository.SaveModel(*model,"model");}
     model.reset();
     const auto request=MakeRequest(path,dir.path()/"output");

@@ -1,5 +1,6 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
@@ -63,6 +64,7 @@ void AtomObject::SetPosition(double x, double y, double z)
     m_position.at(2) = z;
     if (m_owner_model != nullptr)
     {
+        m_owner_model->EditAnalysis().Clear();
         m_owner_model->InvalidateDerivedState();
     }
 }
@@ -72,6 +74,7 @@ void AtomObject::SetPosition(const std::array<double, 3> & value)
     m_position = value;
     if (m_owner_model != nullptr)
     {
+        m_owner_model->EditAnalysis().Clear();
         m_owner_model->InvalidateDerivedState();
     }
 }

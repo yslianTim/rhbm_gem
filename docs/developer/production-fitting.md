@@ -71,5 +71,5 @@ their input data in the test itself; MDPDE equation helpers are declared in
 
 Joint component estimation uses the separate production contract in the
 [Joint runtime guide](joint-component-runtime.md). Its saved data supports
-SQLite schema v20, Stage Result JSON version 4, and Joint Result JSON schema
+SQLite schema v21, Stage Result JSON version 5, and Joint Result JSON schema
 v24 only. These formats do not migrate or decode older formats.

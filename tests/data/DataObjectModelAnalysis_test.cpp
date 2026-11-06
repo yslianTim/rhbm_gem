@@ -1826,7 +1826,7 @@ TEST(DataObjectModelAnalysisTest, JointUpdatesInvalidateDependentResultsAcrossTh
         stage.uncertainty.covariance = Eigen::Matrix3d::Identity();
         editor.SetAtomStageEstimate(rg::FittingStage::Second, *atom, stage);
         rg::PostFitPeelingResult peeling;
-        peeling.source = stage.source; peeling.samples = {{1, {}}, {2, {}}};
+        peeling.source = stage.source; peeling.samples = {{1, {}, {}}, {2, {}, {}}};
         second_stage_test::postprocessing::AssignGridObservationsForTesting(peeling,view.GetRawSamplingEntriesView(),atom->GetPosition());
         editor.SetAtomPostFitPeeling(*atom, peeling);
         rg::PostJointLocalResult local;
@@ -1854,9 +1854,9 @@ TEST(DataObjectModelAnalysisTest, JointUpdatesInvalidateDependentResultsAcrossTh
     auto raw = view.GetRawSamplingEntries(false);
     std::reverse(raw.begin(), raw.end());
     editor.SetAtomLocalRawSamplingEntries(*atom, raw);
-    EXPECT_FALSE(view.GetPostFitPeeling());
-    EXPECT_FALSE(view.GetPostJointLocalResult());
-    EXPECT_TRUE(view.GetPeelingSamplingEntries().empty());
+    EXPECT_TRUE(view.GetPostFitPeeling());
+    EXPECT_TRUE(view.GetPostJointLocalResult());
+    EXPECT_FALSE(view.GetPeelingSamplingEntries().empty());
     EXPECT_EQ(view.GetFinalModel(rg::FittingStage::Second).ToVector(), point);
     stage.point = stage.point->WithAmplitude(3);
     editor.SetAtomStageEstimate(rg::FittingStage::Second, *atom, stage);
@@ -1895,7 +1895,7 @@ TEST(DataObjectModelAnalysisTest, PostJointLocalResultHasIndependentJointEndpoin
     editor.SetAtomLocalRawSamplingEntries(atom, raw);
     rg::PostFitPeelingResult peeling;
     peeling.source = rg::AtomLocalPotentialView::For(atom).GetStageEstimate(rg::FittingStage::Second).source;
-    peeling.samples = {{1.5, {}}, {1.4, {}}, {1.3, {}}, {1.2, {}}};
+    peeling.samples = {{1.5, {}, {}}, {1.4, {}, {}}, {1.3, {}, {}}, {1.2, {}, {}}};
     second_stage_test::postprocessing::AssignGridObservationsForTesting(peeling,rg::AtomLocalPotentialView::For(atom).GetRawSamplingEntriesView(),atom.GetPosition());
     editor.SetAtomPostFitPeeling(atom, peeling);
 
@@ -1922,8 +1922,8 @@ TEST(DataObjectModelAnalysisTest, PostJointLocalResultHasIndependentJointEndpoin
     EXPECT_DOUBLE_EQ(view.GetPostJointLocalResult()->fit.mdpde.GetModel().GetAmplitude(), 1.8);
 
     editor.SetAtomLocalRawSamplingEntries(atom, {{3, {.2, {0,0,0}, true}}});
-    EXPECT_FALSE(view.GetPostFitPeeling());
-    EXPECT_FALSE(view.GetPostJointLocalResult());
+    EXPECT_TRUE(view.GetPostFitPeeling());
+    EXPECT_TRUE(view.GetPostJointLocalResult());
     EXPECT_TRUE(model->GetAnalysisView().GetJointResult());
     EXPECT_DOUBLE_EQ(view.GetFinalModel(rg::FittingStage::Second).GetAmplitude(), 2);
 
@@ -1966,7 +1966,7 @@ TEST(DataObjectModelAnalysisTest, StageGettersProjectOnePointAndJointSamplesCann
     editor.SetAtomLocalRawSamplingEntries(atom, {{2, {.1, {0,0,0}, true}}, {4, {.2, {1,0,0}, true}}});
     rg::PostFitPeelingResult peeling;
     peeling.source = view.GetStageEstimate(rg::FittingStage::Second).source;
-    peeling.samples = {{1, {}}, {2, {}}}; peeling.neighbor_count = 3;
+    peeling.samples = {{1, {}, {}}, {2, {}, {}}}; peeling.neighbor_count = 3;
     second_stage_test::postprocessing::AssignGridObservationsForTesting(peeling,rg::AtomLocalPotentialView::For(atom).GetRawSamplingEntriesView(),atom.GetPosition());
     editor.SetAtomPostFitPeeling(atom, peeling);
     EXPECT_THROW(editor.SetAtomLocalPeelingSamplingEntries(atom, {}), std::invalid_argument);

@@ -4,6 +4,7 @@
 #include "data/detail/LocalPotentialEntry.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/data/object/MapObject.hpp>
 
 namespace rhbm_gem {
 
@@ -12,12 +13,20 @@ ModelAnalysisData::~ModelAnalysisData() = default;
 
 ModelAnalysisData & ModelAnalysisData::Of(ModelObject & model_object)
 {
-    return *model_object.m_analysis_data;
+    auto & data=*model_object.m_analysis_data;
+    if (data.source_map_revision && *data.source_map_revision!=data.source_map_generation) data.Clear();
+    return data;
 }
 
 const ModelAnalysisData & ModelAnalysisData::Of(const ModelObject & model_object)
 {
-    return *model_object.m_analysis_data;
+    return Of(const_cast<ModelObject &>(model_object));
+}
+
+void ModelAnalysisData::BindMapObservations(const MapObject & map)
+{
+    source_map_revision=map.m_observation_revision;
+    source_map_generation=*source_map_revision;
 }
 
 void ModelAnalysisData::Clear()
@@ -25,6 +34,8 @@ void ModelAnalysisData::Clear()
     m_atom_group_entry = AtomGroupPotentialEntry{};
     m_atom_local_entry_map.clear();
     joint_result.reset();
+    source_map_revision.reset();
+    source_map_generation=0;
 }
 
 AtomGroupPotentialEntry & ModelAnalysisData::AtomGroupEntry()

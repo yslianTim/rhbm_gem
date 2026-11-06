@@ -181,3 +181,38 @@ inside the chosen fitting radius actually used for alpha, fit and information.
 The CSV names N_positive explicitly as `positive_all_2A`; retention fractions
 use N_retained divided by the radius-specific candidate count. Nonpositive
 responses are not Peeling failures.
+
+## P5 integrity, invalidation and persistence
+
+Release build and all 21 CTest groups pass (39.25 s, at most four threads).
+The complete-source Group fixture varies A/tau across 20 separated Targets,
+uses the actual workflow, and round-trips Gaussian posterior covariance and
+fixed Joint charge through SQLite and Stage JSON. It replaces abstract Group
+persistence fixtures without a Joint snapshot. Ordered grid IDs, Original row
+mapping, map positions, response/reason pairing, charge identity and all four
+Local counts are checked. Available Local evidence independently replays the
+fixed charge to verify correction/positive/retained counts. Local Gaussian
+offsets must be zero. Empty positive datasets retain zero actual solver rows;
+the historical FirstStage/Two-Stage sentinel behavior remains unchanged.
+
+A live map revision binds its analyses and model copies. Value replacement,
+clearing and normalization invalidate them at next access; copying or destroying
+the map does not invalidate independent/historical evidence. Position changes
+clear analysis and spatial caches. Replacing/removing a Joint snapshot clears
+downstream grid records. Grid geometry or known map/model content identity
+cannot be changed by metadata-only updates. FirstStage raw edits retain grid
+results. These dependencies have regression coverage.
+
+The Peeling contributor universe now contains only Original contributors.
+Every 2 Å candidate lies inside a Target's Original 2.5 Å support, so all atoms
+with an actual contribution there are already included by the Original builder.
+Unindexed contributors are rejected; no reconstruction-only interpolation
+lookup or fallback remains. Sparse cached values require no dense matrix.
+
+Current documentation describes Stage JSON 5 / SQLite 21 / Joint JSON 24.
+The two baseline broken links are retained as plain historical report names
+rather than links to nonexistent files; all documentation link checks pass.
+The real files were subsequently located through `local/run_example.sh` in
+`/Users/yslian/data`; the earlier negative search applied only to the project
+folders searched. A paired real-map baseline was rebuilt from an ordinary
+`git archive` source directory (not a Git worktree) at the initial commit.

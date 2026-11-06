@@ -41,17 +41,17 @@ codecs decode float32 mode-2 voxels into the runtime's contiguous double map.
 
 | Layer | Supported format |
 | --- | --- |
-| SQLite | Schema v20 only |
-| Stage Result JSON | Version 4 only |
+| SQLite | Schema v21 only |
+| Stage Result JSON | Version 5 only |
 | Joint Result JSON | Schema v24 only |
 
 No layer migrates historical data. A genuinely empty SQLite database is
-initialized as v20. An existing database opens only when its `user_version`
+initialized as v21. An existing database opens only when its `user_version`
 is 20 and its exact current schema validates. Unsupported versions or
 structures are rejected before schema or row mutation; the repository does
 not repair, upgrade, delete, or replace them.
 
-Stage JSON readers require `{"version":4}`. Joint JSON writers always emit
+Stage JSON readers require `{"version":5}`. Joint JSON writers always emit
 schema 24, and Joint readers require schema 24 with the
 `target-only-pure-halo-support-exclusion-v1` parameterization. Version
 selection does not depend on convergence, Halo count, or reconstruction
@@ -62,7 +62,7 @@ results, and nullable diagnostics.
 
 ## SQLite schema and lifecycle
 
-Schema v20 contains these tables:
+Schema v21 contains these tables:
 
 - `model_object`
 - `model_chain_map`
@@ -92,7 +92,7 @@ transaction. A failed write rolls back all rows for that save. A key saved
 without a Joint result has no Joint result row.
 
 Load validates the database, loads the current model structure, decodes a
-Joint result only as schema 24, and decodes a Stage result only as version 4.
+Joint result only as schema 24, and decodes a Stage result only as version 5.
 Any malformed JSON or unsupported payload fails the load; it is not rewritten
 in place.
 
@@ -102,7 +102,7 @@ in place.
 - `src/data/io/sqlite/ModelObjectStorage.cpp`: current model and result SQL.
 - `src/data/io/detail/PersistenceSchema.hpp`: SQLite, Stage, and Joint
   version constants.
-- `src/data/io/detail/StageResultJson.cpp`: Stage JSON version 4.
+- `src/data/io/detail/StageResultJson.cpp`: Stage JSON version 5.
 - `src/data/io/detail/JointResultJson.cpp`: Joint JSON schema 24.
 - `tests/data/DataObjectSchemaLifecycle_test.cpp` and
   `DataObjectSchemaValidation_test.cpp`: database bootstrap and rejection.

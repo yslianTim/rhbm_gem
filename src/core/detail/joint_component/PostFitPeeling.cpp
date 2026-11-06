@@ -8,7 +8,6 @@
 #include <algorithm>
 #include <cmath>
 #include <set>
-#include <unordered_map>
 
 namespace rhbm_gem::core::detail {
 namespace {
@@ -93,38 +92,24 @@ JointPeelingContributorUniverse BuildJointPeelingContributorUniverse(
     if (result.halo_median_reconstruction)
         universe.joint_run_id=result.halo_median_reconstruction->joint_run_id;
     const auto & input=problem.OriginalInput();
-    std::unordered_map<int,std::size_t> contributor_indices;
-    contributor_indices.reserve(input.atom_ids.size());
+    // Every voxel in the 2 A candidate set lies in a Target's Original 2.5 A
+    // support. The Original-domain builder already includes every non-H atom
+    // contributing to those Original observations.
+    universe.contributors.reserve(input.atom_ids.size());
     for (std::size_t index=0;index<input.atom_ids.size();++index)
-        contributor_indices.emplace(std::stoi(input.atom_ids[index]),index);
-    const auto * domain=input.selection_domain ? &*input.selection_domain : nullptr;
-    universe.contributors.reserve(model.GetNumberOfAtom());
-    for (const auto & object:model.GetAtomList())
     {
+        const auto * object=model.FindAtomPtr(std::stoi(input.atom_ids[index]));
         JointPeelingContributor contributor;
         contributor.atom_id=object->GetSerialID();
         contributor.position=object->GetPosition();
+        contributor.contributor_index=index;
         contributor.reconstruction_eligible=object->GetElement()!=Element::HYDROGEN;
-        if (contributor.reconstruction_eligible && !std::all_of(
-                contributor.position.begin(),contributor.position.end(),
-                [](double coordinate){return std::isfinite(coordinate);}))
-            throw std::invalid_argument("Nonfinite Joint Peeling contributor position.");
-        if (const auto found=contributor_indices.find(contributor.atom_id);found!=contributor_indices.end())
-        {
-            contributor.contributor_index=found->second;
-            contributor.target=domain && std::binary_search(domain->target_indices.begin(),
-                domain->target_indices.end(),found->second);
-        }
+        contributor.target=input.selection_domain && std::binary_search(input.selection_domain->target_indices.begin(),
+            input.selection_domain->target_indices.end(),index);
         if (universe.joint_run_id.empty() && contributor.target)
         {
             const auto local=AtomLocalPotentialView::For(*object);
-            if (local.IsAvailable())
-            {
-                const auto stage=local.GetStageEstimate(FittingStage::Second);
-                if (stage.source.method==EstimateMethod::JointComponents &&
-                    stage.source.role==FittingRole::Target)
-                    universe.joint_run_id=stage.source.run_id;
-            }
+            if (local.IsAvailable()) universe.joint_run_id=local.GetStageEstimate(FittingStage::Second).source.run_id;
         }
         universe.contributors.push_back(std::move(contributor));
     }
@@ -186,29 +171,27 @@ JointPostprocessingContext::JointPostprocessingContext(
             throw std::invalid_argument("Invalid Joint Peeling contributor universe.");
         first_contributor=false;
         previous_contributor_id=contributor.atom_id;
-        if (contributor.contributor_index)
-        {
-            const auto index=*contributor.contributor_index;
-            if (index>=input.atom_ids.size() || std::stoi(input.atom_ids[index])!=contributor.atom_id)
-                throw std::invalid_argument("Joint Peeling contributor universe identity mismatch.");
-            const bool target=input.selection_domain && std::binary_search(
-                input.selection_domain->target_indices.begin(),input.selection_domain->target_indices.end(),index);
-            if (contributor.target!=target || !contributor.reconstruction_eligible)
-                throw std::invalid_argument("Joint Peeling contributor universe identity mismatch.");
-            ++indexed_contributors;
-        }
-        else if (contributor.target)
+        const auto index=contributor.contributor_index;
+        if (index>=input.atom_ids.size() || std::stoi(input.atom_ids[index])!=contributor.atom_id)
             throw std::invalid_argument("Joint Peeling contributor universe identity mismatch.");
+        const bool target=std::binary_search(input.selection_domain->target_indices.begin(),
+            input.selection_domain->target_indices.end(),index);
+        if (contributor.target!=target || !contributor.reconstruction_eligible)
+            throw std::invalid_argument("Joint Peeling contributor universe identity mismatch.");
+        ++indexed_contributors;
     }
     if (indexed_contributors!=input.atom_ids.size())
         throw std::invalid_argument("Joint Peeling contributor universe identity mismatch.");
     std::set<std::size_t> grid_indices;
-    for (const auto & row_id : input.row_ids)
+    for (std::size_t row=0;row<input.row_ids.size();++row)
     {
+        const auto & row_id=input.row_ids[row];
         const auto grid = std::stoull(row_id);
         if (grid >= geometry.GetMapValueArraySize() || row_id != std::to_string(grid) ||
             !grid_indices.insert(grid).second)
             throw std::invalid_argument("Joint original-domain row mapping mismatch.");
+        if (!std::isfinite(geometry.GetMapValue(grid)) || input.observations.at(row)!=geometry.GetMapValue(grid))
+            throw std::invalid_argument("Original observations differ from current map.");
     }
     if (m_metrics)
     {
@@ -344,8 +327,11 @@ std::vector<std::pair<int, PostFitPeelingResult>> JointPostprocessingContext::Bu
         if (point && (!std::isfinite(point->GetAmplitude()) || point->GetAmplitude()<0 ||
             !std::isfinite(point->GetOffset()) || !std::isfinite(point->GetWidth()) || point->GetWidth()<=0))
             throw std::invalid_argument("Invalid reconstruction contributor parameters.");
+        std::set<std::size_t> support_rows;
         for (const auto & support:input.support[atom])
         {
+            if (!support_rows.insert(support.row).second)
+                throw std::invalid_argument("Duplicate Original contributor support row.");
             std::optional<double> value;
             if (point)
             {
@@ -392,7 +378,7 @@ std::vector<std::pair<int, PostFitPeelingResult>> JointPostprocessingContext::Bu
             }
             if (m_metrics)
             {
-                ++m_metrics->raw_peeling_sample_count;
+                ++m_metrics->grid_peeling_sample_count;
                 if (sample.response) ++m_metrics->available_peeling_sample_count;
                 else
                 {
@@ -428,10 +414,9 @@ PostJointLocalSamples JointPostprocessingContext::BuildPostJointLocalSamples(
     const auto & input = m_problem.OriginalInput();
     const auto atom_found=std::lower_bound(m_contributors.contributors.begin(),m_contributors.contributors.end(),atom_id,
         [](const JointPeelingContributor & contributor,int id){return contributor.atom_id<id;});
-    if (atom_found==m_contributors.contributors.end() || atom_found->atom_id!=atom_id ||
-        !atom_found->contributor_index)
+    if (atom_found==m_contributors.contributors.end() || atom_found->atom_id!=atom_id)
         throw std::invalid_argument("Post-Joint sample target is outside the Joint problem.");
-    const auto atom_index=*atom_found->contributor_index;
+    const auto atom_index=atom_found->contributor_index;
     if (!input.selection_domain || !std::binary_search(
             input.selection_domain->target_indices.begin(), input.selection_domain->target_indices.end(), atom_index))
         throw std::invalid_argument("Post-Joint samples require a selected Joint target.");

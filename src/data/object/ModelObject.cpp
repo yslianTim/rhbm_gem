@@ -274,6 +274,8 @@ ModelObject::ModelObject(const ModelObject & other) :
 
     const auto & source_analysis_data{ ModelAnalysisData::Of(other) };
     m_analysis_data->joint_result = source_analysis_data.joint_result;
+    m_analysis_data->source_map_revision=source_analysis_data.source_map_revision;
+    m_analysis_data->source_map_generation=source_analysis_data.source_map_generation;
     {
         const auto & source_entry{ source_analysis_data.AtomGroupEntry() };
         auto & cloned_entry{ m_analysis_data->AtomGroupEntry() };

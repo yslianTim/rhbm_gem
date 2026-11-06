@@ -171,8 +171,14 @@ or unavailable donors is a valid result state.
 
 The reconstructed Halo points support Original-domain PostFitPeeling. The
 workflow then runs Post-Joint Local MDPDE for qualified selected targets and
-Group Fitting from those local results. These downstream stages retain their
-own availability and qualification evidence.
+Group Fitting from those local results. Peeling collects
+Original support rows at r² <= 4 Å², uses raw map voxel values and direct 2.5 Å
+neighbor kernels, then directly subtracts the Target's own C/tau charge.
+Post-Joint Local fitting uses the positive corrected grid observations within
+1 Å, with one shared dataset for alpha, estimation and information. FirstStage
+Fibonacci sampling is unchanged. These downstream stages retain their own
+availability and qualification evidence; see the
+[stage integration guide](joint-stage-integration.md).
 
 Halo medians retain the `(A, tau, C)` order:
 `theta_h = (median A_i, median tau_i, median C_i)` over each Halo's qualified
@@ -189,13 +195,13 @@ Halo reconstruction, and peeling.
 
 | Payload | Accepted format |
 | --- | --- |
-| SQLite database | Schema v20 |
-| Stage Result JSON | Version 4 |
+| SQLite database | Schema v21 |
+| Stage Result JSON | Version 5 |
 | Joint Result JSON | Schema v24 |
 
-SQLite opens a new empty database by initializing schema v20 and opens an
-existing database only when its exact schema is v20. Stage JSON accepts only
-version 4. Joint JSON accepts only schema 24 and the `strict-v2` or
+SQLite opens a new empty database by initializing schema v21 and opens an
+existing database only when its exact schema is v21. Stage JSON accepts only
+version 5. Joint JSON accepts only schema 24 and the `strict-v2` or
 `practical-v2` convergence identifiers. It stores target-only Pure Exclusion
 results. No format performs migrations or compatibility decoding. Unsupported
 inputs are rejected without repair or overwrite.
@@ -208,7 +214,7 @@ the latter is the bound-projected eta stationarity threshold.
 Units metadata uses `joint-kernel-map-units-v2` and `tau: angstrom`.
 Joint CSV parameter columns are `A,tau,C`, in that order. Schema 24 accepts
 only these current keys, including when the Joint payload is stored in a
-SQLite v20 database. Stage JSON v4 and native Gaussian Width fields keep
+SQLite v21 database. Stage JSON v5 and native Gaussian Width fields keep
 their independent contracts.
 
 Current documents can store qualified and unqualified results, nullable
@@ -251,9 +257,9 @@ identity without claiming that search ran or that a width bound was available.
   in `GaussSeidelBcd.hpp` owns the internal search settings.
 - [ComponentSweepBudget.hpp](https://github.com/yslianTim/rhbm_gem/blob/develop/src/core/detail/joint_component/ComponentSweepBudget.hpp)
   owns the unchanged adaptive sweep decisions.
-- [Refactor validation](bcd-refactor-validation.md) records the baseline and
+- Refactor validation (`bcd-refactor-validation.md`, absent from this checkout) records the baseline and
   numerical/contract checks.
-- [Tau naming validation](tau-naming-validation.md) records the symbol inventory,
+- Tau naming validation (`tau-naming-validation.md`, absent from this checkout) records the symbol inventory,
   numerical equivalence and logger/persistence checks.
 
 The [data I/O architecture](architecture/dataobject-io-architecture.md)

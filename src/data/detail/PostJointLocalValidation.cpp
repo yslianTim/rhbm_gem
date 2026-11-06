@@ -6,6 +6,7 @@
 #include <cmath>
 #include <exception>
 #include <limits>
+#include <numbers>
 #include <set>
 #include <utility>
 
@@ -74,6 +75,22 @@ std::string ValidatePostFitPeelingResult(const PostFitPeelingResult & peeling,
         if (snapshot && (observation.original_row_index>=snapshot->row_ids.size() ||
             snapshot->row_ids[observation.original_row_index]!=std::to_string(observation.global_grid_index)))
             return "Post-Joint Original row mapping mismatch.";
+        if (snapshot && std::all_of(snapshot->metadata.grid_size.begin(),snapshot->metadata.grid_size.end(),
+                [](int size){return size>0;}))
+        {
+            auto grid=observation.global_grid_index;
+            for(std::size_t axis=0;axis<3;++axis)
+            {
+                const auto size=static_cast<std::size_t>(snapshot->metadata.grid_size[axis]);
+                const auto coordinate=grid%size; grid/=size;
+                const double position=snapshot->metadata.origin[axis]+
+                    snapshot->metadata.grid_spacing[axis]*static_cast<double>(coordinate);
+                if (!std::isfinite(position) || std::abs(position-observation.position[axis])>
+                    1.0e-12*std::max(1.0,std::abs(position)))
+                    return "Post-Joint grid index/position mismatch.";
+            }
+            if(grid) return "Post-Joint grid index outside map geometry.";
+        }
         if (target_position)
         {
             double square{};
@@ -131,9 +148,37 @@ PostJointLocalEvidenceAssessment AssessPostJointLocalResult(
             std::sqrt(found->observation.squared_distance)!=failure.distance)
             return Invalid("Invalid post-Joint local sample failure identity.");
     }
-    if (result.status==EvidenceStatus::Available &&
-        result.corrected_sample_count+result.sample_failures.size()!=result.sample_count)
-        return Invalid("Post-Joint corrected/failure count mismatch.");
+    if (result.status==EvidenceStatus::Available)
+    {
+        std::size_t corrected{},positive{},retained{};
+        for(const auto & sample:peeling->samples)
+        {
+            const auto & observation=sample.observation;
+            const double distance=std::sqrt(observation.squared_distance);
+            // Independent scalar replay of the fixed charge; C is not an offset.
+            const double width=result.fixed_charge.width;
+            if(!std::isfinite(width) || width<=0 || !std::isfinite(result.fixed_charge.coefficient))
+                return Invalid("Invalid Post-Joint fixed charge profile.");
+            const double kernel=distance<1e-5 ? std::sqrt(2.0/std::numbers::pi)/width :
+                std::erf(distance/width/std::sqrt(2.0))/distance;
+            const double charge=result.fixed_charge.coefficient*kernel;
+            const double response=sample.response ? *sample.response-charge :
+                std::numeric_limits<double>::quiet_NaN();
+            const bool failed=!std::isfinite(response);
+            if(failure_indices.contains(observation.original_row_index)!=failed)
+                return Invalid("Post-Joint correction/failure identity mismatch.");
+            if(failed) continue;
+            ++corrected;
+            if(response>0)
+            {
+                ++positive;
+                if(distance<=result.fitting_radius) ++retained;
+            }
+        }
+        if(corrected!=result.corrected_sample_count || positive!=result.positive_sample_count ||
+            retained!=result.effective_sample_count)
+            return Invalid("Post-Joint corrected/positive/retained dataset mismatch.");
+    }
 
     if (joint.point)
     {
@@ -165,7 +210,7 @@ PostJointLocalEvidenceAssessment AssessPostJointLocalResult(
     for (const auto * model : {&point, &ols})
         if (!std::isfinite(model->GetAmplitude()) || model->GetAmplitude() <= 0.0 ||
             !std::isfinite(model->GetWidth()) || model->GetWidth() <= 0.0 ||
-            !std::isfinite(model->GetOffset()))
+            (!std::isfinite(model->GetOffset()) || model->GetOffset()!=0.0))
             return Invalid("Available post-Joint local evidence has invalid Gaussian parameters.");
     if (!diagnostics || diagnostics->status != RHBMEstimationStatus::SUCCESS ||
         GetSolveQualification(diagnostics->status, diagnostics->refinement) == RHBMSolveQualification::Unqualified ||

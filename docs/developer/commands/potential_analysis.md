@@ -287,7 +287,7 @@ request.estimator = rhbm_gem::core::PotentialEstimator::JOINT_COMPONENTS;
 request.model_file_path = "model.cif";
 request.map_file_path = "map.mrc";
 request.selected_chain_ids = {"A"};
-request.database_path = "joint.sqlite"; // SQLite schema v20
+request.database_path = "joint.sqlite"; // SQLite schema v21
 request.saved_key_tag = "example";
 auto completed = rhbm_gem::core::RunCommand(request);
 ```
@@ -303,12 +303,12 @@ convergence and point-quality columns.
 
 | Data | Accepted format |
 | --- | --- |
-| SQLite database | Schema v20 only |
-| Stage Result JSON | Version 4 only |
+| SQLite database | Schema v21 only |
+| Stage Result JSON | Version 5 only |
 | Joint Result JSON | Schema v24 only |
 
-An empty database is initialized as v20. An existing database must have the
-exact v20 schema. Stage JSON accepts only version 4; Joint JSON always writes
+An empty database is initialized as v21. An existing database must have the
+exact v21 schema. Stage JSON accepts only version 5; Joint JSON always writes
 schema 24 and reads only schema 24. No migrations, upgrades, historical
 fallbacks, or automatic repairs are performed. Unsupported inputs are rejected
 without modifying the database. See the

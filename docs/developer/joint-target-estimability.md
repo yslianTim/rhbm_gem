@@ -38,7 +38,7 @@ Joint JSON schema 24 writes this contract and omits the retired diagnostic
 members completely. The reader accepts only schema 24 and rejects unknown
 component/point fields and noncurrent target contracts. Schema 21 documents
 must be read with their original Git version. No legacy reader is retained.
-SQLite schema 20 and Stage Result JSON version 4 are unchanged: SQLite stores
+SQLite schema 21 and Stage Result JSON version 5 version the grid-domain downstream contract: SQLite stores
 the versioned Joint JSON payload and performs no migration. The C++ public
 struct layout also changes; downstream C++ consumers must rebuild.
 

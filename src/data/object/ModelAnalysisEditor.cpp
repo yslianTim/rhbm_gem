@@ -112,6 +112,8 @@ std::set<int> InvalidateJointRuns(ModelAnalysisData & data, const std::set<std::
         affected.insert(id);
     }
     data.joint_result.reset();
+    data.source_map_revision.reset();
+    data.source_map_generation=0;
     return affected;
 }
 
@@ -165,8 +167,14 @@ void ModelAnalysisEditor::ApplyJointResult(JointAnalysisResult result, const std
     SetJointResult(std::move(result));
 }
 
+void ModelAnalysisEditor::BindJointMapObservations(const MapObject & map)
+{
+    ModelAnalysisData::Of(m_model_object).BindMapObservations(map);
+}
+
 void ModelAnalysisEditor::SetJointResult(JointAnalysisResult result)
 {
+    ClearJointResult();
     ModelAnalysisData::Of(m_model_object).joint_result=std::move(result);
 }
 
@@ -340,12 +348,29 @@ void ModelAnalysisEditor::UpdateJointMetadata(JointAnalysisMetadata metadata)
 {
     auto & result = ModelAnalysisData::Of(m_model_object).joint_result;
     if (!result) throw std::runtime_error("Joint diagnostic snapshot unavailable.");
+    const auto & current=result->metadata;
+    if ((std::all_of(current.grid_size.begin(),current.grid_size.end(),[](int size){return size>0;}) &&
+            (current.grid_size!=metadata.grid_size || current.grid_spacing!=metadata.grid_spacing ||
+                current.origin!=metadata.origin)) ||
+        (current.map_sha256 && current.map_sha256!=metadata.map_sha256) ||
+        (current.model_sha256 && current.model_sha256!=metadata.model_sha256))
+        throw std::invalid_argument("Joint source metadata requires a new workflow when map/model identity changes.");
     result->metadata = std::move(metadata);
 }
 
 void ModelAnalysisEditor::ClearJointResult()
 {
-    ModelAnalysisData::Of(m_model_object).joint_result.reset();
+    auto & data=ModelAnalysisData::Of(m_model_object);
+    std::set<int> affected;
+    for (auto & [id,entry]:data.AtomLocalEntries())
+        if (entry->StageEstimate(FittingStage::Second).source.method==EstimateMethod::JointComponents)
+        {
+            entry->ClearPeeling();
+            entry->ClearGroupMemberResult();
+            affected.insert(id);
+        }
+    InvalidateGroups(data,affected);
+    data.joint_result.reset();
 }
 
 void ModelAnalysisEditor::Clear()
@@ -428,9 +453,12 @@ void ModelAnalysisEditor::SetAtomLocalRawSamplingEntries(
     LocalPotentialSampleList value)
 {
     auto & entry = EnsureAtomLocalPotential(m_model_object, atom_object);
-    entry.ClearPeeling();
-    entry.ClearGroupMemberResult();
-    InvalidateGroups(ModelAnalysisData::Of(m_model_object), {atom_object.GetSerialID()});
+    if (entry.StageEstimate(FittingStage::Second).source.method!=EstimateMethod::JointComponents)
+    {
+        entry.ClearPeeling();
+        entry.ClearGroupMemberResult();
+        InvalidateGroups(ModelAnalysisData::Of(m_model_object), {atom_object.GetSerialID()});
+    }
     entry.SetRawSamplingEntries(std::move(value));
 }
 

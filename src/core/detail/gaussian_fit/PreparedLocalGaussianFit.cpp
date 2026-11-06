@@ -90,7 +90,7 @@ PreparedLocalGaussianDesign::PreparedLocalGaussianDesign(
     }
 }
 
-RHBMMemberDataset PreparedLocalGaussianDesign::BuildDataset(
+RHBMMemberDataset PreparedLocalGaussianDesign::BuildSelectedDataset(
     const std::vector<double> & sample_response_list,
     const GaussianModel3D & offset_model) const
 {
@@ -126,17 +126,22 @@ RHBMMemberDataset PreparedLocalGaussianDesign::BuildDataset(
         retained_count++;
     }
 
-    if (retained_count == 0)
-    {
-        dataset.X = RHBMDesignMatrix::Zero(1, 2);
-        dataset.y = RHBMResponseVector::Zero(1);
-    }
-    else
-    {
-        dataset.X.conservativeResize(retained_count, 2);
-        dataset.y.conservativeResize(retained_count);
-    }
+    dataset.X.conservativeResize(retained_count, 2);
+    dataset.y.conservativeResize(retained_count);
 
+    return dataset;
+}
+
+RHBMMemberDataset PreparedLocalGaussianDesign::BuildDataset(
+    const std::vector<double> & responses, const GaussianModel3D & offset_model) const
+{
+    auto dataset=BuildSelectedDataset(responses,offset_model);
+    // Retain the existing FirstStage/Two-Stage empty-response sentinel contract.
+    if (dataset.y.size()==0)
+    {
+        dataset.X=RHBMDesignMatrix::Zero(1,2);
+        dataset.y=RHBMResponseVector::Zero(1);
+    }
     return dataset;
 }
 

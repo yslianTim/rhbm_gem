@@ -20,6 +20,7 @@
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
@@ -84,7 +85,7 @@ PostJointLocalResult FitPostJointLocalTarget(
 
     const GaussianModel3D no_charge{0.0, 1.0, 0.0};
     const PreparedLocalGaussianDesign design{gaussian_samples, 0.0, fitting_radius};
-    const auto dataset = design.BuildDataset(responses, no_charge);
+    const auto dataset = design.BuildSelectedDataset(responses, no_charge);
     result.effective_sample_count = static_cast<std::size_t>(dataset.y.size());
     if (dataset.y.size() <= 2)
     { result.status = EvidenceStatus::Unavailable; result.reason = "insufficient-positive-responses"; return result; }
@@ -267,6 +268,9 @@ void RunJointComponentWorkflow(
         fit.costs.initialization_seconds = initialization_seconds;
         return CaptureJointAnalysisResult(std::move(fit));
     }();
+    snapshot.metadata.grid_size=map.GetGridSize();
+    snapshot.metadata.grid_spacing=map.GetGridSpacing();
+    snapshot.metadata.origin=map.GetOrigin();
     const auto postprocessing_start = std::chrono::steady_clock::now();
     postprocessing_metrics.rss_before_postprocessing_bytes = joint_component::CurrentRssBytes();
     ++postprocessing_metrics.joint_stage_mapping_builds;
@@ -309,6 +313,7 @@ void RunJointComponentWorkflow(
     }
     data_internal::ApplyJointStageEstimates(model, snapshot, joint_run_id);
     model.EditAnalysis().SetJointResult(std::move(snapshot));
+    model.EditAnalysis().BindJointMapObservations(map);
     if (halo_reconstruction_unavailable)
     {
         finish_without_downstream();
@@ -327,12 +332,11 @@ void RunJointComponentWorkflow(
     auto peeling_updates = postprocessing.BuildPostFitPeelingBatch(
         std::span<const std::size_t>(original.selection_domain->target_indices));
     model.EditAnalysis().ApplyPostFitPeelingsBatch(std::move(peeling_updates));
-    if (postprocessing_metrics.mapping_mismatch_samples || postprocessing_metrics.missing_contributor_samples)
+    if (postprocessing_metrics.missing_contributor_samples)
     {
         std::ostringstream warning;
-        warning << "[Joint] Peeling data integrity issue | mapping_mismatch="
-            << postprocessing_metrics.mapping_mismatch_samples
-            << " | missing_contributors=" << postprocessing_metrics.missing_contributor_samples;
+        warning << "[Joint] Peeling data integrity issue | missing_contributors="
+            << postprocessing_metrics.missing_contributor_samples;
         LogJointWarning(warning.str());
     }
     std::vector<const AtomObject *> joint_targets;
@@ -434,7 +438,6 @@ void RunJointComponentWorkflow(
             << postprocessing_metrics.tail_ratio_available_targets
             << " | raw_sum=" << postprocessing_metrics.tail_raw_response_sum
             << " | peeled_sum=" << postprocessing_metrics.tail_peeling_response_sum
-            << " | mapping_mismatch_samples=" << postprocessing_metrics.mapping_mismatch_samples
             << " | missing_contributor_samples=" << postprocessing_metrics.missing_contributor_samples;
         for (const auto & [bucket, count] : postprocessing_metrics.tail_coverage_distribution)
             tail_detail << " | coverage_" << bucket << '=' << count;

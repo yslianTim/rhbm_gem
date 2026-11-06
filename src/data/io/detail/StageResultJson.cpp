@@ -453,6 +453,13 @@ void Validate(const ModelObject & model)
         if(!s.source.atom_id.empty() && s.source.atom_id!=std::to_string(id)) throw std::invalid_argument("Stage atom identity mismatch.");
         if(e->PostFitPeeling())
         {
+            if(!joint_snapshot) throw std::invalid_argument("Original-grid peeling requires its Joint snapshot.");
+            if(joint_snapshot->selection_domain &&
+                joint_snapshot->atom_ids.size()>joint_snapshot->selection_domain->target_indices.size() &&
+                !joint_snapshot->halo_median_reconstruction &&
+                std::any_of(e->PostFitPeeling()->samples.begin(),e->PostFitPeeling()->samples.end(),
+                    [](const auto & sample){return sample.response.has_value();}))
+                throw std::invalid_argument("Available grid peeling requires Halo reconstruction provenance.");
             const auto position=model.FindAtomPtr(id)->GetPosition();
             const auto reason=data_internal::ValidatePostFitPeelingResult(*e->PostFitPeeling(),s,joint_snapshot,&position);
             if(!reason.empty()) throw std::invalid_argument(reason);
