@@ -76,3 +76,35 @@ r>1 A counterexample to universal full-policy inclusion. All 55 focused tests
 passed. F0 atom/calibration/JCE/QScore fields still match E0 exactly. Detailed
 research output adds per-point masks/responses and per-shell neighbor IDs;
 synthetic Gaussian contributions are diagnostics only, outside the estimator.
+
+## E3: synthetic truth and contamination
+
+Completed 36 Production-calibrated runs (four scenarios, three deterministic
+phases, F0/FO/FQ) and three crowded phase-0 common-bound runs. Every endpoint
+passes the original KKT/Replay/Endpoint checks. All 12 new F0 runs exactly
+match the previous detailed numerical records. Fine/coarse/noisy controls
+match across all three policies. All designs have rank two; every synthetic
+run has 24 qualified donors and no fallback. Four sensitivity tests pass,
+including a new truth/contamination regression independent of solver agreement.
+
+Pooled crowded Width RMSE is F0 0.027900, FO 0.050862, FQ 0.065149 A;
+Amplitude RMSE is 0.267184, 0.603496, 0.793883. Selected positive fitting rows
+per phase rise from 1200 to 2166 and 2250. FO/FQ improve absolute Width error
+on only 16.67%/9.72% of matched observations. Mean paired changes are
++0.020625/+0.033929 A; worst regressions +0.058778/+0.084522 A.
+
+Mean analytic neighbor signal on F0 retained fitting rows is 0.029302;
+FO/FQ newly accepted rows have 0.096691/0.109163. Their mean contamination
+ratios are 0.239340/0.338626 versus F0's 0.078633. FQ's additions beyond FO
+have mean ratio 1.480407. Contributions use only the fixture's normalized,
+2.5 A supported Gaussian, with no invented charge. Epsilon is 1e-12 times
+that atom's largest absolute raw analytic target contribution; the ledger
+reports the fraction with abs(target)<=epsilon (zero here), absolute neighbor
+signal, per-shell and per-atom summaries. Truth never enters fitting or
+selection. More retained rows have not established more independent information.
+
+The independent `neighbor-selection-results.json` retains per-run solver,
+qualification, covariance, timing and coverage summaries, per-atom fits,
+matched outliers and selection diagnostics. Reproduce with
+`python3 tests/research/run_neighbor_selection_study.py` (single numerical
+worker), or `--summarize-only` to aggregate saved detailed build outputs.

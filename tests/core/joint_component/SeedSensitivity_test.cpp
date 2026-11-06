@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include "support/FirstStageSamplingFixture.hpp"
+#include "support/FibonacciNeighborSelection.hpp"
 #include "support/CommandTestHelpers.hpp"
 #include "core/detail/FirstStageInitialization.hpp"
 #include "core/detail/FittingWorkset.hpp"
@@ -164,4 +165,60 @@ TEST(JointSeedSensitivityTest, ExperimentalSamplesPersistWithoutBecomingGridIden
     EXPECT_EQ(view.GetPostFitPeeling()->samples.size(),peeling_count);
     EXPECT_EQ(view.GetPostJointLocalResult()->effective_sample_count,retained);
     EXPECT_EQ(view.GetRawSamplingEntries(false).size(),200u);
+}
+
+
+TEST(JointSeedSensitivityTest, FixedGeometryRelaxationIncreasesCrowdedWidthErrorAndContamination)
+{
+    auto source=second_stage_test::FirstStageStudyModel(1.4,0);
+    auto map=second_stage_test::FirstStageStudyMap(*source,.4,1e-4,0);
+    FitOptions options; options.quiet_mode=true;
+    std::vector<double> rmse,contamination;
+    for (int control=0;control<3;++control)
+    {
+        ModelObject model(*source); model.EditAnalysis().InitializeFromSelection();
+        const auto workset=d::MakeTwoStageFittingWorkset(model);
+        d::RunJointSeedSamplingWorkflow(*map,model,workset.contributors,1,{},true,{});
+        double neighbor_sum=0.; std::size_t retained=0;
+        for (const auto * atom:workset.contributors)
+        {
+            auto raw=AtomLocalPotentialView::For(*atom).GetRawSamplingEntries(false);
+            if (control)
+                second_stage_test::ApplyFibonacciNeighborSelection(raw,
+                    second_stage_test::FibonacciNeighborMasks(*atom,model,raw),control==2);
+            // Truth is used only to assess selected observations, never to fit them.
+            for (const auto & sample:raw)
+                if (sample.point.is_selected && sample.point.distance<=1.)
+                {
+                    ++retained;
+                    for (std::size_t i=0;i<model.GetAtomList().size();++i)
+                    {
+                        const auto & other=*model.GetAtomList()[i];
+                        if (other.GetSerialID()==atom->GetSerialID()) continue;
+                        double square=0.;
+                        for (std::size_t axis=0;axis<3;++axis)
+                        {
+                            const double delta=sample.point.position[axis]-other.GetPositionRef()[axis];
+                            square+=delta*delta;
+                        }
+                        neighbor_sum+=(1.5+.02*static_cast<double>(i))*
+                            n::EvaluateKernel(square,.35+.005*static_cast<double>(i),2.5).gaussian;
+                    }
+                }
+            model.EditAnalysis().SetAtomLocalRawSamplingEntries(*atom,std::move(raw));
+        }
+        const auto init=d::RunJointFirstStageInitializationFromPreparedSamples(model,workset,options);
+        const auto calibration=n::CalibrateGlobalWidth(init,"neighbor-selection-regression");
+        EXPECT_EQ(calibration.qualified_donor_count,24u); EXPECT_EQ(calibration.fallback_count,0u);
+        double square=0.;
+        for (std::size_t i=0;i<init.atoms.size();++i)
+        {
+            const double error=init.atoms[i].mdpde[1]-(.35+.005*static_cast<double>(i));
+            square+=error*error;
+        }
+        rmse.push_back(std::sqrt(square/24.)); contamination.push_back(neighbor_sum/static_cast<double>(retained));
+    }
+    EXPECT_LT(rmse[0],.03); EXPECT_GT(rmse[1],.045); EXPECT_GT(rmse[2],.06);
+    EXPECT_LT(rmse[0],rmse[1]); EXPECT_LT(rmse[1],rmse[2]);
+    EXPECT_LT(contamination[0],contamination[1]); EXPECT_LT(contamination[1],contamination[2]);
 }
