@@ -149,18 +149,18 @@ for each deterministic case. All entries have KKT/Replay/Endpoint Pass.
 
 | Scenario/phase | MM | OM | MO | OO |
 |---|---|---|---|---|
-| fine-r0 | 2 / 0.3768 / 1.63334972214e-07 | 2 / 0.3754 / 1.63334972214e-07 | 2 / 0.3763 / 1.63334972214e-07 | 2 / 0.3746 / 1.63334972214e-07 |
-| fine-r1 | 2 / 0.3753 / 1.63216263417e-07 | 2 / 0.3762 / 1.63216263417e-07 | 2 / 0.3761 / 1.63216263417e-07 | 2 / 0.3756 / 1.63216263417e-07 |
-| fine-r2 | 2 / 0.3784 / 1.63244281161e-07 | 2 / 0.3786 / 1.63244281161e-07 | 2 / 0.3782 / 1.63244281161e-07 | 2 / 0.3779 / 1.63244281161e-07 |
-| coarse-r0 | 2 / 0.0473 / 1.6310440785e-07 | 2 / 0.0466 / 1.63104407847e-07 | 2 / 0.0466 / 1.6310440785e-07 | 2 / 0.0464 / 1.63104407847e-07 |
-| coarse-r1 | 2 / 0.0468 / 1.63010944828e-07 | 2 / 0.0467 / 1.63010944826e-07 | 2 / 0.0463 / 1.63010944828e-07 | 2 / 0.0463 / 1.63010944826e-07 |
-| coarse-r2 | 3 / 0.0484 / 1.63039069686e-07 | 3 / 0.0476 / 1.63039069692e-07 | 3 / 0.0480 / 1.63039069686e-07 | 3 / 0.0474 / 1.63039069692e-07 |
-| noisy-r0 | 5 / 0.0710 / 0.0376988288475 | 5 / 0.0705 / 0.0376988288475 | 5 / 0.0703 / 0.0376988288475 | 5 / 0.0703 / 0.0376988288475 |
-| noisy-r1 | 5 / 0.0730 / 0.037682939286 | 5 / 0.0720 / 0.037682939286 | 5 / 0.0742 / 0.037682939286 | 5 / 0.0741 / 0.037682939286 |
-| noisy-r2 | 5 / 0.0738 / 0.0376909591757 | 5 / 0.0727 / 0.0376909591757 | 5 / 0.0735 / 0.0376909591757 | 5 / 0.0726 / 0.0376909591757 |
-| crowded-r0 | 124 / 2.5959 / 2.98621142151e-08 | 124 / 2.5945 / 2.98621142196e-08 | 124 / 2.5935 / 2.98621142151e-08 | 124 / 2.6043 / 2.98621142196e-08 |
-| crowded-r1 | 126 / 2.6570 / 2.91632563512e-08 | 126 / 2.6576 / 2.91632563949e-08 | 126 / 2.6587 / 2.91632563512e-08 | 126 / 2.6558 / 2.91632563949e-08 |
-| crowded-r2 | 125 / 2.6408 / 2.9522700626e-08 | 125 / 2.6363 / 2.95227006384e-08 | 125 / 2.6365 / 2.9522700626e-08 | 125 / 2.6357 / 2.95227006384e-08 |
+| fine-r0 | 2 / 0.3758 / 1.63334972214e-07 | 2 / 0.3801 / 1.63334972214e-07 | 2 / 0.3757 / 1.63334972214e-07 | 2 / 0.3750 / 1.63334972214e-07 |
+| fine-r1 | 2 / 0.3757 / 1.63216263417e-07 | 2 / 0.3766 / 1.63216263417e-07 | 2 / 0.3756 / 1.63216263417e-07 | 2 / 0.3752 / 1.63216263417e-07 |
+| fine-r2 | 2 / 0.3778 / 1.63244281161e-07 | 2 / 0.3780 / 1.63244281161e-07 | 2 / 0.3769 / 1.63244281161e-07 | 2 / 0.3778 / 1.63244281161e-07 |
+| coarse-r0 | 2 / 0.0469 / 1.6310440785e-07 | 2 / 0.0467 / 1.63104407847e-07 | 2 / 0.0465 / 1.6310440785e-07 | 2 / 0.0466 / 1.63104407847e-07 |
+| coarse-r1 | 2 / 0.0469 / 1.63010944828e-07 | 2 / 0.0466 / 1.63010944826e-07 | 2 / 0.0464 / 1.63010944828e-07 | 2 / 0.0464 / 1.63010944826e-07 |
+| coarse-r2 | 3 / 0.0485 / 1.63039069686e-07 | 3 / 0.0481 / 1.63039069692e-07 | 3 / 0.0480 / 1.63039069686e-07 | 3 / 0.0476 / 1.63039069692e-07 |
+| noisy-r0 | 5 / 0.0709 / 0.0376988288475 | 5 / 0.0706 / 0.0376988288475 | 5 / 0.0704 / 0.0376988288475 | 5 / 0.0703 / 0.0376988288475 |
+| noisy-r1 | 5 / 0.0729 / 0.037682939286 | 5 / 0.0721 / 0.037682939286 | 5 / 0.0724 / 0.037682939286 | 5 / 0.0718 / 0.037682939286 |
+| noisy-r2 | 5 / 0.0741 / 0.0376909591757 | 5 / 0.0728 / 0.0376909591757 | 5 / 0.0735 / 0.0376909591757 | 5 / 0.0724 / 0.0376909591757 |
+| crowded-r0 | 124 / 2.5935 / 2.98621142151e-08 | 124 / 2.6284 / 2.98621142196e-08 | 124 / 2.6203 / 2.98621142151e-08 | 124 / 2.5977 / 2.98621142196e-08 |
+| crowded-r1 | 126 / 2.6519 / 2.91632563512e-08 | 126 / 2.6550 / 2.91632563949e-08 | 126 / 2.6563 / 2.91632563512e-08 | 126 / 2.6582 / 2.91632563949e-08 |
+| crowded-r2 | 125 / 2.6428 / 2.9522700626e-08 | 125 / 2.6372 / 2.95227006384e-08 | 125 / 2.6351 / 2.9522700626e-08 | 125 / 2.6353 / 2.95227006384e-08 |
 
 Final Width truth RMSE pooled across phases, and largest OM-versus-MM Width
 difference. MO equals MM numerically and OO equals OM for all synthetic cases;
@@ -222,8 +222,8 @@ Raw positive finite Width distribution, including unqualified estimates:
 | Final objective | 0.012784319782223002 | 0.012784319782222695 | 0.012784319782222858 | 0.012784319782223001 |
 | Global AC / Width KKT | 1.4486e-08 / 9.6824e-10 | 1.3184e-08 / 9.0081e-10 | 1.3736e-08 / 9.405e-10 | 1.4423e-08 / 9.8516e-10 |
 | Replay / Endpoint | Pass / Pass | Pass / Pass | Pass / Pass | Pass / Pass |
-| JCE seconds | 7.149423 | 7.168676 | 7.150666 | 7.133286 |
-| Process peak RSS MB | 1472.315 | 1472.315 | 1472.315 | 1472.315 |
+| JCE seconds | 7.084179 | 7.170618 | 7.123300 | 7.128432 |
+| Process peak RSS MB | 1469.563 | 1469.563 | 1469.563 | 1469.563 |
 
 OLS bound minus MDPDE bound is -0.120972204 A (-3.8014%); the p95 difference is -0.030243051 A.
 
@@ -241,8 +241,8 @@ OLS bound minus MDPDE bound is -0.120972204 A (-3.8014%); the p95 difference is 
 | Final objective | 0.016970359134848675 | 0.016970359134849095 | 0.016970359134848675 | 0.016970359134849095 |
 | Global AC / Width KKT | 6.2032e-08 / 9.9243e-10 | 6.2323e-08 / 9.9407e-10 | 6.2032e-08 / 9.9243e-10 | 6.2323e-08 / 9.9407e-10 |
 | Replay / Endpoint | Pass / Pass | Pass / Pass | Pass / Pass | Pass / Pass |
-| JCE seconds | 16.242883 | 16.333258 | 16.229666 | 16.213992 |
-| Process peak RSS MB | 1638.040 | 1659.994 | 1659.994 | 1659.994 |
+| JCE seconds | 16.192022 | 16.640994 | 16.213977 | 16.228951 |
+| Process peak RSS MB | 1579.418 | 1579.418 | 1579.418 | 1579.418 |
 
 OLS bound minus MDPDE bound is -0.215102301 A (-7.6629%); the p95 difference is -0.053775575 A.
 
@@ -265,7 +265,7 @@ common bound must reproduce the full endpoint and numerical evidence exactly.
 
 | Dataset | Common bound A | MM/OM/MO/OO sweeps | Objective range |
 |---|---:|---|---|
-| crowded-r0 | 1.974169540 | 124/124/124/124 | 2.9862114215066711e-08 .. 2.9862114219649755e-08 |
+| crowded-r0 | 124 / 2.5935 / 2.98621142151e-08 | 124 / 2.6284 / 2.98621142196e-08 | 124 / 2.6203 / 2.98621142151e-08 | 124 / 2.5977 / 2.98621142196e-08 |
 | 6z6u | 3.182305712 | 163/165/163/165 | 0.012784319782222695 .. 0.012784319782223002 |
 | 8rqb | 2.807050572 | 95/95/95/95 | 0.016970359134848675 .. 0.016970359134849095 |
 
@@ -336,3 +336,186 @@ sequential durations. Bookkeeping is the residual of the enclosing FirstStage
 wall time. Only completed calls contribute; all study calls complete. Regression
 checks both timed and default paths against the exact same original baseline.
 All primary/common cases are revalidated after this measurement-only addition.
+
+Sampling, alpha training, the complete OLS+MDPDE estimator call, initialization
+adapter, calibration, bounded projection, solver and downstream have separate
+scopes. Solver time is `SolverConfigured` through return, including search,
+numerical qualification and assembly. It excludes initial calibration and
+projection for every cell, including MM. The serial, fixed cell order may
+introduce cache/order effects. Real timings are single observations, not
+statistically reliable speedups. RSS is process high-water memory, cumulative
+across all cells (including earlier MM downstream); it cannot rank cell-specific
+peak allocations. Import dominates real-map memory. The adapter is linear in
+the small contributor count and does not duplicate map storage.
+
+This is a seed-source switch benchmark after a complete FirstStage fit. OLS
+is read from the same call that computes MDPDE and uses the trained alpha;
+no MDPDE or alpha-training cost has been avoided. A future OLS-only workflow
+could have a different cost, but its savings are unimplemented and are **not**
+included in these measurements. It would also need an independent qualification
+contract, since the study currently depends on the MDPDE solve gate.
+
+### Performance observations
+
+Synthetic entries are medians across three deterministic phases; real entries
+are single observations. Adapter/calibration times construct both sources;
+FirstStage fitting is the complete estimator call, including OLS, MDPDE and
+any existing failed-only refinement, without separating an invented OLS-only cost.
+
+| Dataset | Sampling s | Alpha training s | FirstStage fitting s | Bookkeeping s | Adapter us | Both calibrations us |
+|---|---:|---:|---:|---:|---:|---:|
+| fine | 0.004304 | 0.047931 | 0.000545 | 0.000074 | 7.334 | 2.500 |
+| coarse | 0.003971 | 0.051613 | 0.000586 | 0.000075 | 6.250 | 2.417 |
+| noisy | 0.003886 | 0.080205 | 0.000690 | 0.000079 | 7.375 | 2.792 |
+| crowded | 0.003905 | 0.058438 | 0.000539 | 0.000066 | 6.500 | 2.750 |
+| 6z6u | 0.025500 | 0.392232 | 0.004059 | 0.000414 | 24.750 | 6.583 |
+| 8rqb | 0.018454 | 0.401691 | 0.004535 | 0.000413 | 27.417 | 7.875 |
+
+| Dataset | MM solver s | OM solver s | MO solver s | OO solver s | MM downstream s | Process peak MB |
+|---|---:|---:|---:|---:|---:|---:|
+| fine | 0.375778 | 0.378023 | 0.375696 | 0.375151 | 0.313180 | 146.162 |
+| coarse | 0.046899 | 0.046662 | 0.046512 | 0.046617 | 0.082739 | 46.105 |
+| noisy | 0.072946 | 0.072060 | 0.072440 | 0.071805 | 0.087185 | 46.055 |
+| crowded | 2.642767 | 2.637150 | 2.635076 | 2.635316 | 0.081071 | 46.170 |
+| 6z6u | 7.084179 | 7.170618 | 7.123300 | 7.128432 | 0.258470 | 1469.563 |
+| 8rqb | 16.192022 | 16.640994 | 16.213977 | 16.228951 | 0.501686 | 1579.418 |
+
+Bounded projection is measured separately per run (1.417..21.709 us for main runs). These tiny durations are observations, not a meaningful performance ranking.
+
+The major FirstStage cost in these measurements is alpha cross-validation,
+not the final estimator call. Both remain executed for every source-switch
+comparison. OLS seed does not reduce sweeps, and the small timing differences
+across deterministic phases do not establish a reliable speedup. Single real
+OM observations are slower than MM on both maps; no statistical claim follows.
+
+Alpha summary (one shared trained MDPDE alpha per atom; OLS does not have a
+separately trained robustness parameter). All values span 0..1. Both decoded
+parameter vectors are valid in every observed main-study atom record.
+
+| Dataset | Atom/phase records | Alpha median | Alpha=0 records | Both Widths valid |
+|---|---:|---:|---:|---:|
+| fine | 72 | 0.30 | 21 | 72 |
+| coarse | 72 | 0.20 | 25 | 72 |
+| noisy | 72 | 0.10 | 26 | 72 |
+| crowded | 72 | 0.20 | 27 | 72 |
+| 6z6u | 120 | 0.30 | 23 | 120 |
+| 8rqb | 120 | 0.30 | 22 | 120 |
+
+### Early progress and solver work
+
+Each entry is **first-sweep objective / total accepted local updates / total
+search evaluations** (phase 0 for synthetic). First-sweep objectives sum each
+component after its first complete sweep plus parameter-independent rows,
+using the same parent observation scale. They do not alter solver decisions.
+
+| Dataset | MM | OM | MO | OO |
+|---|---|---|---|---|
+| fine | 1.63335067989e-07 / 48 / 96 | 1.63334999358e-07 / 48 / 96 | 1.63335067989e-07 / 48 / 96 | 1.63334999358e-07 / 48 / 96 |
+| coarse | 1.66508035448e-07 / 48 / 96 | 1.65387082733e-07 / 48 / 96 | 1.66508035448e-07 / 48 / 96 | 1.65387082733e-07 / 48 / 96 |
+| noisy | 0.0376990360367 / 91 / 182 | 0.0376989301857 / 91 / 182 | 0.0376990360367 / 91 / 182 | 0.0376989301857 / 91 / 182 |
+| crowded | 0.0224335564184 / 248 / 496 | 0.0226159841262 / 248 / 496 | 0.0224335564184 / 248 / 496 | 0.0226159841262 / 248 / 496 |
+| 6z6u | 0.0273555717449 / 1610 / 4321 | 0.027394802789 / 1618 / 4374 | 0.0273558844713 / 1609 / 4366 | 0.0273948016104 / 1629 / 4366 |
+| 8rqb | 0.0306223025663 / 929 / 2090 | 0.0307603703582 / 940 / 2090 | 0.0306223025663 / 929 / 2090 | 0.0307603703582 / 940 / 2090 |
+
+OLS has a slightly lower first-sweep objective on isolated synthetic phase 0,
+but a higher one on crowded phase 0 and both real maps. These small early
+advantages do not reduce synthetic sweeps/evaluations. Real accepted-update
+counts can differ even when the final objective agrees; there is no consistent
+work reduction from the OLS seed.
+
+### Production decision
+
+**Retain F0 + MDPDE seed + MDPDE calibration.** The evidence combines a
+scenario-dependent truth result (Outcome E) with insufficient promotion evidence
+(retain Production, Outcome A). No adaptive/hybrid Production policy is added.
+
+| Question | Evidence-based answer |
+|---|---|
+| Is OLS FirstStage Width more accurate? | On these isolated/fine/coarse/noisy fixtures, average bias/RMSE/MAE improve. Crowded truth favors MDPDE. There is no real-map Width truth. |
+| Is OLS a better JCE seed (MM vs OM)? | No demonstrated advantage: identical synthetic sweeps, 165 vs 163 on 6Z6U, and 95 vs 95 on 8RQB. Final truth recovery is essentially unchanged. |
+| Does OLS destabilize numerical qualification? | No observed failure in this matrix. Every available endpoint passes the original criteria. This is not a guarantee for untested maps. |
+| Is OLS calibration better (MM vs MO, OM vs OO)? | It yields smaller bounds with identical donor cohorts, but no truth/convergence superiority. 6Z6U's weak endpoint changes substantially. |
+| Are endpoints the same? | Synthetic and 8RQB agree closely, but are not forced bitwise identical by estimator. 6Z6U has different certified Widths along a weak direction despite almost identical predictions/objectives. |
+| What comes from seed? | MM vs OM at the identical bound isolates the 6Z6U 0.003944 A weak-Width difference and two additional sweeps. |
+| What comes from bound? | OM vs OO has identical bounded OLS seeds but a 0.155728 A weak-Width change. MM vs MO also includes altered initial clipping. This direction is more bound-sensitive than seed-sensitive here. |
+| Is full OLS justified (MM vs OO)? | No. A scenario-dependent local truth benefit, no consistent JCE benefit and no realized fitting-cost reduction do not justify promotion. |
+| Is adaptive/hybrid follow-up warranted? | A limited, preregistered follow-up is reasonable because noise/isolation and crowding favor different local estimates. It must evaluate contamination diagnostics, independent OLS qualification, additional maps/charge cases and repeated timings; these data do not establish a winning rule. |
+| What should remain? | The source-selection adapter, shared calibration math, exact-baseline/factorial/fallback/projection/persistence regressions, optional call timer, sequential runner, compact source/endpoint evidence and this report. |
+
+### Reproduction and limitations
+
+```
+cmake --build build/release --target first_stage_sampling_study --parallel 4
+python3 -B tests/research/run_width_initialization_study.py
+# Optional scopes: --scope synthetic or --scope real
+# Reaggregate already saved detailed build outputs:
+python3 -B tests/research/run_width_initialization_study.py --summarize-only
+```
+
+The runner uses committed FirstStage/JCE summaries even in a fresh checkout;
+when old detailed build outputs are present, it additionally compares complete
+raw sampling, JCE evidence/state and calibration records. The original committed
+coarse and 6Z6U full baseline snapshots are always compared for those datasets.
+Detailed observations and logs are reproducible ignored build artifacts; compact
+JSON retains per-atom source evidence, final parameter vectors, qualification,
+independent audits, truth errors and timing. Prior evidence is never overwritten.
+
+Limitations are the unchanged normalized-Gaussian, no-charge synthetic truth,
+three deterministic phases, two first-120-target real subsets, common MDPDE
+qualification rather than independent OLS qualification, no optional impulse
+contamination trial, single ordered real timings and cumulative RSS. Independent
+prediction comparisons cover retained JCE fitting observations. Small local
+Width-column norms diagnose weak local sensitivity, not a population-wide
+statistical identifiability theorem. Production/source policies, fitting radius,
+interpolation, neighbor rules, BCD/LM/KKT/Replay/Endpoint thresholds and downstream
+numerical rules are unchanged.
+
+### Final verification and Git provenance
+
+Release and Debug full builds passed with at most four workers. CTest passed
+21/21 groups in Release (43.12 s) and Debug (529.18 s), including FirstStage,
+Width source selection, donor eligibility, median fallback, calibration,
+projection, BCD convergence, KKT, Independent Replay, Endpoint Certification,
+persistence/invalidation and Post-Joint downstream. Registration guards cover
+all 1105 enabled GoogleTests, including seven new Width source tests, with
+none disabled or missing. Focused source/calibration tests pass 13/13.
+`lint_repo`, `lint_install_smoke`, runner syntax and `git diff --check` pass.
+Three pre-existing missing-field-initializer warnings remain in
+`DataObjectPersistence_test.cpp`; that unrelated file is unchanged.
+
+All tests use the existing thresholds/timeouts. Builds use parallel=4 and CTest
+parallel=1, with OMP_NUM_THREADS=2, OMP_THREAD_LIMIT=4, OPENBLAS_NUM_THREADS=1,
+VECLIB_MAXIMUM_THREADS=1 and unchanged per-group overrides. Numerical study
+processes run sequentially with one worker. After the optional timer addition,
+all 68 endpoints were rerun: every non-time/RSS field of all 14 complete dataset
+ledgers matches the pre-timer run exactly. All 14 MM runs also retain full
+original F0 parity, and all nine prior research artifacts retain their SHA-256.
+Log digests, source digests and acceptance counts are saved separately in
+`ols-vs-mdpde-validation.json`.
+
+Cleanup removes the temporary pre-timer comparison copies after recording
+parity; final detailed observations/logs remain in the ignored build directory.
+There are no experimental public flags, new dependencies, unused helpers,
+temporary solver instrumentation or new Production numerical branches. The
+optional FirstStage call timer is retained for the requested reproducible
+performance decomposition, with the default path unchanged. Research endpoints
+are not relabeled as Production persistence evidence. No unrelated work was
+overwritten; no branch/worktree, detached HEAD, force push, reset or Notion edit
+was used.
+
+All changes are directly on the existing `develop`. Implementation commits:
+
+| Commit | Verified unit |
+|---|---|
+| 78717218 | S0 baseline and contracts |
+| 330bb501 | S1 immutable source selection |
+| cee14b98 | S2 orthogonal seed/calibration controls |
+| ba86ad80 | S3 synthetic truth and convergence |
+| 557381c0 | S4 real maps, common bounds and persistence guard |
+| 74c99985 | S5 separate alpha/fitting measurements and timer parity |
+| 95a00747 | Fresh-checkout reproduction and tooling cleanup |
+
+The final documentation commit and normal push receipt are reported in the
+delivery message. Fetched origin/develop still equals the initial
+`2a1b565e5bf891ec6dcf15767ab45cd372eda3ee` before that final commit/push;
+the completed history is a safe fast-forward from it.

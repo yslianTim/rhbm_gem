@@ -41,5 +41,94 @@
         "sha256": "f6291929d941a6c81e6480b809d98fce948c8b21589681224cb9e34519be5a42"
       }
     }
+  },
+  "timing_only_full_numerical_parity": {
+    "6z6u": true,
+    "8rqb": true,
+    "coarse-r0": true,
+    "coarse-r1": true,
+    "coarse-r2": true,
+    "crowded-r0": true,
+    "crowded-r1": true,
+    "crowded-r2": true,
+    "fine-r0": true,
+    "fine-r1": true,
+    "fine-r2": true,
+    "noisy-r0": true,
+    "noisy-r1": true,
+    "noisy-r2": true
+  },
+  "matrix": {
+    "synthetic_main": 48,
+    "real_main": 8,
+    "synthetic_common": 4,
+    "real_common": 8,
+    "all_unchanged_numerical_checks_passed": true
+  },
+  "prior_evidence_unchanged": {
+    "6z6u-endpoint-audit.json": true,
+    "baseline-6z6u.json": true,
+    "neighbor-selection-validation.json": true,
+    "results.json": true,
+    "README.md": true,
+    "baseline.json": true,
+    "8rqb-endpoint-audit.json": true,
+    "neighbor-selection-study.md": true,
+    "neighbor-selection-results.json": true
+  },
+  "final_release": {
+    "build": "passed; parallel=4",
+    "ctest": "21/21 passed",
+    "seconds": 43.12,
+    "new_width_source_tests": 7,
+    "focused_source_and_calibration_tests": 13,
+    "test_threads": "OMP_NUM_THREADS=2 OMP_THREAD_LIMIT=4 OPENBLAS_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1; CTest parallel=1; existing per-group overrides retained",
+    "registration": {
+      "enabled": 1105,
+      "covered_unique": 1105,
+      "missing": 0,
+      "disabled": 0
+    }
+  },
+  "cleanup": {
+    "production_default": "F0 + MDPDE seed + MDPDE bound",
+    "new_public_flags": false,
+    "new_dependencies": false,
+    "notion_modified": false,
+    "branch_created": false,
+    "worktree_created": false,
+    "unrelated_user_changes_overwritten": false,
+    "retained_tools": [
+      "ResearchWidthInitialization.hpp",
+      "WidthInitializationStudy.hpp",
+      "run_width_initialization_study.py",
+      "WidthSource_test.cpp"
+    ],
+    "research_runner_syntax": "passed",
+    "committed_baseline_summary_reaggregation": "passed for all 14 datasets"
+  },
+  "final_debug": {
+    "build": "passed; parallel=4",
+    "ctest": "21/21 passed",
+    "seconds": 529.18,
+    "registration": {
+      "enabled": 1105,
+      "covered_unique": 1105,
+      "missing": 0,
+      "disabled": 0
+    }
+  },
+  "lint_repo": "passed",
+  "lint_install_smoke": "passed",
+  "numerical_code_commit": "74c999857315e281e73f3638b5f49e2fca0a2d1b",
+  "verified_through_code_commit": "95a00747243f8fd62cfab3f2938b8ea08a3d5718",
+  "final_prefetch_origin_develop": "2a1b565e5bf891ec6dcf15767ab45cd372eda3ee",
+  "verification_log_sha256": {
+    "build/release/width-final-build.log": "3549d8721d60707b4d64fdb99b58a0fa6d6c2310c616d6fec4b4ab446b0bc6e6",
+    "build/release/width-final-ctest.log": "d2997cf308e2f7de4fb46bc08cf03ae811b4debae3907bf638e089335bbce272",
+    "build/debug/width-final-build.log": "9cf4631365b506a26bec10c8485929d9a81e5b1cbec5260f755d152025335779",
+    "build/debug/width-final-ctest.log": "e9f49b9729ada622c1ae9c03b8a5b875031037c00275820bb83fafe19acce51c",
+    "build/release/width-final-lint.log": "2371f6fcecf445668625e9570b538f1b3ce900af0d2fe40cf0b74554fdcec93c",
+    "build/release/width-final-runner.log": "e92e0fb753596b706fb9b33e1189cb1e1f19862d80eceb54c280431dbebd8ad1"
   }
 }
