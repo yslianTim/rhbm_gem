@@ -54,3 +54,20 @@ both real-map F0 runs additionally compare every prior atom, calibration,
 complete JCE evidence/state and QScore field exactly. Time/RSS are excluded.
 JSON reference parsing uses precise numbers so decimal round trips do not
 introduce a one-ULP comparison artifact.
+
+## S1: derived Width sources
+
+`tests/support/ResearchWidthInitialization.hpp` creates separate, run-owned
+MDPDE/OLS selections from a const completed initialization. Each selected
+record carries source identity, raw/used Width, Width and full parameter
+validity, common qualification gate, fallback reason and donor exclusion.
+MDPDE seeds use the exact Production vector/fallback. OLS uses its own finite
+positive target Width median; no valid donors means unavailable, never an
+invented seed or a switch to MDPDE. Halos retain roles and receive no fallback.
+The transient projection bridge explicitly labels its research scope and
+retains both original estimator arrays. It is not original FirstStage evidence.
+
+Ten focused baseline/selection/calibration tests pass, covering deterministic
+source choice, original-record immutability, nonfinite/zero/negative Widths,
+parameter validity versus Width validity, same-source fallback, unavailable
+source pools, Target/Halo roles and the existing donor-minimum contract.
