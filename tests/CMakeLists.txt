@@ -287,6 +287,11 @@ target_include_directories(rhbm_tests PRIVATE
 
 add_dependencies(tests_all rhbm_tests)
 
+# Explicit research target; never installed or run by ordinary CTest.
+add_executable(first_stage_sampling_study EXCLUDE_FROM_ALL research/FirstStageSamplingStudy.cpp)
+target_link_libraries(first_stage_sampling_study PRIVATE rhbm_gem CompilerFlags)
+target_include_directories(first_stage_sampling_study PRIVATE "${PROJECT_SOURCE_DIR}/src")
+
 # Shared test-only helpers compile into the test executable.
 target_sources(rhbm_tests PRIVATE
     support/JointSyntheticWorkload.cpp

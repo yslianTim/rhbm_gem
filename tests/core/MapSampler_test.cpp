@@ -358,6 +358,16 @@ TEST(MapSamplerTest, SharedTricubicStencilPreservesClampAndEffectiveWeights)
     }
 }
 
+TEST(MapSamplerTest, TricubicBaselineAtOffGridAndHalfVoxelBoundary)
+{
+    const auto map = MakeMapObject();
+    const SamplingPointList points{{0., {0.3, 0.6, 0.8}}, {0., {-0.5, 0., 0.}}};
+    const auto samples = detail::BuildLocalPotentialSampleList(map, points);
+    ASSERT_EQ(samples.size(), 2u);
+    EXPECT_NEAR(samples[0].response, 5.898, 2e-14);
+    EXPECT_DOUBLE_EQ(samples[1].response, 0.9375);
+}
+
 TEST(MapSamplerTest, ExplicitMapPointsUseTheProductionInterpolationPath)
 {
     MapObject map({4,4,4},{0.1,0.1,0.1},{-0.1,-0.1,-0.1});
