@@ -177,7 +177,7 @@ OLS Width RMSE is also retained in `results.json`, along with OLS/MDPDE A/tau
 means, bias and RMSE, rank counts, retained counts and distinct radial counts.
 All synthetic cells have 24/24 native qualified donors, no refined donors,
 unqualified donors or median fallbacks. Designs have rank two. Qualification
-was not loosened. The noisy case loses up to three Q0 positive fitting rows;
+was not loosened. The noisy case loses up to four Q0 positive fitting rows;
 interpolation therefore changes positive-response selection as well as values.
 
 Representative coarse phase 0, counts summed over 24 targets; time is median
@@ -239,3 +239,143 @@ more information. FirstStage retains one center; original QScore retains eight.
 P4 conclusion: Tricubic has lower Width bias/RMSE in these synthetic cases.
 Q0 has a small isolated/noisy advantage but a substantial crowded regression.
 There is insufficient evidence to promote a sampling or interpolation default.
+
+## P5: calibration, full JCE and downstream validation
+
+There are 98 runs: 48 synthetic factorial, 18 synthetic controls, eight real
+Production-calibration runs, and 24 common-bound runs. Every numerical endpoint
+passed the unchanged KKT, Independent Replay and Endpoint Certification checks;
+there are no failed checks or new block-sweep-budget failures. The initial
+objective is computed from Production's actual zero A/C initial state, hence it
+does not vary with initial Width. Common-bound runs use the maximum available
+Production-calibrated bound across the four cells for that exact dataset,
+with the existing bounded projection, unchanged observations/noise scale,
+BCD policy and numerical checks. They are explicitly `common-research`, not
+Production calibration qualifications. No solver or calibration rule changed.
+
+Representative coarse phase 0 JCE:
+
+| Metric | F0 | F1 | Q0 | Q1 |
+|---|---:|---:|---:|---:|
+| Width upper bound A | 1.878270 | 1.962747 | 1.874897 | 1.964502 |
+| Initial objective | 0.5 | 0.5 | 0.5 | 0.5 |
+| Final objective | 1.63104408e-7 | 1.63104408e-7 | 1.63104408e-7 | 1.63104408e-7 |
+| Maximum component sweeps | 2 | 3 | 2 | 3 |
+| KKT / Replay / Endpoint | Pass | Pass | Pass | Pass |
+
+Real data use the first 120 non-hydrogen targets in file order, with the full
+model for neighbor and Halo closure; all four policies use identical selection.
+Source file names, byte counts and SHA-256 digests are in `results.json`.
+These are representative subsets, not complete-structure validation. EMD-11103
+spacing is 0.492000 A; EMD-19436 spacing is 0.305280 A (exact values
+are saved). No map normalization was added. There is no real-map Width truth.
+
+6Z6U / EMD-11103 FirstStage, counts summed across targets:
+
+| Metric | F0 | F1 | Q0 | Q1 |
+|---|---:|---:|---:|---:|
+| Raw candidates | 24000 | 24000 | 20035 | 20035 |
+| Selected candidates | 14763 | 14763 | 20035 | 20035 |
+| Positive fitting rows | 9045 | 9048 | 9859 | 9855 |
+| Median alpha | 0.30 | 0.30 | 0.30 | 0.20 |
+| Qualified donors | 120 | 120 | 119 | 118 |
+| Coverage | 100% | 100% | 99.17% | 98.33% |
+| Median fallback count | 0 | 0 | 1 | 2 |
+| Initialization seconds | 0.4194 | 0.3755 | 0.4436 | 0.4065 |
+| Peak process RSS MB | 1463.3 | 1520.2 | 1520.5 | 1516.4 |
+
+All 120 native fits report success, but Q0/Q1 include invalid Gaussian Widths
+excluded from calibration. Native success alone does not make a Width donor.
+The existing fallback is used; no new fallback was introduced. Q sampling has
+2400 successful shells, no failures, 7092 retries and 8..11 accepted points per
+successful shell. Shell candidates requested in total are 19200 minimum,
+33384 on final attempts, with 19915 accepted observations plus 120 centers.
+
+6Z6U JCE:
+
+| Metric | F0 | F1 | Q0 | Q1 |
+|---|---:|---:|---:|---:|
+| Width upper bound A | 3.182306 | 3.306113 | 4.114484 | 4.215381 |
+| Initial objective | 0.397521864730 | 0.397521864730 | 0.397521864730 | 0.397521864730 |
+| Final objective | 0.0127843197822230 | 0.0127843197822231 | 0.0127843197822230 | 0.0127843197822231 |
+| Sweeps | 163 | 162 | 164 | 163 |
+| KKT / Replay / Endpoint | Pass | Pass | Pass | Pass |
+| Total seconds through JCE, including input | 9.194 | 8.574 | 8.769 | 8.721 |
+| Post-Joint Local available | 120 | 120 | 120 | 120 |
+| Group members available | 45 | 45 | 45 | 45 |
+
+Initial bound violations are 1/1/0/0 and use the existing projection. Width
+p50/p90/p95/p99 and exclusion reasons are retained for every run in JSON.
+Final active Width-bound counts are zero in all 16 real-map endpoints.
+
+8RQB / EMD-19436: all four cells have 119/120 qualified donors, one unqualified
+native estimate, zero median fallback, and 120 Local / 42 Group members.
+Q sampling has 6979 retries and 8..11 accepted points, no shell failures.
+
+| Metric | F0 | F1 | Q0 | Q1 |
+|---|---:|---:|---:|---:|
+| Positive fitting rows | 8904 | 8911 | 9838 | 9846 |
+| Width upper bound A | 2.807051 | 2.833567 | 2.715419 | 2.884479 |
+| Initial objective | 0.429031571040 | 0.429031571040 | 0.429031571040 | 0.429031571040 |
+| Final objective | 0.0169703591348487 | 0.0169703591348483 | 0.0169703591348484 | 0.0169703591348484 |
+| Sweeps | 95 | 95 | 95 | 95 |
+| KKT / Replay / Endpoint | Pass | Pass | Pass | Pass |
+| Initialization seconds | 0.4231 | 0.3944 | 0.4483 | 0.4222 |
+| Total seconds through JCE, including input | 17.928 | 17.817 | 18.208 | 18.028 |
+| Peak process RSS MB | 1590.6 | 1619.2 | 1564.4 | 1619.4 |
+
+Common-bound results (maximum component sweeps in F0/F1/Q0/Q1 order):
+
+| Dataset, phase 0 | Common bound A | Sweeps | Final objective range |
+|---|---:|---|---|
+| Fine | 1.868041 | 2/2/2/2 | 1.633349722142e-7 |
+| Coarse | 1.964502 | 2/3/2/3 | 1.631044078495e-7 .. 1.631044078624e-7 |
+| Noisy | 1.971969 | 5/5/5/5 | 0.0376988288475112 .. 0.0376988288475113 |
+| Crowded | 2.425913 | 124/124/124/124 | 2.986211421507e-8 .. 2.986211447876e-8 |
+| 6Z6U | 4.215381 | 164/163/162/163 | 0.0127843197822229 .. 0.0127843197822237 |
+| 8RQB | 2.884479 | 95/95/95/95 | 0.0169703591348483 .. 0.0169703591348487 |
+
+The objective similarities must not be interpreted as identical parameter
+endpoints. Independent support-based reconstruction in the endpoint audit
+finds a 6Z6U weak Width direction at atom 221: A=0, C approximately 1.49081e-4,
+nearest retained grid observation 1.961676 A away. Its Width ranges from
+0.079395 to 0.250884 A across original/common bounds and initializations.
+Normalized Width-column norms in changed runs are 1.4e-136 .. 8.5e-18;
+this specific direction has negligible observation sensitivity. A=0 alone
+does not imply that a charge-dependent Width is unidentified.
+
+Holding F0 initialization fixed but replacing its 3.182306 A Production bound
+with the common 4.215381 A bound changes atom 221 from 0.246789 to 0.079395 A.
+Holding the bound fixed still leaves differing initializations with different
+values in this weak direction. Thus both the calibration-dependent optimization
+path and initialization matter; neither is evidence of Width truth improvement.
+Other 119 Widths differ by <=8.2e-8 A versus F0. Normalized prediction maximum
+differences are <=1.2e-9, and all endpoints retain their original certification.
+8RQB's maximum Width difference is 1.9e-8 A and normalized prediction difference
+<=5.6e-10. There is no new Width-bound concentration.
+
+Audits are saved separately in `6z6u-endpoint-audit.json` and
+`8rqb-endpoint-audit.json`. Reproduce after the main runner:
+
+```
+OMP_NUM_THREADS=1 OMP_THREAD_LIMIT=4 build/release/bin/first_stage_sampling_study audit.json audit 6z6u build/release/first-stage-study /Users/yslian/data/6z6u.cif /Users/yslian/data/emd_11103_unsharpened.map
+```
+
+P5 validation includes truth-based regression at two spacings, independent
+objective reconstruction and feasible parameters under both bounds, original
+KKT/Replay/Endpoint evidence, SQLite persistence of Q1 raw geometry, and
+invalidation independence of original-grid peeling/Local state from raw-sample
+replacement. Three new numerical tests passed. The full workflow was rerun
+separately for each main Production cell: every saved objective exactly agrees
+with its direct JCE run, and no Local/Group coverage regression was observed.
+
+The complete Release CTest suite also passed after P5 (21/21 groups, 40.34 s).
+
+Performance limits: timings are single real-map runs or medians of three
+synthetic phases, not precision speedup estimates. Input parsing dominates
+real-map RSS; process high-water includes a separately timed downstream
+validation, while reported `total_seconds` stops after JCE and QScore. RSS
+variation across methods is small relative to the common import footprint and
+does not demonstrate a sampling-policy memory benefit. Q0 is slower to
+initialize in crowded environments. Lower sweep count alone does not justify
+promotion.
