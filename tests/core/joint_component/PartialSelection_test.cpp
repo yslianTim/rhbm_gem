@@ -562,7 +562,7 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsSelectedTargetsOnceWi
         EXPECT_EQ(view.GetPostJointLocalResult().has_value(), target);
         if (target)
         {
-            EXPECT_EQ(view.GetPostFitPeeling()->samples.size(), view.GetRawSamplingEntries(false).size());
+            EXPECT_FALSE(view.GetPostFitPeeling()->samples.empty());
             const auto & local = *view.GetPostJointLocalResult();
             EXPECT_EQ(local.source.run_id, stage.source.run_id);
             EXPECT_EQ(local.source.component_id, stage.source.component_id);
@@ -575,7 +575,7 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsSelectedTargetsOnceWi
             {
                 const auto prepared = postprocessing_test::BuildPostJointLocalSamples(
                     *f.map, *f.model, problem, id, *view.GetPostFitPeeling(), result);
-                const auto gaussian_only = prepared.BuildGaussianSamples(view.GetRawSamplingEntriesView());
+                const auto gaussian_only = prepared.BuildGaussianSamples();
                 const double alpha = core::TrainAlphaR(gaussian_only, options);
                 const auto direct = core::EstimateLocalGaussian(
                     gaussian_only, alpha, options, rhbm_gem::GaussianModel3D{0.0, 1.0, 0.0});
@@ -732,7 +732,7 @@ TEST(JointComponentPartialSelectionTest, SummaryIncludesOnlyConvergedSecondStage
     }
 }
 
-TEST(JointComponentPartialSelectionTest, PostFitPeelingReconstructsGridNodesOutsideOriginalDomain)
+TEST(JointComponentPartialSelectionTest, PostFitPeelingUsesOriginalGridAndPreservesFirstStageSamples)
 {
     auto f = joint_partial_test::Make("partial");
     SetExactMapForFixture(f);
@@ -758,31 +758,21 @@ TEST(JointComponentPartialSelectionTest, PostFitPeelingReconstructsGridNodesOuts
     const auto before = view.GetFinalModel(rhbm_gem::FittingStage::Second).ToVector();
     const auto outputs = postprocessing_test::BuildPostFitPeelingSamples(*f.map, *f.model, problem,std::nullopt,&snapshot);
     const auto & output = outputs.at(1);
-    ASSERT_EQ(output.samples.size(), raw.size());
-    ASSERT_TRUE(output.samples[0].response);
-    EXPECT_LT(*output.samples[0].response, raw[0].response);
+    ASSERT_FALSE(output.samples.empty());
     ASSERT_TRUE(snapshot.halo_median_reconstruction);
-    ASSERT_EQ(snapshot.halo_median_reconstruction->halos.size(),1u);
     const auto & median=snapshot.halo_median_reconstruction->halos.front();
     const rhbm_gem::GaussianModel3D neighbor{median.amplitude,median.width,median.charge};
-    const auto stencil = core::detail::MakeTricubicStencil(*f.map, points[0].position);
-    const double neighbor_prediction = core::detail::InterpolateTricubic(stencil, [&](const auto & node) {
-        const auto position = core::simulation::GridPosition(node, f.map->GetGridSpacing(), f.map->GetOrigin());
-        const double squared = core::simulation::SupportSquare(position, f.model->FindAtomPtr(2)->GetPosition());
-        return squared <= 6.25 ? neighbor.ResponseAtDistance(std::sqrt(squared)) : 0.0;
-    });
-    EXPECT_NEAR(*output.samples[0].response, raw[0].response - neighbor_prediction, 1e-12);
-    ASSERT_TRUE(output.samples[2].response);
-    const auto outer_stencil = core::detail::MakeTricubicStencil(*f.map, points[2].position);
-    const double outer_neighbor_prediction = core::detail::InterpolateTricubic(
-        outer_stencil, [&](const auto & node) {
-            const auto position = core::simulation::GridPosition(node, f.map->GetGridSpacing(), f.map->GetOrigin());
-            const double squared = core::simulation::SupportSquare(
-                position, f.model->FindAtomPtr(2)->GetPosition());
-            return squared <= 6.25 ? neighbor.ResponseAtDistance(std::sqrt(squared)) : 0.0;
-        });
-    EXPECT_NEAR(*output.samples[2].response,
-        raw[2].response - outer_neighbor_prediction, 1e-12);
+    for(const auto & sample:output.samples)
+    {
+        ASSERT_TRUE(sample.response) << sample.reason;
+        const auto & observation=sample.observation;
+        const double square=core::simulation::SupportSquare(observation.position,f.model->FindAtomPtr(2)->GetPosition());
+        const double r=std::sqrt(square),tau=neighbor.GetWidth();
+        const double charge=r<1e-5 ? std::sqrt(2.0/std::acos(-1.0))/tau : std::erf(r/(std::sqrt(2.0)*tau))/r;
+        const double prediction=square>6.25 ? 0.0 : neighbor.GetAmplitude()*
+            std::pow(2.0*std::acos(-1.0)*tau*tau,-1.5)*std::exp(-square/(2*tau*tau))+neighbor.GetOffset()*charge;
+        EXPECT_NEAR(*sample.response,observation.raw_response-prediction,1e-12);
+    }
     editor.SetAtomPostFitPeeling(*atom, output);
     ASSERT_TRUE(view.GetLocalFittingPeelingRatio(0, 1));
     EXPECT_GT(*view.GetLocalFittingPeelingRatio(0, 1), 0);
@@ -819,10 +809,10 @@ TEST(JointComponentPartialSelectionTest, ExcludedFitRowsRemainInOriginalPeelingD
     const auto peelings=postprocessing_test::BuildPostFitPeelingSamples(
         context,problem.OriginalInput().selection_domain->target_indices);
     ASSERT_TRUE(peelings.contains(1));
-    ASSERT_EQ(peelings.at(1).samples.size(),1u);
+    ASSERT_FALSE(peelings.at(1).samples.empty());
     EXPECT_TRUE(peelings.at(1).samples.front().response) << peelings.at(1).samples.front().reason;
 }
-TEST(JointComponentPartialSelectionTest, PeelingIncludesDistantHaloThroughInterpolationStencil)
+TEST(JointComponentPartialSelectionTest, PeelingIgnoresContributorsOutsideActualGridSupport)
 {
     auto f = joint_partial_test::Make("weak");
     // Binary-exact spacing makes the y/z zero-weight stencil nodes exact.
@@ -844,21 +834,21 @@ TEST(JointComponentPartialSelectionTest, PeelingIncludesDistantHaloThroughInterp
     auto raw = core::detail::BuildLocalPotentialSampleList(*f.map, points);
     editor.SetAtomLocalRawSamplingEntries(*target, raw);
     auto result = postprocessing_test::BuildPostFitPeelingSamples(*f.map, *f.model, problem,std::nullopt,&snapshot).at(1);
-    ASSERT_TRUE(result.samples[0].response) << result.samples[0].reason;
-    // Halo center 4.8 A away, with zero analytic support at the sample position.
-    // Its contribution at the 2.5 A stencil node must still be subtracted.
-    EXPECT_GT(std::abs(*result.samples[0].response - raw[0].response), 1e-6);
-    EXPECT_EQ(result.neighbor_count, 1);
-    raw[0].response = 0;
-    editor.SetAtomLocalRawSamplingEntries(*target, raw);
-    result = postprocessing_test::BuildPostFitPeelingSamples(*f.map, *f.model, problem,std::nullopt,&snapshot).at(1);
-    editor.SetAtomPostFitPeeling(*target, result);
-    EXPECT_FALSE(rhbm_gem::AtomLocalPotentialView::For(*target).GetLocalFittingPeelingRatio(0, 3));
-    raw[0].response = -100;
-    editor.SetAtomLocalRawSamplingEntries(*target, raw);
-    result = postprocessing_test::BuildPostFitPeelingSamples(*f.map, *f.model, problem,std::nullopt,&snapshot).at(1);
-    ASSERT_TRUE(result.samples[0].response);
-    EXPECT_LT(*result.samples[0].response, 0);
+    ASSERT_FALSE(result.samples.empty());
+    for(const auto & sample:result.samples)
+    {
+        ASSERT_TRUE(sample.response) << sample.reason;
+        EXPECT_DOUBLE_EQ(*sample.response,sample.observation.raw_response);
+        EXPECT_LE(sample.observation.squared_distance,4.0);
+    }
+    EXPECT_EQ(result.neighbor_count,0u);
+    raw[0].response=-100;
+    editor.SetAtomLocalRawSamplingEntries(*target,raw);
+    const auto changed=postprocessing_test::BuildPostFitPeelingSamples(*f.map,*f.model,problem,std::nullopt,&snapshot).at(1);
+    ASSERT_EQ(changed.samples.size(),result.samples.size());
+    for(std::size_t i=0;i<result.samples.size();++i)
+        EXPECT_EQ(changed.samples[i].response,result.samples[i].response);
+
 }
 
 TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextValidatesIdentityAndBuildsMappingsOnce)
@@ -945,7 +935,6 @@ TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextValidatesIde
         const auto & shared_peeling = peelings.at(id);
         const auto & standalone_peeling = standalone_peelings.at(id);
         const auto local = rhbm_gem::AtomLocalPotentialView::For(*atom);
-        const auto & raw_samples = local.GetRawSamplingEntriesView();
         ASSERT_EQ(shared_peeling.samples.size(), standalone_peeling.samples.size());
         for (std::size_t i = 0; i < shared_peeling.samples.size(); ++i)
         {
@@ -963,7 +952,7 @@ TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextValidatesIde
         EXPECT_EQ(shared.source.run_id,standalone.source.run_id);
         EXPECT_EQ(shared.source.role,standalone.source.role);
         EXPECT_EQ(shared.source.fixed_from_first_stage,standalone.source.fixed_from_first_stage);
-        EXPECT_EQ(shared.samples.size(), raw_samples.size());
+        EXPECT_EQ(shared.samples.size(), shared_peeling.samples.size());
         ASSERT_EQ(shared.samples.size(), standalone.samples.size());
         EXPECT_DOUBLE_EQ(shared.fixed_charge.coefficient, standalone.fixed_charge.coefficient);
         EXPECT_DOUBLE_EQ(shared.fixed_charge.width, standalone.fixed_charge.width);
@@ -973,10 +962,10 @@ TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextValidatesIde
         EXPECT_DOUBLE_EQ(shared.fixed_charge.width,stage.point->GetWidth());
         for (std::size_t i = 0; i < shared.samples.size(); ++i)
         {
-            EXPECT_EQ(shared.samples[i].raw_sample_index,i);
-            EXPECT_EQ(shared.samples[i].raw_sample_index,standalone.samples[i].raw_sample_index);
-            EXPECT_DOUBLE_EQ(shared.samples[i].distance,raw_samples[i].point.distance);
-            EXPECT_DOUBLE_EQ(shared.samples[i].raw_response,raw_samples[i].response);
+            EXPECT_EQ(shared.samples[i].original_row_index,shared_peeling.samples[i].observation.original_row_index);
+            EXPECT_EQ(shared.samples[i].original_row_index,standalone.samples[i].original_row_index);
+            EXPECT_DOUBLE_EQ(shared.samples[i].distance,std::sqrt(shared_peeling.samples[i].observation.squared_distance));
+            EXPECT_DOUBLE_EQ(shared.samples[i].raw_response,shared_peeling.samples[i].observation.raw_response);
             EXPECT_DOUBLE_EQ(shared.samples[i].distance,standalone.samples[i].distance);
             EXPECT_DOUBLE_EQ(shared.samples[i].raw_response,standalone.samples[i].raw_response);
             EXPECT_EQ(shared.samples[i].peeled_response,standalone.samples[i].peeled_response);
@@ -984,9 +973,9 @@ TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextValidatesIde
             EXPECT_EQ(shared.samples[i].gaussian_response, standalone.samples[i].gaussian_response);
             EXPECT_EQ(shared.samples[i].reason, standalone.samples[i].reason);
         }
-        ASSERT_EQ(shared.samples.size(),1u);
+        ASSERT_FALSE(shared.samples.empty());
         ASSERT_TRUE(shared.samples.front().fixed_charge_response);
-        const auto basis=core::joint_component::EvaluateKernel(0.0,stage.point->GetWidth(),2.5);
+        const auto basis=core::joint_component::EvaluateKernel(shared.samples.front().squared_distance,stage.point->GetWidth(),2.5);
         EXPECT_DOUBLE_EQ(*shared.samples.front().fixed_charge_response,
             stage.point->GetOffset()*basis.charge);
         expected_prepared_samples += shared.samples.size();
@@ -1129,6 +1118,7 @@ TEST(JointComponentPartialSelectionTest, PostJointEvidenceAssessmentEnforcesAvai
     peeling.source = joint.source;
     peeling.samples.resize(raw.size());
     for (auto & sample : peeling.samples) sample.response = 1.0;
+    postprocessing_test::AssignGridObservationsForTesting(peeling,raw);
 
     PostJointLocalResult result;
     result.source = joint.source;
@@ -1136,6 +1126,7 @@ TEST(JointComponentPartialSelectionTest, PostJointEvidenceAssessmentEnforcesAvai
     result.reason.clear();
     result.fixed_charge = {joint.point->GetOffset(), joint.point->GetWidth()};
     result.sample_count = raw.size();
+    result.corrected_sample_count=result.positive_sample_count=result.sample_count;
     result.effective_sample_count = 3;
     result.fit.alpha_r = 0.2;
     result.fit.ols = {GaussianModel3D{2.1, 0.47, 0.0}, {}};
@@ -1149,7 +1140,7 @@ TEST(JointComponentPartialSelectionTest, PostJointEvidenceAssessmentEnforcesAvai
 
     const auto assess = [&](const PostJointLocalResult & candidate, const LocalStageEstimate & endpoint,
                             const PostFitPeelingResult * paired) {
-        return data_internal::AssessPostJointLocalResult(candidate, 1, endpoint, paired, raw);
+        return data_internal::AssessPostJointLocalResult(candidate, 1, endpoint, paired);
     };
     const auto assessCurrent = [&](const PostJointLocalResult & candidate) {
         return assess(candidate, joint, &peeling);
@@ -1249,11 +1240,12 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInforma
         for (int sample_index = 0; sample_index < 6; ++sample_index)
         {
             LocalPotentialSample sample;
-            sample.point.distance = 0.12 + 0.43 * sample_index;
+            sample.point.distance = 0.12 + 0.30 * sample_index;
             sample.response = 2.0 + 0.1 * id + 0.02 * sample_index;
             raw.push_back(sample);
             peeling.samples.push_back({sample.response, {}});
         }
+        postprocessing_test::AssignGridObservationsForTesting(peeling,raw,model.FindAtomPtr(id)->GetPosition());
         editor.SetAtomLocalRawSamplingEntries(*model.FindAtomPtr(id), std::move(raw));
         peelings.emplace_back(id, std::move(peeling));
 
@@ -1261,6 +1253,7 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInforma
         local.source = stage.source;
         local.fixed_charge = {stage.point->GetOffset(), stage.point->GetWidth()};
         local.sample_count = 6;
+        local.corrected_sample_count=local.positive_sample_count=6;
         local.effective_sample_count = 6;
         local.fit.alpha_r = 0.2;
         local.fit.ols = {GaussianModel3D(1.9 + 0.1 * id, 0.40 + 0.01 * id, 0.0), {}};
@@ -1657,16 +1650,16 @@ TEST(JointComponentPartialSelectionTest, CompleteModelWidthSensitivityPropagates
         auto repeated=AtomLocalPotentialView::For(*f.model->FindAtomPtr(1)).GetRawSamplingEntriesView();
         for(auto & sample:repeated) sample.point.distance=.2;
         f.model->EditAnalysis().SetAtomLocalRawSamplingEntries(*f.model->FindAtomPtr(1),std::move(repeated));
-        const auto rank_deficient=core::detail::FitPostJointLocalTargetForTesting(
+        const auto repeated_fit=core::detail::FitPostJointLocalTargetForTesting(
             context,*f.model,1,out.peeling.at(1),options,metrics);
-        EXPECT_EQ(rank_deficient.status,EvidenceStatus::Unavailable);
-        EXPECT_EQ(rank_deficient.reason,"rank-deficient-local-design");
-        EXPECT_FALSE(rank_deficient.information);
+        EXPECT_EQ(repeated_fit.status,out.local.status);
+        EXPECT_EQ(repeated_fit.reason,out.local.reason);
+        EXPECT_EQ(repeated_fit.fit.mdpde.GetModel().ToVector(),out.local.fit.mdpde.GetModel().ToVector());
         return out;
     };
     const auto difference=[](const Output & left,const Output & right,bool correction) {
         double maximum{};
-        for(std::size_t i=0;i<left.samples.samples.size();++i)
+        for(std::size_t i=0;i<(correction ? left.samples.samples.size():left.peeling.at(2).samples.size());++i)
         {
             const auto & a=left.samples.samples[i]; const auto & b=right.samples.samples[i];
             if(correction)
@@ -1701,25 +1694,17 @@ TEST(JointComponentPartialSelectionTest, CompleteModelWidthSensitivityPropagates
         EXPECT_DOUBLE_EQ(*sample.gaussian_response,*sample.peeled_response-*sample.fixed_charge_response);
 
     const auto weak_narrow=run(.2,.015),weak_broad=run(.2,.02);
-    EXPECT_LT(difference(weak_narrow,weak_broad,true),1e-13);
-    EXPECT_LT(difference(weak_narrow,weak_broad,false),1e-13);
     EXPECT_NE(weak_narrow.samples.fixed_charge.width,weak_broad.samples.fixed_charge.width);
-    for(std::size_t i=0;i<weak_narrow.samples.samples.size();++i)
-        EXPECT_NEAR(*weak_narrow.samples.samples[i].gaussian_response,
-            *weak_broad.samples.samples[i].gaussian_response,1e-13);
-    for(const auto & pair:{std::pair{&weak_narrow.local,&weak_broad.local},
-            std::pair{&weak_narrow.neighbor,&weak_broad.neighbor}})
-    {
-        const auto & left=*pair.first; const auto & right=*pair.second;
-        EXPECT_EQ(left.status,right.status); EXPECT_EQ(left.reason,right.reason);
-        EXPECT_EQ(left.source.run_id,"controlled-width");
-        EXPECT_EQ(left.sample_count,24u); EXPECT_EQ(left.effective_sample_count,right.effective_sample_count);
-        ASSERT_EQ(left.status,EvidenceStatus::Available)<<left.reason;
-        EXPECT_TRUE(left.fit.mdpde.GetModel().ToVector().isApprox(right.fit.mdpde.GetModel().ToVector(),1e-10));
-        ASSERT_TRUE(left.information); ASSERT_TRUE(right.information);
-        EXPECT_TRUE(left.information->precision.isApprox(right.information->precision,1e-10));
-        EXPECT_TRUE(left.information->moment.isApprox(right.information->moment,1e-10));
-    }
+    for(const auto * output:{&weak_narrow,&weak_broad})
+        for(const auto & sample:output->samples.samples)
+        {
+            ASSERT_TRUE(sample.fixed_charge_response); ASSERT_TRUE(sample.gaussian_response);
+            const double r=sample.distance,tau=output->samples.fixed_charge.width;
+            const double charge=.2*(r<1e-5 ? std::sqrt(2./std::acos(-1.))/tau : std::erf(r/(std::sqrt(2.)*tau))/r);
+            EXPECT_NEAR(*sample.fixed_charge_response,charge,1e-12);
+            EXPECT_DOUBLE_EQ(*sample.gaussian_response,*sample.peeled_response-charge);
+        }
+
 }
 
 TEST(JointComponentPartialSelectionTest, WeakJointWidthPolicyComparisonUsesOnlyQualifiedLocalGroupMeasurements)
@@ -1756,11 +1741,12 @@ TEST(JointComponentPartialSelectionTest, WeakJointWidthPolicyComparisonUsesOnlyQ
             raw[i].point.distance=.1+.15*index; raw[i].response=2.+.01*index;
             peeling.samples.push_back({raw[i].response,{}});
         }
+        postprocessing_test::AssignGridObservationsForTesting(peeling,raw,model.FindAtomPtr(id)->GetPosition());
         editor.SetAtomLocalRawSamplingEntries(*model.FindAtomPtr(id),std::move(raw));
         peelings.emplace_back(id,std::move(peeling));
         PostJointLocalResult local;
         local.source=stages[id].source; local.fixed_charge={0.,stages[id].point->GetWidth()};
-        local.sample_count=6; local.effective_sample_count=6; local.fit.alpha_r=.2;
+        local.sample_count=6; local.corrected_sample_count=local.positive_sample_count=6; local.effective_sample_count=6; local.fit.alpha_r=.2;
         local.fit.ols=local.fit.mdpde={GaussianModel3D{2.+.3*id,widths[static_cast<std::size_t>(id-1)],0.},{}};
         local.fit.diagnostics=LocalFitDiagnostics{RHBMEstimationStatus::SUCCESS,.1,{8,1e-8,1e-8},{},std::nullopt};
         local.status=id==5 ? EvidenceStatus::Unavailable : EvidenceStatus::Available;

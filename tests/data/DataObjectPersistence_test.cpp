@@ -1311,13 +1311,13 @@ TEST(DataObjectPersistenceTest, JointNeutralRoundTripPreservesCurrentJointAndSta
     EXPECT_FALSE(data_test::HasTable(dir.path()/"result.sqlite","model_atom_local_potential"));
 }
 
-TEST(DataObjectPersistenceTest, StageResultJsonV4OnlyAcceptsCurrentRoundTrip)
+TEST(DataObjectPersistenceTest, StageResultJsonV5OnlyAcceptsCurrentRoundTrip)
 {
     auto model=data_test::MakeModelWithBond();
     model->SelectAllAtoms();
     model->EditAnalysis().InitializeFromSelection();
     const auto encoded=rg::stage_result_io::Encode(*model);
-    EXPECT_EQ(boost::json::parse(encoded).at("version").as_int64(),4);
+    EXPECT_EQ(boost::json::parse(encoded).at("version").as_int64(),5);
 
     auto restored=data_test::MakeModelWithBond();
     restored->SelectAllAtoms();
@@ -1325,7 +1325,7 @@ TEST(DataObjectPersistenceTest, StageResultJsonV4OnlyAcceptsCurrentRoundTrip)
     EXPECT_NO_THROW(rg::stage_result_io::Decode(*restored,encoded));
     EXPECT_EQ(rg::stage_result_io::Encode(*restored),encoded);
 
-    for(const int version:{1,2,3,5})
+    for(const int version:{1,2,3,4,6})
     {
         auto old=boost::json::parse(encoded).as_object();
         old["version"]=version;
@@ -1369,6 +1369,6 @@ TEST(DataObjectPersistenceTest, CanonicalNativeDiagnosticsAndMissingStatesRoundT
     EXPECT_DOUBLE_EQ(loaded->GetAnalysisView().GetAtomAlphaG(group),.87);
     EXPECT_FALSE(actual.fit_result); ASSERT_TRUE(actual.diagnostics); EXPECT_EQ(actual.diagnostics->iterations.iterations,17);
     EXPECT_EQ(actual.diagnostics->refinement->relative_coordinate_difference,fit.refinement->relative_coordinate_difference);
-    const auto document=boost::json::parse(expected).as_object(); EXPECT_EQ(document.at("version").as_int64(),4);
+    const auto document=boost::json::parse(expected).as_object(); EXPECT_EQ(document.at("version").as_int64(),5);
     EXPECT_FALSE(loaded->GetAnalysisView().GetJointResult());
 }

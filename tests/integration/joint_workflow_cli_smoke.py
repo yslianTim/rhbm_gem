@@ -64,12 +64,12 @@ def main() -> int:
         assert not list(collision.glob("joint_*")), "Collision must fail before writing any result"
         saved = json.loads((root / "joint_result_example.json").read_text())
         with sqlite3.connect(database) as connection:
-            assert connection.execute("PRAGMA user_version").fetchone()[0] == 20
+            assert connection.execute("PRAGMA user_version").fetchone()[0] == 21
             payload = connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='example'").fetchone()[0]
             bcd = json.loads(connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='bcd'").fetchone()[0])
             changed = json.loads(connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='changed'").fetchone()[0])
             stages = json.loads(connection.execute("SELECT result_json FROM model_stage_result WHERE key_tag='example'").fetchone()[0])
-            assert stages["version"] == 4
+            assert stages["version"] == 5
             assert len(stages["atoms"]) == 25
             assert all(atom["peeled"] is None and atom["second_native"] is None for atom in stages["atoms"])
             for group in stages["groups"]:
@@ -78,7 +78,7 @@ def main() -> int:
             assert all(atom["second"]["source"]["method"] == 3 for atom in stages["atoms"])
             for atom in stages["atoms"]:
                 if atom["second"]["source"]["role"] == 1:  # target
-                    assert atom["peeling"]["mode"] == "grid-consistent"
+                    assert atom["peeling"]["mode"] == "original-grid-v1"
                 else:
                     assert atom["peeling"] is None
                     assert atom["post_joint_local"] is None

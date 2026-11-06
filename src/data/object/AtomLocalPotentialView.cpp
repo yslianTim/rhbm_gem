@@ -231,35 +231,28 @@ PeelingRatioAssessment AtomLocalPotentialView::AssessLocalFittingPeelingRatio(
     const auto & raw = GetRawSamplingEntriesView();
     if (const auto & peeling = GetPostFitPeeling(); peeling)
     {
-        if (raw.size() != peeling->samples.size())
-        {
-            for (const auto & sample : raw)
-                if (!(sample.point.distance < distance_min || sample.point.distance > distance_max))
-                    ++assessment.total_samples;
-            assessment.reason = "raw-peeling-sample-count-mismatch";
-            return assessment;
-        }
         long double raw_sum{};
         long double valid_raw_sum{};
         long double peeled_sum{};
         std::string missing_reason;
-        for (std::size_t i = 0; i < raw.size(); ++i)
+        for (const auto & sample:peeling->samples)
         {
-            if (!IsWithinRange(raw[i].point, distance_min, distance_max)) continue;
+            const double distance=std::sqrt(sample.observation.squared_distance);
+            if (distance<distance_min || distance>distance_max) continue;
             ++assessment.total_samples;
-            if (std::isfinite(raw[i].response)) raw_sum += raw[i].response;
-            if (!peeling->samples[i].response)
+            if (std::isfinite(sample.observation.raw_response)) raw_sum+=sample.observation.raw_response;
+            if (!sample.response)
             {
-                if (missing_reason.empty()) missing_reason = peeling->samples[i].reason;
+                if (missing_reason.empty()) missing_reason=sample.reason;
                 continue;
             }
-            if (!std::isfinite(raw[i].response) || !std::isfinite(*peeling->samples[i].response))
+            if (!std::isfinite(sample.observation.raw_response) || !std::isfinite(*sample.response))
             {
-                if (missing_reason.empty()) missing_reason = "nonfinite-response";
+                if (missing_reason.empty()) missing_reason="nonfinite-response";
                 continue;
             }
-            valid_raw_sum += raw[i].response;
-            peeled_sum += *peeling->samples[i].response;
+            valid_raw_sum+=sample.observation.raw_response;
+            peeled_sum+=*sample.response;
             ++assessment.valid_samples;
         }
         if (!StoreResponseSum(raw_sum, assessment.raw_response_sum) ||

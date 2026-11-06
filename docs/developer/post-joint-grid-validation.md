@@ -78,3 +78,33 @@ or changed original observations. It returns stable Original-row order and
 includes the 2 Å boundary independently of the fitting mask. Production still
 uses the baseline downstream path in this phase. Release build and all 30
 selected grid-contract, Pure Exclusion and sampler tests pass.
+
+## P2–P3 grid subtraction and charge correction
+
+Production Peeling now owns only original-grid samples within 2 Å. Each sparse
+Original support contribution is evaluated once; each Target then sums cached
+non-self contributions in extended precision. This avoids repeated kernel
+work and avoids subtracting a large own signal from a total prediction. No
+dense observation-by-atom matrix, interpolation, stencil fallback or node cache
+is used. The same voxel distance evaluates the Target's own C/tau charge.
+
+Target points require Passed global/target/component convergence and parameter
+validity. Local conditioning remains diagnostic for Target endpoints; Halo
+donors retain their stricter Adequate-conditioning requirement. Halo points
+remain geometry-local median reconstructions, not optimizer parameters.
+
+The switch necessarily wires the editor, Local preparation, UI ratios, Group
+validation and persistence together: a mixed raw-index/grid-index contract
+would be invalid even for one commit. Stage JSON is now 5 and SQLite 21;
+Joint JSON remains 24. Old Stage/SQLite contracts are rejected. Failures carry
+Original row and global grid identities. Corrected, positive and retained
+counts are separate; nonpositive finite responses are not reconstruction
+failures. Production fitting remains 1 Å pending the radius study.
+
+Release build succeeds. 20/21 CTest groups pass (36.64 s, serial CTest,
+OMP_NUM_THREADS=2 / OMP_THREAD_LIMIT=4). The only failure is the two pre-existing
+runtime-guide links recorded above. Independent Gaussian/erf references cover
+single and overlapping Targets, signed nonzero charge, Halo medians, narrow
+widths, off-grid atoms, missing contributor state and the total-prediction
+identity. FirstStage sampler tests, Joint numerical tests, Stage/SQLite
+round-trips, Group integration and CLI workflow tests pass.

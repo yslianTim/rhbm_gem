@@ -412,54 +412,17 @@ JointAnalysisResult QualifiedReconstructionSnapshot(const JointProblem & problem
 ;
 
 
-double ReferenceCubic(double p0, double p1, double p2, double p3, double t)
+double ReferenceContribution(double square,const GaussianModel3D & point,bool charge_only=false)
 {
-    const double a0 = p1;
-    const double a1 = .5 * (p2 - p0);
-    const double a2 = .5 * (-p3 + 4.0 * p2 - 5.0 * p1 + 2.0 * p0);
-    const double a3 = .5 * (p3 - 3.0 * p2 + 3.0 * p1 - p0);
-    return a3 * t * t * t + a2 * t * t + a1 * t + a0;
+    if (square>6.25) return 0.0;
+    const double tau=point.GetWidth();
+    const double r=std::sqrt(square);
+    const double charge=r<1e-5 ? std::sqrt(2.0/std::acos(-1.0))/tau : std::erf(r/(std::sqrt(2.0)*tau))/r;
+    const double gaussian=std::pow(2.0*std::acos(-1.0)*tau*tau,-1.5)*std::exp(-square/(2.0*tau*tau));
+    return point.GetOffset()*charge+(charge_only ? 0.0 : point.GetAmplitude()*gaussian);
+}
 }
 
-double ReferenceTricubicCharge(
-    const MapObject & map, const std::vector<double> & original_charge,
-    const std::array<double, 3> & position)
-{
-    const auto dimensions = map.GetGridSize();
-    const auto spacing = map.GetGridSpacing();
-    const auto origin = map.GetOrigin();
-    std::array<int, 3> base{};
-    std::array<double, 3> local{};
-    for (std::size_t axis = 0; axis < 3; ++axis)
-    {
-        const double coordinate = (position[axis] - origin[axis]) / spacing[axis];
-        base[axis] = static_cast<int>(std::floor(coordinate));
-        local[axis] = coordinate - static_cast<double>(base[axis]);
-    }
-    const auto read = [&](int x, int y, int z) {
-        x = std::clamp(x, 0, dimensions[0] - 1);
-        y = std::clamp(y, 0, dimensions[1] - 1);
-        z = std::clamp(z, 0, dimensions[2] - 1);
-        const auto index = static_cast<std::size_t>(x) + static_cast<std::size_t>(dimensions[0]) *
-            (static_cast<std::size_t>(y) + static_cast<std::size_t>(dimensions[1]) *
-                static_cast<std::size_t>(z));
-        return original_charge[index];
-    };
-    std::array<std::array<std::array<double, 4>, 4>, 4> values{};
-    for (int i = -1; i < 3; ++i) for (int j = -1; j < 3; ++j) for (int k = -1; k < 3; ++k)
-        values[static_cast<std::size_t>(i + 1)][static_cast<std::size_t>(j + 1)][static_cast<std::size_t>(k + 1)] =
-            read(base[0] + i, base[1] + j, base[2] + k);
-    std::array<std::array<double, 4>, 4> along_x{};
-    for (std::size_t j = 0; j < 4; ++j) for (std::size_t k = 0; k < 4; ++k)
-        along_x[j][k] = ReferenceCubic(
-            values[0][j][k], values[1][j][k], values[2][j][k], values[3][j][k], local[0]);
-    std::array<double, 4> along_y{};
-    for (std::size_t k = 0; k < 4; ++k)
-        along_y[k] = ReferenceCubic(
-            along_x[0][k], along_x[1][k], along_x[2][k], along_x[3][k], local[1]);
-    return ReferenceCubic(along_y[0], along_y[1], along_y[2], along_y[3], local[2]);
-}
-}
 
 TEST(PureHaloSupportExclusionTest, ExcludesExactBoundarySupportAndPreservesOriginalDomain)
 {
@@ -580,8 +543,8 @@ TEST(PureHaloSupportExclusionTest, PeelingUsesOriginalRowsAndReconstructedHalo)
 {
     auto fixture=BoundaryFixture();
     const auto problem=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
-    auto snapshot=PurePeelingSnapshot(problem,fixture.model);
-    data_internal::ApplyJointStageEstimates(fixture.model,snapshot,"pure-peeling-run");
+    auto snapshot=QualifiedReconstructionSnapshot(problem,fixture.model);
+    data_internal::ApplyJointStageEstimates(fixture.model,snapshot,"reconstruction-only-run");
     const SamplingPointList points{{2.5,{2.5,0,0},true}};
     fixture.model.EditAnalysis().SetAtomLocalRawSamplingEntries(*fixture.model.FindAtomPtr(1),
         core::detail::BuildLocalPotentialSampleList(fixture.map,points));
@@ -589,16 +552,16 @@ TEST(PureHaloSupportExclusionTest, PeelingUsesOriginalRowsAndReconstructedHalo)
         fixture.map,fixture.model,problem,snapshot);
     const auto peelings=postprocessing_test::BuildPostFitPeelingSamples(context, std::vector<std::size_t>{0});
     ASSERT_TRUE(peelings.contains(1));
-    ASSERT_EQ(peelings.at(1).samples.size(),1u);
+    ASSERT_FALSE(peelings.at(1).samples.empty());
     EXPECT_TRUE(peelings.at(1).samples.front().response);
     EXPECT_TRUE(peelings.at(1).samples.front().reason.empty());
     const auto prepared=context.BuildPostJointLocalSamples(1,peelings.at(1));
-    ASSERT_EQ(prepared.samples.size(),1u);
+    ASSERT_EQ(prepared.samples.size(),peelings.at(1).samples.size());
     EXPECT_TRUE(prepared.samples.front().fixed_charge_response);
     EXPECT_TRUE(prepared.samples.front().gaussian_response);
 }
 
-TEST(PureHaloSupportExclusionTest, ReconstructsMissingNodesFromAllQualifiedHaloContributors)
+TEST(PureHaloSupportExclusionTest, GridPeelingAndOwnChargeMatchIndependentDirectReference)
 {
     auto fixture=ReconstructionOnlyFixture();
     const auto problem=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
@@ -623,53 +586,29 @@ TEST(PureHaloSupportExclusionTest, ReconstructsMissingNodesFromAllQualifiedHaloC
         fixture.map,fixture.model,problem,snapshot,&metrics);
     const auto peelings=postprocessing_test::BuildPostFitPeelingSamples(context, std::vector<std::size_t>{0});
     const auto & peeling=peelings.at(1);
-    ASSERT_EQ(peeling.samples.size(),2u);
-
-    const auto map_size=fixture.map.GetMapValueArraySize();
-    std::vector<double> target_field(map_size),other_target_field(map_size),halo_field(map_size),charge_field(map_size);
-    for (std::size_t grid=0;grid<map_size;++grid)
+    ASSERT_FALSE(peeling.samples.empty());
+    for (const auto & sample:peeling.samples)
     {
-        const auto position=fixture.map.GetGridPosition(grid);
-        const auto contribution=[&](const auto & center,const GaussianModel3D & profile) {
-            const double square=core::simulation::SupportSquare(position,center);
-            if (square>6.25) return 0.0;
-            const auto basis=core::joint_component::EvaluateKernel(square,profile.GetWidth(),2.5);
-            return profile.GetAmplitude()*basis.gaussian+profile.GetOffset()*basis.charge;
-        };
-        target_field[grid]=contribution(target_position,point);
-        other_target_field[grid]=contribution(other_target_position,other_target_point);
-        for (const auto & halo:halo_positions) halo_field[grid]+=contribution(halo,reconstructed_halo);
-        const double target_square=core::simulation::SupportSquare(position,target_position);
-        if (target_square<=6.25)
-            charge_field[grid]=point.GetOffset()*core::joint_component::EvaluateKernel(
-                target_square,point.GetWidth(),2.5).charge;
+        const auto & observation=sample.observation;
+        ASSERT_TRUE(sample.response) << sample.reason;
+        double neighbor_prediction=ReferenceContribution(core::simulation::SupportSquare(
+            observation.position,other_target_position),other_target_point);
+        for(const auto & center:halo_positions)
+            neighbor_prediction+=ReferenceContribution(core::simulation::SupportSquare(
+                observation.position,center),reconstructed_halo);
+        EXPECT_NEAR(*sample.response,observation.raw_response-neighbor_prediction,1e-12);
     }
-    for (std::size_t sample=0;sample<points.size();++sample)
-    {
-        ASSERT_TRUE(peeling.samples[sample].response) << peeling.samples[sample].reason;
-        const double neighbor_prediction=ReferenceTricubicCharge(
-            fixture.map,halo_field,points[sample].position)+ReferenceTricubicCharge(
-                fixture.map,other_target_field,points[sample].position);
-        const double expected=raw[sample].response-neighbor_prediction;
-        EXPECT_NEAR(*peeling.samples[sample].response,expected,1e-12);
-    }
-    EXPECT_NEAR(*peeling.samples[0].response,raw[0].response,1e-12);
-    EXPECT_EQ(metrics.available_peeling_sample_count,2u);
-    EXPECT_GE(metrics.original_support_boundary_samples,1u);
-    EXPECT_EQ(metrics.reconstruction_lookup_atom_count,4u);
-    EXPECT_GT(metrics.reconstruction_only_node_evaluation_count,0u);
-    EXPECT_LE(metrics.reconstruction_node_cache_peak_entries,4096u);
-    EXPECT_GT(metrics.estimated_reconstruction_workspace_bytes,0u);
-
+    EXPECT_EQ(metrics.available_peeling_sample_count,peeling.samples.size());
     const auto local=context.BuildPostJointLocalSamples(1,peeling);
-    ASSERT_EQ(local.samples.size(),2u);
-    ASSERT_TRUE(local.samples[1].fixed_charge_response);
-    ASSERT_TRUE(local.samples[1].gaussian_response);
-    const double expected_charge=ReferenceTricubicCharge(
-        fixture.map,charge_field,points[1].position);
-    EXPECT_NEAR(*local.samples[1].fixed_charge_response,expected_charge,1e-12);
-    EXPECT_NEAR(*local.samples[1].gaussian_response,
-        *peeling.samples[1].response-expected_charge,1e-12);
+    ASSERT_EQ(local.samples.size(),peeling.samples.size());
+    for(std::size_t i=0;i<local.samples.size();++i)
+    {
+        const auto & sample=local.samples[i];
+        ASSERT_TRUE(sample.fixed_charge_response); ASSERT_TRUE(sample.gaussian_response);
+        const double charge=ReferenceContribution(sample.squared_distance,point,true);
+        EXPECT_NEAR(*sample.fixed_charge_response,charge,1e-12);
+        EXPECT_NEAR(*sample.gaussian_response,*peeling.samples[i].response-charge,1e-12);
+    }
 }
 
 TEST(PureHaloSupportExclusionTest, PeelingIsInvariantToExtraContributorChemicalLabels)
@@ -1105,5 +1044,83 @@ TEST(PostJointGridContractTest, SelectsOriginalVoxelsAtInclusiveRadiusWithStable
         EXPECT_THROW(core::detail::CollectPostJointGridObservations(map,malformed,0,center),std::invalid_argument);
         malformed=input; malformed.observations[samples.front().original_row_index]=std::numeric_limits<double>::quiet_NaN();
         EXPECT_THROW(core::detail::CollectPostJointGridObservations(map,malformed,0,center),std::invalid_argument);
+    }
+}
+
+TEST(PureHaloSupportExclusionTest, GridSubtractionCoversOverlapsHalosChargesAndSupportBoundaries)
+{
+    for (bool halos:{false,true}) for (double width:{.01,.4,.9})
+    for (const auto center:{std::array<double,3>{0.,0.,0.},std::array<double,3>{.13,.21,-.07}})
+    {
+        const std::array<std::array<double,3>,3> centers{center,{1.5,0.,0.},{3.,0.,0.}};
+        const std::array<GaussianModel3D,3> points{
+            GaussianModel3D{2.,width,-.3},GaussianModel3D{3.,.8,.2},
+            GaussianModel3D{2.5,(width+.8)/2.,-.05}};
+        std::vector<std::unique_ptr<AtomObject>> atoms;
+        for(int id=1;id<=(halos ? 3:2);++id)
+        {
+            auto atom=std::make_unique<AtomObject>();
+            atom->SetSerialID(id); atom->SetElement(Element::CARBON);
+            atom->SetPosition(centers[static_cast<std::size_t>(id-1)]);
+            atoms.push_back(std::move(atom));
+        }
+        auto hydrogen=std::make_unique<AtomObject>();
+        hydrogen->SetSerialID(4); hydrogen->SetElement(Element::HYDROGEN); hydrogen->SetPosition(center);
+        atoms.push_back(std::move(hydrogen));
+        ModelObject model(std::move(atoms));
+        model.SelectAtoms([](const auto & atom){return atom.GetSerialID()<=2;});
+        MapObject map({19,13,11},{.5,.4,.6},{-3.,-2.4,-3.});
+        auto values=std::make_unique<double[]>(map.GetMapValueArraySize());
+        for(std::size_t grid=0;grid<map.GetMapValueArraySize();++grid)
+            for(std::size_t atom=0;atom<(halos ? 3u:2u);++atom)
+                values[grid]+=ReferenceContribution(core::simulation::SupportSquare(map.GetGridPosition(grid),centers[atom]),points[atom]);
+        map.SetMapValueArray(std::move(values));
+        const auto problem=BuildPureHaloSupportExclusionProblem(map,model);
+        auto snapshot=QualifiedReconstructionSnapshot(problem,model);
+        for(std::size_t i=0;i<2;++i)
+        {
+            snapshot.components[i].state->ac={points[i].GetAmplitude(),points[i].GetOffset()};
+            snapshot.components[i].state->tau={points[i].GetWidth()};
+        }
+        snapshot.halo_median_reconstruction.reset();
+        if(halos) snapshot.halo_median_reconstruction=core::detail::BuildHaloMedianReconstruction(
+            model,problem,snapshot,"grid-reference").TakeSnapshot();
+        data_internal::ApplyJointStageEstimates(model,snapshot,"grid-reference");
+        const auto context=postprocessing_test::MakeJointPostprocessingContext(map,model,problem,snapshot);
+        const auto batch=context.BuildPostFitPeelingBatch(problem.OriginalInput().selection_domain->target_indices);
+        ASSERT_EQ(batch.size(),2u);
+        for(const auto & [id,peeling]:batch)
+        {
+            const auto target=static_cast<std::size_t>(id-1);
+            const auto local=context.BuildPostJointLocalSamples(id,peeling);
+            ASSERT_EQ(local.samples.size(),peeling.samples.size());
+            EXPECT_GT(local.samples.size(),10u);
+            for(std::size_t row=0;row<local.samples.size();++row)
+            {
+                const auto & sample=local.samples[row];
+                ASSERT_TRUE(sample.gaussian_response) << sample.reason;
+                long double neighbor{}; long double total{};
+                for(std::size_t atom=0;atom<(halos ? 3u:2u);++atom)
+                {
+                    const double value=ReferenceContribution(core::simulation::SupportSquare(sample.position,centers[atom]),points[atom]);
+                    total+=value; if(atom!=target) neighbor+=value;
+                }
+                const double charge=ReferenceContribution(sample.squared_distance,points[target],true);
+                const double expected=static_cast<double>(static_cast<long double>(sample.raw_response)-neighbor-charge);
+                EXPECT_NEAR(*sample.gaussian_response,expected,1e-10*std::max(1.,std::abs(expected)));
+                const double gaussian=ReferenceContribution(sample.squared_distance,points[target])-charge;
+                const double alternative=static_cast<double>(sample.raw_response-total+gaussian);
+                EXPECT_NEAR(*sample.gaussian_response,alternative,1e-10*std::max(1.,std::abs(expected)));
+            }
+        }
+        if(!halos)
+        {
+            snapshot.components[1].state.reset();
+            data_internal::ApplyJointStageEstimates(model,snapshot,"grid-reference");
+            const auto incomplete=postprocessing_test::MakeJointPostprocessingContext(map,model,problem,snapshot)
+                .BuildPostFitPeelingBatch(std::vector<std::size_t>{0});
+            EXPECT_TRUE(std::any_of(incomplete.front().second.samples.begin(),incomplete.front().second.samples.end(),
+                [](const auto & sample){return !sample.response && sample.reason=="missing-contributor-state";}));
+        }
     }
 }

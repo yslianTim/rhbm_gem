@@ -46,24 +46,10 @@ struct JointPostprocessingMetrics
     std::size_t halo_median_valid_target_count{};
     std::size_t halo_median_geometry_local_halos{};
     std::size_t halo_median_unavailable_halos{};
-    std::size_t reconstruction_lookup_atom_count{};
-    std::size_t reconstruction_only_node_evaluation_count{};
-    std::size_t reconstruction_node_cache_hit_count{};
-    std::size_t reconstruction_node_cache_peak_entries{};
     std::size_t estimated_reconstruction_workspace_bytes{};
-    // Peeling availability diagnostics.  The historical sample reason
-    // "outside-joint-domain" remains the serialized compatibility label;
-    // these counters split it into map geometry and original-domain causes.
     std::size_t raw_peeling_sample_count{};
-    std::size_t nonzero_stencil_node_count{};
     std::size_t available_peeling_sample_count{};
     std::size_t unavailable_peeling_sample_count{};
-    std::size_t map_geometry_boundary_samples{};
-    std::size_t map_geometry_boundary_nodes{};
-    std::size_t original_support_boundary_samples{};
-    std::size_t original_support_boundary_nodes{};
-    std::size_t fitting_mask_only_intersection_samples{};
-    std::size_t fitting_mask_only_intersection_nodes{};
     std::size_t mapping_mismatch_samples{};
     std::size_t missing_contributor_samples{};
     std::size_t other_peeling_failure_samples{};
@@ -102,11 +88,9 @@ struct JointPostprocessingMetrics
     std::optional<std::size_t> rss_after_group_bytes;
 };
 
-struct PostJointLocalSample
+struct PostJointLocalSample : PostJointGridObservation
 {
-    std::size_t raw_sample_index{};
     double distance{};
-    double raw_response{};
     std::optional<double> peeled_response;
     std::optional<double> fixed_charge_response;
     std::optional<double> gaussian_response;
@@ -119,7 +103,7 @@ struct PostJointLocalSamples
     JointFixedChargeProfile fixed_charge;
     std::vector<PostJointLocalSample> samples;
 
-    LocalPotentialSampleList BuildGaussianSamples(const LocalPotentialSampleList &) const;
+    LocalPotentialSampleList BuildGaussianSamples() const;
 };
 
 // Borrows one immutable Joint run and owns compact lookups shared by its targets.
@@ -145,8 +129,6 @@ private:
     JointPostprocessingMetrics * m_metrics;
     const HaloMedianBuildResult * m_halo_medians;
     JointPeelingContributorUniverse m_contributors;
-    std::unordered_map<std::size_t, std::size_t> m_row_index_by_grid;
-    std::unordered_map<std::size_t, std::size_t> m_fitting_row_index_by_grid;
 };
 
 }

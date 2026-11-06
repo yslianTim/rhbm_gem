@@ -63,14 +63,15 @@ struct PeelingSampleEstimate
 {
     std::optional<double> response;
     std::string reason;
+    PostJointGridObservation observation;
 };
 
 struct PostFitPeelingResult
 {
     EstimateSource source;
-    std::string mode{ "grid-consistent" };
+    std::string mode{ "original-grid-v1" };
     std::size_t neighbor_count{};
-    // One entry per raw sample, including samples without coverage.
+    // Original-grid observations within 2 A, sorted by Original row identity.
     std::vector<PeelingSampleEstimate> samples;
 };
 
@@ -119,9 +120,10 @@ struct JointFixedChargeProfile
 
 struct PostJointLocalSampleFailure
 {
-    std::size_t raw_sample_index{};
+    std::size_t original_row_index{};
     double distance{};
     std::string reason;
+    std::size_t global_grid_index{};
 };
 
 struct PostJointLocalResult
@@ -134,6 +136,8 @@ struct PostJointLocalResult
     std::optional<RHBMInformation> information;
     std::size_t sample_count{};
     std::size_t effective_sample_count{};
+    std::size_t corrected_sample_count{}, positive_sample_count{};
+    double fitting_radius{1.0};
     std::vector<PostJointLocalSampleFailure> sample_failures;
 };
 

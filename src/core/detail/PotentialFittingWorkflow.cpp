@@ -53,7 +53,7 @@ PostJointLocalResult FitPostJointLocalTarget(
     const auto & joint = local.GetStageEstimate(FittingStage::Second);
     PostJointLocalResult result;
     result.source = joint.source;
-    result.sample_count = local.GetRawSamplingEntriesView().size();
+    result.sample_count = peeling.samples.size();
     result.status = EvidenceStatus::Ineligible;
     if (joint.source.method != EstimateMethod::JointComponents || joint.source.role != FittingRole::Target)
     { result.reason = "not-a-joint-target"; return result; }
@@ -61,8 +61,6 @@ PostJointLocalResult FitPostJointLocalTarget(
     result.fixed_charge = {joint.point->GetOffset(), joint.point->GetWidth()};
     if (joint.convergence != JointCheckStatus::Passed)
     { result.reason = "joint-endpoint-not-qualified"; return result; }
-    if (!local.HasSampleGeometry())
-    { result.status = EvidenceStatus::Unavailable; result.reason = "sample-geometry-unavailable"; return result; }
     if (!SameSource(joint.source, peeling.source))
         throw std::invalid_argument("Post-Joint local fitting source mismatch.");
 
@@ -73,9 +71,11 @@ PostJointLocalResult FitPostJointLocalTarget(
     result.fixed_charge = prepared_samples.fixed_charge;
     for (const auto & sample : prepared_samples.samples)
         if (!sample.reason.empty())
-            result.sample_failures.push_back({sample.raw_sample_index, sample.distance, sample.reason});
-    const auto & raw = local.GetRawSamplingEntriesView();
-    auto gaussian_samples = prepared_samples.BuildGaussianSamples(raw);
+            result.sample_failures.push_back({sample.original_row_index, sample.distance, sample.reason, sample.global_grid_index});
+    auto gaussian_samples = prepared_samples.BuildGaussianSamples();
+    result.corrected_sample_count=gaussian_samples.size();
+    result.positive_sample_count=static_cast<std::size_t>(std::count_if(gaussian_samples.begin(),gaussian_samples.end(),
+        [](const auto & sample){return sample.response>0.0;}));
     std::vector<double> responses;
     responses.reserve(gaussian_samples.size());
     for (const auto & sample : gaussian_samples) responses.push_back(sample.response);
@@ -148,7 +148,7 @@ PostJointLocalResult FitPostJointLocalTarget(
     result.reason.clear();
     result.fit.fit_result.reset();
     const auto assessment = data_internal::AssessPostJointLocalResult(
-        result, atom_id, joint, &peeling, raw);
+        result, atom_id, joint, &peeling);
     if (!assessment.valid) return reject(assessment.reason);
     return result;
 }
@@ -395,7 +395,7 @@ void RunJointComponentWorkflow(
             result.source = stage.source;
             result.status = EvidenceStatus::Unavailable;
             result.reason = "peeling-unavailable";
-            result.sample_count = local.GetRawSamplingEntriesView().size();
+            result.sample_count = 0;
             if (stage.point)
                 result.fixed_charge = {stage.point->GetOffset(), stage.point->GetWidth()};
         }
@@ -432,9 +432,6 @@ void RunJointComponentWorkflow(
             << postprocessing_metrics.tail_ratio_available_targets
             << " | raw_sum=" << postprocessing_metrics.tail_raw_response_sum
             << " | peeled_sum=" << postprocessing_metrics.tail_peeling_response_sum
-            << " | map_boundary_samples=" << postprocessing_metrics.map_geometry_boundary_samples
-            << " | original_support_boundary_samples=" << postprocessing_metrics.original_support_boundary_samples
-            << " | fitting_mask_only_samples=" << postprocessing_metrics.fitting_mask_only_intersection_samples
             << " | mapping_mismatch_samples=" << postprocessing_metrics.mapping_mismatch_samples
             << " | missing_contributor_samples=" << postprocessing_metrics.missing_contributor_samples;
         for (const auto & [bucket, count] : postprocessing_metrics.tail_coverage_distribution)
@@ -442,14 +439,8 @@ void RunJointComponentWorkflow(
         for (const auto & [reason, count] : postprocessing_metrics.tail_unavailable_reasons)
             tail_detail << " | " << reason << '=' << count;
         LogJointDebug(tail_detail.str());
-        std::ostringstream reconstruction_message;
-        reconstruction_message << "[Joint] Reconstruction-only lookup: atoms="
-            << postprocessing_metrics.reconstruction_lookup_atom_count
-            << " | node_evaluations=" << postprocessing_metrics.reconstruction_only_node_evaluation_count
-            << " | cache_hits=" << postprocessing_metrics.reconstruction_node_cache_hit_count
-            << " | cache_peak_entries=" << postprocessing_metrics.reconstruction_node_cache_peak_entries
-            << " | estimated_workspace_bytes=" << postprocessing_metrics.estimated_reconstruction_workspace_bytes;
-        LogJointDebug(reconstruction_message.str());
+        LogJointDebug("[Joint] Original-grid support prediction workspace="+
+            std::to_string(postprocessing_metrics.estimated_reconstruction_workspace_bytes)+" bytes");
     }
     postprocessing_metrics.total_postprocessing_seconds = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - postprocessing_start).count();

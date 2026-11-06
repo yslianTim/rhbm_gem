@@ -1,8 +1,7 @@
 #include "PostFitPeeling.hpp"
 #include "HaloMedianReconstruction.hpp"
-#include "../MapInterpolation.hpp"
 #include "Numerics.hpp"
-#include <rhbm_gem/utils/algorithm/KDTreeAlgorithm.hpp>
+#include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -21,46 +20,11 @@ std::vector<bool> JointOutputMask(const JointProblemInput & input,
     return mask;
 }
 
-template<class HashMap>
-std::size_t EstimateHashStorageBytes(const HashMap & values)
-{
-    return values.bucket_count() * sizeof(void *) + values.size() *
-        (sizeof(typename HashMap::value_type) + 2 * sizeof(void *));
-}
-
 bool SameSource(const EstimateSource & a, const EstimateSource & b)
 {
     return a.method == b.method && a.atom_id == b.atom_id && a.component_id == b.component_id &&
         a.run_id == b.run_id && a.role == b.role && a.fixed_from_first_stage==b.fixed_from_first_stage;
 }
-
-struct StencilAudit
-{
-    std::size_t nonzero_nodes{};
-    std::size_t map_boundary_nodes{};
-    std::size_t original_support_boundary_nodes{};
-    std::size_t fitting_mask_only_nodes{};
-    bool map_boundary{};
-    bool original_support_boundary{};
-    bool mapping_mismatch{};
-    bool fitting_mask_only{};
-};
-
-struct ReconstructionAtom
-{
-    int atom_id{};
-    std::array<double, 3> position{};
-    std::optional<std::size_t> contributor_index;
-    std::optional<GaussianModel3D> point;
-
-    const std::array<double, 3> & GetPosition() const { return position; }
-};
-
-struct ReconstructionNode
-{
-    double prediction{};
-    std::size_t missing_contributors{};
-};
 
 double SquaredDistance(const std::array<double, 3> & left, const std::array<double, 3> & right)
 {
@@ -83,60 +47,10 @@ bool QualifiedTargetPoint(const JointAnalysisResult & result, std::size_t atom)
         [atom](const auto & point) { return point.atom == atom; });
     return found != result.target_evidence->point_atoms.end() &&
         found->component_convergence == JointCheckStatus::Passed &&
-        found->parameter_validity == JointCheckStatus::Passed &&
-        found->local_conditioning == "Adequate";
+        found->parameter_validity == JointCheckStatus::Passed;
 }
 
-StencilAudit AuditStencil(const TricubicStencil & stencil, const MapObject & geometry,
-    const std::vector<std::string> & original_row_ids,
-    const std::unordered_map<std::size_t, std::size_t> & original_rows,
-    const std::unordered_map<std::size_t, std::size_t> & fitting_rows)
-{
-    const auto dimensions = geometry.GetGridSize();
-    std::array<std::array<double, 4>, 3> weights{};
-    for (std::size_t axis = 0; axis < 3; ++axis)
-        for (std::size_t node = 0; node < 4; ++node)
-            weights[axis][node] = CubicInterpolate(
-                node == 0, node == 1, node == 2, node == 3, stencil.local[axis]);
 
-    StencilAudit audit;
-    for (int i = -1; i < 3; ++i) for (int j = -1; j < 3; ++j) for (int k = -1; k < 3; ++k)
-    {
-        const double weight = weights[0][static_cast<std::size_t>(i + 1)] *
-            weights[1][static_cast<std::size_t>(j + 1)] *
-            weights[2][static_cast<std::size_t>(k + 1)];
-        if (weight == 0.0) continue;
-        ++audit.nonzero_nodes;
-        const auto raw_node = stencil.UnclampedNode(i, j, k);
-        const bool in_bounds = raw_node[0] >= 0 && raw_node[1] >= 0 && raw_node[2] >= 0 &&
-            raw_node[0] < dimensions[0] && raw_node[1] < dimensions[1] && raw_node[2] < dimensions[2];
-        if (!in_bounds)
-        {
-            audit.map_boundary = true;
-            ++audit.map_boundary_nodes;
-            continue;
-        }
-        const auto grid = stencil.Index(raw_node);
-        const auto found = original_rows.find(grid);
-        if (found == original_rows.end())
-        {
-            audit.original_support_boundary = true;
-            ++audit.original_support_boundary_nodes;
-            continue;
-        }
-        if (found->second >= original_row_ids.size() || original_row_ids[found->second] != std::to_string(grid))
-        {
-            audit.mapping_mismatch = true;
-            continue;
-        }
-        if (!fitting_rows.contains(grid))
-        {
-            audit.fitting_mask_only = true;
-            ++audit.fitting_mask_only_nodes;
-        }
-    }
-    return audit;
-}
 }
 
 std::vector<PostJointGridObservation> CollectPostJointGridObservations(
@@ -219,25 +133,13 @@ JointPeelingContributorUniverse BuildJointPeelingContributorUniverse(
     return universe;
 }
 
-LocalPotentialSampleList PostJointLocalSamples::BuildGaussianSamples(
-    const LocalPotentialSampleList & raw_samples) const
+LocalPotentialSampleList PostJointLocalSamples::BuildGaussianSamples() const
 {
-    if (samples.size() != raw_samples.size())
-        throw std::invalid_argument("Post-Joint local/raw sample count mismatch.");
     LocalPotentialSampleList result;
     result.reserve(samples.size());
-    for (std::size_t i = 0; i < samples.size(); ++i)
-    {
-        const auto & prepared = samples[i];
-        const auto & raw = raw_samples[i];
-        if (prepared.raw_sample_index != i || prepared.distance != raw.point.distance ||
-            prepared.raw_response != raw.response)
-            throw std::invalid_argument("Post-Joint local/raw sample identity mismatch.");
-        if (!prepared.gaussian_response || !raw.point.is_selected) continue;
-        auto sample = raw;
-        sample.response = *prepared.gaussian_response;
-        result.push_back(std::move(sample));
-    }
+    for (const auto & sample : samples)
+        if (sample.gaussian_response)
+            result.push_back({*sample.gaussian_response,{sample.distance,sample.position,true}});
     return result;
 }
 
@@ -300,34 +202,20 @@ JointPostprocessingContext::JointPostprocessingContext(
     }
     if (indexed_contributors!=input.atom_ids.size())
         throw std::invalid_argument("Joint Peeling contributor universe identity mismatch.");
-    m_row_index_by_grid.reserve(input.row_ids.size());
-    for (std::size_t row = 0; row < input.row_ids.size(); ++row)
+    std::set<std::size_t> grid_indices;
+    for (const auto & row_id : input.row_ids)
     {
-        const auto grid = std::stoull(input.row_ids[row]);
-        if (grid >= geometry.GetMapValueArraySize()) throw std::invalid_argument("Joint row outside map geometry.");
-        const auto [unused, inserted] = m_row_index_by_grid.emplace(grid, row);
-        (void)unused;
-        if (!inserted || input.row_ids[row] != std::to_string(grid))
+        const auto grid = std::stoull(row_id);
+        if (grid >= geometry.GetMapValueArraySize() || row_id != std::to_string(grid) ||
+            !grid_indices.insert(grid).second)
             throw std::invalid_argument("Joint original-domain row mapping mismatch.");
     }
-    if (m_metrics) ++m_metrics->observation_row_mapping_builds;
-
-    const auto & fitting_input = problem.Input();
-    m_fitting_row_index_by_grid.reserve(fitting_input.row_ids.size());
-    for (std::size_t row = 0; row < fitting_input.row_ids.size(); ++row)
-    {
-        const auto grid = std::stoull(fitting_input.row_ids[row]);
-        const auto [unused, inserted] = m_fitting_row_index_by_grid.emplace(grid, row);
-        (void)unused;
-        if (!inserted || fitting_input.row_ids[row] != std::to_string(grid))
-            throw std::invalid_argument("Joint fitting-domain row mapping mismatch.");
-    }
-
-    if (m_metrics) ++m_metrics->contributor_mapping_builds;
     if (m_metrics)
-        m_metrics->estimated_context_lookup_bytes = EstimateHashStorageBytes(m_row_index_by_grid) +
-            EstimateHashStorageBytes(m_fitting_row_index_by_grid) +
-            m_contributors.contributors.size()*sizeof(JointPeelingContributor);
+    {
+        ++m_metrics->observation_row_mapping_builds;
+        ++m_metrics->contributor_mapping_builds;
+        m_metrics->estimated_context_lookup_bytes = m_contributors.contributors.size()*sizeof(JointPeelingContributor);
+    }
 }
 
 std::vector<std::pair<int, PostFitPeelingResult>> JointPostprocessingContext::BuildPostFitPeelingBatch(
@@ -336,10 +224,7 @@ std::vector<std::pair<int, PostFitPeelingResult>> JointPostprocessingContext::Bu
     const auto & input = m_problem.OriginalInput();
     const auto & result = m_snapshot;
     auto requested = JointOutputMask(input, outputs);
-    std::vector<std::vector<std::size_t>> contributors(input.row_ids.size());
-    std::vector<double> prediction(input.row_ids.size());
-    std::vector<std::size_t> missing(input.row_ids.size());
-    std::vector<std::unordered_map<std::size_t, double>> own(input.atom_ids.size());
+
     // Internal representatives reconstruct the observation prediction even when
     // a nonunique halo has no public atom-wise point estimate.
     std::vector<std::optional<GaussianModel3D>> represented(input.atom_ids.size());
@@ -398,10 +283,7 @@ std::vector<std::pair<int, PostFitPeelingResult>> JointPostprocessingContext::Bu
             first=false;
             represented[halo.halo_contributor_index]=GaussianModel3D{halo.amplitude,halo.width,halo.charge};
         }
-        if (result.assembled_state)
-            for(std::size_t atom=0;atom<represented.size();++atom)
-                if(!represented[atom])
-                    throw std::invalid_argument("Fitted Pure Exclusion snapshot has an unmapped target or Halo.");
+
     }
 
     std::string expected_joint_run_id;
@@ -448,254 +330,91 @@ std::vector<std::pair<int, PostFitPeelingResult>> JointPostprocessingContext::Bu
             saved.donor_policy!=rebuilt.donor_policy || saved.halos!=rebuilt.halos)
             throw std::invalid_argument("Invalid Pure Exclusion Halo median run provenance.");
     }
-    const std::string * halo_run_id=halo_medians && halo_medians->snapshot ?
-        &halo_medians->snapshot->joint_run_id : result.halo_median_reconstruction ?
-        &result.halo_median_reconstruction->joint_run_id : nullptr;
-    if (halo_run_id && !expected_joint_run_id.empty() && *halo_run_id!=expected_joint_run_id)
-        throw std::invalid_argument("Invalid Pure Exclusion reconstruction median run provenance.");
-
-    const std::vector<HaloMedianTargetDonor> no_target_donors;
-    const auto & target_donors=halo_medians ? halo_medians->target_donors : no_target_donors;
-    const GeometryLocalTargetDonorIndex target_donor_index(target_donors);
-
-    constexpr std::size_t reconstruction_node_cache_limit=4096;
-    std::vector<ReconstructionAtom> reconstruction_atoms;
-    std::unordered_map<int,std::size_t> reconstruction_atom_by_id;
-    std::unique_ptr<KDNode<ReconstructionAtom>> reconstruction_tree;
+    // Evaluate every recorded support contribution once. Sparse row incidence
+    // permits direct neighbor sums without cancelling the target's own signal
+    // against a shared total prediction (especially for very narrow widths).
+    struct Contribution { std::size_t atom; std::optional<double> value; };
+    std::vector<std::vector<Contribution>> rows(input.row_ids.size());
+    for (std::size_t atom=0;atom<input.atom_ids.size();++atom)
     {
-        reconstruction_atoms.reserve(m_contributors.contributors.size());
-        reconstruction_atom_by_id.reserve(m_contributors.contributors.size());
-        for (const auto & source:m_contributors.contributors)
+        const bool target=std::binary_search(result.selection_domain->target_indices.begin(),
+            result.selection_domain->target_indices.end(),atom);
+        if (target && !QualifiedTargetPoint(result,atom)) represented[atom].reset();
+        const auto & point=represented[atom];
+        if (point && (!std::isfinite(point->GetAmplitude()) || point->GetAmplitude()<0 ||
+            !std::isfinite(point->GetOffset()) || !std::isfinite(point->GetWidth()) || point->GetWidth()<=0))
+            throw std::invalid_argument("Invalid reconstruction contributor parameters.");
+        for (const auto & support:input.support[atom])
         {
-            if (!source.reconstruction_eligible) continue;
-            ReconstructionAtom candidate;
-            candidate.atom_id=source.atom_id;
-            candidate.position=source.position;
-            candidate.contributor_index=source.contributor_index;
-            if (source.contributor_index)
-            {
-                const bool target=std::binary_search(result.selection_domain->target_indices.begin(),
-                    result.selection_domain->target_indices.end(),*source.contributor_index);
-                if (!target || QualifiedTargetPoint(result,*source.contributor_index))
-                    candidate.point=represented[*source.contributor_index];
-            }
-            if (!candidate.point && !candidate.contributor_index && !target_donors.empty())
-            {
-                const auto selected=target_donor_index.Query(candidate.position);
-                if (!selected.empty())
-                {
-                    const auto median=GeometryLocalTargetMedian(selected);
-                    candidate.point=GaussianModel3D{median[0],median[1],median[2]};
-                }
-            }
-            if (candidate.point &&
-                (!std::isfinite(candidate.point->GetAmplitude()) || candidate.point->GetAmplitude()<0 ||
-                    !std::isfinite(candidate.point->GetWidth()) || candidate.point->GetWidth()<=0 ||
-                    !std::isfinite(candidate.point->GetOffset())))
-                throw std::invalid_argument("Invalid Pure Exclusion reconstruction contributor parameters.");
-            reconstruction_atom_by_id.emplace(candidate.atom_id,reconstruction_atoms.size());
-            reconstruction_atoms.push_back(std::move(candidate));
-        }
-        reconstruction_tree=KDTreeAlgorithm<ReconstructionAtom>::BuildKDTree(reconstruction_atoms);
-        if (m_metrics)
-        {
-            m_metrics->reconstruction_lookup_atom_count=reconstruction_atoms.size();
-            std::size_t donor_index_workspace_bytes{};
-            for (const auto & donor:target_donors)
-                donor_index_workspace_bytes+=sizeof(HaloMedianTargetDonor)+donor.atom_id.capacity()+
-                    sizeof(std::array<double,3>)+sizeof(HaloMedianTargetDonor *)+8*sizeof(void *);
-            m_metrics->estimated_reconstruction_workspace_bytes=
-                reconstruction_atoms.size()*(sizeof(ReconstructionAtom)+sizeof(ReconstructionAtom *)+
-                    sizeof(KDNode<ReconstructionAtom>))+donor_index_workspace_bytes+
-                reconstruction_node_cache_limit*(sizeof(std::pair<const std::size_t,ReconstructionNode>)+
-                    2*sizeof(void *))+
-                EstimateHashStorageBytes(reconstruction_atom_by_id)+
-                64*(sizeof(std::pair<const std::size_t,double>)+2*sizeof(void *));
-        }
-    }
-    std::unordered_map<std::size_t,ReconstructionNode> reconstruction_node_cache;
-    reconstruction_node_cache.reserve(reconstruction_node_cache_limit);
-    const auto reconstruct_node=[&](std::size_t grid) {
-        if (const auto found=reconstruction_node_cache.find(grid);found!=reconstruction_node_cache.end())
-        {
-            if (m_metrics) ++m_metrics->reconstruction_node_cache_hit_count;
-            return found->second;
-        }
-        ReconstructionNode node;
-        if (reconstruction_tree)
-        {
-            ReconstructionAtom query;
-            query.position=m_geometry.GetGridPosition(grid);
-            const auto neighbors=KDTreeAlgorithm<ReconstructionAtom>::RangeSearch(
-                reconstruction_tree.get(),&query,2.5);
-            for (const auto * candidate:neighbors)
-            {
-                const double square=SquaredDistance(query.position,candidate->position);
-                if (square>6.25) continue;
-                if (!candidate->point)
-                {
-                    ++node.missing_contributors;
-                    continue;
-                }
-                const auto basis=joint_component::EvaluateKernel(square,candidate->point->GetWidth(),2.5);
-                node.prediction+=candidate->point->GetAmplitude()*basis.gaussian+
-                    candidate->point->GetOffset()*basis.charge;
-            }
-        }
-        if (m_metrics) ++m_metrics->reconstruction_only_node_evaluation_count;
-        if (reconstruction_node_cache.size()<reconstruction_node_cache_limit)
-        {
-            reconstruction_node_cache.emplace(grid,node);
-            if (m_metrics) m_metrics->reconstruction_node_cache_peak_entries=
-                std::max(m_metrics->reconstruction_node_cache_peak_entries,reconstruction_node_cache.size());
-        }
-        return node;
-    };
-
-    std::vector<bool> has_point;
-    for (std::size_t atom = 0; atom < input.atom_ids.size(); ++atom)
-    {
-        const auto & point = represented[atom];
-        has_point.push_back(point.has_value());
-        for (const auto & support : input.support[atom])
-        {
-            contributors[support.row].push_back(atom);
-            double value = 0;
+            std::optional<double> value;
             if (point)
             {
-                const auto basis = joint_component::EvaluateKernel(support.squared_distance, point->GetWidth(), 2.5);
-                value = point->GetAmplitude() * basis.gaussian + point->GetOffset() * basis.charge;
-                prediction[support.row] += value;
+                const auto basis=joint_component::EvaluateKernel(support.squared_distance,point->GetWidth(),2.5);
+                const double prediction=point->GetAmplitude()*basis.gaussian+point->GetOffset()*basis.charge;
+                if (std::isfinite(prediction)) value=prediction;
             }
-            else ++missing[support.row];
-            if (requested[atom]) own[atom].emplace(support.row, value);
+            rows.at(support.row).push_back({atom,value});
         }
     }
     std::vector<std::pair<int, PostFitPeelingResult>> results;
-    results.reserve(static_cast<std::size_t>(std::count(requested.begin(), requested.end(), true)));
-    const auto record_sample = [&](const PeelingSampleEstimate & sample, const StencilAudit & audit) {
-        if (!m_metrics) return;
-        ++m_metrics->raw_peeling_sample_count;
-        m_metrics->nonzero_stencil_node_count += audit.nonzero_nodes;
-        m_metrics->map_geometry_boundary_nodes += audit.map_boundary_nodes;
-        m_metrics->original_support_boundary_nodes += audit.original_support_boundary_nodes;
-        m_metrics->fitting_mask_only_intersection_nodes += audit.fitting_mask_only_nodes;
-        if (audit.map_boundary) ++m_metrics->map_geometry_boundary_samples;
-        if (audit.mapping_mismatch) ++m_metrics->mapping_mismatch_samples;
-        if (audit.original_support_boundary) ++m_metrics->original_support_boundary_samples;
-        if (sample.reason == "missing-contributor-state") ++m_metrics->missing_contributor_samples;
-        else if (!sample.response) ++m_metrics->other_peeling_failure_samples;
-        if (audit.fitting_mask_only) ++m_metrics->fitting_mask_only_intersection_samples;
-        if (sample.response) ++m_metrics->available_peeling_sample_count;
-        else ++m_metrics->unavailable_peeling_sample_count;
-    };
-    for (std::size_t atom = 0; atom < input.atom_ids.size(); ++atom)
+    for (std::size_t atom=0;atom<input.atom_ids.size();++atom)
     {
         if (!requested[atom]) continue;
-        const auto id = std::stoi(input.atom_ids[atom]);
-        const auto view = AtomLocalPotentialView::For(*m_model.FindAtomPtr(id));
-        auto & output = results.emplace_back(id, PostFitPeelingResult{}).second;
-        output.source = view.GetStageEstimate(FittingStage::Second).source;
-        std::set<int> neighbors;
-        for (const auto & raw : view.GetRawSamplingEntriesView())
+        const auto id=std::stoi(input.atom_ids[atom]);
+        const auto * object=m_model.FindAtomPtr(id);
+        const auto view=AtomLocalPotentialView::For(*object);
+        const auto & estimate=view.GetStageEstimate(FittingStage::Second);
+        auto & output=results.emplace_back(id,PostFitPeelingResult{}).second;
+        output.source=estimate.source;
+        std::set<std::size_t> neighbors;
+        for (const auto & observation:CollectPostJointGridObservations(m_geometry,input,atom,object->GetPosition()))
         {
             PeelingSampleEstimate sample;
-            StencilAudit audit;
-            const auto & estimate = view.GetStageEstimate(FittingStage::Second);
-            if (!estimate.point)
-            { sample.reason = estimate.reason; record_sample(sample, audit); output.samples.push_back(sample); continue; }
-            if (!view.HasSampleGeometry())
-            { sample.reason = "sample-geometry-unavailable"; record_sample(sample, audit); output.samples.push_back(sample); continue; }
-            const auto stencil = MakeTricubicStencil(m_geometry, raw.point.position);
-            audit = AuditStencil(stencil, m_geometry, input.row_ids, m_row_index_by_grid,
-                m_fitting_row_index_by_grid);
-            std::unordered_map<std::size_t,double> node_predictions;
-            node_predictions.reserve(64);
-            for (const auto & [grid, weight] : TricubicWeights(stencil))
+            sample.observation=observation;
+            if (!estimate.point) sample.reason=estimate.reason;
+            else if (!represented[atom] || estimate.convergence!=JointCheckStatus::Passed)
+                sample.reason="joint-endpoint-not-qualified";
+            else if (estimate.point->ToVector()!=represented[atom]->ToVector())
+                throw std::invalid_argument("Peeling Target endpoint differs from Joint snapshot.");
+            long double prediction{};
+            for (const auto & contributor:rows[observation.original_row_index])
             {
-                if (weight == 0) continue;
-                const auto found = m_row_index_by_grid.find(grid);
-                if (found == m_row_index_by_grid.end())
-                {
-                    const auto reconstructed=reconstruct_node(grid);
-                    auto target_candidate=reconstruction_atom_by_id.find(id);
-                    const auto grid_position=m_geometry.GetGridPosition(grid);
-                    const bool self_missing=target_candidate!=reconstruction_atom_by_id.end() &&
-                        !reconstruction_atoms[target_candidate->second].point &&
-                        SquaredDistance(reconstruction_atoms[target_candidate->second].position,grid_position)<=6.25;
-                    if (reconstructed.missing_contributors>static_cast<std::size_t>(self_missing))
-                    { sample.reason = "missing-contributor-state"; break; }
-                    double self_prediction{};
-                    if (target_candidate!=reconstruction_atom_by_id.end())
-                    {
-                        const auto & candidate=reconstruction_atoms[target_candidate->second];
-                        if (candidate.point)
-                        {
-                            const auto basis=joint_component::EvaluateKernel(
-                                SquaredDistance(candidate.position,grid_position),candidate.point->GetWidth(),2.5);
-                            self_prediction=candidate.point->GetAmplitude()*basis.gaussian+
-                                candidate.point->GetOffset()*basis.charge;
-                        }
-                    }
-                    node_predictions.emplace(grid,reconstructed.prediction-self_prediction);
-                    ReconstructionAtom query;
-                    query.position=grid_position;
-                    for (const auto * neighbor:KDTreeAlgorithm<ReconstructionAtom>::RangeSearch(
-                            reconstruction_tree.get(),&query,2.5))
-                        if (neighbor->atom_id!=id)
-                            neighbors.insert(neighbor->atom_id);
-                    continue;
-                }
-                const auto row = found->second;
-                for (const auto neighbor : contributors[row])
-                    if (neighbor != atom) neighbors.insert(std::stoi(input.atom_ids[neighbor]));
-                const auto self_missing = !has_point[atom] && own[atom].contains(row) ? 1u : 0u;
-                if (missing[row] > self_missing) { sample.reason = "missing-contributor-state"; break; }
-                const auto self = own[atom].find(row);
-                node_predictions.emplace(grid,prediction[row]-(self==own[atom].end() ? 0.0 : self->second));
+                if (contributor.atom==atom) continue;
+                neighbors.insert(contributor.atom);
+                if (!contributor.value) sample.reason="missing-contributor-state";
+                else prediction+=*contributor.value;
             }
             if (sample.reason.empty())
             {
-                const double neighbor_prediction = InterpolateTricubic(stencil, [&](const auto & node) {
-                    const auto grid=stencil.Index(node);
-                    const auto found=node_predictions.find(grid);
-                    return found==node_predictions.end() ? 0.0 : found->second;
-                });
-                const double response = raw.response - neighbor_prediction;
-                if (std::isfinite(response)) sample.response = response;
-                else sample.reason = "nonfinite-response";
+                const double response=static_cast<double>(static_cast<long double>(observation.raw_response)-prediction);
+                if (std::isfinite(response)) sample.response=response;
+                else sample.reason="nonfinite-peeled-response";
             }
-            record_sample(sample, audit);
+            if (m_metrics)
+            {
+                ++m_metrics->raw_peeling_sample_count;
+                if (sample.response) ++m_metrics->available_peeling_sample_count;
+                else
+                {
+                    ++m_metrics->unavailable_peeling_sample_count;
+                    if (sample.reason=="missing-contributor-state") ++m_metrics->missing_contributor_samples;
+                    else ++m_metrics->other_peeling_failure_samples;
+                }
+            }
             output.samples.push_back(std::move(sample));
         }
-        output.neighbor_count = neighbors.size();
+        output.neighbor_count=neighbors.size();
     }
     if (m_metrics)
     {
-        std::size_t support_entries{};
-        std::size_t requested_support_entries{};
-        std::size_t output_sample_count{};
-        for (std::size_t atom = 0; atom < input.support.size(); ++atom)
-        {
-            support_entries += input.support[atom].size();
-            if (requested[atom]) requested_support_entries += input.support[atom].size();
-        }
-        for (const auto & [unused, output] : results)
-        {
-            (void)unused;
-            output_sample_count += output.samples.size();
-        }
-        m_metrics->estimated_peeling_result_bytes = output_sample_count * sizeof(PeelingSampleEstimate);
-        const auto row_workspace = input.row_ids.size() *
-            (sizeof(std::vector<std::size_t>) + sizeof(double) + sizeof(std::size_t));
-        const auto contributor_workspace = input.atom_ids.size() *
-            (sizeof(std::unordered_map<std::size_t, double>) + sizeof(std::optional<GaussianModel3D>));
-        const auto support_workspace = support_entries * sizeof(std::size_t);
-        const auto own_charge_workspace = requested_support_entries *
-            (sizeof(std::pair<const std::size_t, double>) + 2 * sizeof(void *));
-        m_metrics->estimated_peak_postprocessing_payload_bytes = row_workspace +
-            m_metrics->estimated_context_lookup_bytes + contributor_workspace + support_workspace + own_charge_workspace +
-            m_metrics->estimated_peeling_result_bytes + m_metrics->estimated_reconstruction_workspace_bytes;
+        std::size_t entries{},samples{};
+        for (const auto & row:rows) entries+=row.size();
+        for (const auto & [id,output]:results) { (void)id; samples+=output.samples.size(); }
+        m_metrics->estimated_peeling_result_bytes=samples*sizeof(PeelingSampleEstimate);
+        m_metrics->estimated_reconstruction_workspace_bytes=rows.size()*sizeof(std::vector<Contribution>)+
+            entries*sizeof(Contribution)+represented.size()*sizeof(std::optional<GaussianModel3D>);
+        m_metrics->estimated_peak_postprocessing_payload_bytes=m_metrics->estimated_context_lookup_bytes+
+            m_metrics->estimated_reconstruction_workspace_bytes+m_metrics->estimated_peeling_result_bytes;
     }
     std::sort(results.begin(), results.end(), [](const auto & left, const auto & right) {
         return left.first < right.first;
@@ -725,83 +444,55 @@ PostJointLocalSamples JointPostprocessingContext::BuildPostJointLocalSamples(
         !SameSource(stage.source, peeling.source))
         throw std::invalid_argument("Post-Joint sample endpoint source mismatch.");
     const auto & point = *stage.point;
-    const auto & raw = local.GetRawSamplingEntriesView();
-    if (raw.size() != peeling.samples.size())
-        throw std::invalid_argument("Post-Joint sample/peeling count mismatch.");
-    if (!local.HasSampleGeometry()) throw std::invalid_argument("Post-Joint sample geometry is unavailable.");
-
-    std::unordered_map<std::size_t, double> own_charge;
-    own_charge.reserve(input.support[atom_index].size());
-    for (const auto & support : input.support[atom_index])
-    {
-        const auto basis = joint_component::EvaluateKernel(support.squared_distance, point.GetWidth(), 2.5);
-        own_charge.emplace(support.row, point.GetOffset() * basis.charge);
-    }
-
     PostJointLocalSamples output;
-    output.source = stage.source;
-    output.fixed_charge = {point.GetOffset(), point.GetWidth()};
-    output.samples.reserve(raw.size());
-    for (std::size_t i = 0; i < raw.size(); ++i)
+    output.source=stage.source;
+    output.fixed_charge={point.GetOffset(),point.GetWidth()};
+    const auto observations=CollectPostJointGridObservations(m_geometry,input,atom_index,atom->GetPosition());
+    if (peeling.mode!="original-grid-v1" || peeling.samples.size()!=observations.size())
+        throw std::invalid_argument("Post-Joint grid/peeling count mismatch.");
+    for (std::size_t i=0;i<observations.size();++i)
     {
-        const auto & raw_sample = raw[i];
-        const auto & peeled = peeling.samples[i];
+        const auto & observation=observations[i];
+        const auto & peeled=peeling.samples[i];
+        if (peeled.observation.original_row_index!=observation.original_row_index ||
+            peeled.observation.global_grid_index!=observation.global_grid_index ||
+            peeled.observation.position!=observation.position ||
+            peeled.observation.squared_distance!=observation.squared_distance ||
+            peeled.observation.raw_response!=observation.raw_response)
+            throw std::invalid_argument("Post-Joint grid/peeling identity mismatch.");
         PostJointLocalSample sample;
-        sample.raw_sample_index = i;
-        sample.distance = raw_sample.point.distance;
-        sample.raw_response = raw_sample.response;
-        sample.peeled_response = peeled.response;
-        if (!peeled.response)
+        static_cast<PostJointGridObservation &>(sample)=observation;
+        sample.distance=std::sqrt(observation.squared_distance);
+        sample.peeled_response=peeled.response;
+        if (!peeled.response) sample.reason=peeled.reason.empty() ? "peeling-unavailable" : peeled.reason;
+        else if (!std::isfinite(*peeled.response)) sample.reason="nonfinite-peeled-response";
+        else if (!std::isfinite(point.GetOffset()) || !std::isfinite(point.GetWidth()) || point.GetWidth()<=0)
+            sample.reason="invalid-joint-charge-profile";
+        else
         {
-            sample.reason = peeled.reason.empty() ? "peeling-unavailable" : peeled.reason;
-            output.samples.push_back(std::move(sample));
-            continue;
-        }
-        if (!std::all_of(raw_sample.point.position.begin(), raw_sample.point.position.end(),
-                [](double coordinate) { return std::isfinite(coordinate); }))
-        {
-            sample.reason = "sample-geometry-unavailable";
-            output.samples.push_back(std::move(sample));
-            continue;
-        }
-        const auto stencil = MakeTricubicStencil(m_geometry, raw_sample.point.position);
-        const double charge_response = InterpolateTricubic(stencil, [&](const auto & node) {
-            const auto grid=stencil.Index(node);
-            const auto found = m_row_index_by_grid.find(grid);
-            if (found != m_row_index_by_grid.end())
+            const double charge=point.GetOffset()*joint_component::EvaluateKernel(
+                observation.squared_distance,point.GetWidth(),2.5).charge;
+            if (!std::isfinite(charge)) sample.reason="nonfinite-fixed-charge-response";
+            else
             {
-                const auto charge = own_charge.find(found->second);
-                return charge == own_charge.end() ? 0.0 : charge->second;
+                sample.fixed_charge_response=charge;
+                const double response=*peeled.response-charge;
+                if (std::isfinite(response)) sample.gaussian_response=response;
+                else sample.reason="nonfinite-charge-corrected-response";
             }
-            const auto basis=joint_component::EvaluateKernel(
-                SquaredDistance(atom->GetPosition(),m_geometry.GetGridPosition(grid)),point.GetWidth(),2.5);
-            return point.GetOffset()*basis.charge;
-        });
-        if (std::isfinite(charge_response))
-        {
-            sample.fixed_charge_response = charge_response;
-            const double gaussian_response = *peeled.response - charge_response;
-            if (std::isfinite(gaussian_response)) sample.gaussian_response = gaussian_response;
-            else sample.reason = "nonfinite-charge-corrected-response";
         }
-        else sample.reason = "nonfinite-fixed-charge-response";
         output.samples.push_back(std::move(sample));
     }
     if (m_metrics)
     {
-        m_metrics->total_prepared_sample_count += output.samples.size();
-        for (const auto & sample : output.samples)
+        m_metrics->total_prepared_sample_count+=output.samples.size();
+        for (const auto & sample:output.samples)
             if (sample.gaussian_response) ++m_metrics->valid_local_sample_count;
             else ++m_metrics->invalid_local_sample_count;
-        const auto local_payload = output.samples.size() * sizeof(PostJointLocalSample) +
-            raw.size() * (sizeof(LocalPotentialSample) + 5 * sizeof(double)) +
-            input.support[atom_index].size() *
-                (sizeof(std::pair<const std::size_t, double>) + 2 * sizeof(void *));
-        m_metrics->estimated_peak_postprocessing_payload_bytes = std::max(
+        const auto payload=output.samples.size()*(sizeof(PostJointLocalSample)+sizeof(LocalPotentialSample));
+        m_metrics->estimated_peak_postprocessing_payload_bytes=std::max(
             m_metrics->estimated_peak_postprocessing_payload_bytes,
-            m_metrics->estimated_peeling_result_bytes + local_payload +
-                m_metrics->estimated_context_lookup_bytes +
-                m_metrics->estimated_reconstruction_workspace_bytes);
+            m_metrics->estimated_context_lookup_bytes+m_metrics->estimated_peeling_result_bytes+payload);
     }
     return output;
 }

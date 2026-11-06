@@ -794,6 +794,7 @@ TEST(UmapEmbeddingCommandTest, ExcludesMissingRequiredFeaturesAndAllowsMissingAn
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include "data/detail/JointStageAdapter.hpp"
 #include "core/detail/joint_component/Numerics.hpp"
+#include "support/JointPostprocessingTestHelpers.hpp"
 TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNoInputFiles)
 {
     command_test::ScopedTempDir dir{"joint_umap_saved"};
@@ -890,9 +891,16 @@ TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNo
     for(const auto & atom:model->GetAtomList())
     {
         const auto view=rg::AtomLocalPotentialView::For(*atom);
+        if(view.GetStageEstimate(rg::FittingStage::Second).source.role!=rg::FittingRole::Target) continue;
         rg::PostFitPeelingResult peeling; peeling.source=view.GetStageEstimate(rg::FittingStage::Second).source;
         for(const auto & sample:original_peeling.at(atom->GetSerialID())) peeling.samples.push_back({sample.response,{}});
-        if(atom->GetSerialID()==1) {peeling.samples[1].response.reset(); peeling.samples[1].reason="outside-joint-domain";}
+        second_stage_test::postprocessing::AssignGridObservationsForTesting(peeling,view.GetRawSamplingEntriesView(),atom->GetPosition());
+        for(auto & sample:peeling.samples)
+        {
+            const auto base=12*static_cast<std::size_t>(atom->GetSerialID()-1);
+            sample.observation.original_row_index+=base; sample.observation.global_grid_index+=base;
+        }
+        if(atom->GetSerialID()==2) {peeling.samples[1].response.reset(); peeling.samples[1].reason="outside-joint-domain";}
         model->EditAnalysis().SetAtomPostFitPeeling(*atom,peeling);
     }
     const auto path=dir.path()/"joint.sqlite";
@@ -907,7 +915,7 @@ TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNo
     const auto metadata_lines=ReadLines(request.output_dir/"umap_embedding_model.csv.metadata.json");
     const auto metadata=boost::json::parse(metadata_lines.at(0));
     EXPECT_EQ(metadata.at("estimator").as_string(),"joint-components");
-    EXPECT_EQ(metadata.at("peeling_mode").as_string(),"grid-consistent");
+    EXPECT_EQ(metadata.at("peeling_mode").as_string(),"original-grid-v1");
     EXPECT_NE(metadata.at("column_semantics").at("offset 2nd").as_string().find("charge-kernel coefficient C"),
         std::string::npos);
     EXPECT_EQ(metadata.at("included_rows").as_int64(),20);

@@ -17,6 +17,7 @@
 #include <rhbm_gem/utils/domain/AtomSelector.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include "support/DataObjectTestSupport.hpp"
+#include "support/JointPostprocessingTestHelpers.hpp"
 
 namespace rg = rhbm_gem;
 
@@ -1826,6 +1827,7 @@ TEST(DataObjectModelAnalysisTest, JointUpdatesInvalidateDependentResultsAcrossTh
         editor.SetAtomStageEstimate(rg::FittingStage::Second, *atom, stage);
         rg::PostFitPeelingResult peeling;
         peeling.source = stage.source; peeling.samples = {{1, {}}, {2, {}}};
+        second_stage_test::postprocessing::AssignGridObservationsForTesting(peeling,view.GetRawSamplingEntriesView(),atom->GetPosition());
         editor.SetAtomPostFitPeeling(*atom, peeling);
         rg::PostJointLocalResult local;
         local.source = stage.source;
@@ -1884,7 +1886,9 @@ TEST(DataObjectModelAnalysisTest, PostJointLocalResultHasIndependentJointEndpoin
     joint.point = rg::GaussianModel3D{2, .5, -.1};
     joint.convergence = rg::JointCheckStatus::Passed;
     editor.SetAtomStageEstimate(rg::FittingStage::Second, atom, joint);
-    editor.SetJointResult(rg::JointAnalysisResult{});
+    rg::JointAnalysisResult grid_snapshot;
+    grid_snapshot.row_ids={"0","1","2","3"};
+    editor.SetJointResult(grid_snapshot);
     const LocalPotentialSampleList raw{
         {2, {.1, {0,0,0}, true}}, {3, {.2, {1,0,0}, true}},
         {4, {.3, {0,1,0}, true}}, {5, {.4, {0,0,1}, true}}};
@@ -1892,6 +1896,7 @@ TEST(DataObjectModelAnalysisTest, PostJointLocalResultHasIndependentJointEndpoin
     rg::PostFitPeelingResult peeling;
     peeling.source = rg::AtomLocalPotentialView::For(atom).GetStageEstimate(rg::FittingStage::Second).source;
     peeling.samples = {{1.5, {}}, {1.4, {}}, {1.3, {}}, {1.2, {}}};
+    second_stage_test::postprocessing::AssignGridObservationsForTesting(peeling,rg::AtomLocalPotentialView::For(atom).GetRawSamplingEntriesView(),atom.GetPosition());
     editor.SetAtomPostFitPeeling(atom, peeling);
 
     rg::PostJointLocalResult local;
@@ -1899,6 +1904,7 @@ TEST(DataObjectModelAnalysisTest, PostJointLocalResultHasIndependentJointEndpoin
     local.status = rg::EvidenceStatus::Available;
     local.reason.clear();
     local.sample_count = raw.size();
+    local.corrected_sample_count=local.positive_sample_count=local.sample_count;
     local.effective_sample_count = raw.size();
     local.fit.alpha_r = 0.2;
     local.fit.ols = {rg::GaussianModel3D{1.7, .55, 0}, {}};
@@ -1922,6 +1928,7 @@ TEST(DataObjectModelAnalysisTest, PostJointLocalResultHasIndependentJointEndpoin
     EXPECT_DOUBLE_EQ(view.GetFinalModel(rg::FittingStage::Second).GetAmplitude(), 2);
 
     editor.SetAtomLocalRawSamplingEntries(atom, raw);
+    second_stage_test::postprocessing::AssignGridObservationsForTesting(peeling,rg::AtomLocalPotentialView::For(atom).GetRawSamplingEntriesView(),atom.GetPosition());
     editor.SetAtomPostFitPeeling(atom, peeling);
     editor.SetAtomPostJointLocalResult(atom, local);
     auto changed = view.GetStageEstimate(rg::FittingStage::Second);
@@ -1954,11 +1961,13 @@ TEST(DataObjectModelAnalysisTest, StageGettersProjectOnePointAndJointSamplesCann
     EXPECT_EQ(view.GetGaussianResult(rg::FittingStage::Second).mdpde.GetModel().ToVector(), stage.point->ToVector());
     EXPECT_FALSE(view.GetGaussianResult(rg::FittingStage::Second).diagnostics);
     stage.source.method = rg::EstimateMethod::JointComponents;
+    stage.source.role = rg::FittingRole::Target;
     editor.SetAtomStageEstimate(rg::FittingStage::Second, atom, stage);
     editor.SetAtomLocalRawSamplingEntries(atom, {{2, {.1, {0,0,0}, true}}, {4, {.2, {1,0,0}, true}}});
     rg::PostFitPeelingResult peeling;
     peeling.source = view.GetStageEstimate(rg::FittingStage::Second).source;
     peeling.samples = {{1, {}}, {2, {}}}; peeling.neighbor_count = 3;
+    second_stage_test::postprocessing::AssignGridObservationsForTesting(peeling,rg::AtomLocalPotentialView::For(atom).GetRawSamplingEntriesView(),atom.GetPosition());
     editor.SetAtomPostFitPeeling(atom, peeling);
     EXPECT_THROW(editor.SetAtomLocalPeelingSamplingEntries(atom, {}), std::invalid_argument);
     EXPECT_THROW(editor.SetAtomLocalNeighborCountForPeeling(atom, 99), std::invalid_argument);

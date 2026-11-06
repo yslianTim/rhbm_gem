@@ -217,8 +217,11 @@ void ModelAnalysisEditor::ApplySecondStageEstimates(std::map<int, LocalStageEsti
 void ModelAnalysisEditor::SetAtomPostFitPeeling(const AtomObject & atom, PostFitPeelingResult value)
 {
     auto & entry = EnsureAtomLocalPotential(m_model_object, atom);
-    const auto & raw = entry.RawSamplingEntries();
-    if (raw.size() != value.samples.size()) throw std::invalid_argument("Peeling/raw sample count mismatch.");
+    const auto position=atom.GetPosition();
+    const auto & data=ModelAnalysisData::Of(m_model_object);
+    const auto validation=data_internal::ValidatePostFitPeelingResult(value,entry.StageEstimate(FittingStage::Second),
+        data.joint_result ? &*data.joint_result:nullptr,&position);
+    if (!validation.empty()) throw std::invalid_argument(validation);
     if (!SameSource(value.source, entry.StageEstimate(FittingStage::Second).source))
         throw std::invalid_argument("Peeling source mismatch.");
     entry.ClearGroupMemberResult();
@@ -254,7 +257,7 @@ void ModelAnalysisEditor::ApplyPostJointLocalResultsBatch(
             throw std::invalid_argument("Post-Joint local results mix Joint runs.");
         const auto & peeling = entry->PostFitPeeling();
         const auto assessment = data_internal::AssessPostJointLocalResult(
-            value, id, joint, peeling ? &*peeling : nullptr, entry->RawSamplingEntries());
+            value, id, joint, peeling ? &*peeling : nullptr);
         if (!assessment.valid) throw std::invalid_argument(assessment.reason);
         updates.emplace_back(entry, &value);
     }
@@ -298,11 +301,10 @@ void ModelAnalysisEditor::ApplyPostFitPeelingsBatch(
             throw std::invalid_argument("Inconsistent Joint run identity in post-fit peeling batch.");
         if (!SameSource(peeling.source, stage.source))
             throw std::invalid_argument("Peeling source mismatch.");
-        if (entry->RawSamplingEntries().size() != peeling.samples.size())
-            throw std::invalid_argument("Peeling/raw sample count mismatch.");
-        for (const auto & sample : peeling.samples)
-            if ((sample.response && !std::isfinite(*sample.response)) || (!sample.response && sample.reason.empty()))
-                throw std::invalid_argument("Invalid post-fit peeling sample.");
+        const auto position=atom->GetPosition();
+        const auto reason=data_internal::ValidatePostFitPeelingResult(peeling,stage,
+            data.joint_result ? &*data.joint_result:nullptr,&position);
+        if (!reason.empty()) throw std::invalid_argument(reason);
         updates.emplace_back(entry, &peeling);
     }
 

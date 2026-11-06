@@ -43,7 +43,7 @@ public:
     void SetPeelingSamplingEntries(LocalPotentialSampleList value)
     {
         if (StageEstimate(FittingStage::Second).source.method == EstimateMethod::JointComponents)
-            throw std::invalid_argument("Joint peeling requires paired raw-sample responses.");
+            throw std::invalid_argument("Joint peeling requires original-grid observations.");
         m_peeling_sampling_entries = std::move(value);
     }
     void SetNeighborCountForPeeling(int value)
@@ -148,8 +148,9 @@ public:
         for (std::size_t i = 0; i < m_post_fit_peeling->samples.size(); ++i)
         {
             if (!m_post_fit_peeling->samples[i].response) continue;
-            auto sample = m_raw_sampling_entries.at(i);
-            sample.response = *m_post_fit_peeling->samples[i].response;
+            const auto & observation=m_post_fit_peeling->samples[i].observation;
+            LocalPotentialSample sample{*m_post_fit_peeling->samples[i].response,
+                {std::sqrt(observation.squared_distance),observation.position,true}};
             samples.push_back(std::move(sample));
         }
         return samples;

@@ -192,14 +192,15 @@ V Pack(const PostJointLocalResult & result)
             {"moment",Matrix(result.information->moment)}};
     A failures;
     for (const auto & failure:result.sample_failures)
-        failures.push_back(O{{"index",failure.raw_sample_index},{"distance",failure.distance},{"reason",failure.reason}});
+        failures.push_back(O{{"original_row",failure.original_row_index},{"grid",failure.global_grid_index},{"distance",failure.distance},{"reason",failure.reason}});
     return O{{"source",Pack(result.source)}, {"status",static_cast<int>(result.status)}, {"reason",result.reason},
         {"alpha",result.fit.alpha_r}, {"ols",Pack(result.fit.ols)}, {"mdpde",Pack(result.fit.mdpde)},
         {"uncertainty_recorded",result.fit.uncertainty_recorded},
         {"diagnostics",result.fit.diagnostics ? Pack(*result.fit.diagnostics):V{}},
         {"fixed_charge",A{result.fixed_charge.coefficient,result.fixed_charge.width}},
         {"information",information}, {"samples",result.sample_count},
-        {"effective_samples",result.effective_sample_count}, {"sample_failures",failures}};
+        {"effective_samples",result.effective_sample_count}, {"corrected_samples",result.corrected_sample_count},
+        {"positive_samples",result.positive_sample_count}, {"fitting_radius",result.fitting_radius}, {"sample_failures",failures}};
 }
 PostJointLocalResult PostJointLocal(const V & value)
 {
@@ -226,11 +227,14 @@ PostJointLocalResult PostJointLocal(const V & value)
     }
     result.sample_count=Read<std::size_t>(o,"samples");
     result.effective_sample_count=Read<std::size_t>(o,"effective_samples");
+    result.corrected_sample_count=Read<std::size_t>(o,"corrected_samples");
+    result.positive_sample_count=Read<std::size_t>(o,"positive_samples");
+    result.fitting_radius=Number(o.at("fitting_radius"));
     for(const auto & item:o.at("sample_failures").as_array())
     {
         const auto & failure=item.as_object();
-        result.sample_failures.push_back({Read<std::size_t>(failure,"index"),Number(failure.at("distance")),
-            Read<std::string>(failure,"reason")});
+        result.sample_failures.push_back({Read<std::size_t>(failure,"original_row"),Number(failure.at("distance")),
+            Read<std::string>(failure,"reason"),Read<std::size_t>(failure,"grid")});
     }
     return result;
 }
@@ -319,7 +323,20 @@ std::string Encode(const ModelObject & model)
     {
         const auto * e=data.FindAtomLocalEntry(*atom); if(!e) continue;
         V peeling;
-        if(e->PostFitPeeling()) { const auto & p=*e->PostFitPeeling(); A samples; for(const auto & s:p.samples) samples.push_back(O{{"response",s.response ? V(*s.response):V{}},{"reason",s.reason}}); peeling=O{{"source",Pack(p.source)},{"mode",p.mode},{"neighbors",p.neighbor_count},{"samples",samples}}; }
+        if(e->PostFitPeeling())
+        {
+            const auto & p=*e->PostFitPeeling();
+            A samples;
+            for(const auto & sample:p.samples)
+            {
+                const auto & observation=sample.observation;
+                samples.push_back(O{{"response",sample.response ? V(*sample.response):V{}},{"reason",sample.reason},
+                    {"original_row",observation.original_row_index},{"grid",observation.global_grid_index},
+                    {"squared_distance",observation.squared_distance},{"raw_response",observation.raw_response},
+                    {"position",j::value_from(observation.position)}});
+            }
+            peeling=O{{"source",Pack(p.source)},{"mode",p.mode},{"neighbors",p.neighbor_count},{"samples",samples}};
+        }
         atoms.push_back(O{{"id",atom->GetSerialID()},{"first",Pack(e->StageEstimate(FittingStage::First))},{"second",Pack(e->StageEstimate(FittingStage::Second))},
             {"first_native",Native(*e,FittingStage::First)},{"second_native",Native(*e,FittingStage::Second)},{"neighbors",(e->PostFitPeeling() || e->StageEstimate(FittingStage::Second).source.method==EstimateMethod::JointComponents) ? V{}:V(e->NeighborCountForPeeling())},
             {"geometry",e->SampleGeometryAvailable()},{"raw",Samples(e->RawSamplingEntries(),e->SampleGeometryAvailable())},{"peeled",(e->PostFitPeeling() || e->StageEstimate(FittingStage::Second).source.method==EstimateMethod::JointComponents) ? V{}:Samples(e->PeelingSamplingEntries(),e->SampleGeometryAvailable())},
@@ -363,6 +380,9 @@ void Decode(ModelObject & model, const std::string & text)
             {
                 const auto & item=sample.as_object(); PeelingSampleEstimate estimate;
                 estimate.reason=Read<std::string>(item,"reason");
+                estimate.observation={Read<std::size_t>(item,"original_row"),Read<std::size_t>(item,"grid"),
+                    Number(item.at("squared_distance")),Number(item.at("raw_response")),
+                    Read<std::array<double,3>>(item,"position")};
                 if(!item.at("response").is_null()) estimate.response=Number(item.at("response"));
                 result.samples.push_back(std::move(estimate));
             }
@@ -431,13 +451,18 @@ void Validate(const ModelObject & model)
             throw std::invalid_argument("Unqualified Joint snapshot conflicts with current Joint stage state.");
         if(s.uncertainty.status==EvidenceStatus::Available && (!s.point || !s.uncertainty.covariance || !s.uncertainty.covariance->allFinite())) throw std::invalid_argument("Available uncertainty lacks finite point/covariance.");
         if(!s.source.atom_id.empty() && s.source.atom_id!=std::to_string(id)) throw std::invalid_argument("Stage atom identity mismatch.");
-        if(e->PostFitPeeling()) {const auto & p=*e->PostFitPeeling(); if(p.samples.size()!=e->RawSamplingEntries().size() || p.source.run_id!=s.source.run_id || p.source.atom_id!=s.source.atom_id) throw std::invalid_argument("Peeling source/shape mismatch.");}
+        if(e->PostFitPeeling())
+        {
+            const auto position=model.FindAtomPtr(id)->GetPosition();
+            const auto reason=data_internal::ValidatePostFitPeelingResult(*e->PostFitPeeling(),s,joint_snapshot,&position);
+            if(!reason.empty()) throw std::invalid_argument(reason);
+        }
         if(e->PostJointLocalResult())
         {
             const auto & local=*e->PostJointLocalResult();
             const auto & peeling=e->PostFitPeeling();
             const auto assessment=data_internal::AssessPostJointLocalResult(
-                local,id,s,peeling ? &*peeling:nullptr,e->RawSamplingEntries());
+                local,id,s,peeling ? &*peeling:nullptr);
             if(!assessment.valid) throw std::invalid_argument(assessment.reason);
         }
         if(e->GroupMemberResult() && s.source.method==EstimateMethod::JointComponents && e->GroupMemberResult()->evidence_source_id!=s.source.run_id) throw std::invalid_argument("Posterior source mismatch.");
@@ -477,7 +502,7 @@ void Validate(const ModelObject & model)
                     throw std::invalid_argument("Group posterior lacks current post-Joint local measurement information.");
                 const auto & peeling=entry->PostFitPeeling();
                 const auto assessment=data_internal::AssessPostJointLocalResult(
-                    *local,atom->GetSerialID(),stage,peeling ? &*peeling:nullptr,entry->RawSamplingEntries());
+                    *local,atom->GetSerialID(),stage,peeling ? &*peeling:nullptr);
                 if(!assessment.valid || !assessment.group_eligible ||
                     member.charge_inferred || !member.fixed_charge ||
                     member.fixed_charge->coefficient!=local->fixed_charge.coefficient ||

@@ -1,4 +1,5 @@
 #include "PostJointLocalValidation.hpp"
+#include <rhbm_gem/data/object/JointAnalysisResult.hpp>
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <Eigen/Eigenvalues>
 #include <algorithm>
@@ -47,9 +48,50 @@ PostJointLocalEvidenceAssessment Invalid(std::string reason)
 }
 }
 
+std::string ValidatePostFitPeelingResult(const PostFitPeelingResult & peeling,
+    const LocalStageEstimate & joint, const JointAnalysisResult * snapshot,
+    const std::array<double,3> * target_position)
+{
+    if (peeling.mode!="original-grid-v1" || !SameSource(peeling.source,joint.source) ||
+        joint.source.method!=EstimateMethod::JointComponents || joint.source.role!=FittingRole::Target)
+        return "Post-Joint grid source/contract mismatch.";
+    std::set<std::size_t> grids;
+    std::optional<std::size_t> previous;
+    for (const auto & sample:peeling.samples)
+    {
+        const auto & observation=sample.observation;
+        if ((previous && observation.original_row_index<=*previous) ||
+            !grids.insert(observation.global_grid_index).second ||
+            !std::isfinite(observation.squared_distance) || observation.squared_distance<0 ||
+            observation.squared_distance>4.0 || !std::isfinite(observation.raw_response) ||
+            !std::all_of(observation.position.begin(),observation.position.end(),
+                [](double value){return std::isfinite(value);}))
+            return "Invalid Post-Joint grid identity/order/observation.";
+        previous=observation.original_row_index;
+        if ((sample.response && (!std::isfinite(*sample.response) || !sample.reason.empty())) ||
+            (!sample.response && sample.reason.empty()))
+            return "Invalid Post-Joint available/unavailable response pairing.";
+        if (snapshot && (observation.original_row_index>=snapshot->row_ids.size() ||
+            snapshot->row_ids[observation.original_row_index]!=std::to_string(observation.global_grid_index)))
+            return "Post-Joint Original row mapping mismatch.";
+        if (target_position)
+        {
+            double square{};
+            for (std::size_t axis=0;axis<3;++axis)
+            {
+                const double delta=observation.position[axis]-(*target_position)[axis];
+                square+=delta*delta;
+            }
+            if (std::abs(square-observation.squared_distance)>1.0e-12*std::max(1.0,square))
+                return "Post-Joint target/grid geometry mismatch.";
+        }
+    }
+    return {};
+}
+
 PostJointLocalEvidenceAssessment AssessPostJointLocalResult(
     const PostJointLocalResult & result, int atom_id, const LocalStageEstimate & joint,
-    const PostFitPeelingResult * peeling, const LocalPotentialSampleList & raw_samples)
+    const PostFitPeelingResult * peeling)
 {
     const auto atom_identity = std::to_string(atom_id);
     if (joint.source.method != EstimateMethod::JointComponents || joint.source.role != FittingRole::Target ||
@@ -61,26 +103,37 @@ PostJointLocalEvidenceAssessment AssessPostJointLocalResult(
     if ((result.status == EvidenceStatus::Available && !result.reason.empty()) ||
         (result.status != EvidenceStatus::Available && result.reason.empty()))
         return Invalid("Post-Joint local result status/reason mismatch.");
-    if (result.sample_count != raw_samples.size() || result.effective_sample_count > result.sample_count)
-        return Invalid("Post-Joint local sample count mismatch.");
+    if (result.effective_sample_count > result.positive_sample_count ||
+        result.positive_sample_count > result.corrected_sample_count ||
+        result.corrected_sample_count > result.sample_count ||
+        !std::isfinite(result.fitting_radius) || result.fitting_radius<=0 || result.fitting_radius>2.0)
+        return Invalid("Post-Joint local sample counts/range mismatch.");
     if (peeling)
     {
-        if (!SameSource(peeling->source, result.source) || peeling->samples.size() != raw_samples.size())
-            return Invalid("Post-Joint peeling/raw sample pairing mismatch.");
-        for (const auto & sample : peeling->samples)
-            if (sample.response && !std::isfinite(*sample.response))
-                return Invalid("Post-Joint peeling contains a nonfinite response.");
+        const auto reason=ValidatePostFitPeelingResult(*peeling,joint);
+        if (!reason.empty()) return Invalid(reason);
+        if (result.sample_count!=peeling->samples.size())
+            return Invalid("Post-Joint local/grid sample count mismatch.");
     }
-    if (result.status == EvidenceStatus::Available && !peeling)
-        return Invalid("Available post-Joint local evidence requires current peeling.");
+    else if (result.sample_count || result.status==EvidenceStatus::Available)
+        return Invalid("Post-Joint local evidence requires current grid peeling.");
 
     std::set<std::size_t> failure_indices;
     for (const auto & failure : result.sample_failures)
-        if (failure.raw_sample_index >= raw_samples.size() ||
-            !failure_indices.insert(failure.raw_sample_index).second ||
-            !std::isfinite(failure.distance) || failure.distance != raw_samples[failure.raw_sample_index].point.distance ||
-            failure.reason.empty())
+    {
+        if (!peeling || !failure_indices.insert(failure.original_row_index).second ||
+            !std::isfinite(failure.distance) || failure.reason.empty())
             return Invalid("Invalid post-Joint local sample failure pairing.");
+        const auto found=std::lower_bound(peeling->samples.begin(),peeling->samples.end(),failure.original_row_index,
+            [](const auto & sample,std::size_t row){return sample.observation.original_row_index<row;});
+        if (found==peeling->samples.end() || found->observation.original_row_index!=failure.original_row_index ||
+            found->observation.global_grid_index!=failure.global_grid_index ||
+            std::sqrt(found->observation.squared_distance)!=failure.distance)
+            return Invalid("Invalid post-Joint local sample failure identity.");
+    }
+    if (result.status==EvidenceStatus::Available &&
+        result.corrected_sample_count+result.sample_failures.size()!=result.sample_count)
+        return Invalid("Post-Joint corrected/failure count mismatch.");
 
     if (joint.point)
     {

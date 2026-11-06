@@ -750,16 +750,7 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
     }
     ASSERT_EQ(cli_status,0) << joint_log;
     ASSERT_TRUE(pre_postprocessing_joint_result);
-    const auto reconstruction_marker=joint_log.find("Reconstruction-only lookup:");
-    ASSERT_NE(reconstruction_marker,std::string::npos) << joint_log;
-    const auto evaluation_marker=joint_log.find("node_evaluations=",reconstruction_marker);
-    ASSERT_NE(evaluation_marker,std::string::npos) << joint_log;
-    const auto evaluation_begin=evaluation_marker+std::string("node_evaluations=").size();
-    const auto evaluation_end=joint_log.find(',',evaluation_begin);
-    ASSERT_NE(evaluation_end,std::string::npos) << joint_log;
-    const auto reconstruction_node_evaluations=std::stoull(
-        joint_log.substr(evaluation_begin,evaluation_end-evaluation_begin));
-    EXPECT_GT(reconstruction_node_evaluations,0u);
+    EXPECT_NE(joint_log.find("Original-grid support prediction workspace="),std::string::npos);
 
     rg::DataRepository repository{database_path};
     const auto loaded=repository.LoadModel(key);
@@ -868,8 +859,6 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
     EXPECT_EQ(valid_tail_ratios.size(),25u);
     RecordProperty("joint_target_count",static_cast<int>(target_count));
     RecordProperty("halo_contributor_count",static_cast<int>(stored.atom_ids.size()-target_count));
-    RecordProperty("reconstruction_only_node_evaluations",
-        static_cast<long long>(reconstruction_node_evaluations));
     RecordProperty("tail_complete_targets",static_cast<long long>(complete_tail_target_count));
     RecordProperty("tail_raw_samples",static_cast<long long>(tail_raw_sample_count));
     RecordProperty("tail_valid_samples",static_cast<long long>(tail_valid_sample_count));
@@ -903,7 +892,7 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
     const std::string metadata_text{std::istreambuf_iterator<char>{metadata_file},std::istreambuf_iterator<char>{}};
     const auto metadata=boost::json::parse(metadata_text);
     EXPECT_EQ(metadata.at("estimator").as_string(),"joint-components");
-    EXPECT_EQ(metadata.at("peeling_mode").as_string(),"grid-consistent");
+    EXPECT_EQ(metadata.at("peeling_mode").as_string(),"original-grid-v1");
     EXPECT_EQ(metadata.at("included_rows").as_int64(),static_cast<std::int64_t>(embedded_row_count));
 
     ASSERT_TRUE(rgc::RunCommand(umap).succeeded);

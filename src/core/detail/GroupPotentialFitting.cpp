@@ -30,7 +30,7 @@ bool HasCurrentPostJointLocal(
     const auto & peeling = local.GetPostFitPeeling();
     const auto assessment = data_internal::AssessPostJointLocalResult(
         *result, atom_id, joint,
-        peeling ? &*peeling : nullptr, local.GetRawSamplingEntriesView());
+        peeling ? &*peeling : nullptr);
     if (!assessment.valid) throw std::invalid_argument(assessment.reason);
     return assessment.group_eligible;
 }
