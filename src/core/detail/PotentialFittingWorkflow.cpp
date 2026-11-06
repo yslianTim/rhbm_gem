@@ -265,7 +265,6 @@ void RunJointComponentWorkflow(
     snapshot.metadata.origin=map.GetOrigin();
     const auto postprocessing_start = std::chrono::steady_clock::now();
     postprocessing_metrics.rss_before_postprocessing_bytes = joint_component::CurrentRssBytes();
-    ++postprocessing_metrics.joint_stage_mapping_builds;
     const auto joint_run_id=boost::uuids::to_string(boost::uuids::random_generator()());
     const auto finish_without_downstream = [&] {
         postprocessing_metrics.total_postprocessing_seconds = std::chrono::duration<double>(
@@ -436,8 +435,8 @@ void RunJointComponentWorkflow(
         for (const auto & [reason, count] : postprocessing_metrics.tail_unavailable_reasons)
             tail_detail << " | " << reason << '=' << count;
         LogJointDebug(tail_detail.str());
-        LogJointDebug("[Joint] Original-grid support prediction workspace="+
-            std::to_string(postprocessing_metrics.estimated_reconstruction_workspace_bytes)+" bytes");
+        LogJointDebug("[Joint] Original-grid Peeling workspace="+
+            std::to_string(postprocessing_metrics.estimated_peeling_workspace_bytes)+" bytes");
     }
     postprocessing_metrics.total_postprocessing_seconds = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - postprocessing_start).count();

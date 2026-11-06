@@ -750,7 +750,7 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
     }
     ASSERT_EQ(cli_status,0) << joint_log;
     ASSERT_TRUE(pre_postprocessing_joint_result);
-    EXPECT_NE(joint_log.find("Original-grid support prediction workspace="),std::string::npos);
+    EXPECT_NE(joint_log.find("Original-grid Peeling workspace="),std::string::npos);
 
     rg::DataRepository repository{database_path};
     const auto loaded=repository.LoadModel(key);

@@ -143,10 +143,8 @@ JointPostprocessingContext::JointPostprocessingContext(
         throw std::invalid_argument("Post-fit peeling requires a target-only Pure Exclusion snapshot.");
     if (!IsQualifiedJointAnalysisResult(snapshot))
         throw std::invalid_argument("Post-fit peeling requires a qualified Joint endpoint.");
-    if (m_metrics) ++m_metrics->snapshot_identity_validation_count;
     if (snapshot.atom_ids != input.atom_ids)
         throw std::invalid_argument("Joint peeling snapshot identity mismatch.");
-    if (m_metrics) ++m_metrics->full_row_identity_scan_count;
     if (snapshot.row_ids != input.row_ids)
         throw std::invalid_argument("Joint peeling snapshot identity mismatch.");
     if (!snapshot.selection_domain ||
@@ -197,8 +195,6 @@ JointPostprocessingContext::JointPostprocessingContext(
     }
     if (m_metrics)
     {
-        ++m_metrics->observation_row_mapping_builds;
-        ++m_metrics->contributor_mapping_builds;
         m_metrics->estimated_context_lookup_bytes = m_contributors.contributors.size()*sizeof(JointPeelingContributor);
     }
 }
@@ -399,10 +395,10 @@ std::vector<std::pair<int, PostFitPeelingResult>> JointPostprocessingContext::Bu
         for (const auto & row:rows) entries+=row.size();
         for (const auto & [id,output]:results) { (void)id; samples+=output.samples.size(); }
         m_metrics->estimated_peeling_result_bytes=samples*sizeof(PeelingSampleEstimate);
-        m_metrics->estimated_reconstruction_workspace_bytes=rows.size()*sizeof(std::vector<Contribution>)+
+        m_metrics->estimated_peeling_workspace_bytes=rows.size()*sizeof(std::vector<Contribution>)+
             entries*sizeof(Contribution)+represented.size()*sizeof(std::optional<GaussianModel3D>);
         m_metrics->estimated_peak_postprocessing_payload_bytes=m_metrics->estimated_context_lookup_bytes+
-            m_metrics->estimated_reconstruction_workspace_bytes+m_metrics->estimated_peeling_result_bytes;
+            m_metrics->estimated_peeling_workspace_bytes+m_metrics->estimated_peeling_result_bytes;
     }
     std::sort(results.begin(), results.end(), [](const auto & left, const auto & right) {
         return left.first < right.first;
@@ -422,7 +418,6 @@ PostJointLocalSamples JointPostprocessingContext::BuildPostJointLocalSamples(
     if (!input.selection_domain || !std::binary_search(
             input.selection_domain->target_indices.begin(), input.selection_domain->target_indices.end(), atom_index))
         throw std::invalid_argument("Post-Joint samples require a selected Joint target.");
-    if (m_metrics) ++m_metrics->target_preparation_count;
 
     const auto atom = m_model.FindAtomPtr(atom_id);
     const auto local = AtomLocalPotentialView::For(*atom);
@@ -472,10 +467,6 @@ PostJointLocalSamples JointPostprocessingContext::BuildPostJointLocalSamples(
     }
     if (m_metrics)
     {
-        m_metrics->total_prepared_sample_count+=output.samples.size();
-        for (const auto & sample:output.samples)
-            if (sample.gaussian_response) ++m_metrics->valid_local_sample_count;
-            else ++m_metrics->invalid_local_sample_count;
         const auto payload=output.samples.size()*(sizeof(PostJointLocalSample)+sizeof(LocalPotentialSample));
         m_metrics->estimated_peak_postprocessing_payload_bytes=std::max(
             m_metrics->estimated_peak_postprocessing_payload_bytes,

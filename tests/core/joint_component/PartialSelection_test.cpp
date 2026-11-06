@@ -29,7 +29,6 @@
 #include "core/detail/joint_component/HaloMedianReconstruction.hpp"
 #include "core/detail/PotentialFittingWorkflow.hpp"
 #include "core/detail/joint_component/PostFitPeeling.hpp"
-#include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
 #include "core/detail/MapInterpolation.hpp"
 #include "support/MapSamplerTestSupport.hpp"
 #include "data/io/detail/JointResultJson.hpp"
@@ -515,8 +514,7 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsSelectedTargetsOnceWi
     core::FitOptions options;
     options.estimator = core::PotentialEstimator::JOINT_COMPONENTS;
     options.quiet_mode = true;
-    core::detail::JointPostprocessingMetrics postprocessing_metrics;
-    core::detail::RunJointComponentWorkflow(*f.map, *f.model, options, &postprocessing_metrics);
+    core::detail::RunJointComponentWorkflow(*f.map, *f.model, options);
     core::detail::FirstStageObserverForTesting() = {};
     core::detail::PotentialSamplingObserverForTesting() = {};
     ASSERT_TRUE(f.model->GetAnalysisView().GetJointResult());
@@ -527,12 +525,6 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsSelectedTargetsOnceWi
     const auto expected_stages = rhbm_gem::data_internal::BuildJointStageEstimates(result, "expected-run");
     EXPECT_EQ(f.model->GetSelectedAtoms(), selected);
     EXPECT_EQ(f.model->GetSelectedBonds(), bonds);
-    EXPECT_EQ(postprocessing_metrics.snapshot_identity_validation_count, 1u);
-    EXPECT_EQ(postprocessing_metrics.full_row_identity_scan_count, 1u);
-    EXPECT_EQ(postprocessing_metrics.observation_row_mapping_builds, 1u);
-    EXPECT_EQ(postprocessing_metrics.contributor_mapping_builds, 1u);
-    EXPECT_EQ(postprocessing_metrics.joint_stage_mapping_builds, 1u);
-    EXPECT_EQ(postprocessing_metrics.target_preparation_count, selected.size());
     EXPECT_EQ(result.row_ids, problem.OriginalInput().row_ids);
     ASSERT_EQ(result.initialization.atoms.size(), problem.Input().atom_ids.size());
     std::size_t local_regression_count{};
@@ -852,7 +844,7 @@ TEST(JointComponentPartialSelectionTest, PeelingIgnoresContributorsOutsideActual
 
 }
 
-TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextValidatesIdentityAndBuildsMappingsOnce)
+TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextPreservesGridEvidenceAndRejectsForeignMappings)
 {
     auto f = joint_partial_test::Make("bridge");
     const std::array<int,3> atom_ids{10,20,30};
@@ -891,13 +883,8 @@ TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextValidatesIde
         f.model->EditAnalysis().SetAtomLocalRawSamplingEntries(*atom,raw);
     }
 
-    core::detail::JointPostprocessingMetrics metrics;
     const auto context=postprocessing_test::MakeJointPostprocessingContext(
-        *f.map, *f.model, problem, snapshot, &metrics);
-    EXPECT_EQ(metrics.snapshot_identity_validation_count, 1u);
-    EXPECT_EQ(metrics.full_row_identity_scan_count, 1u);
-    EXPECT_EQ(metrics.observation_row_mapping_builds, 1u);
-    EXPECT_EQ(metrics.contributor_mapping_builds, 1u);
+        *f.map, *f.model, problem, snapshot);
     const auto peelings = postprocessing_test::BuildPostFitPeelingSamples(context,
         problem.OriginalInput().selection_domain->target_indices);
     ASSERT_EQ(peelings.size(), atom_ids.size());
@@ -918,15 +905,9 @@ TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextValidatesIde
         ++map_entry;
     }
     EXPECT_EQ(map_entry, peelings.end());
-    EXPECT_EQ(metrics.snapshot_identity_validation_count, 1u);
-    EXPECT_EQ(metrics.full_row_identity_scan_count, 1u);
-    EXPECT_EQ(metrics.observation_row_mapping_builds, 1u);
-    EXPECT_EQ(metrics.contributor_mapping_builds, 1u);
-    EXPECT_EQ(metrics.target_preparation_count, 0u);
 
     const auto standalone_peelings = postprocessing_test::BuildPostFitPeelingSamples(
         *f.map, *f.model, problem, problem.Input().selection_domain->target_indices, &snapshot);
-    std::size_t expected_prepared_samples{};
     std::size_t target_position{};
     for (const auto * atom : f.model->GetSelectedAtoms())
     {
@@ -979,22 +960,9 @@ TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextValidatesIde
         const auto basis=core::joint_component::EvaluateKernel(shared.samples.front().squared_distance,stage.point->GetWidth(),2.5);
         EXPECT_DOUBLE_EQ(*shared.samples.front().fixed_charge_response,
             stage.point->GetOffset()*basis.charge);
-        expected_prepared_samples += shared.samples.size();
-        EXPECT_EQ(metrics.snapshot_identity_validation_count, 1u);
-        EXPECT_EQ(metrics.full_row_identity_scan_count, 1u);
-        EXPECT_EQ(metrics.observation_row_mapping_builds, 1u);
-        EXPECT_EQ(metrics.contributor_mapping_builds, 1u);
         ++target_position;
     }
     EXPECT_EQ(target_position,atom_ids.size());
-    EXPECT_EQ(metrics.snapshot_identity_validation_count, 1u);
-    EXPECT_EQ(metrics.full_row_identity_scan_count, 1u);
-    EXPECT_EQ(metrics.observation_row_mapping_builds, 1u);
-    EXPECT_EQ(metrics.contributor_mapping_builds, 1u);
-    EXPECT_EQ(metrics.target_preparation_count, atom_ids.size());
-    EXPECT_EQ(metrics.total_prepared_sample_count, expected_prepared_samples);
-    EXPECT_EQ(metrics.total_prepared_sample_count,
-        metrics.valid_local_sample_count + metrics.invalid_local_sample_count);
 
     const auto & target_peeling=peelings.at(atom_ids.front());
     const auto expect_lookup_rejected=[&](const auto & lookup_context,int id,const char * expected_message) {
@@ -1681,7 +1649,7 @@ TEST(JointComponentPartialSelectionTest, CompleteModelWidthSensitivityPropagates
 
 }
 
-TEST(JointComponentPartialSelectionTest, WeakJointWidthPolicyComparisonUsesOnlyQualifiedLocalGroupMeasurements)
+TEST(JointComponentPartialSelectionTest, GroupInferenceUsesQualifiedLocalMeasurementsAndExcludesIneligibleMembers)
 {
     using namespace rhbm_gem;
     std::vector<std::unique_ptr<AtomObject>> atoms;
@@ -1765,17 +1733,17 @@ TEST(JointComponentPartialSelectionTest, WeakJointWidthPolicyComparisonUsesOnlyQ
     EXPECT_DOUBLE_EQ(AtomLocalPotentialView::For(*restored.FindAtomPtr(1)).GetPostJointLocalResult()->fixed_charge.width,1.2);
     const auto exclude=[&](int id) {
         auto & local=locals[static_cast<std::size_t>(id-1)].second;
-        local.status=EvidenceStatus::Ineligible; local.reason="candidate-width-information-exclusion";
+        local.status=EvidenceStatus::Ineligible; local.reason="test-local-evidence-ineligible";
         local.information.reset();
     };
-    exclude(1); // Analysis-only candidate policy, never a production gate.
-    const auto candidate=publish();
-    EXPECT_EQ(candidate.member_ids,(std::vector<int>{2,3,4}));
-    EXPECT_EQ(candidate.eligible_count,3u); EXPECT_EQ(candidate.excluded_count,2u);
-    ASSERT_TRUE(candidate.inference)<<candidate.reason;
-    EXPECT_NE(candidate.inference->mean.ToVector(),original.inference->mean.ToVector());
-    ASSERT_TRUE(candidate.inference->member_results.front().parameter_covariance);
-    EXPECT_FALSE(candidate.inference->member_results.front().parameter_covariance->isApprox(
+    exclude(1); // Ineligible Local evidence must not enter Group inference.
+    const auto excluded=publish();
+    EXPECT_EQ(excluded.member_ids,(std::vector<int>{2,3,4}));
+    EXPECT_EQ(excluded.eligible_count,3u); EXPECT_EQ(excluded.excluded_count,2u);
+    ASSERT_TRUE(excluded.inference)<<excluded.reason;
+    EXPECT_NE(excluded.inference->mean.ToVector(),original.inference->mean.ToVector());
+    ASSERT_TRUE(excluded.inference->member_results.front().parameter_covariance);
+    EXPECT_FALSE(excluded.inference->member_results.front().parameter_covariance->isApprox(
         *original.inference->member_results[1].parameter_covariance,1e-8));
     EXPECT_FALSE(AtomLocalPotentialView::For(*model.FindAtomPtr(1)).GetGroupMemberResult());
     exclude(4);

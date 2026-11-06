@@ -37,15 +37,10 @@ JointPeelingContributorUniverse BuildJointPeelingContributorUniverse(
 
 struct JointPostprocessingMetrics
 {
-    std::size_t snapshot_identity_validation_count{};
-    std::size_t full_row_identity_scan_count{};
-    std::size_t observation_row_mapping_builds{};
-    std::size_t contributor_mapping_builds{};
-    std::size_t joint_stage_mapping_builds{};
     std::size_t halo_median_valid_target_count{};
     std::size_t halo_median_geometry_local_halos{};
     std::size_t halo_median_unavailable_halos{};
-    std::size_t estimated_reconstruction_workspace_bytes{};
+    std::size_t estimated_peeling_workspace_bytes{};
     std::size_t grid_peeling_sample_count{};
     std::size_t available_peeling_sample_count{};
     std::size_t unavailable_peeling_sample_count{};
@@ -64,10 +59,6 @@ struct JointPostprocessingMetrics
     double tail_peeling_response_sum{};
     std::map<std::string, std::size_t> tail_coverage_distribution;
     std::map<std::string, std::size_t> tail_unavailable_reasons;
-    std::size_t target_preparation_count{};
-    std::size_t total_prepared_sample_count{};
-    std::size_t valid_local_sample_count{};
-    std::size_t invalid_local_sample_count{};
     std::size_t estimated_context_lookup_bytes{};
     std::size_t estimated_peeling_result_bytes{};
     std::size_t estimated_peak_postprocessing_payload_bytes{};

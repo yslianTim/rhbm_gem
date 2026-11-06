@@ -34,8 +34,6 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <iomanip>
-#include <iostream>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -844,8 +842,8 @@ TEST(PureHaloSupportExclusionTest, RunsFullPureWorkflowWithGeometryLocalHaloSour
     EXPECT_GE(metrics.estimated_peak_postprocessing_payload_bytes,metrics.estimated_peeling_result_bytes);
     RecordProperty("estimated_context_lookup_bytes",
         static_cast<long long>(metrics.estimated_context_lookup_bytes));
-    RecordProperty("estimated_reconstruction_workspace_bytes",
-        static_cast<long long>(metrics.estimated_reconstruction_workspace_bytes));
+    RecordProperty("estimated_peeling_workspace_bytes",
+        static_cast<long long>(metrics.estimated_peeling_workspace_bytes));
     RecordProperty("estimated_peeling_result_bytes",
         static_cast<long long>(metrics.estimated_peeling_result_bytes));
     RecordProperty("estimated_peak_postprocessing_payload_bytes",
