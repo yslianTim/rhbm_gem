@@ -117,8 +117,8 @@ Halo-subtracted responses require reconstruction provenance. Old raw-index
 Post-Joint records are rejected, with no compatibility reader.
 
 The numerical and statistical range assessment is recorded in the
-[validation report](post-joint-grid-validation.md). Information and Group
-covariance remain conditional working quantities; voxel count alone does not
+[production decision record](post-joint-grid-validation.md). Information and
+Group covariance remain conditional working quantities; voxel count alone does not
 establish independent observations or calibrated posterior coverage.
 
 Only an empty database is initialized. An existing database must have the

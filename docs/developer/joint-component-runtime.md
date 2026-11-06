@@ -175,8 +175,9 @@ Group Fitting from those local results. Peeling collects
 Original support rows at r² <= 4 Å², uses raw map voxel values and direct 2.5 Å
 neighbor kernels, then directly subtracts the Target's own C/tau charge.
 Post-Joint Local fitting uses the positive corrected grid observations within
-1 Å, with one shared dataset for alpha, estimation and information. FirstStage
-Fibonacci sampling is unchanged. These downstream stages retain their own
+the fixed production radius of 1 Å, with one shared dataset for alpha,
+estimation and information. FirstStage Fibonacci sampling is unchanged.
+These downstream stages retain their own
 availability and qualification evidence; see the
 [stage integration guide](joint-stage-integration.md).
 

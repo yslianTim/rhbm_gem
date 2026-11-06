@@ -73,3 +73,10 @@ Joint component estimation uses the separate production contract in the
 [Joint runtime guide](joint-component-runtime.md). Its saved data supports
 SQLite schema v21, Stage Result JSON version 5, and Joint Result JSON schema
 v24 only. These formats do not migrate or decode older formats.
+
+Post-Joint Local fitting collects original voxels within 2 Å, subtracts
+non-self contributors with 2.5 Å support, and directly corrects own charge.
+Its fixed 1 Å positive finite dataset supplies alpha, OLS/MDPDE, rank and
+measurement information together. Wider research fitting ranges are retired;
+the [production decision record](post-joint-grid-validation.md) preserves the
+statistical rationale. Group qualification and WEB remain unchanged.

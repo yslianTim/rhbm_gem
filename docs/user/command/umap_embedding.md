@@ -36,7 +36,7 @@ required features: neighbor distance sum, closest-neighbor distance and tail
 peeling ratio. Missing required values exclude the row with a reported reason;
 fewer than three remaining rows fails the command. Missing ancillary values are
 written as empty CSV fields. A zero response denominator or incomplete Joint
-interpolation coverage makes a peeling ratio unavailable, not zero.
+original-grid coverage makes a peeling ratio unavailable, not zero.
 
 The adjacent `.csv.metadata.json` records estimator, feature names, peeling mode,
 map normalization (null when unknown), standardization, included/excluded row
