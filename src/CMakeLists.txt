@@ -67,6 +67,7 @@ target_sources(rhbm_gem PRIVATE
     core/detail/second_stage/IterationProcess.cpp
     core/MapSampler.cpp
     core/QScoreHelper.cpp
+    core/detail/QScoreSampling.cpp
     core/TestDataFactory.cpp
     core/command/CommandSystem.cpp
     core/painter/AtomPainter.cpp

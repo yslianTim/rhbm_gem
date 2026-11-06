@@ -79,3 +79,21 @@ anisotropic spacing, grid and off-grid points, half-voxel margins, finite
 out-of-range sentinel behavior, nonfinite rejection and singleton grids.
 The Gaussian cubic reference is an interpolation value, not an assertion that
 a finite-grid interpolant exactly reproduces an analytic Gaussian.
+
+## P2: shared QScore-inspired sampling
+
+`QScoreSampling.cpp/.hpp` separates pure spiral geometry from the model-aware
+shell policy. Public QScore shell sampling delegates to that single policy.
+FirstStage candidate construction uses one center and the same accumulated
+shell radii and accepted point ordering. Isolated atoms have 161 candidates,
+81 in the fitting domain (including the center). Shell diagnostics retain
+minimum requested count, attempts, final candidate and accepted counts, and
+success; failed shells contribute no observations even if their final attempt
+accepted fewer than the minimum. Existing QScore center weighting is unchanged.
+
+Release build and sampler/QScore CTest passed. Added tests verify one center,
+all 20 radii and ordering, 1.0 A fitting boundary, pure geometry reference,
+the first successful retry returning 3 rather than 2 points, and all 50 failed
+attempts ending at 106 candidates without fabricated observations. Existing
+hydrogen, crowded-neighbor, foreign-model and correlation tests passed. F0
+atoms, calibration, JCE evidence/state and QScore remain exactly equal to P1.
