@@ -1,6 +1,8 @@
 // Reproducible, single-process FirstStage/JCE study. No production instrumentation.
 #include "core/detail/FirstStageInitialization.hpp"
+#include "support/FirstStageSamplingFixture.hpp"
 #include "core/detail/FittingWorkset.hpp"
+#include "core/detail/PotentialFittingWorkflow.hpp"
 #include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/detail/joint_component/WidthCalibration.hpp"
@@ -11,12 +13,18 @@
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
+#include <rhbm_gem/utils/math/SphereSampler.hpp>
+#include <rhbm_gem/utils/domain/SampleFilter.hpp>
 #include <boost/json.hpp>
 #include <Eigen/QR>
+#include <Eigen/Cholesky>
+#include <Eigen/Eigenvalues>
 #include <chrono>
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <sys/resource.h>
@@ -45,42 +53,6 @@ j::array Checks(const std::vector<JointCheck> & checks)
     }
     return out;
 }
-std::unique_ptr<ModelObject> SyntheticModel(double separation)
-{
-    std::vector<std::unique_ptr<AtomObject>> atoms;
-    for (int i=0;i<24;++i)
-    {
-        auto atom=std::make_unique<AtomObject>();
-        atom->SetSerialID(i+1); atom->SetElement(Element::CARBON);
-        atom->SetPosition(.13+separation*(i%4),.17+separation*((i/4)%3),.19+separation*(i/12));
-        atoms.push_back(std::move(atom));
-    }
-    auto model=std::make_unique<ModelObject>(std::move(atoms));
-    model->SelectAllAtoms(); return model;
-}
-std::unique_ptr<MapObject> SyntheticMap(const ModelObject & model,double spacing,double noise)
-{
-    const auto last=model.GetAtomList().back()->GetPosition();
-    const std::array<double,3> origin{-3.,-3.,-3.};
-    std::array<int,3> dims{};
-    for (std::size_t k=0;k<3;++k) dims[k]=static_cast<int>(std::ceil((last[k]+6.)/spacing));
-    const auto count=static_cast<std::size_t>(dims[0])*static_cast<std::size_t>(dims[1])*static_cast<std::size_t>(dims[2]);
-    auto values=std::make_unique<double[]>(count);
-    for (int z=0;z<dims[2];++z) for (int y=0;y<dims[1];++y) for (int x=0;x<dims[0];++x)
-    {
-        const std::array<double,3> p{origin[0]+x*spacing,origin[1]+y*spacing,origin[2]+z*spacing};
-        double value=noise*std::sin(2.13*x+1.57*y+.73*z);
-        for (std::size_t i=0;i<model.GetAtomList().size();++i)
-        {
-            const auto q=model.GetAtomList()[i]->GetPosition(); double square=0;
-            for (std::size_t k=0;k<3;++k) square+=(p[k]-q[k])*(p[k]-q[k]);
-            value+=(1.5+.02*static_cast<double>(i))*n::EvaluateKernel(square,.35+.005*static_cast<double>(i),2.5).gaussian;
-        }
-        const auto index=static_cast<std::size_t>(x)+static_cast<std::size_t>(dims[0])*(static_cast<std::size_t>(y)+static_cast<std::size_t>(dims[1])*static_cast<std::size_t>(z));
-        values[index]=value;
-    }
-    return std::make_unique<MapObject>(dims,std::array<double,3>{spacing,spacing,spacing},origin,std::move(values));
-}
 j::object DescribeFit(const JointFitResult & fit)
 {
     j::array components;
@@ -99,29 +71,178 @@ j::object DescribeFit(const JointFitResult & fit)
     }
     return out;
 }
+
+void GeometryControl(MapObject & map,ModelObject & model,const d::FittingWorkset & workset,
+    d::MapInterpolationMethod interpolation)
+{
+    auto editor=model.EditAnalysis();
+    for (const auto * atom:workset.contributors)
+    {
+        // Match F0 shell radii/count/center/neighbor policy; change sphere geometry only.
+        const auto fibonacci=sphere_sampler::GenerateFibonacciDeterministic(atom->GetPosition());
+        SamplingPointList points;
+        for (std::size_t i=0;i<fibonacci.size();i+=10)
+            for (const auto & p:d::GenerateSpiralSpherePoints(atom->GetPositionRef(),fibonacci[i].distance,10))
+                points.push_back({fibonacci[i].distance,p,true});
+        std::vector<std::array<double,3>> neighbors;
+        for (const auto * neighbor:atom->FindNeighborAtoms())
+            if (neighbor->GetElement()!=Element::HYDROGEN) neighbors.push_back(neighbor->GetPosition());
+        sample_filter::FilterSamplingPointList(points,atom->GetPosition(),neighbors);
+        editor.SetAtomLocalRawSamplingEntries(*atom,d::BuildLocalPotentialSampleList(map,points,interpolation));
+    }
+}
+
+j::object WorkingInformation(const RHBMMemberDataset & dataset,const LocalGaussianResult & local)
+{
+    j::object out;
+    if (!local.fit_result || local.fit_result->data_covariance.rows()!=dataset.y.size()) return out;
+    const auto diagonal=local.fit_result->data_covariance.diagonal();
+    if (!diagonal.allFinite() || !(diagonal.array()>0.).all()) return out;
+    const Eigen::Matrix2d information=dataset.X.transpose()*diagonal.cwiseInverse().asDiagonal()*dataset.X;
+    Eigen::LLT<Eigen::Matrix2d> factor(information);
+    if (factor.info()!=Eigen::Success) return out;
+    const Eigen::Matrix2d covariance=factor.solve(Eigen::Matrix2d::Identity());
+    const auto model=local.mdpde.GetModel(); const double a=model.GetAmplitude(),t=model.GetWidth();
+    Eigen::Matrix2d jacobian; jacobian << a,-1.5*a*t*t,0.,-.5*t*t*t;
+    const Eigen::Matrix2d physical=jacobian*covariance*jacobian.transpose();
+    const Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> spectrum(information);
+    out["eigenvalues"]=Values({spectrum.eigenvalues()[0],spectrum.eigenvalues()[1]});
+    out["beta_covariance"]=j::array{covariance(0,0),covariance(0,1),covariance(1,0),covariance(1,1)};
+    out["amplitude_width_covariance"]=j::array{physical(0,0),physical(0,1),physical(1,0),physical(1,1)};
+    return out;
+}
+
+void SelectRealTargets(ModelObject & model)
+{
+    model.SelectAllAtoms(false); std::size_t count=0;
+    for (const auto & atom:model.GetAtomList())
+        if (atom->GetElement()!=Element::HYDROGEN && count++<120) model.SetAtomSelected(atom->GetSerialID(),true);
+}
+
+j::object AuditEndpoints(const JointProblem & problem,const std::filesystem::path & directory,
+    const std::string & prefix)
+{
+    const auto read=[](const std::filesystem::path & path) {
+        std::ifstream stream(path);
+        return j::parse(std::string(std::istreambuf_iterator<char>(stream),{})).as_object();
+    };
+    const auto reference=read(directory/(prefix+"-F0-production.json"));
+    const auto & reference_fit=reference.at("joint").as_object();
+    const auto predict=[&](const j::object & fit) {
+        std::vector<double> prediction(problem.Input().observations.size(),0.);
+        const auto & tau=fit.at("tau").as_array(), & ac=fit.at("ac").as_array();
+        for (std::size_t atom=0;atom<tau.size();++atom)
+            for (const auto & support:problem.Input().support[atom])
+            {
+                const auto kernel=n::EvaluateKernel(support.squared_distance,j::value_to<double>(tau[atom]),2.5);
+                prediction[support.row]+=j::value_to<double>(ac[2*atom])*kernel.gaussian+
+                    j::value_to<double>(ac[2*atom+1])*kernel.charge;
+            }
+        return prediction;
+    };
+    const auto reference_prediction=predict(reference_fit);
+    j::array states;
+    for (const auto & entry:std::filesystem::directory_iterator(directory))
+    {
+        const auto name=entry.path().filename().string();
+        if (!name.starts_with(prefix+"-") || entry.path().extension()!=".json") continue;
+        const auto data=read(entry.path()); const auto & fit=data.at("joint").as_object();
+        if (!fit.contains("tau")) continue;
+        const auto prediction=predict(fit); double prediction_difference=0.,objective=0.;
+        for (std::size_t row=0;row<prediction.size();++row)
+        {
+            prediction_difference=std::max(prediction_difference,std::abs(prediction[row]-reference_prediction[row]));
+            const double residual=(prediction[row]-problem.Input().observations[row])/problem.ObservationScale();
+            objective+=residual*residual/2.;
+        }
+        const auto & tau=fit.at("tau").as_array(), & ac=fit.at("ac").as_array();
+        j::array changed; double maximum_tau_difference=0.; std::size_t active_widths=0;
+        const double bound=data.contains("common_bound") ? j::value_to<double>(data.at("common_bound")) :
+            j::value_to<double>(data.at("calibration").as_object().at("bound"));
+        for (std::size_t atom=0;atom<tau.size();++atom)
+        {
+            const double t=j::value_to<double>(tau[atom]),a=j::value_to<double>(ac[2*atom]),c=j::value_to<double>(ac[2*atom+1]);
+            if (t>=bound*(1.-1e-10)) ++active_widths;
+            const double difference=std::abs(t-j::value_to<double>(reference_fit.at("tau").as_array()[atom]));
+            maximum_tau_difference=std::max(maximum_tau_difference,difference);
+            if (difference<=1e-6) continue;
+            double norm_square=0.,minimum_square=std::numeric_limits<double>::infinity();
+            for (const auto & support:problem.Input().support[atom])
+            {
+                const auto kernel=n::EvaluateKernel(support.squared_distance,t,2.5);
+                const double derivative=(a*kernel.d_gaussian_d_log_tau+c*kernel.d_charge_d_log_tau)/problem.ObservationScale();
+                norm_square+=derivative*derivative; minimum_square=std::min(minimum_square,support.squared_distance);
+            }
+            changed.push_back(j::object{{"id",problem.Input().atom_ids[atom]},{"tau",t},{"difference",difference},
+                {"amplitude",a},{"charge",c},{"minimum_support_radius",std::sqrt(minimum_square)},
+                {"normalized_width_column_norm",std::sqrt(norm_square)}});
+        }
+        states.push_back(j::object{{"file",name},{"objective_recomputed",objective},
+            {"objective_recompute_error",objective-j::value_to<double>(fit.at("objective"))},
+            {"prediction_max_difference",prediction_difference},
+            {"normalized_prediction_max_difference",prediction_difference/problem.ObservationScale()},
+            {"maximum_tau_difference",maximum_tau_difference},{"active_widths",active_widths},{"changed_widths",changed}});
+    }
+    return {{"reference",prefix+"-F0-production.json"},{"states",states}};
+}
 }
 
 int main(int argc,char ** argv)
 {
     try
     {
-        if (argc!=3 && argc!=5) throw std::invalid_argument("Usage: first_stage_sampling_study output.json spacing [model.cif map.map]");
-        const auto start=Clock::now();
-        auto model=argc==5 ? ReadModel(argv[3]) : SyntheticModel(5.5);
-        auto map=argc==5 ? ReadMap(argv[4]) : SyntheticMap(*model,std::stod(argv[2]),1e-4);
-        if (argc==5)
+        if (argc!=5 && argc!=7) throw std::invalid_argument(
+            "Usage: first_stage_sampling_study output.json scenario[:replicate] F0|F1|Q0|Q1|Q8|S0|S1 production|common_bound [model.cif map.map]");
+        if (std::string(argv[2])=="audit" && argc==7)
         {
-            model->SelectAllAtoms(false); std::size_t count=0;
-            for (const auto & atom:model->GetAtomList())
-                if (atom->GetElement()!=Element::HYDROGEN && count++<120) model->SetAtomSelected(atom->GetSerialID(),true);
+            auto model=ReadModel(argv[5]); auto map=ReadMap(argv[6]); SelectRealTargets(*model);
+            const auto problem=BuildPureHaloSupportExclusionProblem(*map,*model);
+            std::ofstream stream(argv[1]); stream << j::serialize(AuditEndpoints(problem,argv[4],argv[3])) << '\n';
+            return 0;
         }
+        const auto start=Clock::now();
+        const std::string scenario_arg=argv[2],id=argv[3],bound_mode=argv[4];
+        const auto colon=scenario_arg.find(':'); const auto scenario=scenario_arg.substr(0,colon);
+        const int replicate=colon==std::string::npos ? 0 : std::stoi(scenario_arg.substr(colon+1));
+        if (replicate<0 || replicate>2) throw std::invalid_argument("Replicate must be 0..2.");
+        if (scenario!="fine" && scenario!="coarse" && scenario!="noisy" && scenario!="crowded" && scenario!="real")
+            throw std::invalid_argument("Unknown study scenario.");
+        d::JointSeedSamplingPolicy policy;
+        if (id=="Q0" || id=="Q1" || id=="Q8") policy.sampling=d::JointSeedSamplingMethod::QScoreSpiralShells;
+        else if (id!="F0" && id!="F1" && id!="S0" && id!="S1") throw std::invalid_argument("Unknown study policy.");
+        if (id=="F1" || id=="Q1" || id=="S1") policy.interpolation=d::MapInterpolationMethod::Trilinear;
+        const bool real=argc==7,production=bound_mode=="production";
+        if (real!=(scenario=="real")) throw std::invalid_argument("Real scenario requires model/map paths.");
+        auto model=real ? ReadModel(argv[5]) : second_stage_test::FirstStageStudyModel(scenario=="crowded" ? 1.4 : 5.5,replicate);
+        auto map=real ? ReadMap(argv[6]) : second_stage_test::FirstStageStudyMap(*model,scenario=="fine" ? .2 : .4,scenario=="noisy" ? .05 : 1e-4,replicate);
+        if (real)
+            SelectRealTargets(*model);
         const auto problem=BuildPureHaloSupportExclusionProblem(*map,*model);
         const auto workset=d::MakeJointFittingWorkset(*model,problem);
         model->EditAnalysis().InitializeFromSelection();
         FitOptions options; options.quiet_mode=true;
         const auto init_start=Clock::now();
-        const auto init=d::PrepareJointWidthInitialization(*map,*model,workset,options);
-        j::object output{{"policy","F0"},{"initialization_seconds",Seconds(init_start)},
+        d::JointSeedSamplingReport report;
+        const auto init=[&] {
+            if (id!="Q8" && id!="S0" && id!="S1")
+                return d::PrepareJointWidthInitialization(*map,*model,workset,options,policy,&report);
+            if (id=="Q8")
+            {
+                d::RunJointSeedSamplingWorkflow(*map,*model,workset.contributors,1,{},true,policy,&report);
+                for (const auto * atom:workset.contributors)
+                {
+                    auto raw=AtomLocalPotentialView::For(*atom).GetRawSamplingEntries(false);
+                    const auto center=raw.front(); raw.insert(raw.begin(),7,center);
+                    model->EditAnalysis().SetAtomLocalRawSamplingEntries(*atom,std::move(raw));
+                }
+            }
+            else GeometryControl(*map,*model,workset,policy.interpolation);
+            return d::RunJointFirstStageInitializationFromPreparedSamples(*model,workset,options);
+        }();
+        j::object output{{"policy",id},{"scenario",scenario_arg},{"bound_mode",production ? "production" : "common-research"},
+            {"sampling",id=="S0" || id=="S1" ? "matched-spiral-control" : std::string(d::JointSeedSamplingName(policy.sampling))},
+            {"interpolation",d::MapInterpolationName(policy.interpolation)},
+            {"initialization_seconds",Seconds(init_start)},
             {"grid_spacing",Values({map->GetGridSpacing()[0],map->GetGridSpacing()[1],map->GetGridSpacing()[2]})}};
         j::array records;
         for (std::size_t i=0;i<init.atoms.size();++i)
@@ -131,20 +252,38 @@ int main(int argc,char ** argv)
             const auto & raw=view.GetRawSamplingEntriesView();
             const auto selected=view.GetSamplingEntries(FittingStage::First);
             std::vector<double> responses; std::map<double,std::size_t> radii;
-            std::size_t positive=0,fit_count=0;
+            std::size_t positive=0,fit_count=0,positive_selected=0;
+            std::map<double,std::size_t> fitting_radii;
             for (const auto & s:raw) { ++radii[s.point.distance]; if (s.response>0) ++positive; }
-            for (const auto & s:selected) { responses.push_back(s.response); if (s.point.distance<=1.) ++fit_count; }
+            for (const auto & s:selected)
+            {
+                responses.push_back(s.response); if (s.response>0.) ++positive_selected;
+                if (s.point.distance<=1.) { ++fit_count; if (s.response>0.) ++fitting_radii[s.point.distance]; }
+            }
             const d::PreparedLocalGaussianDesign design(selected,0.,1.);
             const auto dataset=design.BuildSelectedDataset(responses,GaussianModel3D{0.,1.,0.});
             j::array radial;
             for (const auto & [radius,count]:radii) radial.push_back(j::array{radius,count});
-            records.push_back(j::object{{"id",record.id},{"raw",raw.size()},{"selected",selected.size()},
+            j::object saved{{"id",record.id},{"raw",raw.size()},{"selected",selected.size()},
                 {"positive_raw",positive},{"fitting_candidates",fit_count},{"retained",dataset.y.size()},
+                {"positive_selected",positive_selected},{"distinct_fitting_radii",fitting_radii.size()},
                 {"rank",dataset.y.size() ? Eigen::ColPivHouseholderQR<RHBMDesignMatrix>(dataset.X).rank() : 0},
                 {"radial_counts",radial},{"alpha",Number(record.alpha)},
                 {"ols",Values({record.ols[0],record.ols[1],record.ols[2]})},
                 {"mdpde",Values({record.mdpde[0],record.mdpde[1],record.mdpde[2]})},
-                {"qualified",record.first_stage_fit_qualified},{"reason",record.reason},{"seed_source",record.seed_source}});
+                {"qualified",record.first_stage_fit_qualified},{"reason",record.reason},{"seed_source",record.seed_source},
+                {"working_information",WorkingInformation(dataset,view.GetGaussianResult(FittingStage::First))}};
+            if (!real) saved["truth"]=Values({1.5+.02*static_cast<double>(i),.35+.005*static_cast<double>(i)});
+            if (report.atoms.size()==init.atoms.size())
+            {
+                j::array shells;
+                for (const auto & shell:report.atoms[i].shells)
+                    shells.push_back(j::object{{"radius",shell.radius},{"attempts",shell.attempt_count},
+                        {"requested",shell.requested_count},{"candidates",shell.candidate_count},
+                        {"accepted",shell.accepted_count},{"successful",shell.successful}});
+                saved["shells"]=shells;
+            }
+            records.push_back(saved);
         }
         output["atoms"]=records;
         const auto calibration=n::CalibrateGlobalWidth(init,"study");
@@ -157,12 +296,43 @@ int main(int argc,char ** argv)
         if (calibration.p95) { calibrated["p50"]=*calibration.median_width; calibrated["p90"]=*calibration.p90;
             calibrated["p95"]=*calibration.p95; calibrated["p99"]=*calibration.p99; }
         output["calibration"]=calibrated;
+        double initial_objective=0.;
+        for (double y:problem.Input().observations) initial_objective+=(y/problem.ObservationScale())*(y/problem.ObservationScale())/2.;
+        output["initial_objective"]=initial_objective; // Production BCD starts with A=C=0.
         const auto fit_start=Clock::now();
-        const auto fit=FitJointComponentsInitialized(problem,init);
+        const auto fit=[&] {
+            if (production) return FitJointComponentsInitialized(problem,init);
+            const double bound=std::stod(bound_mode);
+            if (!(std::isfinite(bound) && bound>0.)) throw std::invalid_argument("Invalid common bound.");
+            auto common=calibration; common.status="Available"; common.tau_max4=bound;
+            const auto bounded=n::MakeBoundedInitialization(init,common);
+            n::BcdExecutionPolicy solver_policy; solver_policy.eta_upper_bound=std::log(bound);
+            output["common_bound"]=bound; output["common_projections"]=bounded.projection_count;
+            // Research execution, deliberately never labeled Production calibration qualification.
+            if (!init.valid) return JointFitResult{};
+            return n::FitBcdComponents(problem,bounded.tau_values,solver_policy);
+        }();
         output["joint_seconds"]=Seconds(fit_start); output["joint"]=DescribeFit(fit);
         const auto & atom=*model->GetAtomList().front();
         output["qscore"]=CalculateQScoreForAtom(atom,*map,*model,1.,0.);
         output["total_seconds"]=Seconds(start);
+        // Validate the unchanged downstream workflow independently of timing above.
+        if (production && (id=="F0" || id=="F1" || id=="Q0" || id=="Q1"))
+        {
+            const auto downstream_start=Clock::now(); d::JointPostprocessingMetrics metrics;
+            d::RunJointComponentWorkflow(*map,*model,options,&metrics,policy);
+            const auto & snapshot=*model->GetAnalysisView().GetJointResult();
+            std::size_t local_count=0,group_count=0;
+            for (const auto * target:workset.contributors)
+            {
+                const auto view=AtomLocalPotentialView::For(*target);
+                if (view.GetPostJointLocalResult() && view.GetPostJointLocalResult()->status==EvidenceStatus::Available) ++local_count;
+                if (view.GetGroupMemberResult()) ++group_count;
+            }
+            output["downstream"]=j::object{{"local_available",local_count},{"group_available",group_count},
+                {"same_objective",snapshot.objective==fit.objective},{"seconds",Seconds(downstream_start)},
+                {"peeling_samples",metrics.grid_peeling_sample_count},{"peeling_available",metrics.available_peeling_sample_count}};
+        }
         rusage usage{}; getrusage(RUSAGE_SELF,&usage);
 #ifdef __APPLE__
         output["peak_rss_bytes"]=usage.ru_maxrss;
