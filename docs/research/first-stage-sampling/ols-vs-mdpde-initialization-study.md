@@ -181,3 +181,147 @@ error does not consistently improve these path metrics or final recovery.
 Initial A/C=0 objectives are shared and do not measure seed quality. The largest
 synthetic endpoint Width change is only 1.07e-8 A. The synthetic truth advantage
 therefore does not translate into a demonstrated JCE convergence advantage.
+
+## S4: real maps, calibration and endpoint sensitivity
+
+All eight primary real-map runs and eight common-bound runs completed. Both
+120-target subsets use the original full-model neighbor/closure construction,
+map values and preprocessing. File byte counts/SHA-256 match both earlier
+studies; both MM complete numerical baselines are exactly equal. All 16
+endpoints pass unchanged BCD/KKT/Replay/Endpoint rules. No real Width truth is
+available, so neither a smaller bound nor a smaller Width proves accuracy.
+
+The two source donor cohorts are identical: 120 common donors for 6Z6U;
+119 common donors and one common unqualified fit (atom 23) for 8RQB. No
+source-only donor occurs, so quantile changes here are estimator effects,
+not cohort effects. Both sources have 120 valid Widths per map, zero fallback,
+zero refined donors. In 8RQB valid Width and initialization availability do
+not turn the unqualified atom into a donor. Matched-cohort controls are covered
+by tests and are automatically emitted by the runner if cohorts differ.
+
+Raw positive finite Width distribution, including unqualified estimates:
+
+| Map | Source | p50 A | p90 A | p95 A | p99 A |
+|---|---|---:|---:|---:|---:|
+| 6z6u | OLS | 0.623572175 | 0.711822687 | 0.765333377 | 0.915289949 |
+| 6z6u | MDPDE | 0.632081042 | 0.765298567 | 0.795576428 | 1.294110099 |
+| 8rqb | OLS | 0.538074256 | 0.601859143 | 0.647571343 | 0.814430454 |
+| 8rqb | MDPDE | 0.553382740 | 0.621134288 | 0.701491808 | 0.818278114 |
+
+**6Z6U**. The table p95 is the qualified calibration quantile.
+
+| Metric | MM | OM | MO | OO |
+|---|---:|---:|---:|---:|
+| Qualified donors | 120 | 120 | 120 | 120 |
+| Coverage | 100.0000% | 100.0000% | 100.0000% | 100.0000% |
+| Median fallback | 0 | 0 | 0 | 0 |
+| Width p95 A | 0.795576428 | 0.795576428 | 0.765333377 | 0.765333377 |
+| Width upper bound A | 3.182305712 | 3.182305712 | 3.061333508 | 3.061333508 |
+| Bounded projections | 1 | 0 | 1 | 0 |
+| Sweeps | 163 | 165 | 164 | 164 |
+| Final objective | 0.012784319782223002 | 0.012784319782222695 | 0.012784319782222858 | 0.012784319782223001 |
+| Global AC / Width KKT | 1.4486e-08 / 9.6824e-10 | 1.3184e-08 / 9.0081e-10 | 1.3736e-08 / 9.405e-10 | 1.4423e-08 / 9.8516e-10 |
+| Replay / Endpoint | Pass / Pass | Pass / Pass | Pass / Pass | Pass / Pass |
+| JCE seconds | 7.149423 | 7.168676 | 7.150666 | 7.133286 |
+| Process peak RSS MB | 1472.315 | 1472.315 | 1472.315 | 1472.315 |
+
+OLS bound minus MDPDE bound is -0.120972204 A (-3.8014%); the p95 difference is -0.030243051 A.
+
+**8RQB**. The table p95 is the qualified calibration quantile.
+
+| Metric | MM | OM | MO | OO |
+|---|---:|---:|---:|---:|
+| Qualified donors | 119 | 119 | 119 | 119 |
+| Coverage | 99.1667% | 99.1667% | 99.1667% | 99.1667% |
+| Median fallback | 0 | 0 | 0 | 0 |
+| Width p95 A | 0.701762643 | 0.701762643 | 0.647987068 | 0.647987068 |
+| Width upper bound A | 2.807050572 | 2.807050572 | 2.591948271 | 2.591948271 |
+| Bounded projections | 0 | 0 | 0 | 0 |
+| Sweeps | 95 | 95 | 95 | 95 |
+| Final objective | 0.016970359134848675 | 0.016970359134849095 | 0.016970359134848675 | 0.016970359134849095 |
+| Global AC / Width KKT | 6.2032e-08 / 9.9243e-10 | 6.2323e-08 / 9.9407e-10 | 6.2032e-08 / 9.9243e-10 | 6.2323e-08 / 9.9407e-10 |
+| Replay / Endpoint | Pass / Pass | Pass / Pass | Pass / Pass | Pass / Pass |
+| JCE seconds | 16.242883 | 16.333258 | 16.229666 | 16.213992 |
+| Process peak RSS MB | 1638.040 | 1659.994 | 1659.994 | 1659.994 |
+
+OLS bound minus MDPDE bound is -0.215102301 A (-7.6629%); the p95 difference is -0.053775575 A.
+
+6Z6U's largest source discrepancy is atom 172: OLS 0.710901 A versus
+MDPDE 13.830992 A. Both are finite positive estimates under the shared gate;
+this is not an invalid-Width case. MDPDE seeds are projected by 10.648687 A
+under the MDPDE bound and 10.769659 A under the OLS bound. OLS seeds need no
+projection. 8RQB's largest source difference is atom 6 (OLS 0.557500,
+MDPDE 0.794736 A); no seed projects under either bound. Per-atom outliers,
+parameter validity, qualification and source/fallback evidence are retained.
+
+### Common-bound control and independent audit
+
+The common bound is the maximum available calibrated bound for that exact
+dataset. Each constituent calibration independently meets >=20 donors and
+>=95% coverage; the maximum provides a common feasible domain without
+shrinking any calibrated domain. This is explicitly research-only and does
+not acquire Production provenance. Identical-source repeated runs under the
+common bound must reproduce the full endpoint and numerical evidence exactly.
+
+| Dataset | Common bound A | MM/OM/MO/OO sweeps | Objective range |
+|---|---:|---|---|
+| crowded-r0 | 1.974169540 | 124/124/124/124 | 2.9862114215066711e-08 .. 2.9862114219649755e-08 |
+| 6z6u | 3.182305712 | 163/165/163/165 | 0.012784319782222695 .. 0.012784319782223002 |
+| 8rqb | 2.807050572 | 95/95/95/95 | 0.016970359134848675 .. 0.016970359134849095 |
+
+All common endpoints pass the original numerical criteria. Independent
+support-based reconstruction audits final A/C/Width, prediction, objective,
+active Width bound and normalized d(prediction)/d(log Width) columns. The
+largest real objective reconstruction error is below 1e-15. No final Width
+bound is active in any main/common run. Absence of final bound activity does
+not prove the optimization path was independent of the bound.
+
+6Z6U atom 221 starts with OLS/MDPDE Width 0.596216742/0.632147427 A.
+Its nearest retained observation is 1.961676 A away; A is zero in every run.
+The charge coefficient remains approximately 0.000149081, and its normalized
+signal norm is approximately 8.587e-5. The signal is not zero, but its Width
+derivative is tiny. The table's objective contribution is F(full prediction)
+minus F(prediction with this atom removed), retaining other parameters.
+
+| Run | Width A | A | C | Width-column norm | Objective contribution |
+|---|---:|---:|---:|---:|---:|
+| MM | 0.246788791 | 0.0 | 0.000149080861419 | 3.1144e-18 | -3.6867e-09 |
+| OM | 0.250733151 | 0.0 | 0.000149081612166 | 8.2206e-18 | -3.6868e-09 |
+| MO | 0.129805491 | 0.0 | 0.000149081412693 | 7.919e-54 | -3.6868e-09 |
+| OO | 0.095005598 | 0.0 | 0.000149081108279 | 1.1192e-96 | -3.6867e-09 |
+| MM-common | 0.246788791 | 0.0 | 0.000149080861419 | 3.1144e-18 | -3.6867e-09 |
+| OM-common | 0.250733151 | 0.0 | 0.000149081612166 | 8.2206e-18 | -3.6868e-09 |
+| MO-common | 0.246788791 | 0.0 | 0.000149080861419 | 3.1144e-18 | -3.6867e-09 |
+| OO-common | 0.250733151 | 0.0 | 0.000149081612166 | 8.2206e-18 | -3.6868e-09 |
+
+At identical MDPDE bounds, MM versus OM changes atom 221 by 0.003944 A,
+with maximum normalized prediction change 7.045e-10. This is a direct seed
+sensitivity, and both endpoints are certified. Holding the OLS seed fixed,
+OM versus OO changes it by 0.155728 A, with normalized prediction change
+6.323e-10. Their bounded OLS initial vectors are identical and unprojected:
+this isolates a bound/path effect beyond initial clipping. With MDPDE seeds,
+MM versus MO changes it by 0.116983 A; there the bound also changes the initial
+projection of atom 172. Thus bound sensitivity is substantially larger than
+seed sensitivity for this particular weak direction, without demonstrating
+better scientific accuracy. A=0 alone does not prove unidentifiability, because
+charge depends on Width; the directly computed Width-column norms provide
+the relevant local sensitivity evidence.
+
+Common-bound MM/MO and OM/OO reproduce exactly by seed source. 8RQB has maximum
+seed endpoint Width difference 1.313e-8 A and normalized prediction difference
+3.198e-10; changing the bound has no observed endpoint effect. Objective
+agreement must not be described as universal parameter endpoint identity.
+
+### Downstream and persistence
+
+MM uses the unchanged original-grid peeling/Post-Joint Local/Group workflow:
+6Z6U has all 33868 peeling rows, 120 Local results and 45 Group members;
+8RQB has all 141457 rows, 120 Local and 42 Group members. Research-source and
+common-bound results remain in independent JSON. The current persistence
+validator requires Production calibration evidence and a recognized
+initialization data scope. The projection-only bridge intentionally has a
+research scope; raw solver qualification is insufficient to publish it as
+Production evidence. No provenance is forged and no validator is bypassed.
+A regression verifies rejection of raw research solver persistence, plus
+MM downstream processing and exact codec round-trip. Existing persistence,
+invalidation and downstream tests remain enabled for final CTest.

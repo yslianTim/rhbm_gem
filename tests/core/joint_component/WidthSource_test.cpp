@@ -1,11 +1,14 @@
 #include <gtest/gtest.h>
 #include "core/detail/FirstStageInitialization.hpp"
 #include "core/detail/FittingWorkset.hpp"
+#include "core/detail/PotentialFittingWorkflow.hpp"
 #include "core/detail/joint_component/WidthCalibration.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "support/FirstStageSamplingFixture.hpp"
 #include "support/ResearchWidthInitialization.hpp"
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
+#include "data/io/detail/JointResultJson.hpp"
 #include <boost/json.hpp>
 #include <filesystem>
 #include <fstream>
@@ -134,6 +137,29 @@ TEST(WidthSourceTest, RetainsSourceSpecificDonorsMinimumCoverageAndMatchedCohort
         "too-few-qualified-first-stage-target-widths");
 }
 
+TEST(WidthSourceTest, KeepsAsymmetricAndJointInvaliditySeparateFromSeedAvailability)
+{
+    auto input=SourceFixture();
+    for(std::size_t i:{0u,2u})
+    {
+        input.atoms[i].mdpde[1]=0.; input.atoms[i].original_tau=0.;
+        input.atoms[i].reason="invalid-width"; input.tau[i]=0.;
+    }
+    input.atoms[1].ols[1]=0.; input.atoms[2].ols[1]=0.;
+    d::ApplyJointSeedFallback(input);
+    const auto m=width_research::SelectWidths(input,width_research::WidthSource::MDPDE);
+    const auto o=width_research::SelectWidths(input,width_research::WidthSource::OLS);
+    EXPECT_TRUE(o.atoms[0].width_valid); EXPECT_FALSE(m.atoms[0].width_valid);
+    EXPECT_FALSE(o.atoms[1].width_valid); EXPECT_TRUE(m.atoms[1].width_valid);
+    EXPECT_FALSE(o.atoms[2].width_valid); EXPECT_FALSE(m.atoms[2].width_valid);
+    EXPECT_TRUE(o.atoms[3].width_valid); EXPECT_TRUE(m.atoms[3].width_valid);
+    EXPECT_TRUE(o.available); EXPECT_TRUE(m.available);
+    EXPECT_TRUE(o.atoms[0].calibration_donor); EXPECT_FALSE(m.atoms[0].calibration_donor);
+    EXPECT_FALSE(o.atoms[1].calibration_donor); EXPECT_TRUE(m.atoms[1].calibration_donor);
+    EXPECT_EQ(m.fallback_count,2u); EXPECT_EQ(o.fallback_count,2u);
+    EXPECT_EQ(m.tau,input.tau);
+}
+
 TEST(WidthSourceTest, LocksProductionFirstStageAndMmBaseline)
 {
     const auto path=std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path()/
@@ -206,9 +232,19 @@ TEST(WidthSourceTest, LocksProductionFirstStageAndMmBaseline)
         const auto candidate=n::FitBcdComponents(problem,start.tau_values,policy);
         ASSERT_EQ(candidate.RuntimeConvergence(),JointCheckStatus::Passed);
         ASSERT_TRUE(candidate.assembled_state); ASSERT_TRUE(candidate.objective);
+        // Solver qualification alone must not forge Production calibration provenance.
+        EXPECT_THROW(joint_result_io::Encode(CaptureJointAnalysisResult(candidate)),std::invalid_argument);
         EXPECT_NEAR(*candidate.objective,*fit.objective,1e-17);
         for(std::size_t i=0;i<init.atoms.size();++i)
             EXPECT_NEAR(candidate.assembled_state->tau[i],fit.assembled_state->tau[i],3e-9);
     }
+    d::JointPostprocessingMetrics metrics;
+    d::RunJointPostprocessing(*map,*model,problem,CaptureJointAnalysisResult(fit),options,metrics);
+    EXPECT_EQ(metrics.available_peeling_sample_count,metrics.grid_peeling_sample_count);
+    const auto snapshot=model->GetAnalysisView().GetJointResult();
+    ASSERT_TRUE(snapshot);
+    const auto restored=joint_result_io::Decode(joint_result_io::Encode(*snapshot));
+    EXPECT_EQ(restored.objective,fit.objective);
+    EXPECT_EQ(restored.initialization.tau,init.tau);
 }
 }
