@@ -62,3 +62,13 @@ The exact-word search of FO/FQ/Q8/S0/S1/MM/OM/MO/OO found no unrelated productio
 5. C4 tools/test/CMake cleanup -> all registered GoogleTests, no missing/disabled/orphan sources.
 6. C5 evidence/doc archive -> no test/runtime dependencies on study JSON.
 7. C6 Release/Debug all targets/CTest, lint/install, static audit, fixed-workload timing/RSS, clean commits and ordinary push.
+
+## Final token disambiguation
+
+The final broad short-token scan also finds `MO` in ChemicalDataHelper.cpp's
+molybdenum element lookup and `S1` in MapSimulation_test.cpp's synthetic mmCIF
+entity fixture. Both are unrelated production/test identities and are retained.
+All fully named retired policy/tool symbols are absent from src/include/tests/cmake.
+`CalibrateQualifiedWidthDonors` and `GenerateSpiralSpherePoints` remain private
+production implementations; the QScore distance predicate is in the private
+QScore module, outside SampleFilter's public API.

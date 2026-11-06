@@ -130,8 +130,14 @@ TEST(FirstStageInitializationTest, ExactProductionBaselineAndCertifiedEndpoint)
         EXPECT_EQ(component.stop_reason,j::value_to<std::string>(reference.at("stop")));
         EXPECT_EQ(Checks(component.evidence),expected.at("component_checks"));
     }
+    // The original Debug correlation differs from Release by one ULP.
+#ifdef NDEBUG
+    const auto qscore_key="qscore";
+#else
+    const auto qscore_key="qscore_debug";
+#endif
     EXPECT_EQ(CalculateQScoreForAtom(*workset.contributors[0],*map,*model,1.,0.),
-        j::value_to<double>(baseline.at("qscore")));
+        j::value_to<double>(baseline.at(qscore_key)));
     d::JointPostprocessingMetrics metrics;
     d::RunJointPostprocessing(*map,*model,problem,CaptureJointAnalysisResult(fit),options,metrics);
     EXPECT_EQ(metrics.available_peeling_sample_count,metrics.grid_peeling_sample_count);
@@ -176,7 +182,19 @@ TEST(FirstStageInitializationTest, ExactRawSamplingAcrossWorkersAndCrowdedSelect
             captured.push_back(SampleFingerprint(serial.back()));
         }
         FitOptions options; options.quiet_mode=true; options.joint_initialization_thread_size=4;
-        d::PrepareJointWidthInitialization(*map,*model,workset,options);
+        const auto init=d::PrepareJointWidthInitialization(*map,*model,workset,options);
+        const auto calibration=n::CalibrateGlobalWidth(init,"sampling-regression");
+        EXPECT_EQ(calibration.qualified_donor_count,24u); EXPECT_EQ(calibration.fallback_count,0u);
+        if(separation==1.4)
+        {
+            double square=0.;
+            for(std::size_t i=0;i<init.atoms.size();++i)
+            {
+                const double error=init.atoms[i].mdpde[1]-(.35+.005*static_cast<double>(i));
+                square+=error*error;
+            }
+            EXPECT_LT(std::sqrt(square/24.),.03); // Original crowded F0 truth contract.
+        }
         for(std::size_t i=0;i<serial.size();++i)
         {
             const auto raw=AtomLocalPotentialView::For(*workset.contributors[i]).GetRawSamplingEntries(false);
@@ -226,28 +244,26 @@ TEST(FirstStageInitializationTest, MedianFallbackPreservesRawEvidenceAndExcludes
 }
 TEST(FirstStageInitializationTest, WidthTruthRecoveryAndQualificationAtTwoVoxelSpacings)
 {
-    for (double spacing:{.2,.4})
+    for(double spacing:{.2,.4})
     {
-        auto source=second_stage_test::FirstStageSyntheticModel(5.5);
-        auto map=second_stage_test::FirstStageSyntheticMap(*source,spacing);
-        const auto problem=BuildPureHaloSupportExclusionProblem(*map,*source);
+        auto model=second_stage_test::FirstStageSyntheticModel(5.5);
+        auto map=second_stage_test::FirstStageSyntheticMap(*model,spacing);
+        const auto problem=BuildPureHaloSupportExclusionProblem(*map,*model);
+        model->EditAnalysis().InitializeFromSelection();
+        FitOptions options; options.quiet_mode=true;
+        const auto workset=d::MakeJointFittingWorkset(*model,problem);
+        const auto init=d::PrepareJointWidthInitialization(*map,*model,workset,options);
+        const auto calibration=n::CalibrateGlobalWidth(init,"synthetic-truth-regression");
+        EXPECT_EQ(calibration.status,"Available"); EXPECT_EQ(calibration.qualified_donor_count,24u);
+        EXPECT_EQ(calibration.qualified_donor_coverage,1.); EXPECT_EQ(calibration.fallback_count,0u);
+        double square=0.;
+        for(std::size_t i=0;i<init.atoms.size();++i)
         {
-            ModelObject model(*source); model.EditAnalysis().InitializeFromSelection();
-            FitOptions options; options.quiet_mode=true;
-            const auto workset=d::MakeJointFittingWorkset(model,problem);
-            const auto init=d::PrepareJointWidthInitialization(*map,model,workset,options);
-            const auto calibration=n::CalibrateGlobalWidth(init,"synthetic-truth-regression");
-            EXPECT_EQ(calibration.status,"Available"); EXPECT_EQ(calibration.qualified_donor_count,24u);
-            EXPECT_EQ(calibration.qualified_donor_coverage,1.); EXPECT_EQ(calibration.fallback_count,0u);
-            double square=0.;
-            for (std::size_t i=0;i<init.atoms.size();++i)
-            {
-                const double error=init.atoms[i].mdpde[1]-(.35+.005*static_cast<double>(i));
-                square+=error*error;
-            }
-            // Truth-based bounds cover interpolation error, not just solver self-consistency.
-            EXPECT_LT(std::sqrt(square/24.),spacing==.2 ? .002 : .02);
+            const double error=init.atoms[i].mdpde[1]-(.35+.005*static_cast<double>(i));
+            square+=error*error;
         }
+        // Truth-based bounds cover interpolation error, not just solver self-consistency.
+        EXPECT_LT(std::sqrt(square/24.),spacing==.2 ? .002 : .02);
     }
 }
 

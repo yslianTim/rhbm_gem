@@ -8,6 +8,7 @@
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <algorithm>
 #include <memory>
 
 namespace {
@@ -99,7 +100,10 @@ TEST(JointFirstStageSamplingTest, ParallelSamplingFailurePreservesEveryPreviousR
     for(const auto * atom:atoms) before.push_back(AtomLocalPotentialView::For(*atom).GetRawSamplingEntries(false));
     AtomObject unattached;
     auto batch=atoms; batch.insert(batch.begin()+1,&unattached);
-    EXPECT_THROW(RunPotentialSamplingWorkflow(map,*model,batch,4,{},true),std::runtime_error);
+    auto values=std::make_unique<double[]>(32*32*32);
+    std::fill_n(values.get(),32*32*32,2.);
+    MapObject replacement{{32,32,32},{.25,.25,.25},{-3.,-3.,-3.},std::move(values)};
+    EXPECT_THROW(RunPotentialSamplingWorkflow(replacement,*model,batch,4,{},true),std::runtime_error);
     for(std::size_t i=0;i<atoms.size();++i)
         SameSamples(before[i],AtomLocalPotentialView::For(*atoms[i]).GetRawSamplingEntriesView());
 }

@@ -23,3 +23,10 @@ median fallback, certified endpoints, persistence and grid invalidation.
 and immutable bounded projection. Existing workflow/schema tests cover Group
 eligibility and failed-only recovery. The fixture uses precise JSON parsing;
 platform changes must be investigated rather than silently regenerating it.
+
+QScore keeps separate exact Release and Debug references. Its original Debug
+implementation from commit `503a6607`, rebuilt with the current Debug compiler
+flags, returns 0.93585969694861493; the original Release reference is
+0.93585969694861482. This pre-existing one-ULP optimization-mode difference is
+not a cleanup regression. Both modes use exact equality, without loosening the
+correlation tolerance or changing production code.

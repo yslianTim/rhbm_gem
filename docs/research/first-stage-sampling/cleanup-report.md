@@ -137,3 +137,25 @@ supplemental, not the sole evidence source. The production fixture is independen
 Validation: no CMake, source, ordinary tests, Python scripts or developer docs
 refer to the retired research paths/policies; git diff --check and lint_repo
 pass. No persistence, CLI/help schema or Notion document changes.
+
+### C6 — final coverage review and build-mode reference audit
+
+The final review retains the original crowded F0 Width RMSE <0.03 Å contract
+alongside the unchanged isolated 0.002/0.02 Å bounds. The atomicity test now uses
+a different replacement map so an early partial write cannot pass by coinciding
+with prior responses. Removed the copied single-policy test's unnecessary model
+copy/scope. No production code or existing qualification/tolerance changes.
+
+The first full Debug run found only a one-ULP QScore/Release-reference mismatch:
+0.93585969694861493 versus 0.93585969694861482. Rebuilding the initial commit's
+QScoreHelper/QScoreSampling/SampleFilter sources and interpolation header with
+the same Debug compiler flags reproduced 0.93585969694861493 exactly. This is
+an existing optimization-mode difference, not cleanup drift. The fixture now
+stores the original exact Debug and Release references; EXPECT_EQ remains in
+both modes. All other FirstStage/calibration/JCE/raw/peeled/Local baseline
+assertions passed in that first run. Updated Debug FirstStage suites pass 9/9;
+complete Release/Debug acceptance is recorded below after the final runs.
+
+Broad short-token matches MO (molybdenum lookup) and S1 (mmCIF fixture identity)
+are unrelated to the retired factorial controls and remain unchanged. Fully
+named retired symbols have zero src/include/tests/cmake matches.
