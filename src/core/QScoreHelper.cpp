@@ -104,7 +104,7 @@ std::tuple<double, double> GetReferenceGaussianParameters(const MapObject & map_
 SamplingPointList GetRadialPointsForQScore(
     const AtomObject & atom, const ModelObject & model, double radius, int num_points)
 {
-    return detail::SampleQScoreShell(atom, model, radius, num_points).points;
+    return detail::SampleQScoreShell(atom, model, radius, num_points);
 }
 
 double CalculateQScoreForAtom(

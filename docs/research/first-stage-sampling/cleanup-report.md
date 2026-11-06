@@ -61,3 +61,23 @@ Validation: Release all-target build and CTest 21/21 (39.45 s), exact C0
 sampling/FirstStage/calibration/JCE/QScore/peeled/Local fixtures unchanged.
 The EXCLUDE_FROM_ALL retired research source is intentionally not built and
 will be removed with its target in C4; no ordinary test uses the removed policy.
+
+### C2 — QScore owns its production sampling
+
+Removed BuildQScoreSeedSamples, QScoreSeedSamples, QScoreShellDiagnostics and
+QScoreShellSamples. The shell helper now returns SamplingPointList, retaining
+50 attempts, +2 candidates, first-success minimum/all accepted ordering and
+empty failure behavior. Spiral geometry is private. The validated strict
+squared-distance predicate moved verbatim to the private QScore detail module;
+it is no longer a general SampleFilter public API. Its internal declaration
+remains for QScore's numerical boundary/invalid-geometry tests, not as a
+research-only interface. Ownership/cone filtering is untouched.
+
+Removed two FirstStage seed-builder tests; rewrote diagnostic assertions as
+public radial-output checks. Retained deterministic geometry, first-success
+ordering, empty shells, hydrogen/crowding, center weighting, correlation,
+Trilinear boundaries and invalid arguments. Three predicate tests moved intact
+from SampleFilter to QScore. No new exception contracts or thresholds.
+
+Validation: Release build and CTest 21/21 (40.34 s). Exact F0/QScore and all
+C0 fixtures still pass; git diff --check passes.

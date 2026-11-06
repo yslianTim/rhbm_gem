@@ -864,83 +864,32 @@ TEST(QScoreHelperTest, RejectsTargetAtomFromDifferentModel)
         std::invalid_argument);
 }
 
-TEST(QScoreSamplingTest, SeedHasOneCenterAndTheIdenticalQScoreShellPoints)
+TEST(QScoreSamplingTest, FirstSuccessfulRetryAndEmptyShellPreserveAcceptedOrdering)
 {
-    namespace d = rhbm_gem::core::detail;
-    const auto model=MakeModelObject({{{.13,.17,.19},Element::CARBON}});
-    const auto & atom=*model->GetAtomList().front();
-    const auto seed=d::BuildQScoreSeedSamples(atom,*model);
-    ASSERT_EQ(seed.shells.size(),20u);
-    ASSERT_EQ(seed.points.size(),161u);
-    EXPECT_DOUBLE_EQ(seed.points.front().distance,0.);
-    EXPECT_EQ(seed.points.front().position,atom.GetPositionRef());
-    std::size_t index=1,fit_count=1;
-    double radius=.1;
-    for (const auto & shell:seed.shells)
-    {
-        EXPECT_DOUBLE_EQ(shell.radius,radius);
-        EXPECT_TRUE(shell.successful);
-        EXPECT_EQ(shell.attempt_count,1u);
-        EXPECT_EQ(shell.candidate_count,8u);
-        EXPECT_EQ(shell.accepted_count,8u);
-        const auto original=rhbm_gem::core::GetRadialPointsForQScore(atom,*model,radius,8);
-        for (const auto & point:original)
-        {
-            EXPECT_EQ(seed.points.at(index++).position,point.position);
-            if (point.distance<=1.) ++fit_count;
-        }
-        radius+=.1;
-    }
-    EXPECT_EQ(index,seed.points.size());
-    EXPECT_EQ(fit_count,81u);
-    EXPECT_NEAR(seed.points.back().distance,2.,1e-14);
-}
-
-TEST(QScoreSamplingTest, ReportsRetryAndFailureWithoutFabricatedObservations)
-{
-    namespace d = rhbm_gem::core::detail;
     const auto model=MakeModelObject({{{0.,0.,0.},Element::CARBON},{{0.,0.,.5},Element::OXYGEN}});
-    const auto shell=d::SampleQScoreShell(*model->GetAtomList().front(),*model,1.,2);
-    EXPECT_TRUE(shell.diagnostics.successful);
-    EXPECT_EQ(shell.diagnostics.requested_count,2u);
-    EXPECT_EQ(shell.diagnostics.attempt_count,2u);
-    EXPECT_EQ(shell.diagnostics.candidate_count,4u);
-    EXPECT_EQ(shell.diagnostics.accepted_count,3u);
-    EXPECT_EQ(shell.points.size(),3u);
+    const auto shell=rhbm_gem::core::GetRadialPointsForQScore(*model->GetAtomList().front(),*model,1.,2);
+    ASSERT_EQ(shell.size(),3u); // Two candidates fail; the first retry uses four.
+    const auto isolated=MakeModelObject({{{0.,0.,0.},Element::CARBON}});
+    const auto reference=rhbm_gem::core::GetRadialPointsForQScore(*isolated->GetAtomList().front(),*isolated,1.,4);
+    for(std::size_t i=0;i<shell.size();++i)
+    {
+        EXPECT_EQ(shell[i].position,reference[i].position);
+        EXPECT_EQ(shell[i].distance,1.); EXPECT_TRUE(shell[i].is_selected);
+    }
     const auto crowded=MakeCrowdedModelObject();
-    const auto failed=d::SampleQScoreShell(*crowded->GetAtomList().front(),*crowded,1.,8);
-    EXPECT_FALSE(failed.diagnostics.successful);
-    EXPECT_EQ(failed.diagnostics.attempt_count,50u);
-    EXPECT_EQ(failed.diagnostics.candidate_count,106u);
-    EXPECT_LT(failed.diagnostics.accepted_count,8u);
-    EXPECT_TRUE(failed.points.empty());
+    EXPECT_TRUE(rhbm_gem::core::GetRadialPointsForQScore(*crowded->GetAtomList().front(),*crowded,1.,8).empty());
 }
 
 TEST(QScoreSamplingTest, PureGeometryPreservesSpiralInteriorReference)
 {
-    const auto points=rhbm_gem::core::detail::GenerateSpiralSpherePoints({1.,2.,3.},1.,4);
+    const auto model=MakeModelObject({{{1.,2.,3.},Element::CARBON}});
+    const auto points=rhbm_gem::core::GetRadialPointsForQScore(*model->GetAtomList().front(),*model,1.,4);
     ASSERT_EQ(points.size(),4u);
     // Independent scalar formula for the first interior point of the legacy spiral.
     const double h=-1.+2./3.,theta=3.6/std::sqrt(4.*(1.-h*h));
-    EXPECT_NEAR(points[1][0],1.+std::sqrt(1.-h*h)*std::cos(theta),1e-15);
-    EXPECT_NEAR(points[1][1],2.+std::sqrt(1.-h*h)*std::sin(theta),1e-15);
-    EXPECT_NEAR(points[1][2],3.+h,1e-15);
-}
-
-TEST(QScoreSamplingTest, CrowdedSeedOmitsFailedShellsAndPreservesEverySuccessfulPoint)
-{
-    const auto model=MakeCrowdedModelObject();
-    const auto seed=rhbm_gem::core::detail::BuildQScoreSeedSamples(*model->GetAtomList().front(),*model);
-    std::size_t expected=1,failed=0;
-    for (const auto & shell:seed.shells)
-    {
-        const auto count=static_cast<std::size_t>(std::count_if(seed.points.begin(),seed.points.end(),
-            [&](const auto & point){return point.distance==shell.radius;}));
-        if (shell.successful) { EXPECT_EQ(count,shell.accepted_count); expected+=count; }
-        else { ++failed; EXPECT_EQ(count,0u); EXPECT_EQ(shell.attempt_count,50u); }
-    }
-    EXPECT_GT(failed,0u); EXPECT_EQ(seed.points.size(),expected);
-    EXPECT_DOUBLE_EQ(seed.points.front().distance,0.);
+    EXPECT_NEAR(points[1].position[0],1.+std::sqrt(1.-h*h)*std::cos(theta),1e-15);
+    EXPECT_NEAR(points[1].position[1],2.+std::sqrt(1.-h*h)*std::sin(theta),1e-15);
+    EXPECT_NEAR(points[1].position[2],3.+h,1e-15);
 }
 
 TEST(QScoreHelperTest, SharedInterpolationPreservesLegacyBoundaryDiagnostic)
@@ -956,4 +905,32 @@ TEST(QScoreHelperTest, SharedInterpolationPreservesLegacyBoundaryDiagnostic)
     {
         EXPECT_STREQ(error.what(),"CalculateQScoreForAtom sampling position is outside the map boundary.");
     }
+}
+
+TEST(QScoreSamplingTest, NeighborExclusionUsesStrictSquaredDistanceBoundary)
+{
+    const std::array<double, 3> origin{ 0., 0., 0. };
+    const double radius = .9;
+    EXPECT_FALSE(rhbm_gem::core::detail::IsInsideNeighborExclusion({radius, 0., 0.}, origin, radius * radius));
+    EXPECT_TRUE(rhbm_gem::core::detail::IsInsideNeighborExclusion({std::nextafter(radius, 0.), 0., 0.}, origin, radius * radius));
+    EXPECT_FALSE(rhbm_gem::core::detail::IsInsideNeighborExclusion({std::nextafter(radius, 1.), 0., 0.}, origin, radius * radius));
+    EXPECT_FALSE(rhbm_gem::core::detail::IsInsideNeighborExclusion(origin, origin, 0.));
+}
+
+TEST(QScoreSamplingTest, NeighborExclusionHandlesOffGridAndMultipleCandidates)
+{
+    const std::array<double, 3> point{ .137, -.219, 1.153 };
+    EXPECT_FALSE(rhbm_gem::core::detail::IsInsideNeighborExclusion(point, {3.01, .27, -.13}, .81));
+    EXPECT_TRUE(rhbm_gem::core::detail::IsInsideNeighborExclusion(point, {.137, -.219, 1.653}, .81));
+}
+
+TEST(QScoreSamplingTest, NeighborExclusionRejectsNonfiniteGeometryAndInvalidRadius)
+{
+    const std::array<double, 3> origin{ 0., 0., 0. };
+    const auto nan = std::numeric_limits<double>::quiet_NaN();
+    const auto inf = std::numeric_limits<double>::infinity();
+    EXPECT_THROW(rhbm_gem::core::detail::IsInsideNeighborExclusion({nan, 0., 0.}, origin, .81), std::invalid_argument);
+    EXPECT_THROW(rhbm_gem::core::detail::IsInsideNeighborExclusion(origin, {0., inf, 0.}, .81), std::invalid_argument);
+    EXPECT_THROW(rhbm_gem::core::detail::IsInsideNeighborExclusion(origin, origin, nan), std::invalid_argument);
+    EXPECT_THROW(rhbm_gem::core::detail::IsInsideNeighborExclusion(origin, origin, -1.), std::invalid_argument);
 }

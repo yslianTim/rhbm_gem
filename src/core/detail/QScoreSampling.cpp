@@ -2,12 +2,10 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/Constants.hpp>
-#include <rhbm_gem/utils/domain/SampleFilter.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
-#include <utility>
+#include <vector>
 
 namespace rhbm_gem::core::detail {
 namespace {
@@ -16,13 +14,12 @@ constexpr std::size_t kCandidatePointIncrement{ 2 };
 constexpr double kNeighborExclusionRadiusRatio{ 0.9 };
 constexpr double kNeighborSearchRadiusRatio{ 2.0 };
 constexpr double kSpiralSpacing{ 3.6 };
-}
+using RadialPoint = std::array<double, 3>;
 std::vector<RadialPoint> GenerateSpiralSpherePoints(
     const std::array<double, 3> & center,
     double radius,
     std::size_t point_count)
 {
-    if (point_count < 2) throw std::invalid_argument("Spiral sphere requires at least two points.");
     std::vector<RadialPoint> points;
     points.reserve(point_count);
 
@@ -54,7 +51,26 @@ std::vector<RadialPoint> GenerateSpiralSpherePoints(
     return points;
 }
 
-QScoreShellSamples SampleQScoreShell(
+} // namespace
+
+bool IsInsideNeighborExclusion(
+    const std::array<double, 3> & sample_position,
+    const std::array<double, 3> & neighbor_position,
+    double exclusion_radius_squared)
+{
+    numeric_validation::RequireAllFinite(sample_position, "sample position");
+    numeric_validation::RequireAllFinite(neighbor_position, "neighbor position");
+    numeric_validation::RequireFiniteNonNegative(exclusion_radius_squared, "exclusion radius squared");
+    double distance_square{ 0.0 };
+    for (std::size_t axis = 0; axis < sample_position.size(); ++axis)
+    {
+        const auto difference{ sample_position.at(axis) - neighbor_position.at(axis) };
+        distance_square += difference * difference;
+    }
+    return distance_square < exclusion_radius_squared;
+}
+
+SamplingPointList SampleQScoreShell(
     const AtomObject & atom,
     const ModelObject & model,
     double radius,
@@ -85,9 +101,6 @@ QScoreShellSamples SampleQScoreShell(
         static_cast<std::size_t>(num_points)
     };
 
-    QScoreShellSamples result;
-    result.diagnostics.radius = radius;
-    result.diagnostics.requested_count = target_point_count;
     for (int attempt = 0; attempt < kMaximumRadialPointAttempts; ++attempt)
     {
         const auto candidate_point_count{
@@ -110,7 +123,7 @@ QScoreShellSamples SampleQScoreShell(
                 const auto & neighbor_position{
                     neighbor_atom->GetPositionRef()
                 };
-                if (sample_filter::IsInsideNeighborExclusion(
+                if (IsInsideNeighborExclusion(
                         candidate_point, neighbor_position, exclusion_radius_square))
                 {
                     is_rejected = true;
@@ -127,30 +140,13 @@ QScoreShellSamples SampleQScoreShell(
             }
         }
 
-        result.diagnostics.attempt_count = static_cast<std::size_t>(attempt + 1);
-        result.diagnostics.candidate_count = candidate_point_count;
-        result.diagnostics.accepted_count = accepted_points.size();
         if (accepted_points.size() >= target_point_count)
         {
-            result.diagnostics.successful = true;
-            result.points = std::move(accepted_points);
-            return result;
+            return accepted_points;
         }
     }
 
-    return result;
+    return {};
 }
 
-QScoreSeedSamples BuildQScoreSeedSamples(const AtomObject & atom, const ModelObject & model)
-{
-    QScoreSeedSamples result;
-    result.points.push_back(SamplingPoint{0.0, atom.GetPositionRef(), true});
-    for (double radius = 0.1; radius < 2.0 + 0.01; radius += 0.1)
-    {
-        auto shell = SampleQScoreShell(atom, model, radius, 8);
-        result.shells.push_back(shell.diagnostics);
-        result.points.insert(result.points.end(), shell.points.begin(), shell.points.end());
-    }
-    return result;
-}
 } // namespace rhbm_gem::core::detail

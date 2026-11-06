@@ -2,34 +2,15 @@
 
 #include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 #include <array>
-#include <cstddef>
-#include <vector>
 
 namespace rhbm_gem { class AtomObject; class ModelObject; }
 
 namespace rhbm_gem::core::detail {
-using RadialPoint = std::array<double, 3>;
-std::vector<RadialPoint> GenerateSpiralSpherePoints(
-    const RadialPoint & center, double radius, std::size_t point_count);
+// Strict QScore distance comparison; callers own neighbor discovery and radius scaling.
+bool IsInsideNeighborExclusion(
+    const std::array<double, 3> & sample_position,
+    const std::array<double, 3> & neighbor_position,
+    double exclusion_radius_squared);
 
-struct QScoreShellDiagnostics
-{
-    double radius{};
-    std::size_t requested_count{}, attempt_count{}, candidate_count{}, accepted_count{};
-    bool successful{};
-};
-struct QScoreShellSamples
-{
-    SamplingPointList points;
-    QScoreShellDiagnostics diagnostics;
-};
-QScoreShellSamples SampleQScoreShell(const AtomObject &, const ModelObject &, double radius, int num_points);
-
-struct QScoreSeedSamples
-{
-    SamplingPointList points;
-    std::vector<QScoreShellDiagnostics> shells;
-};
-// QScore-inspired FirstStage observations: one center, no repeated-center weight.
-QScoreSeedSamples BuildQScoreSeedSamples(const AtomObject &, const ModelObject &);
+SamplingPointList SampleQScoreShell(const AtomObject &, const ModelObject &, double radius, int num_points);
 } // namespace rhbm_gem::core::detail
