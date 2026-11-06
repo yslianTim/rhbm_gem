@@ -4,8 +4,12 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cmath>
+#include <stdexcept>
 
 namespace rhbm_gem::core::detail {
+enum class MapInterpolationMethod { Tricubic, Trilinear };
+
 struct TricubicStencil
 {
     std::array<int, 3> base, dimensions;
@@ -20,6 +24,9 @@ struct TricubicStencil
 };
 inline TricubicStencil MakeTricubicStencil(const MapObject & map, const std::array<double, 3> & position)
 {
+    for (const auto coordinate : position)
+        if (!std::isfinite(coordinate))
+            throw std::out_of_range("Map interpolation position is nonfinite.");
     TricubicStencil stencil{map.GetIndexFromPosition(position), map.GetGridSize(), {}};
     const auto origin = map.GetOrigin(), spacing = map.GetGridSpacing();
     for (std::size_t i = 0; i < 3; ++i)
@@ -65,17 +72,114 @@ double InterpolateTricubic(const TricubicStencil & stencil, Read read)
     return CubicInterpolate(temp_z[0], temp_z[1], temp_z[2], temp_z[3], local.at(2));
 }
 
+inline double InterpolateTrilinear(const MapObject & map, const std::array<double, 3> & position)
+{
+    const auto grid_size{ map.GetGridSize() };
+    const auto grid_spacing{ map.GetGridSpacing() };
+    const auto origin{ map.GetOrigin() };
+
+    std::array<int, 3> lower_indices;
+    std::array<int, 3> upper_indices;
+    std::array<double, 3> fractions;
+    for (std::size_t axis = 0; axis < position.size(); ++axis)
+    {
+        const auto lower_boundary{
+            origin.at(axis) - 0.5 * grid_spacing.at(axis)
+        };
+        const auto upper_boundary{
+            origin.at(axis) +
+                (static_cast<double>(grid_size.at(axis)) - 0.5) *
+                    grid_spacing.at(axis)
+        };
+        const auto coordinate{ position.at(axis) };
+        if (!std::isfinite(coordinate) ||
+            coordinate < lower_boundary ||
+            coordinate > upper_boundary)
+        {
+            throw std::out_of_range(
+                "Map interpolation position is outside the map boundary.");
+        }
+
+        const auto grid_coordinate{
+            std::clamp(
+                (coordinate - origin.at(axis)) / grid_spacing.at(axis),
+                0.0,
+                static_cast<double>(grid_size.at(axis) - 1))
+        };
+        lower_indices.at(axis) = static_cast<int>(std::floor(grid_coordinate));
+        upper_indices.at(axis) = std::min(lower_indices.at(axis) + 1, grid_size.at(axis) - 1);
+        fractions.at(axis) = grid_coordinate - static_cast<double>(lower_indices.at(axis));
+    }
+
+    const auto interpolate{
+        [](double lower_value, double upper_value, double fraction)
+        {
+            return lower_value + fraction * (upper_value - lower_value);
+        }
+    };
+
+    std::array<std::array<double, 2>, 2> x_interpolated_values{};
+    for (std::size_t y_offset = 0; y_offset < 2; ++y_offset)
+    {
+        const auto y_index{
+            y_offset == 0 ? lower_indices.at(1) : upper_indices.at(1)
+        };
+        for (std::size_t z_offset = 0; z_offset < 2; ++z_offset)
+        {
+            const auto z_index{
+                z_offset == 0 ? lower_indices.at(2) : upper_indices.at(2)
+            };
+            const auto lower_value{
+                map.GetMapValue(lower_indices.at(0), y_index, z_index)
+            };
+            const auto upper_value{
+                map.GetMapValue(upper_indices.at(0), y_index, z_index)
+            };
+            x_interpolated_values.at(y_offset).at(z_offset) = interpolate(
+                lower_value,
+                upper_value,
+                fractions.at(0));
+        }
+    }
+
+    std::array<double, 2> y_interpolated_values{};
+    for (std::size_t z_offset = 0; z_offset < 2; ++z_offset)
+    {
+        y_interpolated_values.at(z_offset) = interpolate(
+            x_interpolated_values.at(0).at(z_offset),
+            x_interpolated_values.at(1).at(z_offset),
+            fractions.at(1));
+    }
+    return interpolate(
+        y_interpolated_values.at(0),
+        y_interpolated_values.at(1),
+        fractions.at(2));
+}
+
+inline double InterpolateMapValue(
+    const MapObject & map, const std::array<double, 3> & position, MapInterpolationMethod method)
+{
+    switch (method)
+    {
+        case MapInterpolationMethod::Trilinear:
+            return InterpolateTrilinear(map, position);
+        case MapInterpolationMethod::Tricubic:
+            return InterpolateTricubic(MakeTricubicStencil(map, position),
+                [&](const auto & node) { return map.GetMapValue(node[0], node[1], node[2]); });
+    }
+    throw std::invalid_argument("Unsupported map interpolation method.");
+}
+
 inline LocalPotentialSampleList BuildLocalPotentialSampleList(
     const MapObject & map_object,
-    const SamplingPointList & sample_point_list)
+    const SamplingPointList & sample_point_list,
+    MapInterpolationMethod method = MapInterpolationMethod::Tricubic)
 {
     LocalPotentialSampleList sampling_data_list;
     sampling_data_list.reserve(sample_point_list.size());
     for (const auto & sampling_point : sample_point_list)
     {
-        const auto stencil{MakeTricubicStencil(map_object, sampling_point.position)};
-        const auto map_value{InterpolateTricubic(stencil,
-            [&](const auto & node) { return map_object.GetMapValue(node[0], node[1], node[2]); })};
+        const auto map_value{InterpolateMapValue(map_object, sampling_point.position, method)};
         sampling_data_list.emplace_back(LocalPotentialSample{
             map_value,
             sampling_point

@@ -61,3 +61,21 @@ OMP_NUM_THREADS=1 OMP_THREAD_LIMIT=4 build/release/bin/first_stage_sampling_stud
 Timing and process high-water RSS are measurements, not deterministic regression
 values. Builds use <=4 workers; studies run sequentially with one numerical
 worker. No new third-party dependency is used.
+
+## P1: shared interpolation
+
+`MapInterpolation.hpp` now supplies `MapInterpolationMethod`, the independent
+`InterpolateTrilinear` and `InterpolateTricubic` kernels, and enum-dispatched
+`InterpolateMapValue`. Batch sample construction defaults to Tricubic.
+The original trilinear arithmetic was moved without changing operation order.
+QScore explicitly selects Trilinear and retains its exception text in a wrapper.
+Each finite boundary policy remains unchanged; nonfinite cubic positions now
+throw before undefined floating-to-integer conversion.
+
+Release build, sampler and QScore CTest groups passed. All original fields of
+synthetic baseline atoms, calibration, complete JCE evidence/state and QScore
+are bit-for-bit equal. Tests include constant/affine/quadratic/Gaussian fields,
+anisotropic spacing, grid and off-grid points, half-voxel margins, finite
+out-of-range sentinel behavior, nonfinite rejection and singleton grids.
+The Gaussian cubic reference is an interpolation value, not an assertion that
+a finite-grid interpolant exactly reproduces an analytic Gaussian.

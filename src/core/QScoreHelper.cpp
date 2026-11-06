@@ -1,4 +1,5 @@
 #include <rhbm_gem/core/QScoreHelper.hpp>
+#include "core/detail/MapInterpolation.hpp"
 
 #include <algorithm>
 #include <array>
@@ -23,7 +24,6 @@ constexpr std::size_t kCandidatePointIncrement{ 2 };
 constexpr double kNeighborExclusionRadiusRatio{ 0.9 };
 constexpr double kNeighborSearchRadiusRatio{ 2.0 };
 constexpr double kSpiralSpacing{ 3.6 };
-constexpr double kMapBoundaryMarginRatio{ 0.5 };
 constexpr double kMaximumRadiusTolerance{ 0.01 };
 
 using RadialPoint = std::array<double, 3>;
@@ -64,88 +64,17 @@ std::vector<RadialPoint> GenerateSpiralSpherePoints(
     return points;
 }
 
-double InterpolateMapValueTrilinear(const MapObject & map, const std::array<double, 3> & position)
+double InterpolateQScoreResponse(const MapObject & map, const std::array<double, 3> & position)
 {
-    const auto grid_size{ map.GetGridSize() };
-    const auto grid_spacing{ map.GetGridSpacing() };
-    const auto origin{ map.GetOrigin() };
-
-    std::array<int, 3> lower_indices;
-    std::array<int, 3> upper_indices;
-    std::array<double, 3> fractions;
-    for (std::size_t axis = 0; axis < position.size(); ++axis)
+    try
     {
-        const auto lower_boundary{
-            origin.at(axis) - kMapBoundaryMarginRatio * grid_spacing.at(axis)
-        };
-        const auto upper_boundary{
-            origin.at(axis) +
-                (static_cast<double>(grid_size.at(axis)) - kMapBoundaryMarginRatio) *
-                    grid_spacing.at(axis)
-        };
-        const auto coordinate{ position.at(axis) };
-        if (!std::isfinite(coordinate) ||
-            coordinate < lower_boundary ||
-            coordinate > upper_boundary)
-        {
-            throw std::out_of_range(
-                "CalculateQScoreForAtom sampling position is outside the map boundary.");
-        }
-
-        const auto grid_coordinate{
-            std::clamp(
-                (coordinate - origin.at(axis)) / grid_spacing.at(axis),
-                0.0,
-                static_cast<double>(grid_size.at(axis) - 1))
-        };
-        lower_indices.at(axis) = static_cast<int>(std::floor(grid_coordinate));
-        upper_indices.at(axis) = std::min(lower_indices.at(axis) + 1, grid_size.at(axis) - 1);
-        fractions.at(axis) = grid_coordinate - static_cast<double>(lower_indices.at(axis));
+        return detail::InterpolateMapValue(map, position, detail::MapInterpolationMethod::Trilinear);
     }
-
-    const auto interpolate{
-        [](double lower_value, double upper_value, double fraction)
-        {
-            return lower_value + fraction * (upper_value - lower_value);
-        }
-    };
-
-    std::array<std::array<double, 2>, 2> x_interpolated_values{};
-    for (std::size_t y_offset = 0; y_offset < 2; ++y_offset)
+    catch (const std::out_of_range &)
     {
-        const auto y_index{
-            y_offset == 0 ? lower_indices.at(1) : upper_indices.at(1)
-        };
-        for (std::size_t z_offset = 0; z_offset < 2; ++z_offset)
-        {
-            const auto z_index{
-                z_offset == 0 ? lower_indices.at(2) : upper_indices.at(2)
-            };
-            const auto lower_value{
-                map.GetMapValue(lower_indices.at(0), y_index, z_index)
-            };
-            const auto upper_value{
-                map.GetMapValue(upper_indices.at(0), y_index, z_index)
-            };
-            x_interpolated_values.at(y_offset).at(z_offset) = interpolate(
-                lower_value,
-                upper_value,
-                fractions.at(0));
-        }
+        throw std::out_of_range(
+            "CalculateQScoreForAtom sampling position is outside the map boundary.");
     }
-
-    std::array<double, 2> y_interpolated_values{};
-    for (std::size_t z_offset = 0; z_offset < 2; ++z_offset)
-    {
-        y_interpolated_values.at(z_offset) = interpolate(
-            x_interpolated_values.at(0).at(z_offset),
-            x_interpolated_values.at(1).at(z_offset),
-            fractions.at(1));
-    }
-    return interpolate(
-        y_interpolated_values.at(0),
-        y_interpolated_values.at(1),
-        fractions.at(2));
 }
 
 double CalculateMeanSubtractedCorrelation(
@@ -314,7 +243,7 @@ double CalculateQScoreForAtom(
     numeric_validation::RequireAtLeast(num_points, 2, "CalculateQScoreForAtom num_points");
     
     const auto center_map_value{
-        InterpolateMapValueTrilinear(map, atom.GetPositionRef())
+        InterpolateQScoreResponse(map, atom.GetPositionRef())
     };
     const auto center_reference_value{ height + offset };
 
@@ -332,7 +261,7 @@ double CalculateQScoreForAtom(
         };
         for (const auto & radial_point : radial_points)
         {
-            map_values.emplace_back(InterpolateMapValueTrilinear(map, radial_point.position));
+            map_values.emplace_back(InterpolateQScoreResponse(map, radial_point.position));
             reference_values.emplace_back(reference_value);
         }
     }

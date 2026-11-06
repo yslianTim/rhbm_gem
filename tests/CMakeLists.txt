@@ -96,6 +96,7 @@ set(CORE_COMMAND_TEST_SOURCES
 
 set(CORE_SAMPLER_TEST_SOURCES
     core/MapSampler_test.cpp
+    core/MapInterpolation_test.cpp
 )
 
 set(CORE_QSCORE_TEST_SOURCES
