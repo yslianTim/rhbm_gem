@@ -1,5 +1,15 @@
 # Fibonacci neighbor selection sensitivity study
 
+> Archived research record. The following sections describe the completed studies
+> at commit `503a6607674e068e4d3ef3db52aa770abcf3aea4`, including interfaces and
+> tools that have since been removed. They are not current execution instructions.
+> Production is fixed Fibonacci + Tricubic, Ownership + 30-degree cone, MDPDE
+> Width initialization/calibration; QScore independently keeps Spiral + Trilinear.
+> No adaptive/hybrid seed policy was promoted. Original JSON/source/runners are
+> available through the [evidence archive](evidence-archive.md); current regression
+> coverage and verification are in the [cleanup report](cleanup-report.md).
+> Historical numerical tables and observations below are unchanged.
+
 ## E0: locked baseline (2026-11-06)
 
 Initial and fetched `origin/develop`: `0e9661a81f3480629549361101b1e3609b97686b`.
@@ -113,9 +123,8 @@ selection. More retained rows have not established more independent information.
 
 The independent `neighbor-selection-results.json` retains per-run solver,
 qualification, covariance, timing and coverage summaries, per-atom fits,
-matched outliers and selection diagnostics. Reproduce with
-`python3 tests/research/run_neighbor_selection_study.py` (single numerical
-worker), or `--summarize-only` to aggregate saved detailed build outputs.
+matched outliers and selection diagnostics. The historical single-worker
+runner and aggregation implementation are preserved in the archived commit.
 
 ## E4: real maps, calibration and endpoints
 
@@ -169,7 +178,7 @@ Width information when charge depends on Width.
 1.722e-8 A, normalized prediction difference <=4.923e-10. No real-map Width
 truth is available. The opposite donor-coverage changes across datasets do
 not establish robust improvement. Reproduce real runs/audits with
-`python3 tests/research/run_neighbor_selection_study.py --real-only`.
+the archived real-only runner invocation.
 
 ## E5: decision and acceptance
 

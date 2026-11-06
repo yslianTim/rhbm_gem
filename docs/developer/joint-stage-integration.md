@@ -11,25 +11,28 @@ uses the Sampler's deterministic Fibonacci default. Post-Joint observations
 come directly from original map voxels. These input policies do not change
 Joint problem construction or its Pure Halo-Support Exclusion model.
 
-Joint initialization accepts an internal, per-run `JointSeedSamplingPolicy`:
-`FibonacciShells` / `QScoreSpiralShells` and `Tricubic` / `Trilinear` are
-independent choices. Production defaults remain Fibonacci + Tricubic. QScore's
-correlation independently uses shared Trilinear interpolation and its original
-repeated-center weighting. The QScore-inspired FirstStage policy uses one
-center, shared model-aware spiral shell acceptance and optional run-owned shell
-diagnostics; unavailable shells contribute no observations. Both policies use
-the same selected, positive-response FirstStage OLS/MDPDE estimator with the
-unchanged 1.0 A fitting radius. These choices are internal, without CLI or
-`FitOptions` additions. Research callers save `JointSeedSamplingReport` alongside
-their results; raw entries retain actual coordinates/selection and never become
-Post-Joint original-grid identities. The existing persistence schema is unchanged.
+Joint FirstStage has one sampling and initialization path: 20 deterministic
+Fibonacci shells at 0.05, 0.15, …, 1.95 Å, ten points per shell in the existing
+order. Non-hydrogen neighbors use the existing search and strict Ownership +
+30-degree cone exclusions. Tricubic responses feed the original alpha training
+and OLS/MDPDE estimator on selected positive responses in 0–1.0 Å. JCE Width
+seeds use MDPDE with the existing failed-only recovery, qualification and target
+median fallback. OLS/MDPDE records and the persistence schema are unchanged.
 
-`src/core/detail/MapInterpolation.hpp` provides the enum-dispatched map entry
-point and separate numerical kernels. Trilinear retains inclusive half-voxel
-margins and coordinate clamping; Tricubic retains MapObject floor indices and
-clamped 4x4x4 stencil nodes, including its finite out-of-range sentinel behavior.
-Both reject nonfinite positions before index conversion. See the
-[sampling study](../research/first-stage-sampling/README.md) for experiments.
+Global Width calibration uses qualified target MDPDE donors, at least 20 and
+95% coverage, Type-7 quantiles and the single bound 4 × p95. The original bounded
+projection feeds the unchanged Joint BCD solver. Raw FirstStage entries retain
+actual coordinates/selection and never become Post-Joint original-grid identities.
+
+QScore is an independent production feature. It keeps Spiral radial sampling,
+neighbor-distance exclusion, adaptive retry, original repeated-center weighting,
+Trilinear interpolation and mean-subtracted correlation.
+
+`src/core/detail/MapInterpolation.hpp` provides the separate numerical kernels.
+Trilinear retains inclusive half-voxel margins and coordinate clamping; Tricubic
+retains MapObject floor indices and clamped 4×4×4 stencil nodes, including its
+finite out-of-range sentinel behavior. Both reject nonfinite positions before
+index conversion.
 
 ## Result ownership
 

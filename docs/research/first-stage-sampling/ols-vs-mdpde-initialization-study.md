@@ -1,5 +1,15 @@
 # OLS versus MDPDE Width initialization sensitivity
 
+> Archived research record. The following sections describe the completed studies
+> at commit `503a6607674e068e4d3ef3db52aa770abcf3aea4`, including interfaces and
+> tools that have since been removed. They are not current execution instructions.
+> Production is fixed Fibonacci + Tricubic, Ownership + 30-degree cone, MDPDE
+> Width initialization/calibration; QScore independently keeps Spiral + Trilinear.
+> No adaptive/hybrid seed policy was promoted. Original JSON/source/runners are
+> available through the [evidence archive](evidence-archive.md); current regression
+> coverage and verification are in the [cleanup report](cleanup-report.md).
+> Historical numerical tables and observations below are unchanged.
+
 ## S0: baseline and contracts
 
 Work began on the existing `develop` at
@@ -440,17 +450,11 @@ scenario-dependent truth result (Outcome E) with insufficient promotion evidence
 | What comes from bound? | OM vs OO has identical bounded OLS seeds but a 0.155728 A weak-Width change. MM vs MO also includes altered initial clipping. This direction is more bound-sensitive than seed-sensitive here. |
 | Is full OLS justified (MM vs OO)? | No. A scenario-dependent local truth benefit, no consistent JCE benefit and no realized fitting-cost reduction do not justify promotion. |
 | Is adaptive/hybrid follow-up warranted? | A limited, preregistered follow-up is reasonable because noise/isolation and crowding favor different local estimates. It must evaluate contamination diagnostics, independent OLS qualification, additional maps/charge cases and repeated timings; these data do not establish a winning rule. |
-| What should remain? | The source-selection adapter, shared calibration math, exact-baseline/factorial/fallback/projection/persistence regressions, optional call timer, sequential runner, compact source/endpoint evidence and this report. |
+| Original delivery retention recommendation (superseded by cleanup) | The source-selection adapter, shared calibration math, exact-baseline/factorial/fallback/projection/persistence regressions, optional call timer, sequential runner, compact source/endpoint evidence and this report. |
 
 ### Reproduction and limitations
 
-```
-cmake --build build/release --target first_stage_sampling_study --parallel 4
-python3 -B tests/research/run_width_initialization_study.py
-# Optional scopes: --scope synthetic or --scope real
-# Reaggregate already saved detailed build outputs:
-python3 -B tests/research/run_width_initialization_study.py --summarize-only
-```
+Historical execution commands are available in the archived source commit.
 
 The runner uses committed FirstStage/JCE summaries even in a fresh checkout;
 when old detailed build outputs are present, it additionally compares complete
@@ -496,9 +500,9 @@ Log digests, source digests and acceptance counts are saved separately in
 Cleanup removes the temporary pre-timer comparison copies after recording
 parity; final detailed observations/logs remain in the ignored build directory.
 There are no experimental public flags, new dependencies, unused helpers,
-temporary solver instrumentation or new Production numerical branches. The
-optional FirstStage call timer is retained for the requested reproducible
-performance decomposition, with the default path unchanged. Research endpoints
+temporary solver instrumentation or new Production numerical branches. At that delivery, the
+optional FirstStage call timer was retained for reproducible performance
+decomposition; the subsequent cleanup removed it. Research endpoints
 are not relabeled as Production persistence evidence. No unrelated work was
 overwritten; no branch/worktree, detached HEAD, force push, reset or Notion edit
 was used.

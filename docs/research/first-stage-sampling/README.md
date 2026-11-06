@@ -1,5 +1,15 @@
 # FirstStage sampling and interpolation study
 
+> Archived research record. The following sections describe the completed studies
+> at commit `503a6607674e068e4d3ef3db52aa770abcf3aea4`, including interfaces and
+> tools that have since been removed. They are not current execution instructions.
+> Production is fixed Fibonacci + Tricubic, Ownership + 30-degree cone, MDPDE
+> Width initialization/calibration; QScore independently keeps Spiral + Trilinear.
+> No adaptive/hybrid seed policy was promoted. Original JSON/source/runners are
+> available through the [evidence archive](evidence-archive.md); current regression
+> coverage and verification are in the [cleanup report](cleanup-report.md).
+> Historical numerical tables and observations below are unchanged.
+
 ## P0: baseline (2026-11-06)
 
 Initial branch: `develop`; local HEAD and fetched origin/develop:
@@ -51,12 +61,9 @@ VECLIB_MAXIMUM_THREADS=1 ctest --test-dir build/release --parallel 1
 existing four-thread simulation assertion; OMP_NUM_THREADS=1 failed the
 existing Eigen thread restoration assertion. No code was changed for them.
 
-Reproduce baseline with the explicit, noninstalled research target:
+Historical baseline execution used the now-retired noninstalled research target:
 
-```
-cmake --build build/release --target first_stage_sampling_study --parallel 4
-OMP_NUM_THREADS=1 OMP_THREAD_LIMIT=4 build/release/bin/first_stage_sampling_study output.json coarse:0 F0 production
-```
+Historical execution commands are available in the archived source commit.
 
 Timing and process high-water RSS are measurements, not deterministic regression
 values. Builds use <=4 workers; studies run sequentially with one numerical
@@ -131,16 +138,11 @@ The two P0 baselines pass exact comparison of every originally recorded atom,
 calibration, JCE state/evidence and QScore field. No synthetic truth enters
 calibration or the estimator.
 
-Run the current study with:
+Historical study execution (tooling now retired):
 
-```
-cmake --build build/release --target first_stage_sampling_study --parallel 4
-python3 tests/research/run_first_stage_sampling_study.py --real-data /Users/yslian/data
-# Reaggregate existing detailed outputs without rerunning numerical fits:
-python3 tests/research/run_first_stage_sampling_study.py --real-data /Users/yslian/data --summarize-only
-```
+Historical execution commands are available in the archived source commit.
 
-The executable accepts `output.json scenario[:phase] policy production|bound
+The historical executable accepted `output.json scenario[:phase] policy production|bound
 [model.cif map.map]`; e.g. `output.json coarse:0 F0 production`. Scenarios are
 fine (0.2 A spacing), coarse (0.4 A), noisy (0.4 A, additive sinusoidal noise
 amplitude 0.05), crowded (0.4 A, atomic separation 1.4 A), or real. Other
@@ -355,12 +357,10 @@ differences are <=1.2e-9, and all endpoints retain their original certification.
 8RQB's maximum Width difference is 1.9e-8 A and normalized prediction difference
 <=5.6e-10. There is no new Width-bound concentration.
 
-Audits are saved separately in `6z6u-endpoint-audit.json` and
-`8rqb-endpoint-audit.json`. Reproduce after the main runner:
+Audits were saved separately in the archived `6z6u-endpoint-audit.json` and
+`8rqb-endpoint-audit.json`. Historical audit execution:
 
-```
-OMP_NUM_THREADS=1 OMP_THREAD_LIMIT=4 build/release/bin/first_stage_sampling_study audit.json audit 6z6u build/release/first-stage-study /Users/yslian/data/6z6u.cif /Users/yslian/data/emd_11103_unsharpened.map
-```
+Historical execution commands are available in the archived source commit.
 
 P5 validation includes truth-based regression at two spacings, independent
 objective reconstruction and feasible parameters under both bounds, original
@@ -405,12 +405,12 @@ RSS; the original 98-run ledger retains its whole-process measurements.
 | Change | Decision | Evidence |
 |---|---|---|
 | Shared interpolation refactor | **Promoted** | Exact F0/QScore parity; independent kernel and boundary tests; Release/Debug regression; no material measured resource regression |
-| QScore-inspired FirstStage sampling | **Retained for research** | Small isolated gain, substantial crowded bias/RMSE regression, lower 6Z6U donor coverage and unstable calibration tail; no demonstrated endpoint advantage |
-| FirstStage Trilinear policy | **Retained for research** | Larger Width bias/RMSE in tested truth maps, despite some Amplitude/noise and runtime tradeoffs |
+| QScore-inspired FirstStage sampling | **Not promoted; research tooling now retired** | Small isolated gain, substantial crowded bias/RMSE regression, lower 6Z6U donor coverage and unstable calibration tail; no demonstrated endpoint advantage |
+| FirstStage Trilinear policy | **Not promoted; research tooling now retired** | Larger Width bias/RMSE in tested truth maps, despite some Amplitude/noise and runtime tradeoffs |
 
 **Production remains F0: FibonacciShells + Tricubic.** QScore independently
-remains Trilinear with its original center weighting. Both internal switches
-and run-owned diagnostics remain available without public API/CLI flags.
+remains Trilinear with its original center weighting. At the original delivery, internal
+switches and run-owned diagnostics were retained; the cleanup has now removed them.
 No BCD/KKT/LM, calibration coverage, Endpoint/Replay or downstream numerical
 rule changed. Common-bound research does not replace Production qualification.
 
@@ -418,8 +418,8 @@ Cleanup removed the orphaned include and generated study bytecode, made
 dependencies explicit, sorted audit output and compacted the 98-run ledger
 without changing any field. Production has one shared interpolation
 implementation, one spiral generator/model-aware shell policy, and one
-FirstStage estimator. Research controls and reproducible tools remain in the
-explicit noninstalled study target; temporary instrumentation was not added to
+FirstStage estimator. Research controls and reproducible tools were retained in the
+original noninstalled study target (now retired); temporary instrumentation was not added to
 Production. Developer documentation describes the current algorithm and
 ownership; experiment history stays here. Notion was not updated. No new
 branch/worktree or third-party dependency was created.
@@ -428,5 +428,5 @@ Scope limits: only the specified 120-target real subsets were tested, not whole
 structures; real Width accuracy is unknown. Three deterministic synthetic
 phases do not establish population-wide statistical robustness. Working
 covariance is conditional and does not correct interpolation dependence or
-duplicate observations. These limits are reasons to retain research switches
-and the established Production default, not unverified promotion claims.
+duplicate observations. These limits supported retaining the established Production default; the completed
+research switches have since been removed.

@@ -116,3 +116,24 @@ files are in compile_commands.json; no uncompiled test source. The generated
 Ninja target inventory contains no study target. No retired symbols remain in
 src/include/tests/cmake. Numerical baseline remains exact; no tolerances or
 CTest timeout/qualification settings changed.
+
+### C5 — historical conclusions and evidence archive
+
+Retained all three scientific reports, their numerical tables, qualifications
+and limitations. Added explicit archive notices, removed current executable
+commands and dated superseded retention recommendations. Updated only the
+FirstStage/QScore description in joint-stage-integration.md to the single
+production path and existing calibration rules. All original table numeric
+tokens were checked unchanged against the initial commit.
+
+Pruned nine study JSON files (full factorial results, per-atom/endpoint audits
+and validation ledgers). Before deletion, each was parsed and verified byte
+identical to its immutable initial-commit Git object. evidence-archive.md records
+all sizes, SHA-256 values, blob IDs and immutable recovery links. No unique
+scientific evidence is destroyed: the ancestor commit is the archive; no
+independent external archive was created. Ignored detailed build outputs remain
+supplemental, not the sole evidence source. The production fixture is independent.
+
+Validation: no CMake, source, ordinary tests, Python scripts or developer docs
+refer to the retired research paths/policies; git diff --check and lint_repo
+pass. No persistence, CLI/help schema or Notion document changes.
