@@ -164,6 +164,7 @@ def main():
                 atom['sources'] = {s: data['selections'][s]['atoms'][i] for s in ('OLS', 'MDPDE')}
             section['atoms'].extend(atoms)
             keys = ('sampling_seconds', 'alpha_training_and_fitting_seconds', 'adapter_seconds', 'calibration_seconds',
+                    'alpha_training_seconds', 'first_stage_fitting_seconds', 'first_stage_bookkeeping_seconds',
                     'initialization_seconds', 'initialization_peak_rss_bytes', 'calibrations', 'donor_cohorts',
                     'matched_cohort_calibrations', 'paired_endpoint_audits', 'common_bound', 'observation_scale', 'initial_objective', 'qscore', 'grid_spacing', 'total_seconds', 'peak_rss_bytes')
             summary = {k: data[k] for k in keys if k in data}

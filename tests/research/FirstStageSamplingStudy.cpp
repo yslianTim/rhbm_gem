@@ -257,6 +257,7 @@ int main(int argc,char ** argv)
         FitOptions options; options.quiet_mode=true;
         const auto init_start=Clock::now();
         d::JointSeedSamplingReport report;
+        d::FirstStageTimingReport timing;
         double sampling_seconds=0.,fitting_seconds=0.;
         const auto init=[&] {
             if(id=="width")
@@ -264,7 +265,7 @@ int main(int argc,char ** argv)
                 d::RunJointSeedSamplingWorkflow(*map,*model,workset.contributors,1,{},true,policy,&report);
                 sampling_seconds=Seconds(init_start);
                 const auto fitting_start=Clock::now();
-                auto initialization=d::RunJointFirstStageInitializationFromPreparedSamples(*model,workset,options);
+                auto initialization=d::RunJointFirstStageInitializationFromPreparedSamples(*model,workset,options,&timing);
                 fitting_seconds=Seconds(fitting_start);
                 return initialization;
             }
@@ -393,6 +394,9 @@ int main(int argc,char ** argv)
         {
             output["sampling_seconds"]=sampling_seconds;
             output["alpha_training_and_fitting_seconds"]=fitting_seconds;
+            output["alpha_training_seconds"]=timing.alpha_training_seconds;
+            output["first_stage_fitting_seconds"]=timing.fitting_seconds;
+            output["first_stage_bookkeeping_seconds"]=fitting_seconds-timing.alpha_training_seconds-timing.fitting_seconds;
             RunWidthStudy(output,init,problem,*map,*model,workset,options,real);
             output["total_seconds"]=Seconds(start); output["peak_rss_bytes"]=PeakRssBytes();
             std::ofstream stream(argv[1]); stream << j::serialize(output) << '\n';

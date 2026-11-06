@@ -325,3 +325,14 @@ Production evidence. No provenance is forged and no validator is bypassed.
 A regression verifies rejection of raw research solver persistence, plus
 MM downstream processing and exact codec round-trip. Existing persistence,
 invalidation and downstream tests remain enabled for final CTest.
+
+## S5: timing and acceptance scope
+
+An optional internal `FirstStageTimingReport` measures the existing alpha and
+estimator calls separately. It is absent for Production callers, adds no policy
+or public CLI flag, and changes no estimator input/order/decision. Reported call
+durations are sums across workers; this study uses one worker, so they are
+sequential durations. Bookkeeping is the residual of the enclosing FirstStage
+wall time. Only completed calls contribute; all study calls complete. Regression
+checks both timed and default paths against the exact same original baseline.
+All primary/common cases are revalidated after this measurement-only addition.

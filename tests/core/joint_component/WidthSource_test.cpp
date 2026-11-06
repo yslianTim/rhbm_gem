@@ -179,6 +179,17 @@ TEST(WidthSourceTest, LocksProductionFirstStageAndMmBaseline)
     const auto init=d::PrepareJointWidthInitialization(*map,*model,workset,options);
     d::FirstStageObserverForTesting()={};
     EXPECT_EQ(fits,24u);
+    d::FirstStageTimingReport timing;
+    const auto timed=d::RunJointFirstStageInitializationFromPreparedSamples(*model,workset,options,&timing);
+    EXPECT_GT(timing.alpha_training_seconds,0.); EXPECT_GT(timing.fitting_seconds,0.);
+    EXPECT_EQ(timed.tau,init.tau);
+    for(std::size_t i=0;i<init.atoms.size();++i)
+    {
+        EXPECT_EQ(timed.atoms[i].ols,init.atoms[i].ols);
+        EXPECT_EQ(timed.atoms[i].mdpde,init.atoms[i].mdpde);
+        EXPECT_EQ(timed.atoms[i].alpha,init.atoms[i].alpha);
+        EXPECT_EQ(timed.atoms[i].first_stage_qualification,init.atoms[i].first_stage_qualification);
+    }
     ASSERT_TRUE(init.valid);
     ASSERT_EQ(init.atoms.size(),24u);
     for(std::size_t i=0;i<init.atoms.size();++i)
