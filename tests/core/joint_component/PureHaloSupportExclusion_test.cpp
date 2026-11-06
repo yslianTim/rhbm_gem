@@ -2,6 +2,7 @@
 #include <boost/json.hpp>
 
 #include "core/detail/FirstStageInitialization.hpp"
+#include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
 #include "core/detail/MapInterpolation.hpp"
 #include "core/detail/joint_component/HaloMedianReconstruction.hpp"
 #include "core/detail/GroupPotentialFitting.hpp"
@@ -568,7 +569,6 @@ TEST(PureHaloSupportExclusionTest, GridPeelingAndOwnChargeMatchIndependentDirect
     ASSERT_EQ(problem.OriginalInput().atom_ids,(std::vector<std::string>{"1","4"}));
     auto snapshot=QualifiedReconstructionSnapshot(problem,fixture.model);
     data_internal::ApplyJointStageEstimates(fixture.model,snapshot,"reconstruction-only-run");
-    const std::array<double,3> target_position{0.0,0.0,0.0};
     const std::array<double,3> other_target_position{-4.5,-4.5,-4.5};
     const std::array<std::array<double,3>,2> halo_positions{{
         {4.72,1.18,1.18},{4.72,-1.18,1.18}}};
@@ -799,7 +799,8 @@ TEST(PureHaloSupportExclusionTest, RunsFullPureWorkflowWithGeometryLocalHaloSour
         if (!local_result) continue;
         const auto & r=*local_result;
         boost::json::object row{{"atom",atom->GetSerialID()},{"samples",r.sample_count},
-            {"retained",r.effective_sample_count},{"reason",r.reason},{"alpha",r.fit.alpha_r},
+            {"retained",r.effective_sample_count},{"corrected",r.corrected_sample_count},{"positive",r.positive_sample_count},
+            {"radius",r.fitting_radius},{"reason",r.reason},{"alpha",r.fit.alpha_r},
             {"ols_A",r.fit.ols.GetModel().GetAmplitude()},{"ols_tau",r.fit.ols.GetModel().GetWidth()},
             {"mdpde_A",r.fit.mdpde.GetModel().GetAmplitude()},{"mdpde_tau",r.fit.mdpde.GetModel().GetWidth()}};
         if (r.information)
@@ -1122,5 +1123,47 @@ TEST(PureHaloSupportExclusionTest, GridSubtractionCoversOverlapsHalosChargesAndS
             EXPECT_TRUE(std::any_of(incomplete.front().second.samples.begin(),incomplete.front().second.samples.end(),
                 [](const auto & sample){return !sample.response && sample.reason=="missing-contributor-state";}));
         }
+    }
+}
+
+
+TEST(PureHaloSupportExclusionTest, GridLocalRangesShareAlphaFitAndInformationDataset)
+{
+    auto fixture=ReconstructionOnlyFixture();
+    auto values=std::make_unique<double[]>(fixture.map.GetMapValueArraySize());
+    for(std::size_t grid=0;grid<fixture.map.GetMapValueArraySize();++grid)
+        values[grid]=fixture.map.GetMapValue(grid)+.001*std::sin(static_cast<double>(grid));
+    fixture.map.SetMapValueArray(std::move(values));
+    const auto problem=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
+    const auto snapshot=QualifiedReconstructionSnapshot(problem,fixture.model);
+    data_internal::ApplyJointStageEstimates(fixture.model,snapshot,"range-dataset");
+    const auto context=postprocessing_test::MakeJointPostprocessingContext(fixture.map,fixture.model,problem,snapshot);
+    const auto peeling=context.BuildPostFitPeelingBatch(std::vector<std::size_t>{0}).front().second;
+    const auto prepared=context.BuildPostJointLocalSamples(1,peeling);
+    const auto samples=prepared.BuildGaussianSamples();
+    std::vector<double> responses; for(const auto & sample:samples) responses.push_back(sample.response);
+    FitOptions options; options.quiet_mode=true;
+    std::size_t previous{};
+    for(double radius:{1.,1.5,2.})
+    {
+        const core::detail::PreparedLocalGaussianDesign design(samples,0.,radius);
+        const auto dataset=design.BuildDataset(responses,GaussianModel3D{0.,1.,0.});
+        const double alpha=core::detail::TrainLocalGaussianAlpha(dataset,1);
+        const auto reference=core::detail::EstimateLocalGaussianDataset(dataset,alpha,1,0.);
+        core::detail::JointPostprocessingMetrics metrics;
+        const auto result=core::detail::FitPostJointLocalTargetForTesting(context,fixture.model,1,peeling,options,metrics,radius);
+        ASSERT_EQ(result.status,EvidenceStatus::Available) << result.reason;
+        EXPECT_EQ(result.sample_count,peeling.samples.size());
+        EXPECT_EQ(result.corrected_sample_count,samples.size());
+        EXPECT_EQ(result.effective_sample_count,static_cast<std::size_t>(dataset.y.size()));
+        EXPECT_GT(result.effective_sample_count,previous); previous=result.effective_sample_count;
+        EXPECT_DOUBLE_EQ(result.fit.alpha_r,alpha);
+        EXPECT_EQ(result.fit.mdpde.GetModel().ToVector(),reference.mdpde.GetModel().ToVector());
+        const auto inverse=reference.fit_result->data_covariance.diagonal().cwiseInverse().eval();
+        const Eigen::Matrix2d precision=dataset.X.transpose()*inverse.asDiagonal()*dataset.X;
+        const Eigen::Vector2d moment=dataset.X.transpose()*(inverse.array()*dataset.y.array()).matrix();
+        ASSERT_TRUE(result.information);
+        EXPECT_TRUE(result.information->precision.isApprox(precision,1e-12));
+        EXPECT_TRUE(result.information->moment.isApprox(moment,1e-12));
     }
 }

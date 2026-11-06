@@ -46,13 +46,15 @@ bool SameSource(const EstimateSource & a, const EstimateSource & b)
 PostJointLocalResult FitPostJointLocalTarget(
     const JointPostprocessingContext & postprocessing, const ModelObject & model,
     int atom_id, const PostFitPeelingResult & peeling,
-    const FitOptions & options, JointPostprocessingMetrics & metrics)
+    const FitOptions & options, JointPostprocessingMetrics & metrics,
+    double fitting_radius=kPostJointFittingDistanceMax)
 {
     const auto atom = model.FindAtomPtr(atom_id);
     const auto local = AtomLocalPotentialView::For(*atom);
     const auto & joint = local.GetStageEstimate(FittingStage::Second);
     PostJointLocalResult result;
     result.source = joint.source;
+    result.fitting_radius=fitting_radius;
     result.sample_count = peeling.samples.size();
     result.status = EvidenceStatus::Ineligible;
     if (joint.source.method != EstimateMethod::JointComponents || joint.source.role != FittingRole::Target)
@@ -81,7 +83,7 @@ PostJointLocalResult FitPostJointLocalTarget(
     for (const auto & sample : gaussian_samples) responses.push_back(sample.response);
 
     const GaussianModel3D no_charge{0.0, 1.0, 0.0};
-    const PreparedLocalGaussianDesign design{gaussian_samples, 0.0, kSignalDistanceMax};
+    const PreparedLocalGaussianDesign design{gaussian_samples, 0.0, fitting_radius};
     const auto dataset = design.BuildDataset(responses, no_charge);
     result.effective_sample_count = static_cast<std::size_t>(dataset.y.size());
     if (dataset.y.size() <= 2)
@@ -91,13 +93,13 @@ PostJointLocalResult FitPostJointLocalTarget(
     { result.status = EvidenceStatus::Unavailable; result.reason = "rank-deficient-local-design"; return result; }
 
     phase_start = std::chrono::steady_clock::now();
-    const double alpha = TrainAlphaR(gaussian_samples, options);
+    const double alpha = TrainLocalGaussianAlpha(dataset,options.thread_size);
     metrics.local_alpha_training_seconds += std::chrono::duration<double>(
         std::chrono::steady_clock::now() - phase_start).count();
     if (!std::isfinite(alpha) || alpha < 0.0)
     { result.status = EvidenceStatus::Unavailable; result.reason = "local-alpha-training-failed"; return result; }
     phase_start = std::chrono::steady_clock::now();
-    result.fit = EstimateLocalGaussian(gaussian_samples, alpha, options, no_charge);
+    result.fit = EstimateLocalGaussianDataset(dataset,alpha,options.thread_size,0.0);
     metrics.local_mdpde_fitting_seconds += std::chrono::duration<double>(
         std::chrono::steady_clock::now() - phase_start).count();
     result.fit.alpha_r = alpha;
@@ -176,9 +178,9 @@ void LogJointWarning(const std::string & message)
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 PostJointLocalResult FitPostJointLocalTargetForTesting(
     const JointPostprocessingContext & context, const ModelObject & model, int atom,
-    const PostFitPeelingResult & peeling, const FitOptions & options, JointPostprocessingMetrics & metrics)
+    const PostFitPeelingResult & peeling, const FitOptions & options, JointPostprocessingMetrics & metrics, double radius)
 {
-    return FitPostJointLocalTarget(context, model, atom, peeling, options, metrics);
+    return FitPostJointLocalTarget(context, model, atom, peeling, options, metrics, radius);
 }
 
 JointWorkflowFitHook & JointWorkflowFitHookForTesting()

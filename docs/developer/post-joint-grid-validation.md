@@ -108,3 +108,76 @@ single and overlapping Targets, signed nonzero charge, Halo medians, narrow
 widths, off-grid atoms, missing contributor state and the total-prediction
 identity. FirstStage sampler tests, Joint numerical tests, Stage/SQLite
 round-trips, Group integration and CLI workflow tests pass.
+
+## P4 radius decision
+
+768 paired synthetic trials per path: spacing 0.35/0.7 Å, center alignment
+0/0.17 Å (with unequal y/z shifts), base tau 0.4/0.7/0.9 Å, additive Gaussian
+noise SD 0.5%/3% of the Gaussian peak, independent or spatially correlated
+noise. Each of the 48 configurations has 16 trials with independent innovations
+(seed 1729+trial); A and tau vary by deterministic independent sinusoidal
+patterns. Signed charge is known and corrected at each voxel. The correlated
+field averages a normalized 3x3x3 innovation neighborhood (adjacent-voxel
+correlation approximately 2/3 away from map boundaries). This does not model
+all cryo-EM noise. Neighbor/Halo subtraction is independently covered by the
+numerical tests; this statistical experiment conditions on the true endpoint
+and does not estimate Halo uncertainty.
+
+Legacy comparison recreates the single-Target baseline Fibonacci map sampling
+and tricubic own-charge field, then uses the same Gaussian estimator and 1 Å
+range. Grid variants use the production Peeling/correction and Local fitting
+qualification with a test-only radius argument. FirstStage defaults are
+unchanged. Training, fitting and information now consume one selected dataset;
+the common PreparedLocalGaussianDesign API defines the explicit radial range.
+
+| Metric | Legacy Fibonacci 1 Å | Grid 1 Å | Grid 1.5 Å | Grid 2 Å |
+|---|---:|---:|---:|---:|
+|Qualified Local / 768|768/768|767/768|766/768|768/768|
+|A bias|-0.015803|0.012441|-0.030434|-0.063734|
+|A RMSE|0.121849|0.098797|0.152310|0.501155|
+|tau bias (Å)|0.002373|0.000476|0.023456|0.115998|
+|tau RMSE (Å)|0.016132|0.012598|0.057009|0.214714|
+|Positive retained / radius candidates|99.98%|99.77%|93.42%|86.49%|
+|Available synthetic groups / 48|48/48|48/48|48/48|48/48|
+|Posterior nominal 95% ellipse coverage|6.25%|44.59%|27.81%|13.67%|
+|Local beta MSE / mean working covariance trace|64.82|2.20|58.14|316.33|
+|Mean information condition|59.62|68.35|24.60|19.59|
+
+Groups contain the 16 qualified synthetic members per configuration and use
+the current Group alpha, MDPDE and WEB kernels; production source/run eligibility
+is tested separately in the workflow tests. Group alpha training retains its
+existing random split policy, so individual Group summaries are exploratory,
+not a deterministic covariance calibration certificate. Raw per-configuration
+OLS/MDPDE bias, RMSE, width error SD, alpha, conditioning, sample counts,
+posterior MSE/covariance traces, coverage, failures and timings are retained in
+[the compact CSV](post-joint-grid-statistics.csv).
+
+**Decision: retain 1 Å grid fitting; do not promote 2 Å.** For base tau=0.4 Å,
+mean tau bias at 2 Å is +0.3416 Å with independent noise and +0.3343 Å with
+correlated noise, versus +0.00083/+0.00407 Å at 1 Å. Broader tau=0.9 Å cases
+benefit from the larger design leverage (2 Å bias -0.00016/-0.00115 Å), but this
+does not offset the narrow-peak tail selection bias. Improved design condition
+and 768/768 numerical qualifications at 2 Å do not establish statistical
+correctness. No estimator qualification was relaxed. The three unavailable
+grid outcomes (one at 1 Å, two at 1.5 Å) are `local-mdpde-unqualified`.
+
+Working covariance is conditional and diagonal by observation. The experiment
+shows substantial overconfidence even at 1 Å, especially with correlated noise;
+the legacy Fibonacci interpolation has still worse dependence/calibration.
+These are measured limitations, not a claim that voxels are independent or
+that any nominal 95% coverage is calibrated. Joint charge and Halo uncertainty
+remain conditioned out. Changing the Group statistical model is out of scope.
+
+Across the 768 grid fits, alpha training totals are 1.35/2.53/3.73 s and fitting
+0.0132/0.0239/0.0461 s for 1/1.5/2 Å in the first run. This isolates the extra
+fitting-domain cost from removal of interpolation. The expanded four-path study
+ran in 12.30 s with measured process peak RSS 32,030,720 B. This is a small
+synthetic study peak, not the real-map pipeline peak.
+
+N_grid is all candidate voxels at r²<=4. N_corrected counts finite corrected
+responses across that candidate domain. N_positive counts positive corrected
+responses across the same domain; N_retained is the positive finite subset
+inside the chosen fitting radius actually used for alpha, fit and information.
+The CSV names N_positive explicitly as `positive_all_2A`; retention fractions
+use N_retained divided by the radius-specific candidate count. Nonpositive
+responses are not Peeling failures.

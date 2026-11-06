@@ -222,22 +222,8 @@ double TrainAlphaR(
     const LocalPotentialSampleList & sample_entries,
     const FitOptions & options)
 {
-    std::vector<RHBMMemberDataset> dataset_list{
-        rhbm_helper::BuildMemberDataset(
-            sample_entries, 0.0, detail::kSignalDistanceMax)
-    };
-    const auto response_count{
-        static_cast<std::size_t>(dataset_list.front().y.size())
-    };
-    auto training_options{ MakeTrainingOptions(options) };
-    if (response_count < 2)
-    {
-        return training_options.alpha_min;
-    }
-    training_options.subset_size = std::min(
-        training_options.subset_size,
-        response_count);
-    return rhbm_trainer::CrossValidationAlphaR(dataset_list, training_options).best_alpha;
+    return detail::TrainLocalGaussianAlpha(
+        rhbm_helper::BuildMemberDataset(sample_entries,0.0,detail::kSignalDistanceMax),options.thread_size);
 }
 
 double TrainAlphaG(

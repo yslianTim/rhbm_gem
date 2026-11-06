@@ -14,7 +14,7 @@ using JointWorkflowFitHook = void (*)(JointFitResult &);
 JointWorkflowFitHook & JointWorkflowFitHookForTesting();
 PostJointLocalResult FitPostJointLocalTargetForTesting(
     const JointPostprocessingContext &, const ModelObject &, int, const PostFitPeelingResult &,
-    const FitOptions &, JointPostprocessingMetrics &);
+    const FitOptions &, JointPostprocessingMetrics &, double radius=1.0);
 #endif
 
 void RunTwoStageFromPreparedSamples(

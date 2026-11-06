@@ -1,5 +1,6 @@
 #include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
 #include "utils/hrl/MDPDEEndpointRefinement.hpp"
+#include <rhbm_gem/utils/hrl/RHBMTrainer.hpp>
 
 #include <cmath>
 #include <stdexcept>
@@ -38,6 +39,25 @@ LocalGaussianResult DecodeLocalGaussianResult(
 }
 
 } // namespace
+
+double TrainLocalGaussianAlpha(const RHBMMemberDataset & dataset, int thread_size)
+{
+    rhbm_trainer::RHBMTrainingOptions options;
+    options.execution_options.thread_size=thread_size;
+    const auto count=static_cast<std::size_t>(dataset.y.size());
+    if (count<2) return options.alpha_min;
+    options.subset_size=std::min(options.subset_size,count);
+    return rhbm_trainer::CrossValidationAlphaR({dataset},options).best_alpha;
+}
+
+LocalGaussianResult EstimateLocalGaussianDataset(const RHBMMemberDataset & dataset,
+    double alpha_r, int thread_size, double offset)
+{
+    numeric_validation::RequireFiniteNonNegative(alpha_r,"alpha_r");
+    const auto result=rhbm_helper::EstimateBetaMDPDE(alpha_r,dataset,
+        RHBMExecutionOptions{.thread_size=thread_size});
+    return DecodeLocalGaussianResult(alpha_r,result,offset);
+}
 
 PreparedLocalGaussianDesign::PreparedLocalGaussianDesign(
     const LocalPotentialSampleList & sample_entries,
@@ -127,20 +147,15 @@ LocalGaussianResult PreparedLocalGaussianDesign::Estimate(
     const GaussianModel3D & offset_model,
     bool enable_failed_only_refinement) const
 {
-    numeric_validation::RequireFiniteNonNegative(alpha_r, "alpha_r");
-    auto dataset{ BuildDataset(sample_response_list, offset_model) };
-    auto result{
-        rhbm_helper::EstimateBetaMDPDE(
-            alpha_r,
-            dataset,
-            RHBMExecutionOptions{ .thread_size = thread_size })
-    };
+    const auto dataset=BuildDataset(sample_response_list,offset_model);
+    auto result=EstimateLocalGaussianDataset(dataset,alpha_r,thread_size,offset_model.GetOffset());
     if (enable_failed_only_refinement)
     {
-        result = mdpde_detail::ApplyFailedOnlyRefinement(dataset, alpha_r,
-            RHBMExecutionOptions{.thread_size = thread_size}, result);
+        const auto refined=mdpde_detail::ApplyFailedOnlyRefinement(dataset,alpha_r,
+            RHBMExecutionOptions{.thread_size=thread_size},*result.fit_result);
+        return DecodeLocalGaussianResult(alpha_r,refined,offset_model.GetOffset());
     }
-    return DecodeLocalGaussianResult(alpha_r, result, offset_model.GetOffset());
+    return result;
 }
 
 } // namespace rhbm_gem::core::detail

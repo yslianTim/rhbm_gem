@@ -10,6 +10,11 @@
 
 namespace rhbm_gem::core::detail {
 
+// Both operations consume the identical finite, positive, radius-selected design.
+double TrainLocalGaussianAlpha(const RHBMMemberDataset &, int thread_size);
+LocalGaussianResult EstimateLocalGaussianDataset(const RHBMMemberDataset &, double alpha_r,
+    int thread_size, double offset);
+
 class PreparedLocalGaussianDesign
 {
     struct Row
