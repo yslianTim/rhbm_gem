@@ -1,11 +1,15 @@
 #include <rhbm_gem/core/MapSampler.hpp>
 #include "core/detail/MapInterpolation.hpp"
+#include "core/detail/JointSeedSampling.hpp"
+#include "core/detail/gaussian_fit/FittingRanges.hpp"
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 #include "support/MapSamplerTestSupport.hpp"
 #endif
 
 #include <array>
 #include <cstddef>
+#include <cmath>
+#include <exception>
 #include <optional>
 #include <string>
 #include <utility>
@@ -38,7 +42,8 @@ namespace {
 LocalPotentialSampleList SampleAtomMapValuesFromPoints(
     const MapObject & map_object,
     const AtomObject & atom,
-    SamplingPointList sample_point_list)
+    SamplingPointList sample_point_list,
+    detail::MapInterpolationMethod interpolation = detail::MapInterpolationMethod::Tricubic)
 {
     const auto local_position{ atom.GetPosition() };
     const auto neighbor_atom_list{ atom.FindNeighborAtoms() };
@@ -50,28 +55,31 @@ LocalPotentialSampleList SampleAtomMapValuesFromPoints(
         reject_position_list.emplace_back(neighbor_atom->GetPosition());
     }
     sample_filter::FilterSamplingPointList(sample_point_list, local_position, reject_position_list);
-    return detail::BuildLocalPotentialSampleList(map_object, sample_point_list);
+    return detail::BuildLocalPotentialSampleList(map_object, sample_point_list, interpolation);
 }
 
+template<class SampleAtom>
 void RunPotentialSamplingWorkflowImpl(
-    MapObject & map_object,
     ModelObject & model_object,
     const std::vector<AtomObject *> & atom_list,
     int thread_count,
     std::string_view progress_label,
-    bool quiet_mode)
+    bool quiet_mode,
+    SampleAtom sample_atom)
 {
     std::optional<ScopeTimer> timer;
     if (!quiet_mode) timer.emplace("MapSampler::RunPotentialSamplingWorkflow");
     const std::string progress_message{progress_label};
     size_t atom_count{ 0 };
     std::vector<LocalPotentialSampleList> raw_sampling_entries_list(atom_list.size());
+    std::vector<std::exception_ptr> failures(atom_list.size());
 #ifdef USE_OPENMP
     #pragma omp parallel for num_threads(thread_count)
 #endif
     for (size_t i = 0; i < atom_list.size(); i++)
     {
-        raw_sampling_entries_list[i] = SampleAtomMapValues(map_object, *atom_list[i]);
+        try { raw_sampling_entries_list[i] = sample_atom(i); }
+        catch (...) { failures[i] = std::current_exception(); }
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         if (detail::PotentialSamplingObserverForTesting())
             detail::PotentialSamplingObserverForTesting()(atom_list[i]->GetSerialID());
@@ -86,6 +94,7 @@ void RunPotentialSamplingWorkflowImpl(
         }
     }
 
+    for (const auto & failure : failures) if (failure) std::rethrow_exception(failure);
     auto analysis{ model_object.EditAnalysis() };
     for (size_t i = 0; i < atom_list.size(); i++)
     {
@@ -136,7 +145,8 @@ void RunPotentialSamplingWorkflow(
     bool quiet_mode)
 {
     RunPotentialSamplingWorkflowImpl(
-        map_object, model_object, atom_list, thread_count, progress_label, quiet_mode);
+        model_object, atom_list, thread_count, progress_label, quiet_mode,
+        [&](std::size_t i) { return SampleAtomMapValues(map_object, *atom_list[i]); });
 }
 
 void RunPotentialSamplingWorkflow(
@@ -149,6 +159,71 @@ void RunPotentialSamplingWorkflow(
         model_object,
         model_object.GetSelectedAtoms(),
         thread_count);
+}
+
+std::string_view detail::JointSeedSamplingName(JointSeedSamplingMethod method)
+{
+    switch (method)
+    {
+        case JointSeedSamplingMethod::FibonacciShells: return "FibonacciShells";
+        case JointSeedSamplingMethod::QScoreSpiralShells: return "QScoreSpiralShells";
+    }
+    throw std::invalid_argument("Unsupported Joint seed sampling method.");
+}
+
+std::string_view detail::MapInterpolationName(MapInterpolationMethod method)
+{
+    switch (method)
+    {
+        case MapInterpolationMethod::Tricubic: return "Tricubic";
+        case MapInterpolationMethod::Trilinear: return "Trilinear";
+    }
+    throw std::invalid_argument("Unsupported map interpolation method.");
+}
+
+void detail::RunJointSeedSamplingWorkflow(
+    MapObject & map, ModelObject & model, const std::vector<AtomObject *> & atoms,
+    int thread_count, std::string_view progress_label, bool quiet_mode,
+    const JointSeedSamplingPolicy & policy, JointSeedSamplingReport * report)
+{
+    // Validate before entering OpenMP and snapshot the policy for this run.
+    JointSeedSamplingName(policy.sampling);
+    MapInterpolationName(policy.interpolation);
+    const auto run_policy = policy;
+    if (report) { report->policy = run_policy; report->atoms.assign(atoms.size(), {}); }
+    RunPotentialSamplingWorkflowImpl(model, atoms, std::clamp(thread_count, 1, 4),
+        progress_label, quiet_mode, [&](std::size_t index) {
+            const auto & atom = *atoms[index];
+            LocalPotentialSampleList samples;
+            if (run_policy.sampling == JointSeedSamplingMethod::FibonacciShells)
+                samples = SampleAtomMapValuesFromPoints(map, atom,
+                    sphere_sampler::GenerateSamplingPointList(atom.GetPosition()), run_policy.interpolation);
+            else
+            {
+                auto seed = BuildQScoreSeedSamples(atom, model);
+                samples = BuildLocalPotentialSampleList(map, seed.points, run_policy.interpolation);
+                if (report) report->atoms[index].shells = std::move(seed.shells);
+            }
+            if (report)
+            {
+                auto & record = report->atoms[index];
+                record.atom_id = atom.GetSerialID();
+                record.raw_count = samples.size();
+                for (const auto & sample : samples)
+                {
+                    if (!sample.point.is_selected) continue;
+                    ++record.selected_count;
+                    const bool positive = std::isfinite(sample.response) && sample.response > 0.;
+                    if (positive) ++record.positive_count;
+                    if (IsSignalDistance(sample.point.distance))
+                    {
+                        ++record.fitting_count;
+                        if (positive) ++record.positive_fitting_count;
+                    }
+                }
+            }
+            return samples;
+        });
 }
 
 } // namespace rhbm_gem::core

@@ -193,6 +193,7 @@ set(JOINT_COMPONENT_CONTRACT_TEST_SOURCES
 )
 
 set(JOINT_COMPONENT_WORKFLOW_TEST_SOURCES
+    core/joint_component/SeedSampling_test.cpp
     core/joint_component/Runtime_test.cpp
     core/joint_component/Progress_test.cpp
     core/joint_component/PartialSelection_test.cpp

@@ -97,3 +97,27 @@ the first successful retry returning 3 rather than 2 points, and all 50 failed
 attempts ending at 106 candidates without fabricated observations. Existing
 hydrogen, crowded-neighbor, foreign-model and correlation tests passed. F0
 atoms, calibration, JCE evidence/state and QScore remain exactly equal to P1.
+
+## P3: internal per-run policies
+
+`JointSeedSamplingPolicy` independently selects Fibonacci/QScore-inspired shells
+and Tricubic/Trilinear. `PrepareJointWidthInitialization` and the internal Joint
+workflow accept a const per-run policy, default F0. `FitOptions`, public CLI,
+Two-Stage sampling and QScore correlation options are unchanged. The common
+sampling workflow computes responses in workers, rethrows interpolation errors
+on the caller before modifying model analysis, then moves samples through the
+same editor. No new sample identity or original-grid index interpretation is
+introduced. No estimator or calibration/solver qualification rule changes.
+
+Policies are named in normal Joint sampling logs. Research callers request a
+`JointSeedSamplingReport` containing the policy and per-atom shell/sample
+diagnostics and save it alongside results. This report is run-owned; there is
+no global/thread-local experiment state or public persistence-schema extension.
+Persisted raw vectors retain their actual geometry and selection; Post-Joint
+uses its separate original-grid identities.
+
+All 21 Release CTest groups passed (39.07 s), including new independent-factor,
+legacy-default equality, QScore isolation, serial/four-worker deterministic,
+repeated-policy-run and parallel-boundary-failure tests, existing Two-Stage,
+joint convergence, persistence and invalidation contracts. All original F0
+baseline numerical fields remain exactly equal.

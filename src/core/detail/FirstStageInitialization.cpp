@@ -209,18 +209,20 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
 }
 
 JointInitialization PrepareJointWidthInitialization(
-    MapObject & map, ModelObject & model, const FittingWorkset & workset, const FitOptions & options)
+    MapObject & map, ModelObject & model, const FittingWorkset & workset, const FitOptions & options,
+    const JointSeedSamplingPolicy & policy, JointSeedSamplingReport * report)
 {
     if (!options.quiet_mode)
     {
         Logger::FinishProgressLine();
         Logger::Log(LogLevel::Info, "[Joint] Sampling " +
             std::to_string(workset.contributors.size()) +
-            " Joint contributors");
+            " Joint contributors | sampling=" + std::string(JointSeedSamplingName(policy.sampling)) +
+            " | interpolation=" + std::string(MapInterpolationName(policy.interpolation)));
     }
     const auto atoms = CollectFirstStageAtoms(workset);
-    RunPotentialSamplingWorkflow(map, model, atoms, options.joint_initialization_thread_size,
-        " Joint sampling", options.quiet_mode);
+    RunJointSeedSamplingWorkflow(map, model, atoms, options.joint_initialization_thread_size,
+        " Joint sampling", options.quiet_mode, policy, report);
     if (!options.quiet_mode)
     {
         Logger::FinishProgressLine();

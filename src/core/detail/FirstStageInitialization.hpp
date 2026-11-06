@@ -2,6 +2,7 @@
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include "joint_component/JointComponentEstimator.hpp"
 #include "joint_component/JointProgress.hpp"
+#include "JointSeedSampling.hpp"
 #include <vector>
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 #include <functional>
@@ -21,7 +22,8 @@ void RunBatchFirstStageFromPreparedSamples(
 JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
     ModelObject &, const FittingWorkset &, const FitOptions &);
 JointInitialization PrepareJointWidthInitialization(
-    MapObject &, ModelObject &, const FittingWorkset &, const FitOptions &);
+    MapObject &, ModelObject &, const FittingWorkset &, const FitOptions &,
+    const JointSeedSamplingPolicy & = {}, JointSeedSamplingReport * = nullptr);
 JointFitResult FitJointComponentsInitializedWithProgress(
     const JointProblem &, const JointInitialization &,
     const joint_component::JointProgressObserver &);

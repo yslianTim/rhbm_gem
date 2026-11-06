@@ -213,7 +213,8 @@ void RunTwoStageWorkflow(MapObject & map, ModelObject & model, const FitOptions 
 
 void RunJointComponentWorkflow(
     MapObject & map, ModelObject & model, const FitOptions & options,
-    JointPostprocessingMetrics * supplied_metrics)
+    JointPostprocessingMetrics * supplied_metrics,
+    const JointSeedSamplingPolicy & policy, JointSeedSamplingReport * sampling_report)
 {
     JointPostprocessingMetrics local_metrics;
     auto & postprocessing_metrics = supplied_metrics ? *supplied_metrics : local_metrics;
@@ -240,7 +241,7 @@ void RunJointComponentWorkflow(
     const auto initialization = [&] {
         const auto workset = MakeJointFittingWorkset(model, problem);
         model.EditAnalysis().InitializeFromSelection();
-        return PrepareJointWidthInitialization(map, model, workset, options);
+        return PrepareJointWidthInitialization(map, model, workset, options, policy, sampling_report);
     }();
     const auto initialization_seconds = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - initialization_start).count();
