@@ -81,3 +81,19 @@ from SampleFilter to QScore. No new exception contracts or thresholds.
 
 Validation: Release build and CTest 21/21 (40.34 s). Exact F0/QScore and all
 C0 fixtures still pass; git diff --check passes.
+
+### C3 — production MDPDE initialization only
+
+Removed ResearchWidthInitialization.hpp and its six remaining OLS selection,
+same-source fallback, calibration/cohort, projection-bridge and factorial tests
+in WidthSource_test.cpp. Production protection was moved and passed in C0;
+WidthCalibration_test remains intact. Removed FirstStageTimingReport, optional
+pointer, chrono calls, timing arrays/fills and conditional accumulation only.
+The same worker batches, alpha/estimator order and exception handling remain.
+Moved CalibrateQualifiedWidthDonors into WidthCalibration.cpp's anonymous
+namespace without modifying donor selection, thresholds, quantiles or bound
+math. OLS/MDPDE results, estimator implementation and persistence are untouched.
+
+Validation: Release build and CTest 21/21 (39.39 s); exact MDPDE seeds,
+original/used Width, qualification, fallback, calibration, projected starts,
+JCE state/objective and downstream regression remain passing.

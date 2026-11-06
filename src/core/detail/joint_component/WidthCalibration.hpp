@@ -47,10 +47,6 @@ struct BoundedInitialization
 // deliberately has no simulation-truth input.
 WidthBoundCalibration CalibrateGlobalWidth(const JointInitialization &, std::string dataset_identity);
 
-// Shared math after caller-specific eligibility: donors must be finite positive
-// qualified widths. Preserves the donor minimum, coverage, Type-7 and 4*p95 rule.
-WidthBoundCalibration CalibrateQualifiedWidthDonors(WidthBoundCalibration, std::vector<double> donors);
-
 // Builds a feasible working vector without changing the captured FirstStage
 // estimates or the caller's JointInitialization.
 BoundedInitialization MakeBoundedInitialization(

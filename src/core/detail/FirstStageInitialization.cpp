@@ -8,7 +8,6 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <algorithm>
-#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <exception>
@@ -68,9 +67,8 @@ void RunBatchFirstStageFromPreparedSamples(
 }
 
 JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
-    ModelObject & model, const FittingWorkset & workset, const FitOptions & options, FirstStageTimingReport * timing)
+    ModelObject & model, const FittingWorkset & workset, const FitOptions & options)
 {
-    if (timing) *timing = {};
     if (workset.target_mask.size() != workset.contributors.size())
         throw std::invalid_argument("First-stage workset role count mismatch.");
     JointInitialization initialization;
@@ -106,8 +104,6 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
     std::vector<unsigned char> alpha_ready(workspace_count);
     std::vector<unsigned char> fit_attempted(workspace_count);
     std::vector<std::exception_ptr> failures(workspace_count);
-    using Clock = std::chrono::steady_clock;
-    std::vector<double> alpha_seconds(timing ? workspace_count : 0), fit_seconds(timing ? workspace_count : 0);
     std::size_t completed_count = 0;
     for (std::size_t begin = 0; begin < workset.contributors.size(); begin += workspace_count)
     {
@@ -117,8 +113,6 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
         std::fill(alpha_ready.begin(), alpha_ready.end(), 0);
         std::fill(fit_attempted.begin(), fit_attempted.end(), 0);
         std::fill(failures.begin(), failures.end(), std::exception_ptr{});
-        std::fill(alpha_seconds.begin(), alpha_seconds.end(), 0.);
-        std::fill(fit_seconds.begin(), fit_seconds.end(), 0.);
 #ifdef USE_OPENMP
         #pragma omp parallel for num_threads(worker_count)
 #endif
@@ -131,15 +125,11 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
                 const auto view = AtomLocalPotentialView::For(*atom);
                 const auto & samples = view.GetSamplingEntries(FittingStage::First);
                 sample_counts[slot] = samples.size();
-                const auto alpha_start = timing ? Clock::now() : Clock::time_point{};
                 alphas[slot] = EstimateLocalAlphaForAtom(*atom, atom_options, FittingStage::First);
-                if (timing) alpha_seconds[slot] = std::chrono::duration<double>(Clock::now() - alpha_start).count();
                 alpha_ready[slot] = 1;
                 fit_attempted[slot] = 1;
-                const auto fit_start = timing ? Clock::now() : Clock::time_point{};
                 estimates[slot] = EstimateLocalGaussian(samples, alphas[slot], atom_options,
                     view.GetEstimateMDPDE(FittingStage::First));
-                if (timing) fit_seconds[slot] = std::chrono::duration<double>(Clock::now() - fit_start).count();
             }
             catch (...)
             {
@@ -151,11 +141,6 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
             const auto index = begin + slot;
             auto * atom = workset.contributors[index];
             auto & record = initialization.atoms[index];
-            if (timing)
-            {
-                timing->alpha_training_seconds += alpha_seconds[slot];
-                timing->fitting_seconds += fit_seconds[slot];
-            }
             record.sample_count = sample_counts[slot];
             double tau = nan;
             try

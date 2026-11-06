@@ -32,7 +32,6 @@ std::optional<double> BoundFrom(double p95, double multiplier)
         return std::nullopt;
     return bound;
 }
-}
 
 WidthBoundCalibration CalibrateQualifiedWidthDonors(
     WidthBoundCalibration result, std::vector<double> donors)
@@ -79,6 +78,8 @@ WidthBoundCalibration CalibrateQualifiedWidthDonors(
     result.status="Available";
     return result;
 }
+
+} // namespace
 
 WidthBoundCalibration CalibrateGlobalWidth(
     const JointInitialization & initialization, std::string dataset_identity)
