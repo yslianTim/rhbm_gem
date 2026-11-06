@@ -59,3 +59,20 @@ retry, shell success, interpolation and center weighting remain in QScore.
 off-grid and invalid-geometry tests and existing hydrogen/multiple-neighbor,
 empty-neighbor and retry cases. Crowded Q0 atom/calibration/JCE/QScore fields
 remain exactly equal after extraction.
+
+## E2: fixed-geometry controls
+
+Research-only `FibonacciNeighborSelection.hpp` builds FO (strict ownership with
+F0's fixed 2.5 A candidates) and FQ (QScore's per-shell 2r candidates, strict
+squared 0.9r exclusion), excluding hydrogen. The explicit study IDs FO/FQ copy
+F0 raw observations and change only selection flags through the existing
+editor, then call the unchanged prepared-sample FirstStage estimator. No
+Production enum, public CLI option, refill or repeated center was added.
+
+Four new GoogleTests cover fixed geometry/responses/order, deterministic and
+1/4-worker estimator parity, independent distance checks, dense neighbors,
+strict ownership/distance/search boundaries, hydrogen/empty sets and a raw
+r>1 A counterexample to universal full-policy inclusion. All 55 focused tests
+passed. F0 atom/calibration/JCE/QScore fields still match E0 exactly. Detailed
+research output adds per-point masks/responses and per-shell neighbor IDs;
+synthetic Gaussian contributions are diagnostics only, outside the estimator.

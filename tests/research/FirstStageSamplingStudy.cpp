@@ -1,6 +1,7 @@
 // Reproducible, single-process FirstStage/JCE study. No production instrumentation.
 #include "core/detail/FirstStageInitialization.hpp"
 #include "support/FirstStageSamplingFixture.hpp"
+#include "support/FibonacciNeighborSelection.hpp"
 #include "core/detail/FittingWorkset.hpp"
 #include "core/detail/PotentialFittingWorkflow.hpp"
 #include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
@@ -206,7 +207,7 @@ int main(int argc,char ** argv)
     try
     {
         if (argc!=5 && argc!=7) throw std::invalid_argument(
-            "Usage: first_stage_sampling_study output.json scenario[:replicate] F0|F1|Q0|Q1|Q8|S0|S1 production|common_bound [model.cif map.map]");
+            "Usage: first_stage_sampling_study output.json scenario[:replicate] F0|FO|FQ|F1|Q0|Q1|Q8|S0|S1 production|common_bound [model.cif map.map]");
         if (std::string(argv[2])=="audit" && argc==7)
         {
             auto model=ReadModel(argv[5]); auto map=ReadMap(argv[6]); SelectRealTargets(*model);
@@ -223,7 +224,7 @@ int main(int argc,char ** argv)
             throw std::invalid_argument("Unknown study scenario.");
         d::JointSeedSamplingPolicy policy;
         if (id=="Q0" || id=="Q1" || id=="Q8") policy.sampling=d::JointSeedSamplingMethod::QScoreSpiralShells;
-        else if (id!="F0" && id!="F1" && id!="S0" && id!="S1") throw std::invalid_argument("Unknown study policy.");
+        else if (id!="F0" && id!="FO" && id!="FQ" && id!="F1" && id!="S0" && id!="S1") throw std::invalid_argument("Unknown study policy.");
         if (id=="F1" || id=="Q1" || id=="S1") policy.interpolation=d::MapInterpolationMethod::Trilinear;
         const bool real=argc==7,production=bound_mode=="production";
         if (real!=(scenario=="real")) throw std::invalid_argument("Real scenario requires model/map paths.");
@@ -238,6 +239,18 @@ int main(int argc,char ** argv)
         const auto init_start=Clock::now();
         d::JointSeedSamplingReport report;
         const auto init=[&] {
+            if (id=="FO" || id=="FQ")
+            {
+                d::RunJointSeedSamplingWorkflow(*map,*model,workset.contributors,1,{},true,policy,&report);
+                for (const auto * atom:workset.contributors)
+                {
+                    auto raw=AtomLocalPotentialView::For(*atom).GetRawSamplingEntries(false);
+                    const auto masks=second_stage_test::FibonacciNeighborMasks(*atom,*model,raw);
+                    second_stage_test::ApplyFibonacciNeighborSelection(raw,masks,id=="FQ");
+                    model->EditAnalysis().SetAtomLocalRawSamplingEntries(*atom,std::move(raw));
+                }
+                return d::RunJointFirstStageInitializationFromPreparedSamples(*model,workset,options);
+            }
             if (id!="Q8" && id!="S0" && id!="S1")
                 return d::PrepareJointWidthInitialization(*map,*model,workset,options,policy,&report);
             if (id=="Q8")
@@ -289,6 +302,40 @@ int main(int argc,char ** argv)
                 {"qualified",record.first_stage_fit_qualified},{"reason",record.reason},{"seed_source",record.seed_source},
                 {"working_information",WorkingInformation(dataset,view.GetGaussianResult(FittingStage::First))}};
             if (!real) saved["truth"]=Values({1.5+.02*static_cast<double>(i),.35+.005*static_cast<double>(i)});
+            if (id=="F0" || id=="FO" || id=="FQ")
+            {
+                const auto masks=second_stage_test::FibonacciNeighborMasks(*workset.contributors[i],*model,raw);
+                j::array observations,shells;
+                for (std::size_t k=0;k<raw.size();++k)
+                {
+                    const auto & s=raw[k]; const auto & m=masks.rows[k];
+                    j::array row{s.point.distance,s.point.position[0],s.point.position[1],s.point.position[2],s.response,
+                        m.f0,!m.ownership,!m.qscore,!m.shared_qscore,m.ownership,m.cone};
+                    if (!real)
+                    {
+                        double target=0.,neighbor=0.;
+                        for (std::size_t a=0;a<model->GetAtomList().size();++a)
+                        {
+                            const auto & position=model->GetAtomList()[a]->GetPositionRef(); double square=0.;
+                            for (std::size_t axis=0;axis<3;++axis)
+                                square+=(s.point.position[axis]-position[axis])*(s.point.position[axis]-position[axis]);
+                            const double contribution=(1.5+.02*static_cast<double>(a))*
+                                n::EvaluateKernel(square,.35+.005*static_cast<double>(a),2.5).gaussian;
+                            if (a==i) target=contribution; else neighbor+=contribution;
+                        }
+                        row.push_back(target); row.push_back(neighbor);
+                    }
+                    observations.push_back(row);
+                }
+                for (const auto & [radius,shell]:masks.shells)
+                {
+                    j::array fixed,qscore;
+                    for (int a:shell.fixed_ids) fixed.push_back(a);
+                    for (int a:shell.qscore_ids) qscore.push_back(a);
+                    shells.push_back(j::object{{"radius",radius},{"fixed_ids",fixed},{"qscore_ids",qscore}});
+                }
+                saved["neighbor_selection"]=j::object{{"observations",observations},{"shells",shells}};
+            }
             if (report.atoms.size()==init.atoms.size())
             {
                 j::array shells;

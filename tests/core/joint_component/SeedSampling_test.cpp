@@ -8,6 +8,8 @@
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <memory>
+#include "support/FibonacciNeighborSelection.hpp"
+#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
 namespace {
 using namespace rhbm_gem;
@@ -137,4 +139,113 @@ TEST(JointSeedSamplingTest, ParallelInterpolationFailurePreservesPreviousRawEntr
     MapObject small{{1,1,1},{.1,.1,.1},{0.,0.,0.},std::move(values)};
     EXPECT_THROW(d::RunJointSeedSamplingWorkflow(small,*model,atoms,4,{},true,q1),std::out_of_range);
     SameSamples(before,AtomLocalPotentialView::For(*atoms[0]).GetRawSamplingEntriesView());
+}
+
+
+TEST(JointSeedSamplingTest, NeighborControlsPreserveRawGeometryResponsesAndParallelEstimates)
+{
+    auto map=Map(); FitOptions options; options.quiet_mode=true;
+    for (bool qscore:{false,true})
+    {
+        auto serial=Model(),parallel=Model();
+        std::vector<JointInitialization> initializations;
+        for (auto * model:{serial.get(),parallel.get()})
+        {
+            const int workers=model==serial.get() ? 1 : 4;
+            const auto workset=d::MakeTwoStageFittingWorkset(*model);
+            d::RunJointSeedSamplingWorkflow(map,*model,workset.contributors,workers,{},true,f0);
+            for (const auto * atom:workset.contributors)
+            {
+                const auto baseline=AtomLocalPotentialView::For(*atom).GetRawSamplingEntries(false);
+                const auto masks=second_stage_test::FibonacciNeighborMasks(*atom,*model,baseline);
+                auto controlled=baseline;
+                second_stage_test::ApplyFibonacciNeighborSelection(controlled,masks,qscore);
+                ASSERT_EQ(controlled.size(),200u);
+                for (std::size_t k=0;k<controlled.size();++k)
+                {
+                    const auto & m=masks.rows[k];
+                    EXPECT_EQ(m.f0,baseline[k].point.is_selected);
+                    EXPECT_EQ(m.f0,!(m.ownership || m.cone));
+                    EXPECT_EQ(controlled[k].point.position,baseline[k].point.position);
+                    EXPECT_EQ(controlled[k].point.distance,baseline[k].point.distance);
+                    EXPECT_EQ(controlled[k].response,baseline[k].response);
+                    EXPECT_EQ(controlled[k].point.is_selected,!(qscore ? m.qscore : m.ownership));
+                    if (m.shared_qscore) EXPECT_TRUE(m.ownership);
+                    if (baseline[k].point.distance<=1. && m.qscore) EXPECT_TRUE(m.ownership);
+                    bool independently_rejected=false;
+                    const double r=baseline[k].point.distance;
+                    for (const auto * neighbor:model->FindNeighborAtoms(*atom,2.*r))
+                    {
+                        const double distance=array_helper::ComputeNorm(baseline[k].point.position,neighbor->GetPositionRef());
+                        independently_rejected |= neighbor->GetElement()!=Element::HYDROGEN && distance<.9*r;
+                    }
+                    EXPECT_EQ(m.qscore,independently_rejected);
+                }
+                auto repeated=baseline;
+                second_stage_test::ApplyFibonacciNeighborSelection(repeated,masks,qscore);
+                SameSamples(controlled,repeated);
+                model->EditAnalysis().SetAtomLocalRawSamplingEntries(*atom,std::move(controlled));
+            }
+            options.joint_initialization_thread_size=workers;
+            initializations.push_back(d::RunJointFirstStageInitializationFromPreparedSamples(*model,workset,options));
+        }
+        SameInitialization(initializations[0],initializations[1]);
+    }
+}
+
+namespace {
+std::unique_ptr<ModelObject> NeighborControlModel(double neighbor_position,Element element=Element::CARBON)
+{
+    std::vector<std::unique_ptr<AtomObject>> atoms;
+    for (int i=0;i<2;++i)
+    {
+        auto atom=std::make_unique<AtomObject>(); atom->SetSerialID(i+1);
+        atom->SetElement(i==0 ? Element::CARBON : element);
+        atom->SetPosition(i==0 ? -1. : neighbor_position,0.,0.);
+        atoms.push_back(std::move(atom));
+    }
+    return std::make_unique<ModelObject>(std::move(atoms));
+}
+}
+
+TEST(JointSeedSamplingTest, NeighborControlStrictBoundaries)
+{
+    const LocalPotentialSampleList raw{{1.,SamplingPoint{1.,{0.,0.,0.},true}}};
+    auto ownership=NeighborControlModel(1.);
+    EXPECT_FALSE(second_stage_test::FibonacciNeighborMasks(*ownership->FindAtomPtr(1),*ownership,raw).rows[0].ownership);
+    for (double neighbor:{std::nextafter(.9,0.),.9,std::nextafter(.9,1.)})
+    {
+        auto model=NeighborControlModel(neighbor);
+        const auto masks=second_stage_test::FibonacciNeighborMasks(*model->FindAtomPtr(1),*model,raw);
+        EXPECT_EQ(masks.rows[0].qscore,neighbor<.9);
+    }
+    auto model=NeighborControlModel(1.); // center-neighbor distance equals 2r
+    const auto masks=second_stage_test::FibonacciNeighborMasks(*model->FindAtomPtr(1),*model,raw);
+    EXPECT_EQ(masks.shells.at(1.).qscore_ids,(std::vector<int>{2}));
+}
+
+TEST(JointSeedSamplingTest, NeighborControlsIgnoreHydrogenAndEmptyNeighborSets)
+{
+    const LocalPotentialSampleList raw{{1.,SamplingPoint{1.,{0.,0.,0.},true}}};
+    for (double position:{.1,10.})
+    {
+        auto model=NeighborControlModel(position,position==.1 ? Element::HYDROGEN : Element::CARBON);
+        const auto masks=second_stage_test::FibonacciNeighborMasks(*model->FindAtomPtr(1),*model,raw);
+        EXPECT_TRUE(masks.rows[0].f0); EXPECT_FALSE(masks.rows[0].ownership);
+        EXPECT_FALSE(masks.rows[0].qscore); EXPECT_FALSE(masks.rows[0].cone);
+        EXPECT_TRUE(masks.shells.at(1.).fixed_ids.empty());
+    }
+}
+
+TEST(JointSeedSamplingTest, NeighborUniverseDifferenceCanReverseRawDomainInclusion)
+{
+    auto model=NeighborControlModel(2.); // distance 3 A: outside fixed 2.5 A query
+    const LocalPotentialSampleList raw{{1.,SamplingPoint{1.,{0.,0.,0.},true}},
+        {1.,SamplingPoint{1.95,{.95,0.,0.},true}}};
+    const auto masks=second_stage_test::FibonacciNeighborMasks(*model->FindAtomPtr(1),*model,raw);
+    EXPECT_FALSE(masks.rows[0].qscore);
+    EXPECT_TRUE(masks.rows[1].f0); EXPECT_FALSE(masks.rows[1].ownership);
+    EXPECT_TRUE(masks.rows[1].qscore); EXPECT_FALSE(masks.rows[1].shared_qscore);
+    EXPECT_TRUE(masks.shells.at(1.95).fixed_ids.empty());
+    EXPECT_EQ(masks.shells.at(1.95).qscore_ids,(std::vector<int>{2}));
 }
