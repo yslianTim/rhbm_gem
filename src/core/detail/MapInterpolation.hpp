@@ -8,7 +8,6 @@
 #include <stdexcept>
 
 namespace rhbm_gem::core::detail {
-enum class MapInterpolationMethod { Tricubic, Trilinear };
 
 struct TricubicStencil
 {
@@ -156,30 +155,16 @@ inline double InterpolateTrilinear(const MapObject & map, const std::array<doubl
         fractions.at(2));
 }
 
-inline double InterpolateMapValue(
-    const MapObject & map, const std::array<double, 3> & position, MapInterpolationMethod method)
-{
-    switch (method)
-    {
-        case MapInterpolationMethod::Trilinear:
-            return InterpolateTrilinear(map, position);
-        case MapInterpolationMethod::Tricubic:
-            return InterpolateTricubic(MakeTricubicStencil(map, position),
-                [&](const auto & node) { return map.GetMapValue(node[0], node[1], node[2]); });
-    }
-    throw std::invalid_argument("Unsupported map interpolation method.");
-}
-
 inline LocalPotentialSampleList BuildLocalPotentialSampleList(
     const MapObject & map_object,
-    const SamplingPointList & sample_point_list,
-    MapInterpolationMethod method = MapInterpolationMethod::Tricubic)
+    const SamplingPointList & sample_point_list)
 {
     LocalPotentialSampleList sampling_data_list;
     sampling_data_list.reserve(sample_point_list.size());
     for (const auto & sampling_point : sample_point_list)
     {
-        const auto map_value{InterpolateMapValue(map_object, sampling_point.position, method)};
+        const auto map_value{InterpolateTricubic(MakeTricubicStencil(map_object, sampling_point.position),
+            [&](const auto & node) { return map_object.GetMapValue(node[0], node[1], node[2]); })};
         sampling_data_list.emplace_back(LocalPotentialSample{
             map_value,
             sampling_point

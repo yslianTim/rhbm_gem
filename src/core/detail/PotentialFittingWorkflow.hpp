@@ -2,7 +2,6 @@
 
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include "joint_component/PostFitPeeling.hpp"
-#include "JointSeedSampling.hpp"
 
 #include <vector>
 
@@ -31,8 +30,7 @@ void RunTwoStageFromPreparedSamples(
 
 void RunJointComponentWorkflow(
     MapObject & map, ModelObject & model, const FitOptions & options,
-    JointPostprocessingMetrics * metrics = nullptr,
-    const JointSeedSamplingPolicy & policy = {}, JointSeedSamplingReport * sampling_report = nullptr);
+    JointPostprocessingMetrics * metrics = nullptr);
 
 void RunJointPostprocessing(
     MapObject &, ModelObject &, const JointProblem &, JointAnalysisResult,

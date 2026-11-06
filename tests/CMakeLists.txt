@@ -202,7 +202,6 @@ set(JOINT_COMPONENT_WORKFLOW_TEST_SOURCES
 
 set(JOINT_COMPONENT_NUMERICAL_TEST_SOURCES
     core/joint_component/FirstStageInitialization_test.cpp
-    core/joint_component/SeedSensitivity_test.cpp
     core/joint_component/GaussSeidelBcd_test.cpp
     core/joint_component/ComponentSweepBudget_test.cpp
     core/joint_component/LocalConditioning_test.cpp

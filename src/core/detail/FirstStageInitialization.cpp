@@ -1,5 +1,6 @@
 #include "FirstStageInitialization.hpp"
 #include "FittingWorkset.hpp"
+#include <rhbm_gem/core/MapSampler.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -223,20 +224,18 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
 }
 
 JointInitialization PrepareJointWidthInitialization(
-    MapObject & map, ModelObject & model, const FittingWorkset & workset, const FitOptions & options,
-    const JointSeedSamplingPolicy & policy, JointSeedSamplingReport * report)
+    MapObject & map, ModelObject & model, const FittingWorkset & workset, const FitOptions & options)
 {
     if (!options.quiet_mode)
     {
         Logger::FinishProgressLine();
         Logger::Log(LogLevel::Info, "[Joint] Sampling " +
             std::to_string(workset.contributors.size()) +
-            " Joint contributors | sampling=" + std::string(JointSeedSamplingName(policy.sampling)) +
-            " | interpolation=" + std::string(MapInterpolationName(policy.interpolation)));
+            " Joint contributors | sampling=FibonacciShells | interpolation=Tricubic");
     }
     const auto atoms = CollectFirstStageAtoms(workset);
-    RunJointSeedSamplingWorkflow(map, model, atoms, options.joint_initialization_thread_size,
-        " Joint sampling", options.quiet_mode, policy, report);
+    RunPotentialSamplingWorkflow(map, model, atoms, std::clamp(options.joint_initialization_thread_size, 1, 4),
+        " Joint sampling", options.quiet_mode);
     if (!options.quiet_mode)
     {
         Logger::FinishProgressLine();

@@ -25,7 +25,7 @@ double InterpolateQScoreResponse(const MapObject & map, const std::array<double,
 {
     try
     {
-        return detail::InterpolateMapValue(map, position, detail::MapInterpolationMethod::Trilinear);
+        return detail::InterpolateTrilinear(map, position);
     }
     catch (const std::out_of_range &)
     {
