@@ -23,8 +23,10 @@
 #include <chrono>
 #include <cmath>
 #include <fstream>
+#include <filesystem>
 #include <iostream>
 #include <iterator>
+#include <limits>
 #include <map>
 #include <memory>
 #include <sys/resource.h>
@@ -38,6 +40,15 @@ namespace j = boost::json;
 using Clock = std::chrono::steady_clock;
 double Seconds(Clock::time_point start)
 { return std::chrono::duration<double>(Clock::now()-start).count(); }
+std::size_t PeakRssBytes()
+{
+    rusage usage{}; getrusage(RUSAGE_SELF,&usage);
+#ifdef __APPLE__
+    return static_cast<std::size_t>(usage.ru_maxrss);
+#else
+    return 1024*static_cast<std::size_t>(usage.ru_maxrss);
+#endif
+}
 j::value Number(double x) { return std::isfinite(x) ? j::value(x) : j::value(nullptr); }
 j::array Values(const std::vector<double> & values)
 { j::array out; for (double v : values) out.push_back(Number(v)); return out; }
@@ -183,6 +194,9 @@ j::object AuditEndpoints(const JointProblem & problem,const std::filesystem::pat
             {"normalized_prediction_max_difference",prediction_difference/problem.ObservationScale()},
             {"maximum_tau_difference",maximum_tau_difference},{"active_widths",active_widths},{"changed_widths",changed}});
     }
+    std::sort(states.begin(),states.end(),[](const auto & left,const auto & right) {
+        return left.as_object().at("file").as_string()<right.as_object().at("file").as_string();
+    });
     return {{"reference",prefix+"-F0-production.json"},{"states",states}};
 }
 }
@@ -243,6 +257,7 @@ int main(int argc,char ** argv)
             {"sampling",id=="S0" || id=="S1" ? "matched-spiral-control" : std::string(d::JointSeedSamplingName(policy.sampling))},
             {"interpolation",d::MapInterpolationName(policy.interpolation)},
             {"initialization_seconds",Seconds(init_start)},
+            {"initialization_peak_rss_bytes",PeakRssBytes()},
             {"grid_spacing",Values({map->GetGridSpacing()[0],map->GetGridSpacing()[1],map->GetGridSpacing()[2]})}};
         j::array records;
         for (std::size_t i=0;i<init.atoms.size();++i)
@@ -313,6 +328,7 @@ int main(int argc,char ** argv)
             return n::FitBcdComponents(problem,bounded.tau_values,solver_policy);
         }();
         output["joint_seconds"]=Seconds(fit_start); output["joint"]=DescribeFit(fit);
+        output["jce_peak_rss_bytes"]=PeakRssBytes();
         const auto & atom=*model->GetAtomList().front();
         output["qscore"]=CalculateQScoreForAtom(atom,*map,*model,1.,0.);
         output["total_seconds"]=Seconds(start);
@@ -333,12 +349,7 @@ int main(int argc,char ** argv)
                 {"same_objective",snapshot.objective==fit.objective},{"seconds",Seconds(downstream_start)},
                 {"peeling_samples",metrics.grid_peeling_sample_count},{"peeling_available",metrics.available_peeling_sample_count}};
         }
-        rusage usage{}; getrusage(RUSAGE_SELF,&usage);
-#ifdef __APPLE__
-        output["peak_rss_bytes"]=usage.ru_maxrss;
-#else
-        output["peak_rss_bytes"]=1024*usage.ru_maxrss;
-#endif
+        output["peak_rss_bytes"]=PeakRssBytes();
         std::ofstream stream(argv[1]); stream << j::serialize(output) << '\n';
         return 0;
     }

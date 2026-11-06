@@ -5,6 +5,7 @@
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
 #include <algorithm>
 #include <cmath>
+#include <stdexcept>
 #include <utility>
 
 namespace rhbm_gem::core::detail {

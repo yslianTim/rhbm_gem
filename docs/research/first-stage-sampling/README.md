@@ -305,7 +305,8 @@ successful shell. Shell candidates requested in total are 19200 minimum,
 | Group members available | 45 | 45 | 45 | 45 |
 
 Initial bound violations are 1/1/0/0 and use the existing projection. Width
-p50/p90/p95/p99 and exclusion reasons are retained for every run in JSON.
+p50/p90/p95/p99 and native/refined/unqualified counts are retained for every run
+in JSON. Detailed per-atom reasons remain in the reproducible build outputs.
 Final active Width-bound counts are zero in all 16 real-map endpoints.
 
 8RQB / EMD-19436: all four cells have 119/120 qualified donors, one unqualified
@@ -379,3 +380,53 @@ variation across methods is small relative to the common import footprint and
 does not demonstrate a sampling-policy memory benefit. Q0 is slower to
 initialize in crowded environments. Lower sweep count alone does not justify
 promotion.
+
+## P6: final acceptance and decision
+
+Release and Debug builds passed with at most four build workers. Final full
+CTest: Release 21/21 groups (39.76 s); Debug 21/21 (491.47 s). All 1089 enabled
+GoogleTests are covered by the registration guard; none are disabled. Final
+QScore tests additionally verify failed shells never become observations and
+the original boundary exception message survives shared interpolation.
+`lint_repo` and `lint_install_smoke` passed. CTest was sequential with
+OMP_NUM_THREADS=2, OMP_THREAD_LIMIT=4, BLAS/VECLIB threads=1; Joint groups retain
+their existing OMP_NUM_THREADS=1 environment. Numerical and timeout criteria
+were not changed.
+
+The final default rerun matches every originally recorded P0 atom, calibration,
+JCE evidence/state and QScore field exactly. Its initialization takes 0.05706 s
+versus baseline 0.05851 s; these single measurements do not establish a
+speedup. Peak RSS through JCE is 35,209,216 bytes versus baseline 34,766,848
+(+1.3%, including additional research reporting). Initialization high-water
+is 32,440,320 bytes; full repeated downstream validation reaches 45,940,736.
+The current research executable records phase RSS as well as whole-process
+RSS; the original 98-run ledger retains its whole-process measurements.
+
+| Change | Decision | Evidence |
+|---|---|---|
+| Shared interpolation refactor | **Promoted** | Exact F0/QScore parity; independent kernel and boundary tests; Release/Debug regression; no material measured resource regression |
+| QScore-inspired FirstStage sampling | **Retained for research** | Small isolated gain, substantial crowded bias/RMSE regression, lower 6Z6U donor coverage and unstable calibration tail; no demonstrated endpoint advantage |
+| FirstStage Trilinear policy | **Retained for research** | Larger Width bias/RMSE in tested truth maps, despite some Amplitude/noise and runtime tradeoffs |
+
+**Production remains F0: FibonacciShells + Tricubic.** QScore independently
+remains Trilinear with its original center weighting. Both internal switches
+and run-owned diagnostics remain available without public API/CLI flags.
+No BCD/KKT/LM, calibration coverage, Endpoint/Replay or downstream numerical
+rule changed. Common-bound research does not replace Production qualification.
+
+Cleanup removed the orphaned include and generated study bytecode, made
+dependencies explicit, sorted audit output and compacted the 98-run ledger
+without changing any field. Production has one shared interpolation
+implementation, one spiral generator/model-aware shell policy, and one
+FirstStage estimator. Research controls and reproducible tools remain in the
+explicit noninstalled study target; temporary instrumentation was not added to
+Production. Developer documentation describes the current algorithm and
+ownership; experiment history stays here. Notion was not updated. No new
+branch/worktree or third-party dependency was created.
+
+Scope limits: only the specified 120-target real subsets were tested, not whole
+structures; real Width accuracy is unknown. Three deterministic synthetic
+phases do not establish population-wide statistical robustness. Working
+covariance is conditional and does not correct interpolation dependence or
+duplicate observations. These limits are reasons to retain research switches
+and the established Production default, not unverified promotion claims.

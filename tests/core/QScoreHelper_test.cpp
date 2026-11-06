@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
@@ -924,4 +925,35 @@ TEST(QScoreSamplingTest, PureGeometryPreservesSpiralInteriorReference)
     EXPECT_NEAR(points[1][0],1.+std::sqrt(1.-h*h)*std::cos(theta),1e-15);
     EXPECT_NEAR(points[1][1],2.+std::sqrt(1.-h*h)*std::sin(theta),1e-15);
     EXPECT_NEAR(points[1][2],3.+h,1e-15);
+}
+
+TEST(QScoreSamplingTest, CrowdedSeedOmitsFailedShellsAndPreservesEverySuccessfulPoint)
+{
+    const auto model=MakeCrowdedModelObject();
+    const auto seed=rhbm_gem::core::detail::BuildQScoreSeedSamples(*model->GetAtomList().front(),*model);
+    std::size_t expected=1,failed=0;
+    for (const auto & shell:seed.shells)
+    {
+        const auto count=static_cast<std::size_t>(std::count_if(seed.points.begin(),seed.points.end(),
+            [&](const auto & point){return point.distance==shell.radius;}));
+        if (shell.successful) { EXPECT_EQ(count,shell.accepted_count); expected+=count; }
+        else { ++failed; EXPECT_EQ(count,0u); EXPECT_EQ(shell.attempt_count,50u); }
+    }
+    EXPECT_GT(failed,0u); EXPECT_EQ(seed.points.size(),expected);
+    EXPECT_DOUBLE_EQ(seed.points.front().distance,0.);
+}
+
+TEST(QScoreHelperTest, SharedInterpolationPreservesLegacyBoundaryDiagnostic)
+{
+    const auto map=MakeGaussianMapObject();
+    const auto model=MakeModelObject({{{100.,0.,0.},Element::CARBON}});
+    try
+    {
+        rhbm_gem::core::CalculateQScoreForAtom(*model->GetAtomList().front(),map,*model,1.,0.);
+        FAIL()<<"Expected QScore boundary exception";
+    }
+    catch (const std::out_of_range & error)
+    {
+        EXPECT_STREQ(error.what(),"CalculateQScoreForAtom sampling position is outside the map boundary.");
+    }
 }

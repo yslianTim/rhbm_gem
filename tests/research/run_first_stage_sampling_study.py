@@ -146,8 +146,12 @@ def main():
             a, b = json.loads((baseline_dir / old).read_text()), json.loads((runs / new).read_text())
             parity[old] = all(shared_equal(a[key], b[key]) for key in ("atoms", "calibration", "joint", "qscore"))
             assert parity[old], f"F0 baseline changed: {old}"
-    (baseline_dir / "results.json").write_text(json.dumps({"baseline_exact_parity": parity,
-        "real_data": provenance, "runs": results}, indent=2) + "\n")
+    # One complete run per line keeps the checked-in numerical evidence reviewable.
+    with (baseline_dir / "results.json").open("w") as stream:
+        stream.write('{\n  "baseline_exact_parity": ' + json.dumps(parity) + ',\n  "real_data": ' + json.dumps(provenance))
+        stream.write(',\n  "runs": {\n')
+        stream.write(',\n'.join('    ' + json.dumps(name) + ': ' + json.dumps(value) for name, value in results.items()))
+        stream.write('\n  }\n}\n')
     print(f"Saved {len(results)} study summaries; baseline parity: {parity}", flush=True)
 
 

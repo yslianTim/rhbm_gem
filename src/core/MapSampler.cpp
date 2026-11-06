@@ -6,6 +6,7 @@
 #include "support/MapSamplerTestSupport.hpp"
 #endif
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cmath>

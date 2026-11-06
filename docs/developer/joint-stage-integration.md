@@ -11,6 +11,26 @@ uses the Sampler's deterministic Fibonacci default. Post-Joint observations
 come directly from original map voxels. These input policies do not change
 Joint problem construction or its Pure Halo-Support Exclusion model.
 
+Joint initialization accepts an internal, per-run `JointSeedSamplingPolicy`:
+`FibonacciShells` / `QScoreSpiralShells` and `Tricubic` / `Trilinear` are
+independent choices. Production defaults remain Fibonacci + Tricubic. QScore's
+correlation independently uses shared Trilinear interpolation and its original
+repeated-center weighting. The QScore-inspired FirstStage policy uses one
+center, shared model-aware spiral shell acceptance and optional run-owned shell
+diagnostics; unavailable shells contribute no observations. Both policies use
+the same selected, positive-response FirstStage OLS/MDPDE estimator with the
+unchanged 1.0 A fitting radius. These choices are internal, without CLI or
+`FitOptions` additions. Research callers save `JointSeedSamplingReport` alongside
+their results; raw entries retain actual coordinates/selection and never become
+Post-Joint original-grid identities. The existing persistence schema is unchanged.
+
+`src/core/detail/MapInterpolation.hpp` provides the enum-dispatched map entry
+point and separate numerical kernels. Trilinear retains inclusive half-voxel
+margins and coordinate clamping; Tricubic retains MapObject floor indices and
+clamped 4x4x4 stencil nodes, including its finite out-of-range sentinel behavior.
+Both reject nonfinite positions before index conversion. See the
+[sampling study](../research/first-stage-sampling/README.md) for experiments.
+
 ## Result ownership
 
 The Joint result stores the target-only Pure Exclusion state, component

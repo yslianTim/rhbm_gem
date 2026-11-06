@@ -1,6 +1,5 @@
 #include "FirstStageInitialization.hpp"
 #include "FittingWorkset.hpp"
-#include <rhbm_gem/core/MapSampler.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
