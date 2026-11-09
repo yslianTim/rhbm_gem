@@ -1,7 +1,9 @@
 #include <gtest/gtest.h>
 #include "support/JointTestNumerics.hpp"
 #include "support/InstrumentedLM.hpp"
+#include "support/JointSyntheticWorkload.hpp"
 #include "core/detail/joint_component/ActiveSetBoundedLM.hpp"
+#include "core/detail/joint_component/Problem.hpp"
 #include "core/detail/joint_component/TiledQR.hpp"
 #include "support/CommandTestHelpers.hpp"
 #include "core/command/detail/SimulationGeometry.hpp"
@@ -28,17 +30,32 @@ struct Sample
 struct RejectOnce
 {
     int calls{},rejected{},retry_limit{40}; bool always{},reject_all{},tiny_step{}; std::string failure;
+    bool worsen_first_trial{};
+    std::vector<double> trial_ratios, solve_radii, solve_eta, solve_response;
     bool retry() const {return calls<retry_limit;}
     int values() const {return 2;}
-    int operator()(const Vector & x,Vector & r) {++calls; r=Vector::Constant(2,tiny_step ? -1e-100 : x(0)-1); return 0;}
+    int operator()(const Vector & x,Vector & r)
+    {
+        ++calls; r=Vector::Constant(2,tiny_step ? -1e-100 : x(0)-1);
+        if(worsen_first_trial && calls==2) r.setConstant(-2);
+        return 0;
+    }
     int df(const Vector &,Eigen::MatrixXd & d) {d=Eigen::MatrixXd::Constant(2,1,tiny_step ? 1e100 : 1.); return 0;}
     int linearize(const Vector & x,const Vector & residual,Eigen::MatrixXd & d,Vector & response,Vector & norms)
     {df(x,d); response=residual; norms=d.colwise().blueNorm(); return 0;}
     joint::ActiveSetStep solve_bounded_step(const Eigen::MatrixXd & j,const Vector & response,
         const Vector & x,const Vector & diagonal,double radius,double damping)
-    {return joint::SolveBoundedTrustRegionStep(j,response,diagonal,Vector::Constant(x.size(),2.0)-x,radius,damping);}
-    bool Trial(const Vector &,const Vector &,const Vector &,double,double,double,double,double,bool proposed)
-    {if(reject_all || (proposed && (always || rejected==0))) {++rejected; return false;} return true;}
+    {
+        solve_radii.push_back(radius); solve_eta.push_back(x(0)); solve_response.push_back(response(0));
+        return joint::SolveBoundedTrustRegionStep(j,response,diagonal,Vector::Constant(x.size(),2.0)-x,radius,damping);
+    }
+    bool Trial(const Vector &,const Vector &,const Vector &,double,double,double,double,double ratio,bool proposed)
+    {
+        trial_ratios.push_back(ratio);
+        if(reject_all || (proposed && (always || (!worsen_first_trial && rejected==0))))
+        {++rejected; return false;}
+        return true;
+    }
 };
 }
 
@@ -68,6 +85,87 @@ TEST(JointComponentSearchTest, InvalidTrialShrinksWithoutChangingAcceptedState)
     p::InstrumentedLM<RejectOnce> rejecting(fail); x.setZero();
     rejecting.minimizeInit(x); status=rejecting.minimizeOneStep(x);
     EXPECT_EQ(status,Eigen::LevenbergMarquardtSpace::UserAsked); EXPECT_EQ(x(0),0); EXPECT_EQ(fail.calls,2);
+}
+
+TEST(JointComponentSearchTest, TrustedLowRatioAndUntrustedTrialUseDifferentRetries)
+{
+    for(const bool trusted_low_ratio:{false,true})
+    {
+        SCOPED_TRACE(trusted_low_ratio);
+        RejectOnce problem; problem.worsen_first_trial=trusted_low_ratio;
+        p::InstrumentedLM<RejectOnce> lm(problem);
+        lm.parameters.factor=.1;
+        Vector eta=Vector::Zero(1);
+        ASSERT_EQ(lm.minimizeInit(eta),Eigen::LevenbergMarquardtSpace::NotStarted);
+        EXPECT_EQ(lm.minimizeOneStep(eta),Eigen::LevenbergMarquardtSpace::Running);
+        ASSERT_EQ(problem.solve_radii.size(),2u);
+        ASSERT_EQ(problem.trial_ratios.size(),2u);
+        EXPECT_EQ(problem.solve_eta,(std::vector<double>{0,0}));
+        EXPECT_EQ(problem.solve_response,(std::vector<double>{-1,-1}));
+        EXPECT_GT(eta(0),0);
+        EXPECT_LT(eta(0),.1);
+        EXPECT_EQ(lm.iterations(),2);
+        EXPECT_EQ(problem.rejected,trusted_low_ratio ? 0 : 1);
+        if(trusted_low_ratio) EXPECT_LT(problem.trial_ratios.front(),0);
+        else EXPECT_GE(problem.trial_ratios.front(),1e-4);
+        EXPECT_GE(problem.trial_ratios.back(),1e-4);
+        EXPECT_NEAR(problem.solve_radii.back()/problem.solve_radii.front(),
+            trusted_low_ratio ? .1 : .25,1e-12);
+    }
+}
+
+TEST(JointComponentSearchTest, ProfileSearchPreservesAcceptedTrajectory)
+{
+    const rhbm_gem::core::JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
+    auto context=data.context;
+    context.eta_upper_bound=std::log(.53);
+    context.update_budget=3;
+    const Vector tau=Eigen::Vector3d(.46,.49,.52);
+    const auto search=joint::SearchProfile(data.domain,data.y,tau,context);
+    const std::array<Eigen::Vector3d,4> expected_eta{{
+        {-.776528789498996,-.713349887877465,-.653926467406664},
+        {-.693859784826252,-.692966728106180,-.692837467146539},
+        {-.693143774255377,-.693153781751112,-.693147361351597},
+        {-.693143834605029,-.693153796340366,-.693147370056698}}};
+    const std::array expected_radius{0.,.0290531450193031,.0581062900386062,.000503430554232906};
+    const std::array expected_ratio{0.,1.01772153847589,1.00000563441645,1.00000488429624};
+    ASSERT_EQ(search.trials.size(),expected_eta.size());
+    for(std::size_t i=0;i<search.trials.size();++i)
+    {
+        SCOPED_TRACE(i);
+        const auto & trial=search.trials[i];
+        EXPECT_EQ(trial.evaluation,static_cast<int>(i+1));
+        EXPECT_TRUE(trial.accepted);
+        EXPECT_EQ(trial.accepted_update,static_cast<int>(i));
+        ASSERT_TRUE(trial.trust && trial.trust->passed);
+        ASSERT_TRUE(trial.lm && trial.lm->proposed_acceptance);
+        EXPECT_TRUE(trial.endpoint.eta.isApprox(expected_eta[i],1e-11));
+        EXPECT_DOUBLE_EQ(trial.lm->damping,0.);
+        EXPECT_NEAR(trial.lm->radius,expected_radius[i],1e-12);
+        EXPECT_NEAR(trial.lm->ratio,expected_ratio[i],1e-7);
+        if(i>0)
+        {
+            EXPECT_TRUE(trial.lm->accepted_eta.isApprox(expected_eta[i-1],1e-11));
+            EXPECT_TRUE((trial.lm->accepted_eta+trial.lm->step).isApprox(trial.endpoint.eta,1e-14));
+        }
+    }
+    EXPECT_TRUE(search.eta.isApprox(expected_eta.back(),1e-11));
+    EXPECT_EQ(search.lm_status,-1);
+    EXPECT_EQ(search.stop_reason,"accepted-update-budget");
+    EXPECT_TRUE(search.stopped);
+    EXPECT_FALSE(search.width_failed);
+    EXPECT_EQ(search.evaluations,4);
+    EXPECT_EQ(search.derivatives,3);
+    EXPECT_EQ(search.accepted,3);
+    EXPECT_EQ(search.bounded_lm_work.subproblem_solves,3u);
+    EXPECT_EQ(search.bounded_lm_work.damping_qr_factorizations,3u);
+    const auto endpoint=joint::EvaluateProfile(data.domain,data.y,search.eta,&context);
+    EXPECT_NEAR(endpoint.certificate.objective/(context.scale*context.scale),2.01990781328648e-10,1e-18);
+    EXPECT_LE(endpoint.certificate.width_bound_projected_kkt,1e-12);
+    const auto replay=joint::CheckIndependentReplay(data.domain,data.y,endpoint,context);
+    EXPECT_TRUE(replay.passed);
+    EXPECT_TRUE(joint::VerifyJointEndpoint(data.domain,data.y,endpoint,replay,context).numerical_qualified);
 }
 
 TEST(JointComponentSearchTest, ExplicitSupportArithmeticKeepsStrictBoundary)
