@@ -32,44 +32,58 @@ void CheckSingleBlock(const std::string & topology,int atoms)
     n::BcdSearchPolicy policy; policy.maximum_sweeps=30;
     policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
     policy.eta_upper_bound=std::log(2.2);
-    const auto result=n::RunBcdDiagnostic(problem,eta,policy);
+    std::vector<n::BcdSweepRecord> sweeps;
+    const auto result=second_stage_test::SearchBcdFixture(problem,eta,policy,&sweeps);
     ASSERT_TRUE(result.search_converged)<<result.reason;
-    ASSERT_TRUE(result.endpoint_certified)<<result.endpoint_trust.reason;
-    EXPECT_GE(result.sweeps.size(),2u);
+    ASSERT_TRUE(result.certification)<<result.reason;
+    ASSERT_TRUE(result.certification->verified())<<result.certification->trust.reason;
+    EXPECT_GE(sweeps.size(),2u);
     EXPECT_GT(result.first_order_stationarity_sweep,0u);
     EXPECT_GE(result.confirmed_stationarity_sweep,result.first_order_stationarity_sweep);
-    ASSERT_EQ(result.fit.components.size(),1u);
-    EXPECT_EQ(result.fit.components.front().search_sweeps,result.sweeps.size());
-    EXPECT_EQ(result.fit.components.front().first_order_stationarity_sweep,result.first_order_stationarity_sweep);
-    EXPECT_EQ(result.fit.components.front().confirmed_stationarity_sweep,result.confirmed_stationarity_sweep);
-    EXPECT_EQ(result.fit.components.front().endpoint_certification_sweep,result.sweeps.size());
-    EXPECT_EQ(result.fit.components.front().endpoint_certification_sweep,result.confirmed_stationarity_sweep);
-    EXPECT_LE(result.sweeps.back().global_ac_kkt,policy.convergence_criteria.global_ac_kkt);
-    EXPECT_LE(result.sweeps.back().global_eta_gradient_inf_norm,policy.convergence_criteria.global_eta_gradient);
-    EXPECT_LE(result.sweeps.back().cache_replay_error,2e-12);
-    EXPECT_TRUE(result.assessment.primary.valid);
-    EXPECT_TRUE(result.assessment.independent_replay.passed);
-    EXPECT_EQ(result.fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
-    EXPECT_TRUE(result.fit.search_completed);
+    EXPECT_EQ(result.sweep_count,sweeps.size());
+    EXPECT_EQ(result.certification_sweep,result.confirmed_stationarity_sweep);
+    EXPECT_EQ(result.certification_sweep,sweeps.size());
+    EXPECT_LE(sweeps.back().global_ac_kkt,policy.convergence_criteria.global_ac_kkt);
+    EXPECT_LE(sweeps.back().global_eta_gradient_inf_norm,policy.convergence_criteria.global_eta_gradient);
+    EXPECT_LE(sweeps.back().cache_replay_error,2e-12);
+    EXPECT_TRUE(result.certification->assessment.primary.valid);
+    EXPECT_TRUE(result.certification->assessment.independent_replay.passed);
+    EXPECT_TRUE(result.certification->qualified());
+    EXPECT_TRUE(result.accepted_state_integrity);
     const auto bounded=second_stage_test::matched::joint_component::FitBoundedJointComponentsForTesting(
         problem,std::vector<double>(static_cast<std::size_t>(atoms),.55),2.2);
     ASSERT_EQ(bounded.components.size(),1u);
     ASSERT_TRUE(bounded.components.front().candidate_diagnostic);
     EXPECT_EQ(bounded.components.front().candidate_diagnostic->convergence_criteria_id,"practical-v2");
-    ASSERT_TRUE(bounded.components.front().state);
-    ASSERT_TRUE(result.fit.components.front().state);
-    ASSERT_TRUE(bounded.objective && result.fit.objective);
-    EXPECT_EQ(bounded.components.front().search_sweeps,result.fit.components.front().search_sweeps);
-    EXPECT_EQ(bounded.components.front().stop_reason,"block-stationary");
-    EXPECT_LE(std::abs(bounded.objective.value()-result.fit.objective.value()),1e-12);
-    for(std::size_t k=0;k<bounded.components.front().state->ac.size();++k)
-        EXPECT_LE(std::abs(bounded.components.front().state->ac[k]-result.fit.components.front().state->ac[k]),
-            1e-10*(1+std::abs(result.fit.components.front().state->ac[k])));
-    for(std::size_t k=0;k<bounded.components.front().state->log_tau.size();++k)
-        EXPECT_LE(std::abs(bounded.components.front().state->log_tau[k]-result.fit.components.front().state->log_tau[k]),1e-10);
-    auto stopped_search=result.fit; stopped_search.search_completed=false;
+    EXPECT_EQ(bounded.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+    EXPECT_TRUE(bounded.search_completed);
+    const auto & component=bounded.components.front();
+    ASSERT_TRUE(component.state);
+    ASSERT_TRUE(bounded.assembled_state && bounded.prediction && bounded.objective);
+    EXPECT_EQ(component.search_sweeps,result.sweep_count);
+    EXPECT_EQ(component.first_order_stationarity_sweep,result.first_order_stationarity_sweep);
+    EXPECT_EQ(component.confirmed_stationarity_sweep,result.confirmed_stationarity_sweep);
+    EXPECT_EQ(component.endpoint_certification_sweep,result.certification_sweep);
+    EXPECT_EQ(component.stop_reason,"block-stationary");
+    const auto & endpoint=result.certification->assessment.primary;
+    const double objective=endpoint.certificate.objective/(data.context.scale*data.context.scale);
+    EXPECT_LE(std::abs(*bounded.objective-objective),1e-12);
+    ASSERT_EQ(bounded.prediction->size(),static_cast<std::size_t>(result.state.prediction.size()));
+    for(std::size_t row=0;row<bounded.prediction->size();++row)
+    {
+        const double prediction=(*bounded.prediction)[row];
+        EXPECT_LE(std::abs(prediction-result.state.prediction.data()[row]),2e-12+2e-13*std::abs(prediction));
+    }
+    ASSERT_EQ(component.state->ac.size(),static_cast<std::size_t>(endpoint.beta.size()));
+    for(std::size_t k=0;k<component.state->ac.size();++k)
+        EXPECT_LE(std::abs(component.state->ac[k]-endpoint.beta.data()[k]),
+            1e-10*(1+std::abs(endpoint.beta.data()[k])));
+    ASSERT_EQ(component.state->log_tau.size(),static_cast<std::size_t>(endpoint.eta.size()));
+    for(std::size_t k=0;k<component.state->log_tau.size();++k)
+        EXPECT_LE(std::abs(component.state->log_tau[k]-endpoint.eta.data()[k]),1e-10);
+    auto stopped_search=bounded; stopped_search.search_completed=false;
     EXPECT_EQ(stopped_search.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
-    for(const auto & sweep:result.sweeps)
+    for(const auto & sweep:sweeps)
         EXPECT_LE(sweep.objective_after,sweep.objective_before+n::BlockObjectiveReplayEnclosure(sweep.objective_before));
     EXPECT_EQ(data.partition.components.size(),1u);
 }
@@ -184,14 +198,16 @@ TEST(JointBcdSearchTest, ReplayWorkspacePreservesExactSearchResultsAcrossRuns)
     const n::Vector eta=n::Vector::Constant(3,std::log(.55));
     n::BcdSearchPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=4;
     policy.eta_upper_bound=std::log(2.2);
-    const auto first=n::RunBcdDiagnostic(problem,eta,policy);
-    const auto second=n::RunBcdDiagnostic(problem,eta,policy);
+    std::vector<n::BcdSweepRecord> first_sweeps;
+    const auto first=second_stage_test::SearchBcdFixture(problem,eta,policy,&first_sweeps);
+    std::vector<n::BcdSweepRecord> second_sweeps;
+    const auto second=second_stage_test::SearchBcdFixture(problem,eta,policy,&second_sweeps);
 
     EXPECT_EQ(first.reason,second.reason);
     EXPECT_EQ(first.total_block_solves,second.total_block_solves);
     EXPECT_EQ(first.total_profile_evaluations,second.total_profile_evaluations);
     ASSERT_EQ(first.blocks.size(),second.blocks.size());
-    ASSERT_EQ(first.sweeps.size(),second.sweeps.size());
+    ASSERT_EQ(first_sweeps.size(),second_sweeps.size());
     EXPECT_TRUE(BitwiseEqual(first.state.eta,second.state.eta));
     EXPECT_TRUE(BitwiseEqual(first.state.beta,second.state.beta));
     EXPECT_TRUE(BitwiseEqual(first.state.prediction,second.state.prediction));
@@ -209,13 +225,13 @@ TEST(JointBcdSearchTest, ReplayWorkspacePreservesExactSearchResultsAcrossRuns)
         EXPECT_TRUE(BitwiseEqual(left.local_objective_after,right.local_objective_after));
         EXPECT_TRUE(BitwiseEqual(left.global_replay_delta,right.global_replay_delta));
     }
-    for(std::size_t i=0;i<first.sweeps.size();++i)
+    for(std::size_t i=0;i<first_sweeps.size();++i)
     {
-        EXPECT_EQ(first.sweeps[i].accepted_blocks,second.sweeps[i].accepted_blocks);
-        EXPECT_EQ(first.sweeps[i].unchanged_blocks,second.sweeps[i].unchanged_blocks);
-        EXPECT_EQ(first.sweeps[i].block_solves,second.sweeps[i].block_solves);
-        EXPECT_TRUE(BitwiseEqual(first.sweeps[i].objective_after,second.sweeps[i].objective_after));
-        EXPECT_TRUE(BitwiseEqual(first.sweeps[i].cache_replay_error,second.sweeps[i].cache_replay_error));
+        EXPECT_EQ(first_sweeps[i].accepted_blocks,second_sweeps[i].accepted_blocks);
+        EXPECT_EQ(first_sweeps[i].unchanged_blocks,second_sweeps[i].unchanged_blocks);
+        EXPECT_EQ(first_sweeps[i].block_solves,second_sweeps[i].block_solves);
+        EXPECT_TRUE(BitwiseEqual(first_sweeps[i].objective_after,second_sweeps[i].objective_after));
+        EXPECT_TRUE(BitwiseEqual(first_sweeps[i].cache_replay_error,second_sweeps[i].cache_replay_error));
     }
 }
 
@@ -226,7 +242,7 @@ TEST(JointBcdSearchTest, CandidateObserverDoesNotChangeSearch)
     const n::Vector eta=n::Vector::Constant(3,std::log(.55));
     n::BcdSearchPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=4;
     policy.eta_upper_bound=std::log(2.2);
-    const auto baseline=n::RunBcdDiagnostic(problem,eta,policy);
+    const auto baseline=second_stage_test::SearchBcdFixture(problem,eta,policy);
     std::size_t candidate_count{},accepted_count{};
     policy.candidate_observer=[&](const n::BcdCandidateEvent & event) {
         ++candidate_count; accepted_count+=event.accepted;
@@ -239,13 +255,15 @@ TEST(JointBcdSearchTest, CandidateObserverDoesNotChangeSearch)
         EXPECT_LE(std::abs(event.candidate_objective-replay.objective),
             n::BlockObjectiveReplayEnclosure(replay.objective));
     };
-    const auto observed=n::RunBcdDiagnostic(problem,eta,policy);
+    const auto observed=second_stage_test::SearchBcdFixture(problem,eta,policy);
 
     EXPECT_GT(candidate_count,0u);
     EXPECT_GT(accepted_count,0u);
     EXPECT_EQ(baseline.reason,observed.reason);
     EXPECT_EQ(baseline.search_converged,observed.search_converged);
-    EXPECT_EQ(baseline.endpoint_certified,observed.endpoint_certified);
+    ASSERT_EQ(baseline.certification.has_value(),observed.certification.has_value());
+    if(baseline.certification)
+        EXPECT_EQ(baseline.certification->verified(),observed.certification->verified());
     EXPECT_EQ(baseline.total_block_solves,observed.total_block_solves);
     EXPECT_EQ(baseline.sweep_count,observed.sweep_count);
     EXPECT_TRUE(BitwiseEqual(baseline.state.eta,observed.state.eta));
@@ -267,17 +285,19 @@ TEST(JointBcdSearchTest, IncrementalObjectiveMatchesIndependentFullReplay)
     policy.candidate_observer=[&](const n::BcdCandidateEvent & event) {
         AuditIncrementalCandidate(*data.input,data.layout,data.y,data.context.scale,event,e1_audit);
     };
-    const auto e1=n::RunBcdDiagnostic(problem,eta,policy);
+    std::vector<n::BcdSweepRecord> sweeps;
+    const auto e1=second_stage_test::SearchBcdFixture(problem,eta,policy,&sweeps);
 
     ASSERT_TRUE(e1.search_converged)<<e1.reason;
-    ASSERT_TRUE(e1.endpoint_certified)<<e1.endpoint_trust.reason;
-    EXPECT_TRUE(e1.assessment.independent_replay.passed);
+    ASSERT_TRUE(e1.certification)<<e1.reason;
+    ASSERT_TRUE(e1.certification->verified())<<e1.certification->trust.reason;
+    EXPECT_TRUE(e1.certification->assessment.independent_replay.passed);
     EXPECT_GT(e1_audit.candidates,0u);
     EXPECT_EQ(e1_audit.decision_disagreements,0u);
     EXPECT_EQ(e1.work.incremental_objective_evaluations,e1_audit.candidates);
     EXPECT_EQ(e1.work.objective_reconciliations,e1.sweep_count);
     EXPECT_EQ(e1.work.full_candidate_replays,0u);
-    EXPECT_TRUE(std::all_of(e1.sweeps.begin(),e1.sweeps.end(),
+    EXPECT_TRUE(std::all_of(sweeps.begin(),sweeps.end(),
         [](const auto & sweep){return sweep.objective_cache_refreshed;}));
 }
 
@@ -288,10 +308,12 @@ TEST(JointBcdSearchTest, IncrementalObjectiveQualifiesAtActiveWidthUpperBound)
     n::BcdSearchPolicy policy; policy.core_atoms=2; policy.maximum_sweeps=40;
     policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
     policy.eta_upper_bound=std::log(.5);
-    const auto e1=n::RunBcdDiagnostic(problem,initial_eta,policy);
+    std::vector<n::BcdSweepRecord> sweeps;
+    const auto e1=second_stage_test::SearchBcdFixture(problem,initial_eta,policy,&sweeps);
     ASSERT_TRUE(e1.search_converged)<<e1.reason;
-    ASSERT_TRUE(e1.endpoint_certified)<<e1.endpoint_trust.reason;
-    EXPECT_TRUE(e1.assessment.independent_replay.passed);
+    ASSERT_TRUE(e1.certification)<<e1.reason;
+    ASSERT_TRUE(e1.certification->verified())<<e1.certification->trust.reason;
+    EXPECT_TRUE(e1.certification->assessment.independent_replay.passed);
     ASSERT_TRUE(e1.final_sweep);
     EXPECT_TRUE(e1.final_sweep->width_bound_applied);
     EXPECT_GT(e1.final_sweep->active_width_bound_count,0u);
@@ -300,7 +322,7 @@ TEST(JointBcdSearchTest, IncrementalObjectiveQualifiesAtActiveWidthUpperBound)
         n::PracticalJointConvergenceCriteria.global_eta_gradient);
     EXPECT_EQ(e1.work.objective_reconciliations,e1.sweep_count);
     EXPECT_GT(e1.work.incremental_objective_evaluations,0u);
-    EXPECT_TRUE(std::all_of(e1.sweeps.begin(),e1.sweeps.end(),
+    EXPECT_TRUE(std::all_of(sweeps.begin(),sweeps.end(),
         [](const auto & sweep){return sweep.objective_cache_refreshed;}));
 }
 
@@ -316,17 +338,20 @@ TEST(JointBcdSearchTest, EverySweepReconcilesObjectiveAfterReplayAudit)
     policy.candidate_observer=[&](const n::BcdCandidateEvent & event) {
         AuditIncrementalCandidate(*data.input,data.layout,data.y,data.context.scale,event,audit);
     };
-    const auto result=n::RunBcdDiagnostic(problem,initial_eta,policy);
+    std::vector<n::BcdSweepRecord> sweeps;
+    const auto result=second_stage_test::SearchBcdFixture(problem,initial_eta,policy,&sweeps);
 
     ASSERT_TRUE(result.search_converged)<<result.reason;
-    ASSERT_TRUE(result.endpoint_certified)<<result.endpoint_trust.reason;
-    EXPECT_TRUE(result.assessment.independent_replay.passed);
-    EXPECT_EQ(result.fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+    ASSERT_TRUE(result.certification)<<result.reason;
+    ASSERT_TRUE(result.certification->verified())<<result.certification->trust.reason;
+    EXPECT_TRUE(result.certification->assessment.independent_replay.passed);
+    EXPECT_TRUE(result.certification->qualified());
+    EXPECT_TRUE(result.accepted_state_integrity);
     EXPECT_EQ(audit.candidates,result.work.incremental_objective_evaluations);
     EXPECT_EQ(audit.decision_disagreements,0u);
     EXPECT_EQ(result.work.objective_reconciliations,result.sweep_count);
-    EXPECT_EQ(result.sweeps.size(),result.sweep_count);
-    EXPECT_TRUE(std::all_of(result.sweeps.begin(),result.sweeps.end(),
+    EXPECT_EQ(sweeps.size(),result.sweep_count);
+    EXPECT_TRUE(std::all_of(sweeps.begin(),sweeps.end(),
         [](const auto & sweep){return sweep.objective_cache_refreshed;}));
     const auto replay=b::Replay(*data.input,data.layout,data.y,
         result.state.eta,result.state.beta,data.context.scale);
@@ -342,11 +367,12 @@ TEST(JointBcdSearchTest, SweepReplayMismatchFailsBeforeObjectiveReconciliation)
     n::BcdSearchPolicy policy; policy.core_atoms=2; policy.maximum_sweeps=1;
     policy.eta_upper_bound=std::log(2.2);
     policy.perturb_sweep_replay_objective_for_testing=true;
-    const auto result=n::RunBcdDiagnostic(problem,eta,policy);
+    std::vector<n::BcdSweepRecord> sweeps;
+    const auto result=second_stage_test::SearchBcdFixture(problem,eta,policy,&sweeps);
 
     ASSERT_TRUE(result.final_sweep.has_value());
     ASSERT_EQ(result.sweep_count,1u);
-    EXPECT_TRUE(result.sweeps.empty());
+    EXPECT_TRUE(sweeps.empty());
     EXPECT_EQ(result.reason,"block-cache-replay-failed");
     EXPECT_FALSE(result.final_sweep->objective_cache_refreshed);
     EXPECT_EQ(result.work.objective_reconciliations,0u);
@@ -366,14 +392,17 @@ TEST(JointBcdSearchTest, IncrementalObjectiveRemainsQualifiedAcrossInitialWidths
         n::BcdSearchPolicy policy; policy.core_atoms=2; policy.maximum_sweeps=40;
         policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
         policy.eta_upper_bound=std::log(2.2);
-        const auto result=n::RunBcdDiagnostic(problem,initial_eta,policy);
+        std::vector<n::BcdSweepRecord> sweeps;
+        const auto result=second_stage_test::SearchBcdFixture(problem,initial_eta,policy,&sweeps);
         ASSERT_TRUE(result.search_converged)<<result.reason;
-        ASSERT_TRUE(result.endpoint_certified)<<result.endpoint_trust.reason;
-        EXPECT_TRUE(result.assessment.independent_replay.passed);
-        EXPECT_EQ(result.fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+        ASSERT_TRUE(result.certification)<<result.reason;
+        ASSERT_TRUE(result.certification->verified())<<result.certification->trust.reason;
+        EXPECT_TRUE(result.certification->assessment.independent_replay.passed);
+        EXPECT_TRUE(result.certification->qualified());
+        EXPECT_TRUE(result.accepted_state_integrity);
         EXPECT_GT(result.work.incremental_objective_evaluations,0u);
         EXPECT_EQ(result.work.objective_reconciliations,result.sweep_count);
-        EXPECT_TRUE(std::all_of(result.sweeps.begin(),result.sweeps.end(),
+        EXPECT_TRUE(std::all_of(sweeps.begin(),sweeps.end(),
             [](const auto & sweep){return sweep.objective_cache_refreshed;}));
     }
 }
@@ -398,7 +427,7 @@ TEST(JointBcdSearchTest, SignedCancellationQualifiesWhenOnlyKktGateIsSatisfied)
     policy.candidate_observer=[&](const n::BcdCandidateEvent & event) {
         AuditIncrementalCandidate(*data.input,data.layout,data.y,data.context.scale,event,audit);
     };
-    const auto result=n::RunBcdDiagnostic(problem,initial_eta,policy);
+    const auto result=second_stage_test::SearchBcdFixture(problem,initial_eta,policy);
 
     EXPECT_GT(audit.candidates,0u);
     EXPECT_EQ(audit.decision_disagreements,0u);
@@ -407,9 +436,11 @@ TEST(JointBcdSearchTest, SignedCancellationQualifiesWhenOnlyKktGateIsSatisfied)
         <<" first_kkt="<<result.first_order_stationarity_sweep
         <<" confirmed="<<result.confirmed_stationarity_sweep;
     EXPECT_TRUE(result.search_converged);
-    EXPECT_TRUE(result.endpoint_certified);
-    EXPECT_TRUE(result.assessment.independent_replay.passed);
-    EXPECT_EQ(result.fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+    ASSERT_TRUE(result.certification)<<result.reason;
+    EXPECT_TRUE(result.certification->verified());
+    EXPECT_TRUE(result.certification->assessment.independent_replay.passed);
+    EXPECT_TRUE(result.certification->qualified());
+    EXPECT_TRUE(result.accepted_state_integrity);
     ASSERT_TRUE(result.final_sweep);
     EXPECT_LE(result.final_sweep->global_ac_kkt,n::PracticalJointConvergenceCriteria.global_ac_kkt);
     EXPECT_LE(result.final_sweep->stationarity_eta_gradient_inf_norm,
@@ -492,7 +523,7 @@ TEST(JointBcdSearchTest, HardCaseIncrementalObjectiveAndReplayQualification)
         policy.candidate_observer=[&](const n::BcdCandidateEvent & event) {
             AuditIncrementalCandidate(*data.input,data.layout,data.y,data.context.scale,event,audit);
         };
-        const auto result=n::RunBcdDiagnostic(problem,initial_eta,policy);
+        const auto result=second_stage_test::SearchBcdFixture(problem,initial_eta,policy);
         ASSERT_EQ(result.state.eta.size(),initial_eta.size())<<fixture.name<<':'<<result.reason;
         const auto replay=b::Replay(*data.input,data.layout,data.y,
             result.state.eta,result.state.beta,data.context.scale);
@@ -509,7 +540,7 @@ TEST(JointBcdSearchTest, HardCaseIncrementalObjectiveAndReplayQualification)
         {
             EXPECT_EQ(result.reason,"block-recovery-exhausted")<<fixture.name;
             EXPECT_FALSE(result.search_converged)<<fixture.name;
-            EXPECT_FALSE(result.endpoint_certified)<<fixture.name;
+            EXPECT_FALSE(result.certification)<<fixture.name;
         }
         else if(fixture.name=="low-signal-noise-only")
         {
@@ -519,20 +550,23 @@ TEST(JointBcdSearchTest, HardCaseIncrementalObjectiveAndReplayQualification)
                 <<" confirmed="<<result.confirmed_stationarity_sweep
                 <<" objective="<<result.state.objective;
             EXPECT_TRUE(result.search_converged)<<fixture.name;
-            EXPECT_TRUE(result.endpoint_certified)<<fixture.name<<':'<<result.endpoint_trust.reason;
-            EXPECT_TRUE(result.assessment.independent_replay.passed)<<fixture.name;
+            ASSERT_TRUE(result.certification)<<fixture.name;
+            EXPECT_TRUE(result.certification->verified())<<fixture.name<<':'<<result.certification->trust.reason;
+            EXPECT_TRUE(result.certification->assessment.independent_replay.passed)<<fixture.name;
             ASSERT_TRUE(result.final_sweep)<<fixture.name;
             EXPECT_LE(result.final_sweep->global_ac_kkt,
                 n::PracticalJointConvergenceCriteria.global_ac_kkt)<<fixture.name;
             EXPECT_LE(result.final_sweep->stationarity_eta_gradient_inf_norm,
                 n::PracticalJointConvergenceCriteria.global_eta_gradient)<<fixture.name;
-            EXPECT_EQ(result.fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed)<<fixture.name;
+            EXPECT_TRUE(result.certification->qualified())<<fixture.name;
+            EXPECT_TRUE(result.accepted_state_integrity)<<fixture.name;
         }
         else
         {
             EXPECT_TRUE(result.search_converged)<<fixture.name<<':'<<result.reason;
-            EXPECT_TRUE(result.endpoint_certified)<<fixture.name<<':'<<result.endpoint_trust.reason;
-            EXPECT_TRUE(result.assessment.independent_replay.passed)<<fixture.name;
+            ASSERT_TRUE(result.certification)<<fixture.name;
+            EXPECT_TRUE(result.certification->verified())<<fixture.name<<':'<<result.certification->trust.reason;
+            EXPECT_TRUE(result.certification->assessment.independent_replay.passed)<<fixture.name;
         }
     }
 }
@@ -794,14 +828,15 @@ TEST(JointBcdSearchTest, UnchangedCandidateSkipsOnlyCandidateReplay)
     const n::Vector eta=n::Vector::Constant(3,std::log(.5));
     n::BcdSearchPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=30;
     policy.eta_upper_bound=std::log(2.2);
-    const auto result=n::RunBcdDiagnostic(problem,eta,policy);
+    std::vector<n::BcdSweepRecord> sweeps;
+    const auto result=second_stage_test::SearchBcdFixture(problem,eta,policy,&sweeps);
 
     EXPECT_GT(result.work.candidate_replay_skipped_unchanged,0u);
     EXPECT_LT(result.work.full_candidate_replays+result.work.affected_candidate_replays,result.total_block_solves);
     EXPECT_LE(result.work.full_candidate_replays+result.work.affected_candidate_replays+
         result.work.candidate_replay_skipped_unchanged,
         result.total_block_solves);
-    EXPECT_EQ(result.work.sweep_replays,result.sweeps.size());
+    EXPECT_EQ(result.work.sweep_replays,sweeps.size());
     std::size_t unchanged_records{};
     for(const auto & block:result.blocks)
         if(block.reason=="block-unchanged")
@@ -866,7 +901,7 @@ TEST(JointBcdSearchTest, ProductionBoundedSearchReleasesTheStartingUpperFace)
     policy.core_atoms=4;
     policy.maximum_sweeps=1;
     policy.eta_upper_bound=eta_max;
-    const auto result=n::RunBcdDiagnostic(problem,initial,policy);
+    const auto result=second_stage_test::SearchBcdFixture(problem,initial,policy);
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const auto & bounded_lm=result.work.bounded_lm;
     EXPECT_GT(bounded_lm.subproblem_solves,0u);
@@ -943,13 +978,11 @@ void CheckMultiBlockBudgetFailure(const std::string & topology)
     const n::Vector eta=n::Vector::Constant(32,std::log(.55));
     n::BcdSearchPolicy policy; policy.core_atoms=16; policy.maximum_sweeps=0;
     policy.eta_upper_bound=std::log(2.2);
-    const auto result=n::RunBcdDiagnostic(problem,eta,policy);
+    const auto result=second_stage_test::SearchBcdFixture(problem,eta,policy);
     EXPECT_FALSE(result.search_converged);
     EXPECT_EQ(result.reason,"block-sweep-budget");
-    EXPECT_FALSE(result.endpoint_certified);
-    EXPECT_FALSE(result.fit.search_completed);
-    EXPECT_EQ(result.fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Unavailable);
-    EXPECT_TRUE(result.fit.components.empty());
+    EXPECT_FALSE(result.certification);
+    EXPECT_EQ(result.certification_attempts,0u);
 }
 }
 TEST(JointBcdSearchTest, SmallSingleBlockFixturesUseExistingEndpointCertification)
@@ -957,7 +990,7 @@ TEST(JointBcdSearchTest, SmallSingleBlockFixturesUseExistingEndpointCertificatio
     CheckSingleBlock("chain",8); CheckSingleBlock("cube",8);
     CheckSingleBlock("chain",32); CheckSingleBlock("cube",32);
 }
-TEST(JointBcdSearchTest, MultiBlockBudgetFailureRemainsDistinctFromRuntimeConvergence)
+TEST(JointBcdSearchTest, MultiBlockZeroSweepBudgetCannotCertify)
 {
     CheckMultiBlockBudgetFailure("chain"); CheckMultiBlockBudgetFailure("cube");
 }
@@ -967,19 +1000,21 @@ TEST(JointBcdSearchTest, CheapStationarityNeedsCompleteSweepConfirmation)
     const n::Vector eta=n::Vector::Constant(8,std::log(.55));
     n::BcdSearchPolicy policy; policy.maximum_sweeps=1;
     policy.eta_upper_bound=std::log(2.2);
-    const auto candidate=n::RunBcdDiagnostic(problem,eta,policy);
+    std::vector<n::BcdSweepRecord> candidate_sweeps;
+    const auto candidate=second_stage_test::SearchBcdFixture(problem,eta,policy,&candidate_sweeps);
     EXPECT_FALSE(candidate.search_converged);
     EXPECT_EQ(candidate.reason,"block-sweep-budget");
-    EXPECT_EQ(candidate.sweeps.size(),1u);
+    EXPECT_EQ(candidate_sweeps.size(),1u);
     EXPECT_EQ(candidate.first_order_stationarity_sweep,0u);
     EXPECT_EQ(candidate.confirmed_stationarity_sweep,0u);
 
     policy.maximum_sweeps=30;
-    const auto confirmed=n::RunBcdDiagnostic(problem,eta,policy);
+    std::vector<n::BcdSweepRecord> confirmed_sweeps;
+    const auto confirmed=second_stage_test::SearchBcdFixture(problem,eta,policy,&confirmed_sweeps);
     ASSERT_TRUE(confirmed.search_converged)<<confirmed.reason;
     EXPECT_GT(confirmed.first_order_stationarity_sweep,0u);
     EXPECT_GE(confirmed.confirmed_stationarity_sweep,confirmed.first_order_stationarity_sweep);
-    EXPECT_EQ(confirmed.confirmed_stationarity_sweep,confirmed.sweeps.size());
+    EXPECT_EQ(confirmed.confirmed_stationarity_sweep,confirmed_sweeps.size());
 }
 
 TEST(JointBcdSearchTest, EndpointCertificationRetryScheduleIsPreserved)
@@ -1194,7 +1229,7 @@ TEST(JointBcdSearchTest, BcdAcceptsAtMostOneTrustedLocalUpdatePerBlockVisit)
     const n::Vector eta=n::Vector::Constant(32,std::log(.55));
     n::BcdSearchPolicy policy; policy.core_atoms=16; policy.maximum_sweeps=2;
     policy.eta_upper_bound=std::log(2.2);
-    const auto result=n::RunBcdDiagnostic(problem,eta,policy);
+    const auto result=second_stage_test::SearchBcdFixture(problem,eta,policy);
     ASSERT_FALSE(result.blocks.empty());
     for(const auto & block:result.blocks)
     {

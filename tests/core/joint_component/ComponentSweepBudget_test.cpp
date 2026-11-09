@@ -144,9 +144,9 @@ TEST(JointComponentSweepBudgetTest, EasyQualifiedSearchStopsWithoutExtraWorkOrPa
     n::BcdSearchPolicy policy;
     policy.maximum_sweeps=30; policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
     policy.eta_upper_bound=std::log(2.2);
-    const auto fixed=n::RunBcdDiagnostic(problem,eta,policy);
+    const auto fixed=second_stage_test::SearchBcdFixture(problem,eta,policy);
     policy.nominal_sweeps=20;
-    const auto adaptive=n::RunBcdDiagnostic(problem,eta,policy);
+    const auto adaptive=second_stage_test::SearchBcdFixture(problem,eta,policy);
     ASSERT_TRUE(adaptive.search_converged);
     EXPECT_LT(adaptive.sweep_count,20u);
     EXPECT_EQ(adaptive.sweep_count,fixed.sweep_count);
@@ -154,8 +154,10 @@ TEST(JointComponentSweepBudgetTest, EasyQualifiedSearchStopsWithoutExtraWorkOrPa
     EXPECT_EQ(adaptive.state.beta,fixed.state.beta);
     EXPECT_EQ(adaptive.state.prediction,fixed.state.prediction);
     EXPECT_DOUBLE_EQ(adaptive.state.objective,fixed.state.objective);
-    EXPECT_TRUE(adaptive.assessment.independent_replay.passed);
-    EXPECT_EQ(adaptive.fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
+    ASSERT_TRUE(adaptive.certification)<<adaptive.reason;
+    EXPECT_TRUE(adaptive.certification->assessment.independent_replay.passed);
+    EXPECT_TRUE(adaptive.certification->qualified());
+    EXPECT_TRUE(adaptive.accepted_state_integrity);
 }
 
 TEST(JointComponentSweepBudgetTest, ExtensionPreservesTheOriginalPathAndQualifiesProductionAssembly)
