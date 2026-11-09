@@ -1,10 +1,11 @@
-#include "SimulationBuildInfo.hpp"
 #include "core/detail/joint_component/JointComponentEstimator.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 #include "core/detail/joint_component/WidthCalibration.hpp"
 #include "core/detail/FirstStageInitialization.hpp"
 #include "core/detail/FittingWorkset.hpp"
 #include "core/command/detail/SimulationGeometry.hpp"
+#include "SimulationBuildInfo.hpp"
+
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/utils/math/EigenHelper.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -12,6 +13,7 @@
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
+
 #include <algorithm>
 #include <cmath>
 #include <chrono>

@@ -1,8 +1,8 @@
 #include "detail/CommandRunner.hpp"
 #include "utils/domain/FileFingerprint.hpp"
+#include "data/io/detail/JointResultJson.hpp"
 
 #include <rhbm_gem/core/GaussianEstimator.hpp>
-#include "data/io/detail/JointResultJson.hpp"
 #include <rhbm_gem/core/MapSampler.hpp>
 #include <rhbm_gem/core/QScoreHelper.hpp>
 #include <rhbm_gem/data/io/DataRepository.hpp>

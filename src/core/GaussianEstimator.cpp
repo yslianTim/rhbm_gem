@@ -2,12 +2,10 @@
 #include "core/detail/FirstStageInitialization.hpp"
 #include "core/detail/GroupPotentialFitting.hpp"
 #include "core/detail/joint_component/Numerics.hpp"
-
 #include "core/detail/gaussian_fit/FittingRanges.hpp"
 #include "core/detail/gaussian_fit/GaussianModelOperations.hpp"
 #include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
 
-#include <algorithm>
 #include <cstddef>
 #include <stdexcept>
 #include <string>
@@ -430,6 +428,5 @@ void RunGroupPotentialFitting(ModelObject & model_object, const FitOptions & opt
         }
     }
 }
-
 
 } // namespace rhbm_gem::core
