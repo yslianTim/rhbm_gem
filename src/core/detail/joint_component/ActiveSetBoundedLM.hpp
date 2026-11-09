@@ -24,28 +24,4 @@ struct ActiveSetStep
 ActiveSetStep SolveBoundedTrustRegionStep(const Eigen::MatrixXd &,const Eigen::VectorXd &,
     const Eigen::VectorXd &,const Eigen::VectorXd &,double,double);
 
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-struct BoundedLmDampingTrace
-{
-    double damping{};
-    int phase{};
-    std::string status;
-    Eigen::VectorXd step,gradient,multipliers;
-    std::vector<bool> working_bound_mask;
-    std::vector<std::vector<bool>> working_set_sequence;
-    std::vector<Eigen::VectorXd> step_sequence,gradient_sequence;
-    std::vector<double> kkt_tolerance_sequence;
-    std::vector<Eigen::Index> free_subproblem_ranks;
-    std::size_t iterations{},working_set_releases{};
-    double scaled_step_norm{},kkt_inf_norm{};
-    bool valid{},within_trust_region{},search_accepted{};
-};
-struct BoundedLmTestWork
-{
-    std::vector<BoundedLmDampingTrace> damping_trace;
-    bool capture_trace{};
-};
-BoundedLmTestWork & BoundedLmWorkForTesting();
-#endif
-
 } // namespace rhbm_gem::core::joint_component

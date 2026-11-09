@@ -4,9 +4,6 @@
 #include <cmath>
 #include <limits>
 namespace rhbm_gem::core::joint_component {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-BoundedLmTestWork & BoundedLmWorkForTesting() {static thread_local BoundedLmTestWork work; return work;}
-#endif
 namespace {
 struct BoundedSubproblemContext
 {
@@ -112,11 +109,7 @@ ActiveSetStep Failure(std::string status)
 }
 void SolveAtDamping(BoundedSubproblemContext & context,BoundedLmWorkspace & workspace,
     const Eigen::MatrixXd & j,const Eigen::VectorXd & r,const Eigen::VectorXd & d,
-    const Eigen::VectorXd & upper,double lambda,ActiveSetStep & result
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    ,BoundedLmDampingTrace * trace
-#endif
-)
+    const Eigen::VectorXd & upper,double lambda,ActiveSetStep & result)
 {
     const Eigen::Index n=j.cols();
     result.valid=false; result.status.clear(); result.damping=lambda;
@@ -143,14 +136,6 @@ void SolveAtDamping(BoundedSubproblemContext & context,BoundedLmWorkspace & work
     for(std::size_t iteration=0;iteration<context.maximum_active_iterations;++iteration)
     {
         ++result.damping_active_set_iterations;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        if(trace)
-        {
-            trace->working_set_sequence.push_back(workspace.working_bound_mask);
-            trace->step_sequence.push_back(workspace.step);
-            trace->iterations=iteration+1;
-        }
-#endif
         workspace.free_step_indices.clear();
         for(Eigen::Index i=0;i<n;++i)
             if(!workspace.working_bound_mask[static_cast<std::size_t>(i)] &&
@@ -189,9 +174,6 @@ void SolveAtDamping(BoundedSubproblemContext & context,BoundedLmWorkspace & work
             qr.setThreshold(64.0*std::numeric_limits<double>::epsilon()*
                 static_cast<double>(std::max(workspace.augmented.rows(),workspace.augmented.cols())));
             const auto rank=qr.rank();
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            if(trace) trace->free_subproblem_ranks.push_back(rank);
-#endif
             if(rank!=free_count) {fail("rank-deficient-free-subproblem"); return;}
             workspace.solution=qr.solve(workspace.rhs);
             if(!workspace.solution.allFinite()) {fail("non-finite-free-solution"); return;}
@@ -237,13 +219,6 @@ void SolveAtDamping(BoundedSubproblemContext & context,BoundedLmWorkspace & work
             if(context.stationary_null_direction_mask[static_cast<std::size_t>(i)] &&
                 std::abs(workspace.gradient(i))>context.null_gradient_tolerance)
             {fail("unresolved-null-direction-gradient"); return;}
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        if(trace)
-        {
-            trace->gradient_sequence.push_back(workspace.gradient);
-            trace->kkt_tolerance_sequence.push_back(kkt_tolerance);
-        }
-#endif
         Eigen::Index released_bound_index=-1;
         double largest_wrong_multiplier=kkt_tolerance;
         for(Eigen::Index i=0;i<n;++i)
@@ -260,9 +235,6 @@ void SolveAtDamping(BoundedSubproblemContext & context,BoundedLmWorkspace & work
             workspace.working_bound_mask[static_cast<std::size_t>(released_bound_index)]=false;
             ++working_set_releases;
             ++result.damping_working_set_releases;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            if(trace) ++trace->working_set_releases;
-#endif
             continue;
         }
 
@@ -304,13 +276,6 @@ ActiveSetStep SolveBoundedTrustRegionStepImpl(const Eigen::MatrixXd & j,const Ei
     ActiveSetStep candidate;
     std::size_t damping_solves{},bracket_solves{},bisection_solves{},damping_qr_factorizations{},
         damping_active_set_iterations{},damping_working_set_releases{};
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    auto & work=BoundedLmWorkForTesting();
-    const auto mark_search_accepted=[&]() {
-        if(work.capture_trace && !work.damping_trace.empty())
-            work.damping_trace.back().search_accepted=true;
-    };
-#endif
     const auto finish=[&](ActiveSetStep result) {
         result.damping_solves=damping_solves;
         result.bracket_solves=bracket_solves;
@@ -324,28 +289,7 @@ ActiveSetStep SolveBoundedTrustRegionStepImpl(const Eigen::MatrixXd & j,const Ei
         ++damping_solves;
         if(phase==1) ++bracket_solves;
         else if(phase==2) ++bisection_solves;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        BoundedLmDampingTrace trace;
-        SolveAtDamping(context,workspace,j,r,d,upper,lambda,result,
-            work.capture_trace ? &trace : nullptr);
-        if(work.capture_trace)
-        {
-            trace.damping=lambda; trace.phase=phase; trace.status=result.status;
-            if(result.valid)
-            {
-                trace.step=result.step; trace.gradient=result.gradient; trace.multipliers=result.multipliers;
-                trace.working_bound_mask=result.working_bound_mask;
-            }
-            if(result.iterations) trace.iterations=result.iterations;
-            if(result.valid) trace.working_set_releases=result.working_set_releases;
-            trace.scaled_step_norm=result.scaled_step_norm; trace.kkt_inf_norm=result.kkt_inf_norm;
-            trace.valid=result.valid;
-            trace.within_trust_region=result.valid && result.scaled_step_norm<=trust_radius;
-            work.damping_trace.push_back(std::move(trace));
-        }
-#else
         SolveAtDamping(context,workspace,j,r,d,upper,lambda,result);
-#endif
         damping_qr_factorizations+=result.damping_qr_factorizations;
         damping_active_set_iterations+=result.damping_active_set_iterations;
         damping_working_set_releases+=result.damping_working_set_releases;
@@ -358,12 +302,7 @@ ActiveSetStep SolveBoundedTrustRegionStepImpl(const Eigen::MatrixXd & j,const Ei
     const double trust_tolerance=64.0*std::numeric_limits<double>::epsilon()*trust_radius;
     constexpr double boundary_relative_tolerance=1e-13;
     if(candidate.valid && candidate.scaled_step_norm<=trust_radius+trust_tolerance)
-    {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        mark_search_accepted();
-#endif
         return finish(WithDamping(std::move(candidate),0.0));
-    }
 
     double low=0.0;
     double high=std::max(damping_seed,1e-12);
@@ -372,12 +311,7 @@ ActiveSetStep SolveBoundedTrustRegionStepImpl(const Eigen::MatrixXd & j,const Ei
     {
         solve_candidate(high,1,candidate);
         if(candidate.valid && candidate.scaled_step_norm<=trust_radius)
-        {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            mark_search_accepted();
-#endif
-            CopyActiveSetStep(feasible,candidate); break;
-        }
+        {CopyActiveSetStep(feasible,candidate); break;}
         if(!candidate.valid && candidate.status!="rank-deficient-free-subproblem")
             return finish(Failure(candidate.status));
         low=high;
@@ -393,9 +327,6 @@ ActiveSetStep SolveBoundedTrustRegionStepImpl(const Eigen::MatrixXd & j,const Ei
         solve_candidate(middle,2,candidate);
         if(candidate.valid && candidate.scaled_step_norm<=trust_radius)
         {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            mark_search_accepted();
-#endif
             high=middle; CopyActiveSetStep(feasible,candidate);
             if(trust_radius-candidate.scaled_step_norm<=boundary_relative_tolerance*trust_radius)
                 break;
