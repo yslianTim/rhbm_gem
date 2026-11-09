@@ -38,10 +38,11 @@ First-stage fitting, Joint initialization, alpha training, group solvers, and
 generic local/MDPDE calls retain their existing native behavior.
 
 Potential-fitting workflows exclude hydrogen from targets, sample-neighbor
-masks and contributors. Sampling and Second Stage policies are fixed by the
-workflow. Refinement uses the same Powell hybrid method in
-`(beta0, log(beta1), log(variance))`, a central-difference Jacobian,
-`xtol=1e-12`, and a 128-equation budget.
+masks and contributors. Both estimators use `FitOptions::first_stage_sampling_method`
+for FirstStage geometry and share its neighbor mask and Tricubic interpolation.
+Second Stage policies are fixed by the workflow. Refinement uses the same
+Powell hybrid method in `(beta0, log(beta1), log(variance))`, a
+central-difference Jacobian, `xtol=1e-12`, and a 128-equation budget.
 
 Acceptance requires finite positive variance, a valid Gaussian, full weighted
 rank, a positive denominator, and fresh floor-inclusive scaled equations whose

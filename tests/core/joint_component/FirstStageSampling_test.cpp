@@ -45,7 +45,7 @@ void SameSamples(const LocalPotentialSampleList & a,const LocalPotentialSampleLi
         EXPECT_EQ(a[i].point.position,b[i].point.position);
         EXPECT_EQ(a[i].point.distance,b[i].point.distance);
         EXPECT_EQ(a[i].point.is_selected,b[i].point.is_selected);
-        EXPECT_DOUBLE_EQ(a[i].response,b[i].response);
+        EXPECT_EQ(a[i].response,b[i].response);
     }
 }
 void SameInitialization(const JointInitialization & a,const JointInitialization & b)
@@ -78,18 +78,26 @@ TEST(JointFirstStageSamplingTest, DefaultExactlyMatchesLegacySamplingAndEstimato
 
 TEST(JointFirstStageSamplingTest, DeterministicAcrossWorkersAndRepeatedRuns)
 {
-    auto map=Map(); FitOptions options; options.quiet_mode=true;
-    auto serial=Model(); auto parallel=Model();
-    auto sw=d::MakeTwoStageFittingWorkset(*serial),pw=d::MakeTwoStageFittingWorkset(*parallel);
-    const auto a=d::PrepareJointWidthInitialization(map,*serial,sw,options);
-    options.joint_initialization_thread_size=4;
-    const auto b=d::PrepareJointWidthInitialization(map,*parallel,pw,options);
-    SameInitialization(a,b);
-    for (std::size_t i=0;i<2;++i)
-        SameSamples(AtomLocalPotentialView::For(*sw.contributors[i]).GetRawSamplingEntriesView(),
-            AtomLocalPotentialView::For(*pw.contributors[i]).GetRawSamplingEntriesView());
-    const auto c=d::PrepareJointWidthInitialization(map,*parallel,pw,options);
-    SameInitialization(b,c);
+    auto map=Map();
+    for (const auto method : { SphereSamplingMethod::FibonacciDeterministic,
+             SphereSamplingMethod::SpiralDeterministic })
+    {
+        FitOptions options; options.quiet_mode=true; options.first_stage_sampling_method=method;
+        auto serial=Model(); auto parallel=Model();
+        auto sw=d::MakeTwoStageFittingWorkset(*serial),pw=d::MakeTwoStageFittingWorkset(*parallel);
+        const auto baseline=d::PrepareJointWidthInitialization(map,*serial,sw,options);
+        ASSERT_TRUE(baseline.valid);
+        for (const int workers : { 2, 4, 4 })
+        {
+            SCOPED_TRACE(workers);
+            options.joint_initialization_thread_size=workers;
+            const auto result=d::PrepareJointWidthInitialization(map,*parallel,pw,options);
+            SameInitialization(baseline,result);
+            for (std::size_t i=0;i<sw.contributors.size();++i)
+                SameSamples(AtomLocalPotentialView::For(*sw.contributors[i]).GetRawSamplingEntriesView(),
+                    AtomLocalPotentialView::For(*pw.contributors[i]).GetRawSamplingEntriesView());
+        }
+    }
 }
 
 TEST(JointFirstStageSamplingTest, ParallelSamplingFailurePreservesEveryPreviousRawEntry)
@@ -103,16 +111,33 @@ TEST(JointFirstStageSamplingTest, ParallelSamplingFailurePreservesEveryPreviousR
     auto values=std::make_unique<double[]>(32*32*32);
     std::fill_n(values.get(),32*32*32,2.);
     MapObject replacement{{32,32,32},{.25,.25,.25},{-3.,-3.,-3.},std::move(values)};
-    EXPECT_THROW(RunPotentialSamplingWorkflow(replacement,*model,batch,4,{},true),std::runtime_error);
-    for(std::size_t i=0;i<atoms.size();++i)
-        SameSamples(before[i],AtomLocalPotentialView::For(*atoms[i]).GetRawSamplingEntriesView());
+    for (const auto method : { SphereSamplingMethod::FibonacciDeterministic,
+             SphereSamplingMethod::SpiralDeterministic })
+    {
+        EXPECT_THROW(RunPotentialSamplingWorkflow(replacement,*model,batch,4,{},true,method),std::runtime_error);
+        for(std::size_t i=0;i<atoms.size();++i)
+            SameSamples(before[i],AtomLocalPotentialView::For(*atoms[i]).GetRawSamplingEntriesView());
+    }
 }
 
-TEST(JointFirstStageSamplingTest, FirstStageLeavesIndependentQScoreUnchanged)
+TEST(JointFirstStageSamplingTest, SpiralInitializesWidthsAndLeavesQScoreUnchanged)
 {
     auto map=Map(); auto model=Model(); const auto atoms=model->GetSelectedAtoms();
     const auto score=CalculateQScoreForAtom(*atoms[0],map,*model,1.,0.);
+    const auto default_samples=SampleAtomMapValues(map,*atoms[0]);
     FitOptions options; options.quiet_mode=true;
-    d::PrepareJointWidthInitialization(map,*model,d::MakeTwoStageFittingWorkset(*model),options);
+    options.first_stage_sampling_method=SphereSamplingMethod::SpiralDeterministic;
+    const auto workset=d::MakeTwoStageFittingWorkset(*model);
+    const auto initialization=d::PrepareJointWidthInitialization(map,*model,workset,options);
+    ASSERT_TRUE(initialization.valid);
+    ASSERT_EQ(initialization.atoms.size(),atoms.size());
+    EXPECT_EQ(initialization.atoms.front().seed_source,"fitted");
+    for (const auto * atom : workset.contributors)
+        SameSamples(SampleAtomMapValues(map,*atom,options.first_stage_sampling_method),
+            AtomLocalPotentialView::For(*atom).GetRawSamplingEntriesView());
+    const auto & spiral=AtomLocalPotentialView::For(*atoms[0]).GetRawSamplingEntriesView();
+    ASSERT_FALSE(spiral.empty());
+    ASSERT_FALSE(default_samples.empty());
+    EXPECT_NE(spiral.front().point.position,default_samples.front().point.position);
     EXPECT_EQ(CalculateQScoreForAtom(*atoms[0],map,*model,1.,0.),score);
 }

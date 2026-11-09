@@ -20,6 +20,7 @@ struct FitOptions
     int thread_size{ 1 };
     bool quiet_mode{ false };
     int joint_initialization_thread_size{ 1 };
+    SphereSamplingMethod first_stage_sampling_method{ SphereSamplingMethod::FibonacciDeterministic };
 };
 
 double TrainAlphaR(

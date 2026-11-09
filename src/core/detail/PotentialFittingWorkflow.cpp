@@ -207,7 +207,7 @@ void RunTwoStageWorkflow(MapObject & map, ModelObject & model, const FitOptions 
     const auto workset = MakeTwoStageFittingWorkset(model);
     const auto first_stage_atoms = CollectFirstStageAtoms(workset);
     RunPotentialSamplingWorkflow(map, model, first_stage_atoms, options.thread_size,
-        " Sampling", options.quiet_mode);
+        " Sampling", options.quiet_mode, options.first_stage_sampling_method);
     RunTwoStageFromPreparedSamples(model, workset.contributors, options);
 }
 

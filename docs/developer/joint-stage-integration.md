@@ -11,10 +11,13 @@ Original-grid peeling, Post-Joint Local fitting and Group Fitting.
 ## FirstStage initialization
 
 The Joint workset resolves selected Target identities from the Fitting
-Domain. FirstStage uses 20 deterministic Fibonacci shells at
-0.05, 0.15, …, 1.95 Å, with ten points per shell. Non-hydrogen neighbors
-apply the strict Ownership and 30° cone exclusions. Tricubic samples feed
-alpha training and OLS/MDPDE on selected positive responses within 1 Å.
+Domain. FirstStage uses 20 deterministic shells at 0.05, 0.15, …, 1.95 Å,
+with ten points per shell. C++ callers can set `FitOptions::first_stage_sampling_method`
+to `SphereSamplingMethod::SpiralDeterministic`. The default is
+`SphereSamplingMethod::FibonacciDeterministic`. Both methods apply the
+strict Ownership and 30° cone exclusions for non-hydrogen neighbors.
+Tricubic samples feed alpha training and OLS/MDPDE on selected positive
+responses within 1 Å.
 FirstStage can sample outside the Joint voxel domain. Raw FirstStage records
 retain their sample coordinates and selection independently of grid results.
 

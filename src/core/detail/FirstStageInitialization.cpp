@@ -196,14 +196,16 @@ JointInitialization PrepareJointWidthInitialization(
 {
     if (!options.quiet_mode)
     {
+        const auto sampling_name{ options.first_stage_sampling_method == SphereSamplingMethod::SpiralDeterministic
+            ? "SpiralShells" : "FibonacciShells" };
         Logger::FinishProgressLine();
         Logger::Log(LogLevel::Info, "[Joint] Sampling " +
             std::to_string(workset.contributors.size()) +
-            " Joint contributors | sampling=FibonacciShells | interpolation=Tricubic");
+            " Joint contributors | sampling=" + sampling_name + " | interpolation=Tricubic");
     }
     const auto atoms = CollectFirstStageAtoms(workset);
     RunPotentialSamplingWorkflow(map, model, atoms, std::clamp(options.joint_initialization_thread_size, 1, 4),
-        " Joint sampling", options.quiet_mode);
+        " Joint sampling", options.quiet_mode, options.first_stage_sampling_method);
     if (!options.quiet_mode)
     {
         Logger::FinishProgressLine();

@@ -42,6 +42,15 @@ void RunPotentialSamplingWorkflow(
 void RunPotentialSamplingWorkflow(
     MapObject & map_object,
     ModelObject & model_object,
+    const std::vector<AtomObject *> & atoms,
+    int thread_count,
+    std::string_view progress_label,
+    bool quiet_mode,
+    SphereSamplingMethod sampling_method);
+
+void RunPotentialSamplingWorkflow(
+    MapObject & map_object,
+    ModelObject & model_object,
     int thread_count);
 
 } // namespace core

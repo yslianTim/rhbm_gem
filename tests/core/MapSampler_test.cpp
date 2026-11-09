@@ -2,6 +2,7 @@
 
 #include <array>
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <memory>
 #include <string>
@@ -17,6 +18,7 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 #include <rhbm_gem/utils/math/GridSampler.hpp>
+#include <rhbm_gem/utils/math/SphereSampler.hpp>
 
 using namespace rhbm_gem;
 using namespace rhbm_gem::core;
@@ -110,20 +112,40 @@ TEST(MapSamplerTest, GridSamplerProducesMapSamples)
     EXPECT_DOUBLE_EQ(0.5, sampling_data.front().point.position.at(2));
 }
 
-TEST(MapSamplerTest, AtomSamplerUsesSamplingMethod)
+TEST(MapSamplerTest, SpiralAtomSamplesUseFirstStageMaskAndTricubicResponses)
 {
     auto map{ MakeMapObject() };
     auto model{ MakeLinearNeighborModel() };
     const auto * atom{ model->GetAtomList().at(0).get() };
+    constexpr auto method{ SphereSamplingMethod::SpiralDeterministic };
+    const auto points{ sphere_sampler::GenerateSamplingPointList(atom->GetPositionRef(), method) };
+    const auto samples{ SampleAtomMapValues(map, *atom, method) };
 
-    const auto sampling_data{
-        SampleAtomMapValues(
-            map,
-            *atom,
-            SphereSamplingMethod::FibonacciDeterministic)
-    };
-
-    EXPECT_FALSE(sampling_data.empty());
+    ASSERT_EQ(samples.size(), 200u);
+    ASSERT_EQ(samples.size(), points.size());
+    bool saw_cone_only_rejection{ false };
+    bool saw_ownership_only_rejection{ false };
+    for (std::size_t i = 0; i < samples.size(); ++i)
+    {
+        const auto & point{ points[i] };
+        const double x{ point.position[0] };
+        // The sole neighbor is at (1, 0, 0), so ownership changes at x = 0.5.
+        const bool owned_by_neighbor{ x > 0.5 };
+        const bool inside_cone{ x / point.distance > std::sqrt(3.0) / 2.0 };
+        saw_cone_only_rejection |= inside_cone && !owned_by_neighbor;
+        saw_ownership_only_rejection |= owned_by_neighbor && !inside_cone;
+        EXPECT_EQ(samples[i].point.position, point.position);
+        EXPECT_EQ(samples[i].point.distance, point.distance);
+        EXPECT_EQ(samples[i].point.is_selected, !owned_by_neighbor && !inside_cone);
+        const auto stencil{ detail::MakeTricubicStencil(map, point.position) };
+        const auto response{ detail::InterpolateTricubic(stencil, [&](const auto & node)
+        {
+            return map.GetMapValue(node[0], node[1], node[2]);
+        }) };
+        EXPECT_EQ(samples[i].response, response);
+    }
+    EXPECT_TRUE(saw_cone_only_rejection);
+    EXPECT_TRUE(saw_ownership_only_rejection);
 }
 
 TEST(MapSamplerTest, AtomSamplerDefaultMatchesExplicitFibonacci)
@@ -139,8 +161,8 @@ TEST(MapSamplerTest, AtomSamplerDefaultMatchesExplicitFibonacci)
     ASSERT_EQ(default_samples.size(), explicit_samples.size());
     for (std::size_t i = 0; i < default_samples.size(); ++i)
     {
-        EXPECT_DOUBLE_EQ(default_samples[i].response, explicit_samples[i].response);
-        EXPECT_DOUBLE_EQ(default_samples[i].point.distance, explicit_samples[i].point.distance);
+        EXPECT_EQ(default_samples[i].response, explicit_samples[i].response);
+        EXPECT_EQ(default_samples[i].point.distance, explicit_samples[i].point.distance);
         EXPECT_EQ(default_samples[i].point.position, explicit_samples[i].point.position);
         EXPECT_EQ(default_samples[i].point.is_selected, explicit_samples[i].point.is_selected);
     }

@@ -81,6 +81,19 @@ void RunPotentialSamplingWorkflow(
     std::string_view progress_label,
     bool quiet_mode)
 {
+    RunPotentialSamplingWorkflow(map_object, model_object, atom_list, thread_count,
+        progress_label, quiet_mode, SphereSamplingMethod::FibonacciDeterministic);
+}
+
+void RunPotentialSamplingWorkflow(
+    MapObject & map_object,
+    ModelObject & model_object,
+    const std::vector<AtomObject *> & atom_list,
+    int thread_count,
+    std::string_view progress_label,
+    bool quiet_mode,
+    SphereSamplingMethod sampling_method)
+{
     std::optional<ScopeTimer> timer;
     if (!quiet_mode) timer.emplace("MapSampler::RunPotentialSamplingWorkflow");
     const std::string progress_message{progress_label};
@@ -92,7 +105,7 @@ void RunPotentialSamplingWorkflow(
 #endif
     for (size_t i = 0; i < atom_list.size(); i++)
     {
-        try { raw_sampling_entries_list[i] = SampleAtomMapValues(map_object, *atom_list[i]); }
+        try { raw_sampling_entries_list[i] = SampleAtomMapValues(map_object, *atom_list[i], sampling_method); }
         catch (...) { failures[i] = std::current_exception(); }
 
 #ifdef USE_OPENMP
