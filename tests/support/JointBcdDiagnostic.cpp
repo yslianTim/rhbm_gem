@@ -165,25 +165,9 @@ BcdDiagnosticResult RunBcdDiagnostic(const JointProblem & problem,VectorRef init
     out.final_sweep=search.final_sweep;
     out.local_conditioning=std::move(search.local_conditioning);
     out.certification_attempted=search.certification.has_value();
-    if(policy.certify_endpoint)
-    {
-        if(search.certification)
-        {
-            out.work=search.work;
-            AssembleResult(problem,data,layout,domain,y,context,*search.certification,
-                policy.convergence_criteria,out,search.accepted_state_integrity);
-        }
-        else if(!policy.stop_after_stationarity && search.search_converged &&
-            search.state.eta.size()==static_cast<Eigen::Index>(domain.atoms.size()))
-        {
-            const auto certification=CertifyBcdEndpoint(domain,y,search.state,context,
-                0,
-                policy.convergence_criteria);
-            out.work=search.work;
-            AssembleResult(problem,data,layout,domain,y,context,certification,
-                policy.convergence_criteria,out,search.accepted_state_integrity);
-        }
-    }
+    if(search.certification)
+        AssembleResult(problem,data,layout,domain,y,context,*search.certification,
+            policy.convergence_criteria,out,search.accepted_state_integrity);
     return out;
 }
 }

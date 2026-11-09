@@ -240,14 +240,16 @@ TEST(JointLocalConditioningTest, MultiBlockDiagnosticsLeaveTheAcceptedFitUnchang
     const auto & data=c::JointProblemAccess::Get(problem);
     const auto run=[&](bool diagnostics) {
         n::BcdSearchPolicy policy; policy.core_atoms=1;
-        policy.assess_local_conditioning=diagnostics;
+        policy.collect_diagnostics=diagnostics;
         policy.eta_upper_bound=std::log(2.2);
         const n::Vector eta=n::Vector::Constant(2,std::log(.55));
         return n::SearchBcdComponent(data.domain,data.layout,data.y,eta,data.context,policy);
     };
     const auto with_diagnostics=run(true),without_diagnostics=run(false);
     ASSERT_EQ(with_diagnostics.local_conditioning.size(),2u);
-    EXPECT_TRUE(without_diagnostics.local_conditioning.empty());
+    EXPECT_EQ(without_diagnostics.local_conditioning.size(),2u);
+    EXPECT_FALSE(with_diagnostics.blocks.empty());
+    EXPECT_TRUE(without_diagnostics.blocks.empty());
     EXPECT_EQ(with_diagnostics.state.eta,without_diagnostics.state.eta);
     EXPECT_EQ(with_diagnostics.state.beta,without_diagnostics.state.beta);
     EXPECT_DOUBLE_EQ(with_diagnostics.state.objective,without_diagnostics.state.objective);

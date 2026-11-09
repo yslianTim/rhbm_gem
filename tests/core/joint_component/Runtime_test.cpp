@@ -597,8 +597,7 @@ TEST(JointComponentRuntimeTest, CanonicalReasonReachesComponentProgressAndCaptur
     const auto prepared=n::MakeComponentProblemView(data.layout,data.partition.components.front());
     const std::vector<std::string> reasons{"block-stationary","block-sweep-budget",
         "block-recovery-sweep-budget","block-recovery-exhausted","block-cache-replay-failed",
-        "block-objective-replay-failed","resource-limit:global-state-evaluation:estimated-peak-exceeds-budget",
-        "block-stationary"};
+        "block-objective-replay-failed","resource-limit:global-state-evaluation:estimated-peak-exceeds-budget"};
     for(std::size_t variant=0;variant<reasons.size();++variant)
     {
         SCOPED_TRACE(variant);
@@ -615,7 +614,6 @@ TEST(JointComponentRuntimeTest, CanonicalReasonReachesComponentProgressAndCaptur
                 return n::BcdCandidateFaultForTesting::NaNParameter;
             };
             if(variant==6) local.global_state_memory_budget_for_testing=1;
-            if(variant==7) local.certify_endpoint=false;
         };
         std::vector<n::JointProgressEvent> events;
         const n::JointProgressComponent component{1,1,data.partition.components.front().id,3,
@@ -627,7 +625,6 @@ TEST(JointComponentRuntimeTest, CanonicalReasonReachesComponentProgressAndCaptur
             result.search.certification->qualified();
         EXPECT_EQ(result.succeeded,result.search.search_converged && qualified);
         EXPECT_EQ(result.succeeded,variant==0);
-        if(variant==7) {EXPECT_TRUE(result.search.search_converged); EXPECT_FALSE(result.search.certification);}
         ASSERT_FALSE(events.empty());
         const auto & certification=events.back();
         EXPECT_EQ(certification.phase,n::JointProgressPhase::CertificationStarted);

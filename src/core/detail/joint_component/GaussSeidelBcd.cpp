@@ -415,18 +415,9 @@ BcdSearchResult SearchBcdComponent(
 {
     BcdSearchResult out;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    const bool stop_after_stationarity=policy.stop_after_stationarity;
-    const bool assess_local_conditioning=policy.assess_local_conditioning;
     const bool collect_diagnostics=policy.collect_diagnostics;
 #else
-    constexpr bool stop_after_stationarity=true;
-    constexpr bool assess_local_conditioning=true;
     constexpr bool collect_diagnostics=false;
-#endif
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    const bool endpoint_certification_enabled=policy.certify_endpoint;
-#else
-    constexpr bool endpoint_certification_enabled=true;
 #endif
     EvaluationContext context=parent_context;
     if(policy.eta_upper_bound)
@@ -1040,12 +1031,6 @@ BcdSearchResult SearchBcdComponent(
         if(stationarity==BcdStationarityState::ConfirmedStationary)
         {
             if(out.confirmed_stationarity_sweep==0) out.confirmed_stationarity_sweep=sweep_index+1;
-            if(!stop_after_stationarity || !endpoint_certification_enabled)
-            {
-                out.search_converged=true; out.reason="block-stationary";
-                if(stop_after_stationarity) break;
-                continue;
-            }
             const bool retry_due=!out.certification || certification_retry_due;
             if(!retry_due) continue;
             out.certification=certify_endpoint();
@@ -1075,7 +1060,7 @@ BcdSearchResult SearchBcdComponent(
             [](std::size_t visits){return visits>0;});
         out.reason=recovery_pending ? "block-recovery-sweep-budget" :
             budget.HardLimitReached() ? "block-hard-sweep-budget" : "block-sweep-budget";
-        if(!recovery_pending && stop_after_stationarity && endpoint_certification_enabled && out.sweep_count &&
+        if(!recovery_pending && out.sweep_count &&
             out.certification_sweep!=out.sweep_count)
         {
             out.certification=certify_endpoint();
@@ -1095,9 +1080,7 @@ BcdSearchResult SearchBcdComponent(
                         out.certification->assessment.failure;
         }
     }
-    const bool assess_failed_diagnostic=collect_diagnostics && out.certification.has_value();
-    if(assess_local_conditioning && out.certification &&
-        ((out.search_converged && out.certification->qualified()) || assess_failed_diagnostic))
+    if(out.search_converged && out.certification && out.certification->qualified())
     {
         out.local_conditioning.reserve(prepared_blocks.size());
         for(const auto & prepared:prepared_blocks)
@@ -1229,7 +1212,6 @@ BcdComponentResult SolveBcdComponent(
     policy.component_id=production_policy.component_id;
     policy.eta_upper_bound=production_policy.eta_upper_bound;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    policy.assess_local_conditioning=true;
     if(production_policy.configure_for_testing) production_policy.configure_for_testing(policy);
 #endif
     std::optional<JointBcdProgress> last_bcd_progress;

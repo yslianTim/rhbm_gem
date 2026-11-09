@@ -124,10 +124,7 @@ struct BcdSearchPolicy
     std::size_t nominal_sweeps{}; // Zero uses the fixed maximum (internal numerical fixtures).
     JointConvergenceCriteria convergence_criteria{StrictJointConvergenceCriteria};
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    bool stop_after_stationarity{true};
-    bool certify_endpoint{true}; // Diagnostic facade only; production components always certify.
-    bool assess_local_conditioning{};
-    bool collect_diagnostics{}; // Retain block records and allow diagnostic endpoint conditioning.
+    bool collect_diagnostics{}; // Retain block records.
     std::optional<std::size_t> global_state_memory_budget_for_testing;
     std::function<void(const BcdCandidateEvent &)> candidate_observer;
     bool perturb_sweep_replay_objective_for_testing{};

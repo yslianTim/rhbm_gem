@@ -183,7 +183,6 @@ TEST(JointBcdSearchTest, ReplayWorkspacePreservesExactSearchResultsAcrossRuns)
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
     const n::Vector eta=n::Vector::Constant(3,std::log(.55));
     n::BcdSearchPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=4;
-    policy.stop_after_stationarity=false; policy.certify_endpoint=false;
     policy.eta_upper_bound=std::log(2.2);
     const auto first=n::RunBcdDiagnostic(problem,eta,policy);
     const auto second=n::RunBcdDiagnostic(problem,eta,policy);
@@ -226,7 +225,6 @@ TEST(JointBcdSearchTest, CandidateObserverDoesNotChangeSearch)
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector eta=n::Vector::Constant(3,std::log(.55));
     n::BcdSearchPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=4;
-    policy.stop_after_stationarity=false; policy.certify_endpoint=false;
     policy.eta_upper_bound=std::log(2.2);
     const auto baseline=n::RunBcdDiagnostic(problem,eta,policy);
     std::size_t candidate_count{},accepted_count{};
@@ -246,6 +244,8 @@ TEST(JointBcdSearchTest, CandidateObserverDoesNotChangeSearch)
     EXPECT_GT(candidate_count,0u);
     EXPECT_GT(accepted_count,0u);
     EXPECT_EQ(baseline.reason,observed.reason);
+    EXPECT_EQ(baseline.search_converged,observed.search_converged);
+    EXPECT_EQ(baseline.endpoint_certified,observed.endpoint_certified);
     EXPECT_EQ(baseline.total_block_solves,observed.total_block_solves);
     EXPECT_EQ(baseline.sweep_count,observed.sweep_count);
     EXPECT_TRUE(BitwiseEqual(baseline.state.eta,observed.state.eta));
@@ -311,8 +311,6 @@ TEST(JointBcdSearchTest, EverySweepReconcilesObjectiveAfterReplayAudit)
     const n::Vector initial_eta=n::Vector::Constant(300,std::log(.55));
     n::BcdSearchPolicy policy; policy.core_atoms=12; policy.maximum_sweeps=30;
     policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
-    policy.stop_after_stationarity=true; policy.certify_endpoint=true;
-    policy.assess_local_conditioning=true;
     policy.eta_upper_bound=std::log(2.2);
     IncrementalObjectiveAudit audit;
     policy.candidate_observer=[&](const n::BcdCandidateEvent & event) {
@@ -396,7 +394,6 @@ TEST(JointBcdSearchTest, SignedCancellationQualifiesWhenOnlyKktGateIsSatisfied)
     n::BcdSearchPolicy policy; policy.core_atoms=2; policy.maximum_sweeps=500;
     policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
     policy.eta_upper_bound=std::log(2.2);
-    policy.assess_local_conditioning=true;
     IncrementalObjectiveAudit audit;
     policy.candidate_observer=[&](const n::BcdCandidateEvent & event) {
         AuditIncrementalCandidate(*data.input,data.layout,data.y,data.context.scale,event,audit);
@@ -491,7 +488,6 @@ TEST(JointBcdSearchTest, HardCaseIncrementalObjectiveAndReplayQualification)
         n::BcdSearchPolicy policy; policy.core_atoms=fixture.core_atoms; policy.maximum_sweeps=100;
         policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
         policy.eta_upper_bound=std::log(2.2);
-        policy.assess_local_conditioning=true;
         IncrementalObjectiveAudit audit;
         policy.candidate_observer=[&](const n::BcdCandidateEvent & event) {
             AuditIncrementalCandidate(*data.input,data.layout,data.y,data.context.scale,event,audit);
@@ -802,10 +798,11 @@ TEST(JointBcdSearchTest, PositiveObjectiveDeltaConsistencyConditionBoundsTheAcce
 
 TEST(JointBcdSearchTest, UnchangedCandidateSkipsOnlyCandidateReplay)
 {
-    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
-    const n::Vector eta=n::Vector::Constant(3,std::log(.55));
+    auto input=second_stage_test::SyntheticJointWorkload("chain",3);
+    std::fill(input.observations.begin(),input.observations.end(),0.0);
+    JointProblem problem(std::move(input));
+    const n::Vector eta=n::Vector::Constant(3,std::log(.5));
     n::BcdSearchPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=30;
-    policy.stop_after_stationarity=false; policy.certify_endpoint=false;
     policy.eta_upper_bound=std::log(2.2);
     const auto result=n::RunBcdDiagnostic(problem,eta,policy);
 
@@ -836,7 +833,6 @@ TEST(JointBcdSearchTest, PreparedConditioningUsesValidatedContextWidthBound)
     auto context=data.context; context.eta_upper_bound=std::log(.5);
     n::BcdSearchPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=40;
     policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
-    policy.assess_local_conditioning=true; policy.collect_diagnostics=true;
     const n::Vector eta=n::Vector::Constant(3,std::log(.49));
     const auto inherited=n::SearchBcdComponent(data.domain,data.layout,data.y,eta,context,policy);
     policy.eta_upper_bound=context.eta_upper_bound;
@@ -844,6 +840,8 @@ TEST(JointBcdSearchTest, PreparedConditioningUsesValidatedContextWidthBound)
     EXPECT_TRUE(BitwiseEqual(inherited.state,explicit_bound.state));
     EXPECT_EQ(inherited.reason,explicit_bound.reason);
     EXPECT_EQ(inherited.sweep_count,explicit_bound.sweep_count);
+    ASSERT_TRUE(inherited.search_converged)<<inherited.reason;
+    ASSERT_TRUE(explicit_bound.search_converged)<<explicit_bound.reason;
     ASSERT_EQ(inherited.local_conditioning.size(),3u);
     ASSERT_EQ(inherited.local_conditioning.size(),explicit_bound.local_conditioning.size());
     for(std::size_t block=0;block<inherited.local_conditioning.size();++block)
@@ -877,8 +875,6 @@ TEST(JointBcdSearchTest, ProductionBoundedSearchReleasesTheStartingUpperFace)
     n::BcdSearchPolicy policy;
     policy.core_atoms=4;
     policy.maximum_sweeps=1;
-    policy.certify_endpoint=false;
-    policy.stop_after_stationarity=false;
     policy.eta_upper_bound=eta_max;
     const auto result=n::RunBcdDiagnostic(problem,initial,policy);
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
@@ -1208,7 +1204,6 @@ TEST(JointBcdSearchTest, BcdAcceptsAtMostOneTrustedLocalUpdatePerBlockVisit)
     const n::Vector eta=n::Vector::Constant(32,std::log(.55));
     n::BcdSearchPolicy policy; policy.core_atoms=16; policy.maximum_sweeps=2;
     policy.eta_upper_bound=std::log(2.2);
-    policy.certify_endpoint=false;
     const auto result=n::RunBcdDiagnostic(problem,eta,policy);
     ASSERT_FALSE(result.blocks.empty());
     for(const auto & block:result.blocks)
