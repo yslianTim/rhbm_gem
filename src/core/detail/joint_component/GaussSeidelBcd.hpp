@@ -48,7 +48,7 @@ struct BcdBlockFailureDiagnostics
     std::size_t component_index{},sweep_index{},block_index{},core_atom_count{},affected_row_count{};
     std::vector<std::string> core_atom_ids;
     bool initial_profile_valid{},initial_profile_trusted{},solver_valid{},width_bound_active{};
-    std::string component_id,initial_profile_reason,local_search_stop_reason,solver_reason,lm_subproblem_status,
+    std::string component_id,initial_profile_reason,local_search_stop_reason,solver_reason,
         first_invalid_atom_id,first_invalid_parameter;
     std::optional<Eigen::Index> first_invalid_coefficient;
     std::optional<int> ac_free_design_rank,ac_linear_solve_count,ac_working_set_releases;

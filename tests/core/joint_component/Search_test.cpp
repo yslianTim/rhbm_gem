@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
 #include "support/JointTestNumerics.hpp"
-#include "support/JointRuntimeJson.hpp"
 #include "core/detail/joint_component/BoundedLmDriver.hpp"
 #include "support/JointSyntheticWorkload.hpp"
 #include "core/detail/joint_component/ActiveSetBoundedLM.hpp"
@@ -159,7 +158,6 @@ TEST(JointComponentSearchTest, ProfileSearchPreservesAcceptedTrajectory)
         {-.693859784826252,-.692966728106180,-.692837467146539},
         {-.693143774255377,-.693153781751112,-.693147361351597},
         {-.693143834605029,-.693153796340366,-.693147370056698}}};
-    const std::array expected_radius{0.,.0290531450193031,.0581062900386062,.000503430554232906};
     const std::array expected_ratio{0.,1.01772153847589,1.00000563441645,1.00000488429624};
     ASSERT_EQ(search.trials.size(),expected_eta.size());
     for(std::size_t i=0;i<search.trials.size();++i)
@@ -170,20 +168,17 @@ TEST(JointComponentSearchTest, ProfileSearchPreservesAcceptedTrajectory)
         EXPECT_TRUE(trial.accepted);
         EXPECT_EQ(trial.accepted_update,static_cast<int>(i));
         ASSERT_TRUE(trial.trust && trial.trust->passed);
-        ASSERT_TRUE(trial.lm && trial.lm->proposed_acceptance);
+        ASSERT_TRUE(trial.lm);
         EXPECT_TRUE(trial.endpoint.eta.isApprox(expected_eta[i],1e-11));
-        EXPECT_DOUBLE_EQ(trial.lm->damping,0.);
-        EXPECT_NEAR(trial.lm->radius,expected_radius[i],1e-12);
         EXPECT_NEAR(trial.lm->ratio,expected_ratio[i],1e-7);
         if(i>0)
         {
-            EXPECT_TRUE(trial.lm->accepted_eta.isApprox(expected_eta[i-1],1e-11));
-            EXPECT_TRUE((trial.lm->accepted_eta+trial.lm->step).isApprox(trial.endpoint.eta,1e-14));
+            const auto & previous=search.trials[i-1].endpoint;
+            EXPECT_TRUE((previous.eta+trial.lm->step).isApprox(trial.endpoint.eta,1e-14));
+            EXPECT_LT(trial.endpoint.certificate.objective,previous.certificate.objective);
         }
     }
     EXPECT_TRUE(search.eta.isApprox(expected_eta.back(),1e-11));
-    EXPECT_EQ(search.lm_status,BoundedLmStatus::Running);
-    EXPECT_EQ(m::runtime_json::Search(search,context,data.domain.rows).at("lm_status"),"running");
     EXPECT_EQ(search.stop_reason,"accepted-update-budget");
     EXPECT_TRUE(search.stopped);
     EXPECT_FALSE(search.width_failed);
@@ -401,20 +396,17 @@ TEST(JointComponentSearchTest, BoundedProfileSearchKeepsEveryEvaluatedWidthFeasi
     const double eta_max=std::log(.6);
     context.eta_upper_bound=eta_max;
     const auto search=joint::SearchProfile(domain,sample.y,initial,context);
-    EXPECT_FALSE(search.trials.empty())<<search.stop_reason;
-    bool reached_bound=false;
+    ASSERT_FALSE(search.trials.empty())<<search.stop_reason;
     for(const auto & trial:search.trials)
     {
-        if(trial.endpoint.eta.size()) EXPECT_LE(trial.endpoint.eta.maxCoeff(),eta_max+1e-14);
-        if(trial.lm && trial.lm->bounded_subproblem)
-        {
-            EXPECT_EQ(trial.lm->subproblem_status,"solved");
-            EXPECT_LE(trial.lm->subproblem_kkt_inf_norm,1e-9);
-            EXPECT_LE(trial.lm->diagonal.cwiseProduct(trial.lm->step).norm(),trial.lm->radius+1e-12);
-            reached_bound|=!trial.lm->active_bound_indices.empty();
-        }
+        ASSERT_EQ(trial.endpoint.eta.size(),initial.size());
+        EXPECT_LE(trial.endpoint.eta.maxCoeff(),eta_max+1e-14);
+        if(trial.accepted) ASSERT_TRUE(trial.trust && trial.trust->passed);
     }
-    EXPECT_TRUE(reached_bound)<<search.stop_reason;
+    EXPECT_FALSE(search.width_failed)<<search.stop_reason;
+    EXPECT_LE(search.eta.maxCoeff(),eta_max+1e-14);
+    EXPECT_GT(search.bounded_lm_work.active_bound_occurrences,0u)<<search.stop_reason;
+    EXPECT_LE(search.bounded_lm_work.maximum_subproblem_kkt,1e-9);
 }
 
 TEST(JointComponentSearchTest, ProfileSearchRequiresFiniteWidthUpperBound)
@@ -443,9 +435,10 @@ TEST(JointComponentSearchTest, InfeasibleRoundedTrialKeepsInitialAcceptanceEvide
     ASSERT_FALSE(search.trials.empty());
     const auto & initial=search.trials.front();
     ASSERT_TRUE(initial.lm && initial.trust && initial.trust->passed);
-    EXPECT_TRUE(initial.lm->proposed_acceptance);
+    EXPECT_TRUE(initial.accepted);
+    EXPECT_EQ(initial.accepted_update,0);
+    EXPECT_EQ(initial.endpoint.eta,search.initial.eta);
     EXPECT_TRUE(initial.lm->step.isZero(0.));
-    EXPECT_DOUBLE_EQ(initial.lm->radius,0.);
 }
 
 namespace {

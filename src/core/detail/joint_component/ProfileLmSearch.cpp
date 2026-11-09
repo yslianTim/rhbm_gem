@@ -48,14 +48,8 @@ struct Profile
     bool accepted_width_stationary{};
     BoundedLmWork bounded_lm_work;
     ConstrainedAcWorkspace ac_workspace;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    std::optional<ActiveSetStep> last_bounded_subproblem{};
-#endif
     void RecordBoundedSubproblem(const ActiveSetStep & step)
     {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        last_bounded_subproblem=step;
-#endif
         ++bounded_lm_work.subproblem_solves;
         bounded_lm_work.damping_solves+=step.damping_solves;
         bounded_lm_work.bracket_solves+=step.bracket_solves;
@@ -100,9 +94,8 @@ struct Profile
     // A retry may have replaced the cached candidate while eta is still accepted.
     bool IsStationary(const Vector &) const {return accepted_width_stationary;}
     bool CanRetry() const {return evaluations<context.profile_budget && failure!="unrepresentable-step";}
-    bool AssessTrial([[maybe_unused]] const Vector & accepted,const Vector & step,
-        [[maybe_unused]] const Vector & diagonal,[[maybe_unused]] double radius,
-        [[maybe_unused]] double damping,double actual,double predicted,double ratio,bool proposed)
+    bool AssessTrial(const Vector &,const Vector & step,const Vector &,double,double,
+        double actual,double predicted,double ratio,bool proposed)
     {
         // A rejected evaluation can exit before creating a row.
         if(trace.empty() || trace.back().accepted) return false;
@@ -111,27 +104,6 @@ struct Profile
         lm.step=step;
         lm.actual_decrease=cached.valid ? actual : unavailable;
         lm.predicted_decrease=predicted; lm.ratio=cached.valid ? ratio : unavailable;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        lm.accepted_eta=accepted; lm.diagonal=diagonal;
-        lm.radius=radius; lm.damping=damping;
-        lm.proposed_acceptance=proposed;
-        if(last_bounded_subproblem)
-        {
-            lm.bounded_subproblem=true;
-            lm.subproblem_status=last_bounded_subproblem->status;
-            lm.subproblem_kkt_inf_norm=last_bounded_subproblem->kkt_inf_norm;
-            lm.active_set_iterations=last_bounded_subproblem->iterations;
-            lm.working_set_releases=last_bounded_subproblem->working_set_releases;
-            for(std::size_t i=0;i<last_bounded_subproblem->working_bound_mask.size();++i)
-            {
-                if(!last_bounded_subproblem->working_bound_mask[i]) continue;
-                lm.active_bound_indices.push_back(i);
-                lm.active_bound_multipliers.push_back(last_bounded_subproblem->multipliers(
-                    static_cast<Eigen::Index>(i)));
-            }
-        }
-        last_bounded_subproblem.reset();
-#endif
         row.lm=std::move(lm);
         bool trusted=cached.valid;
         if(proposed)
@@ -219,7 +191,7 @@ SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & init
         auto status=lm.Initialize(eta);
         if(profile.cached.valid)
         {
-            const bool trusted=profile.AssessTrial(eta,Vector::Zero(eta.size()),Vector::Ones(eta.size()),0,0,0,0,0,true);
+            const bool trusted=profile.AssessTrial(eta,Vector::Zero(eta.size()),Vector{},0,0,0,0,0,true);
             if(!trusted) return BoundedLmStatus::ProblemStopped;
         }
         if(profile.cached.valid) profile.Accept(eta,0);
@@ -250,9 +222,6 @@ SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & init
     SearchResult out; out.initial=profile.trace.empty() ? static_cast<Endpoint>(profile.cached) : profile.trace.front().endpoint;
     out.initial_accepted=!profile.trace.empty() && profile.trace.front().accepted;
     out.trials=std::move(profile.trace); out.eta=eta;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    out.lm_status=status;
-#endif
     out.stop_reason=profile.failure.empty() ? "native-lm-stop" : profile.failure;
     out.width_failed=profile.bounded_lm_work.failed_subproblems>0 ||
         out.stop_reason=="bounded-tiny-step-nonstationary" ||

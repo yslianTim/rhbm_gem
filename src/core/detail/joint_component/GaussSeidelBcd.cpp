@@ -327,7 +327,6 @@ BcdBlockFailureDiagnostics FailureDiagnostics(const BcdSearchPolicy & policy,
     for(auto trial=profile.trials.rbegin();trial!=profile.trials.rend();++trial)
         if(trial->lm)
         {
-            out.lm_subproblem_status=trial->lm->subproblem_status;
             out.lm_actual_decrease=trial->lm->actual_decrease;
             out.lm_predicted_decrease=trial->lm->predicted_decrease;
             out.lm_ratio=trial->lm->ratio;
@@ -372,7 +371,7 @@ std::string FormatFailureDiagnostics(const BcdBlockFailureDiagnostics & d)
     out<<" tau_upper_bound="; if(d.tau_upper_bound) out<<*d.tau_upper_bound; else out<<"unavailable";
     out<<" width_bound_active="<<(d.width_bound_active ? "true" : "false")
        <<" eta_step_inf="; if(d.eta_step_inf) out<<*d.eta_step_inf; else out<<"unavailable";
-    out<<" lm_subproblem_status="<<(d.lm_subproblem_status.empty() ? "unavailable" : d.lm_subproblem_status)
+    out<<" lm_subproblem_status=unavailable"
        <<" lm_actual_decrease="; if(d.lm_actual_decrease) out<<*d.lm_actual_decrease; else out<<"unavailable";
     out<<" lm_predicted_decrease="; if(d.lm_predicted_decrease) out<<*d.lm_predicted_decrease; else out<<"unavailable";
     out<<" lm_ratio="; if(d.lm_ratio) out<<*d.lm_ratio; else out<<"unavailable";
