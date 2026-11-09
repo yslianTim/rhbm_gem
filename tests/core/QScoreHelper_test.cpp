@@ -13,7 +13,6 @@
 #include <vector>
 
 #include <rhbm_gem/core/QScoreHelper.hpp>
-#include "core/detail/QScoreSampling.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -294,6 +293,12 @@ TEST(QScoreHelperTest, ReturnsAllAcceptedPointsFromFirstSuccessfulRetry)
             2)
     };
 
+    const auto isolated{ MakeModelObject({ { { 0.0, 0.0, 0.0 }, Element::CARBON } }) };
+    auto reference{ rhbm_gem::core::GetRadialPointsForQScore(
+        *isolated->GetAtomList().front(), *isolated, 1.0, 4) };
+    ASSERT_EQ(reference.size(), 4u);
+    reference.pop_back(); // The north pole is the only rejected point in the first retry.
+    ExpectSamplingPointListsEqual(points, reference);
     ASSERT_EQ(points.size(), 3u);
     for (const auto & point : points)
     {
@@ -864,34 +869,6 @@ TEST(QScoreHelperTest, RejectsTargetAtomFromDifferentModel)
         std::invalid_argument);
 }
 
-TEST(QScoreSamplingTest, FirstSuccessfulRetryAndEmptyShellPreserveAcceptedOrdering)
-{
-    const auto model=MakeModelObject({{{0.,0.,0.},Element::CARBON},{{0.,0.,.5},Element::OXYGEN}});
-    const auto shell=rhbm_gem::core::GetRadialPointsForQScore(*model->GetAtomList().front(),*model,1.,2);
-    ASSERT_EQ(shell.size(),3u); // Two candidates fail; the first retry uses four.
-    const auto isolated=MakeModelObject({{{0.,0.,0.},Element::CARBON}});
-    const auto reference=rhbm_gem::core::GetRadialPointsForQScore(*isolated->GetAtomList().front(),*isolated,1.,4);
-    for(std::size_t i=0;i<shell.size();++i)
-    {
-        EXPECT_EQ(shell[i].position,reference[i].position);
-        EXPECT_EQ(shell[i].distance,1.); EXPECT_TRUE(shell[i].is_selected);
-    }
-    const auto crowded=MakeCrowdedModelObject();
-    EXPECT_TRUE(rhbm_gem::core::GetRadialPointsForQScore(*crowded->GetAtomList().front(),*crowded,1.,8).empty());
-}
-
-TEST(QScoreSamplingTest, PureGeometryPreservesSpiralInteriorReference)
-{
-    const auto model=MakeModelObject({{{1.,2.,3.},Element::CARBON}});
-    const auto points=rhbm_gem::core::GetRadialPointsForQScore(*model->GetAtomList().front(),*model,1.,4);
-    ASSERT_EQ(points.size(),4u);
-    // Independent scalar formula for the first interior point of the legacy spiral.
-    const double h=-1.+2./3.,theta=3.6/std::sqrt(4.*(1.-h*h));
-    EXPECT_NEAR(points[1].position[0],1.+std::sqrt(1.-h*h)*std::cos(theta),1e-15);
-    EXPECT_NEAR(points[1].position[1],2.+std::sqrt(1.-h*h)*std::sin(theta),1e-15);
-    EXPECT_NEAR(points[1].position[2],3.+h,1e-15);
-}
-
 TEST(QScoreHelperTest, SharedInterpolationPreservesLegacyBoundaryDiagnostic)
 {
     const auto map=MakeGaussianMapObject();
@@ -907,30 +884,103 @@ TEST(QScoreHelperTest, SharedInterpolationPreservesLegacyBoundaryDiagnostic)
     }
 }
 
-TEST(QScoreSamplingTest, NeighborExclusionUsesStrictSquaredDistanceBoundary)
+TEST(QScoreHelperTest, NeighborExclusionUsesStrictSquaredDistanceBoundary)
 {
-    const std::array<double, 3> origin{ 0., 0., 0. };
-    const double radius = .9;
-    EXPECT_FALSE(rhbm_gem::core::detail::IsInsideNeighborExclusion({radius, 0., 0.}, origin, radius * radius));
-    EXPECT_TRUE(rhbm_gem::core::detail::IsInsideNeighborExclusion({std::nextafter(radius, 0.), 0., 0.}, origin, radius * radius));
-    EXPECT_FALSE(rhbm_gem::core::detail::IsInsideNeighborExclusion({std::nextafter(radius, 1.), 0., 0.}, origin, radius * radius));
-    EXPECT_FALSE(rhbm_gem::core::detail::IsInsideNeighborExclusion(origin, origin, 0.));
+    // The north pole is at the origin, so its separation is exactly the neighbor's Z magnitude.
+    constexpr double exclusion_radius{ 0.9 };
+    const auto isolated{ MakeModelObject({ { { 0.0, 0.0, -1.0 }, Element::CARBON } }) };
+    const auto reference{ rhbm_gem::core::GetRadialPointsForQScore(
+        *isolated->GetAtomList().front(), *isolated, 1.0, 2) };
+    ASSERT_EQ(reference.size(), 2u);
+    ASSERT_EQ(reference.back().position, (std::array<double, 3>{}));
+
+    for (const double separation : { std::nextafter(exclusion_radius, 0.0), exclusion_radius,
+             std::nextafter(exclusion_radius, 1.0) })
+    {
+        const auto model{ MakeModelObject({
+            { { 0.0, 0.0, -1.0 }, Element::CARBON },
+            { { 0.0, 0.0, -separation }, Element::OXYGEN }
+        }) };
+        const auto shell{ rhbm_gem::core::GetRadialPointsForQScore(
+            *model->GetAtomList().front(), *model, 1.0, 2) };
+        if (separation < exclusion_radius)
+        {
+            EXPECT_GE(shell.size(), 2u);
+            EXPECT_TRUE(std::none_of(shell.begin(), shell.end(), [&](const auto & point)
+            {
+                return point.position == reference.back().position;
+            }));
+        }
+        else
+        {
+            ExpectSamplingPointListsEqual(shell, reference);
+        }
+    }
 }
 
-TEST(QScoreSamplingTest, NeighborExclusionHandlesOffGridAndMultipleCandidates)
+TEST(QScoreHelperTest, ZeroSquaredExclusionRadiusRetainsCoincidentPoint)
 {
-    const std::array<double, 3> point{ .137, -.219, 1.153 };
-    EXPECT_FALSE(rhbm_gem::core::detail::IsInsideNeighborExclusion(point, {3.01, .27, -.13}, .81));
-    EXPECT_TRUE(rhbm_gem::core::detail::IsInsideNeighborExclusion(point, {.137, -.219, 1.653}, .81));
+    constexpr double radius{ 1e-200 }; // Squaring the exclusion radius underflows to zero.
+    const auto model{ MakeModelObject({
+        { { 0.0, 0.0, 0.0 }, Element::CARBON },
+        { { 0.0, 0.0, radius }, Element::OXYGEN }
+    }) };
+    const auto & atom{ *model->GetAtomList().front() };
+    ASSERT_EQ(model->FindNeighborAtoms(atom, 2.0 * radius).size(), 1u);
+    const auto shell{ rhbm_gem::core::GetRadialPointsForQScore(atom, *model, radius, 2) };
+    ASSERT_EQ(shell.size(), 2u);
+    EXPECT_EQ(shell.back().position, model->GetAtomList().back()->GetPositionRef());
 }
 
-TEST(QScoreSamplingTest, NeighborExclusionRejectsNonfiniteGeometryAndInvalidRadius)
+TEST(QScoreHelperTest, MultipleOffGridNeighborsExcludeBothPoles)
 {
-    const std::array<double, 3> origin{ 0., 0., 0. };
-    const auto nan = std::numeric_limits<double>::quiet_NaN();
-    const auto inf = std::numeric_limits<double>::infinity();
-    EXPECT_THROW(rhbm_gem::core::detail::IsInsideNeighborExclusion({nan, 0., 0.}, origin, .81), std::invalid_argument);
-    EXPECT_THROW(rhbm_gem::core::detail::IsInsideNeighborExclusion(origin, {0., inf, 0.}, .81), std::invalid_argument);
-    EXPECT_THROW(rhbm_gem::core::detail::IsInsideNeighborExclusion(origin, origin, nan), std::invalid_argument);
-    EXPECT_THROW(rhbm_gem::core::detail::IsInsideNeighborExclusion(origin, origin, -1.), std::invalid_argument);
+    const std::array<double, 3> center{ 0.137, -0.219, 0.153 };
+    const auto isolated{ MakeModelObject({ { center, Element::CARBON } }) };
+    const auto model{ MakeModelObject({
+        { center, Element::CARBON },
+        { { center[0], center[1], center[2] - 0.5 }, Element::OXYGEN },
+        { { center[0], center[1], center[2] + 0.5 }, Element::CARBON },
+        { { center[0] + 1.95, center[1], center[2] }, Element::CARBON }
+    }) };
+    auto reference{ rhbm_gem::core::GetRadialPointsForQScore(
+        *isolated->GetAtomList().front(), *isolated, 1.0, 4) };
+    ASSERT_EQ(reference.size(), 4u);
+    reference.pop_back();
+    reference.erase(reference.begin());
+    const auto shell{ rhbm_gem::core::GetRadialPointsForQScore(
+        *model->GetAtomList().front(), *model, 1.0, 2) };
+    ExpectSamplingPointListsEqual(shell, reference);
+}
+
+TEST(QScoreHelperTest, RejectsNonfiniteNeighborAndOverflowingSquaredExclusionRadius)
+{
+    const auto infinite_neighbor{ MakeModelObject({
+        { { 0.0, 0.0, 0.0 }, Element::CARBON },
+        { { 0.0, std::numeric_limits<double>::infinity(), 0.0 }, Element::OXYGEN }
+    }) };
+    const auto finite_neighbor{ MakeModelObject({
+        { { 0.0, 0.0, 0.0 }, Element::CARBON },
+        { { 0.0, 1.0, 0.0 }, Element::OXYGEN }
+    }) };
+    // Only the search-radius square overflows for the first case, exposing the nonfinite neighbor.
+    EXPECT_THROW(rhbm_gem::core::GetRadialPointsForQScore(
+        *infinite_neighbor->GetAtomList().front(), *infinite_neighbor, 8e153, 2), std::invalid_argument);
+    EXPECT_THROW(rhbm_gem::core::GetRadialPointsForQScore(
+        *finite_neighbor->GetAtomList().front(), *finite_neighbor, 1e155, 2), std::invalid_argument);
+}
+
+TEST(QScoreHelperTest, NonfiniteCenterIsRejectedByMapInterpolation)
+{
+    const auto model{ MakeModelObject({
+        { { std::numeric_limits<double>::quiet_NaN(), 0.0, 0.0 }, Element::CARBON }
+    }) };
+    const auto & atom{ *model->GetAtomList().front() };
+    const auto shell{ rhbm_gem::core::GetRadialPointsForQScore(atom, *model, 1.0, 2) };
+    ASSERT_EQ(shell.size(), 2u);
+    for (const auto & point : shell)
+    {
+        EXPECT_TRUE(std::isnan(point.position[0]));
+    }
+    const auto map{ MakeGaussianMapObject() };
+    EXPECT_THROW(rhbm_gem::core::CalculateQScoreForAtom(atom, map, *model, 1.0, 0.0), std::out_of_range);
 }

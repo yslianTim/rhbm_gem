@@ -1,6 +1,5 @@
 #include <rhbm_gem/core/QScoreHelper.hpp>
 #include "core/detail/MapInterpolation.hpp"
-#include "core/detail/QScoreSampling.hpp"
 
 #include <algorithm>
 #include <array>
@@ -15,11 +14,34 @@
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
+#include <rhbm_gem/utils/math/SphereSampler.hpp>
 
 namespace rhbm_gem::core {
 namespace {
 
 constexpr double kMaximumRadiusTolerance{ 0.01 };
+
+constexpr int kMaximumRadialPointAttempts{ 50 };
+constexpr std::size_t kCandidatePointIncrement{ 2 };
+constexpr double kNeighborExclusionRadiusRatio{ 0.9 };
+constexpr double kNeighborSearchRadiusRatio{ 2.0 };
+
+bool IsInsideNeighborExclusion(
+    const std::array<double, 3> & sample_position,
+    const std::array<double, 3> & neighbor_position,
+    double exclusion_radius_squared)
+{
+    numeric_validation::RequireAllFinite(sample_position, "sample position");
+    numeric_validation::RequireAllFinite(neighbor_position, "neighbor position");
+    numeric_validation::RequireFiniteNonNegative(exclusion_radius_squared, "exclusion radius squared");
+    double distance_square{ 0.0 };
+    for (std::size_t axis = 0; axis < sample_position.size(); ++axis)
+    {
+        const auto difference{ sample_position.at(axis) - neighbor_position.at(axis) };
+        distance_square += difference * difference;
+    }
+    return distance_square < exclusion_radius_squared;
+}
 
 double InterpolateQScoreResponse(const MapObject & map, const std::array<double, 3> & position)
 {
@@ -102,9 +124,55 @@ std::tuple<double, double> GetReferenceGaussianParameters(const MapObject & map_
 }
 
 SamplingPointList GetRadialPointsForQScore(
-    const AtomObject & atom, const ModelObject & model, double radius, int num_points)
+    const AtomObject & atom,
+    const ModelObject & model,
+    double radius,
+    int num_points)
 {
-    return detail::SampleQScoreShell(atom, model, radius, num_points);
+    numeric_validation::RequireFinitePositive(radius, "GetRadialPointsForQScore radius");
+    numeric_validation::RequireAtLeast(num_points, 2, "GetRadialPointsForQScore num_points");
+
+    auto neighbor_atoms{
+        model.FindNeighborAtoms(atom, kNeighborSearchRadiusRatio * radius)
+    };
+    std::erase_if(neighbor_atoms, [](const AtomObject * neighbor)
+    {
+        return neighbor->GetElement() == Element::HYDROGEN;
+    });
+    const auto exclusion_radius{
+        kNeighborExclusionRadiusRatio * radius
+    };
+    const auto exclusion_radius_square{
+        exclusion_radius * exclusion_radius
+    };
+    const auto target_point_count{
+        static_cast<std::size_t>(num_points)
+    };
+
+    for (int attempt = 0; attempt < kMaximumRadialPointAttempts; ++attempt)
+    {
+        const auto candidate_point_count{
+            target_point_count + static_cast<std::size_t>(attempt) * kCandidatePointIncrement
+        };
+        auto accepted_points{
+            sphere_sampler::GenerateSpiralShell(atom.GetPositionRef(), radius, candidate_point_count)
+        };
+        std::erase_if(accepted_points, [&](const SamplingPoint & point)
+        {
+            return std::any_of(neighbor_atoms.begin(), neighbor_atoms.end(), [&](const AtomObject * neighbor)
+            {
+                return IsInsideNeighborExclusion(
+                    point.position, neighbor->GetPositionRef(), exclusion_radius_square);
+            });
+        });
+
+        if (accepted_points.size() >= target_point_count)
+        {
+            return accepted_points;
+        }
+    }
+
+    return {};
 }
 
 double CalculateQScoreForAtom(
