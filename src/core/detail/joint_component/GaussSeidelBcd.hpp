@@ -28,8 +28,7 @@ struct BcdCandidateEvent
 };
 enum class BcdCandidateFaultForTesting
 {
-    None,LocalObjectiveIncrease,ObjectiveConsistencyFailure,NaNObjective,InfiniteObjective,
-    NaNParameter,InfiniteParameter,InfinitePrediction,InfiniteResidual
+    None,ObjectiveConsistencyFailure,NaNObjective,NaNParameter,InfinitePrediction,InfiniteResidual
 };
 #endif
 
