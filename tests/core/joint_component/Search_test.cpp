@@ -365,6 +365,26 @@ TEST(JointComponentSearchTest, ProfileSearchRequiresFiniteWidthUpperBound)
     EXPECT_EQ(search.stop_reason,"invalid-width-upper-bound");
 }
 
+TEST(JointComponentSearchTest, InfeasibleRoundedTrialKeepsInitialAcceptanceEvidence)
+{
+    Sample sample;
+    for(auto & atom:sample.atoms) atom.width=1.2;
+    for(Eigen::Index row=0;row<sample.y.size();++row)
+        sample.y(row)=m::unique_grid::Direct(sample.grid.voxels[static_cast<std::size_t>(row)].position,sample.atoms,2.5);
+    const p::Domain domain(sample.grid,sample.atoms);
+    auto context=p::MakeContext(sample.y,2);
+    // Adding the full bound increment rounds to zero from log(.98), above the bound.
+    context.eta_upper_bound=-1e-18;
+    const auto search=joint::SearchProfile(domain,sample.y,Vector::Constant(2,.98),context);
+    ASSERT_TRUE(search.initial_accepted);
+    ASSERT_FALSE(search.trials.empty());
+    const auto & initial=search.trials.front();
+    ASSERT_TRUE(initial.lm && initial.trust && initial.trust->passed);
+    EXPECT_TRUE(initial.lm->proposed_acceptance);
+    EXPECT_TRUE(initial.lm->step.isZero(0.));
+    EXPECT_DOUBLE_EQ(initial.lm->radius,0.);
+}
+
 namespace {
 // The same physical log-width t=x+reference is expressed about different origins.
 struct ShiftedWidthResidual

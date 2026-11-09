@@ -1,11 +1,12 @@
 #include "Numerics.hpp"
 #include "ConstrainedAcLeastSquares.hpp"
 #include "CompactSvd.hpp"
-#include "InstrumentedLM.hpp"
+#include "BoundedLmDriver.hpp"
 #include "TiledDerivative.hpp"
 #include "ActiveSetBoundedLM.hpp"
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 
 namespace rhbm_gem::core::joint_component {
 WeakWidthStepAssessment AssessWeakWidthStep(const Matrix & jacobian,VectorRef step,const RankPolicy & policy)
@@ -35,16 +36,38 @@ bool RejectWeakWidthTrial(double step_inf,double weak_step_fraction,double objec
     return improvement>=0 && improvement<=replay_enclosure;
 }
 namespace {
+// The diagnostic JSON uses the historical LM status codes.
+int DiagnosticLmStatus(BoundedLmStatus status)
+{
+    switch(status)
+    {
+        case BoundedLmStatus::Ready: return -2;
+        case BoundedLmStatus::Running: return -1;
+        case BoundedLmStatus::InvalidInput: return 0;
+        case BoundedLmStatus::ReductionTolerance: return 1;
+        case BoundedLmStatus::StepTolerance: return 2;
+        case BoundedLmStatus::ReductionAndStepTolerance: return 3;
+        case BoundedLmStatus::Stationary: return 4;
+        case BoundedLmStatus::EvaluationBudget: return 5;
+        case BoundedLmStatus::ReductionPrecisionLimit: return 6;
+        case BoundedLmStatus::StepPrecisionLimit: return 7;
+        case BoundedLmStatus::GradientPrecisionLimit: return 8;
+        case BoundedLmStatus::ProblemStopped: return 9;
+    }
+    std::abort();
+}
+
 struct Profile
 {
     const Domain & domain;
     VectorRef y;
     const EvaluationContext & context;
-    Evaluation cached;
-    std::vector<joint_component::Trial> trace;
+    Evaluation cached; // Latest evaluation, including unaccepted candidates.
+    std::vector<Trial> trace;
     int evaluations{},derivatives{};
     std::string failure;
     std::optional<double> accepted_objective;
+    bool accepted_width_stationary{};
     std::optional<ActiveSetStep> last_bounded_subproblem;
     BoundedLmWork bounded_lm_work;
     ConstrainedAcWorkspace ac_workspace;
@@ -63,7 +86,7 @@ struct Profile
             bounded_lm_work.maximum_subproblem_kkt=std::isfinite(bounded_lm_work.maximum_subproblem_kkt) ?
                 std::max(bounded_lm_work.maximum_subproblem_kkt,step.kkt_inf_norm) : step.kkt_inf_norm;
     }
-    ActiveSetStep solve_bounded_step(const Matrix & jacobian,VectorRef response,VectorRef eta,
+    ActiveSetStep SolveBoundedStep(const Matrix & jacobian,VectorRef response,VectorRef eta,
         VectorRef diagonal,double radius,double damping)
     {
         ActiveSetStep failed_step;
@@ -92,11 +115,14 @@ struct Profile
             cached.certificate.width_bound_feasible &&
             cached.certificate.width_bound_projected_kkt<=PracticalJointConvergenceCriteria.global_eta_gradient;
     }
-    bool retry() const {return evaluations<context.profile_budget && failure!="unrepresentable-step";}
-    bool Trial(const Vector & accepted,const Vector & step,const Vector & diagonal,
+    // A retry may have replaced the cached candidate while eta is still accepted.
+    bool IsStationary(const Vector &) const {return accepted_width_stationary;}
+    bool CanRetry() const {return evaluations<context.profile_budget && failure!="unrepresentable-step";}
+    bool AssessTrial(const Vector & accepted,const Vector & step,const Vector & diagonal,
         double radius,double damping,double actual,double predicted,double ratio,bool proposed)
     {
-        if(trace.empty()) return false;
+        // A rejected evaluation can exit before creating a row.
+        if(trace.empty() || trace.back().accepted) return false;
         auto & row=trace.back();
         LmTrial lm;
         lm.accepted_eta=accepted; lm.step=step; lm.diagonal=diagonal;
@@ -155,40 +181,41 @@ struct Profile
         if(!trusted) failure=row.rejection_reason.empty() ? "untrusted-trial" : row.rejection_reason;
         return trusted;
     }
-    int values() const {return static_cast<int>(domain.rows);}
+    Eigen::Index ResidualCount() const {return domain.rows;}
     bool Get(const Vector & eta)
     {
         if(cached.valid && cached.eta.size()==eta.size() && (cached.eta.array()==eta.array()).all()) return true;
         if(evaluations>=context.profile_budget) {failure="profile-budget"; return false;}
         failure.clear();
         cached=EvaluateProfile(domain,y,eta,&context,&ac_workspace); ++evaluations;
-        joint_component::Trial row; row.endpoint=cached; row.evaluation=evaluations;
+        Trial row; row.endpoint=cached; row.evaluation=evaluations;
         trace.push_back(std::move(row));
         if(!cached.valid) failure="inner-"+cached.reason;
         return cached.valid;
     }
-    int operator()(const Vector & eta,Vector & residual)
+    bool Evaluate(const Vector & eta,Vector & residual)
     {
         if(!context.eta_upper_bound || !std::isfinite(*context.eta_upper_bound))
-        {failure="invalid-width-upper-bound"; return -1;}
+        {failure="invalid-width-upper-bound"; return false;}
         if((eta.array()>*context.eta_upper_bound).any())
-        {failure="bounded-step-infeasible"; return -1;}
-        if(!Get(eta)) return -1;
-        residual=cached.residual/context.scale; return 0;
+        {failure="bounded-step-infeasible"; return false;}
+        if(!Get(eta)) return false;
+        residual=cached.residual/context.scale; return true;
     }
-    int linearize(const Vector & eta,const Vector &,Matrix & factor,Vector & response,Vector & norms)
+    bool Linearize(const Vector & eta,const Vector &,Matrix & factor,Vector & response,Vector & norms)
     {
-        if(!Get(eta)) return -1;
+        if(!Get(eta)) return false;
         const auto prepared=PrepareDerivative(cached,context.scale,&context);
         auto differential=ReduceDerivative(prepared,cached.residual); ++derivatives;
         if(!differential.valid)
-        {failure=differential.reason; return -1;}
+        {failure=differential.reason; return false;}
         factor=std::move(differential.jacobian); response=std::move(differential.response);
-        norms=std::move(differential.jacobian_norms); return 0;
+        norms=std::move(differential.jacobian_norms); return true;
     }
     void Accept(const Vector & eta,int update)
     {
         UpdateAcceptedProfileObjective(accepted_objective,cached,context.scale,true);
+        accepted_width_stationary=WidthStationary();
         for(auto it=trace.rbegin();it!=trace.rend();++it)
             if((it->endpoint.eta.array()==eta.array()).all())
             {it->accepted=true; it->accepted_update=update; break;}
@@ -199,51 +226,51 @@ SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & init
     const EvaluationContext & context)
 {
     const auto eta_upper_bound=context.eta_upper_bound;
-    Profile profile{domain,y,context,{}, {},0,0,{}, {},{},{},{}};
+    Profile profile{domain,y,context,{}, {},0,0,{}, {},false,{},{},{}};
     Vector eta=initial_tau.array().log(); int accepted{};
-    auto search=[&](auto & lm) {
-        lm.parameters.factor=.1; lm.parameters.ftol=1e-14; lm.parameters.xtol=1e-12;
-        lm.parameters.gtol=1e-12; lm.parameters.maxfev=context.profile_budget;
-        auto status=lm.minimizeInit(eta);
+    auto search=[&] {
+        BoundedLmDriver lm(profile,{.initial_radius_factor=.1,.evaluation_budget=context.profile_budget,
+            .ftol=1e-14,.xtol=1e-12,.gtol=1e-12});
+        auto status=lm.Initialize(eta);
         if(profile.cached.valid)
         {
-            const bool trusted=profile.Trial(eta,Vector::Zero(eta.size()),Vector::Ones(eta.size()),0,0,0,0,0,true);
-            if(!trusted) return Eigen::LevenbergMarquardtSpace::UserAsked;
+            const bool trusted=profile.AssessTrial(eta,Vector::Zero(eta.size()),Vector::Ones(eta.size()),0,0,0,0,0,true);
+            if(!trusted) return BoundedLmStatus::ProblemStopped;
         }
         if(profile.cached.valid) profile.Accept(eta,0);
-        while(status==Eigen::LevenbergMarquardtSpace::NotStarted || status==Eigen::LevenbergMarquardtSpace::Running)
+        while(status==BoundedLmStatus::Ready || status==BoundedLmStatus::Running)
         {
             if(accepted>=context.update_budget) {profile.failure="accepted-update-budget"; break;}
-            const auto before=lm.iterations(); status=lm.minimizeOneStep(eta);
-            if(lm.iterations()>before) {++accepted; profile.Accept(eta,accepted);}
+            status=lm.Advance(eta);
+            if(lm.AcceptedIterations()>accepted)
+            {
+                accepted=static_cast<int>(lm.AcceptedIterations());
+                profile.Accept(eta,accepted);
+            }
         }
         return status;
     };
-    Eigen::LevenbergMarquardtSpace::Status status;
+    BoundedLmStatus status;
     if(!eta_upper_bound || !std::isfinite(*eta_upper_bound))
     {
         profile.failure="invalid-width-upper-bound";
-        status=Eigen::LevenbergMarquardtSpace::UserAsked;
+        status=BoundedLmStatus::ProblemStopped;
     }
     else if((eta.array()>*eta_upper_bound).any())
     {
         profile.failure="bounded-initial-width-infeasible";
-        status=Eigen::LevenbergMarquardtSpace::UserAsked;
+        status=BoundedLmStatus::ProblemStopped;
     }
-    else
-    {
-        InstrumentedLM<Profile> lm(profile);
-        status=search(lm);
-    }
+    else status=search();
     SearchResult out; out.initial=profile.trace.empty() ? static_cast<Endpoint>(profile.cached) : profile.trace.front().endpoint;
     out.initial_accepted=!profile.trace.empty() && profile.trace.front().accepted;
-    out.trials=std::move(profile.trace); out.eta=eta; out.lm_status=static_cast<int>(status);
+    out.trials=std::move(profile.trace); out.eta=eta; out.lm_status=DiagnosticLmStatus(status);
     out.stop_reason=profile.failure.empty() ? "native-lm-stop" : profile.failure;
     out.width_failed=profile.bounded_lm_work.failed_subproblems>0 ||
         out.stop_reason=="bounded-tiny-step-nonstationary" ||
-        (out.stop_reason=="unrepresentable-step" && !profile.WidthStationary());
+        (out.stop_reason=="unrepresentable-step" && !profile.IsStationary(eta));
     out.evaluations=profile.evaluations; out.derivatives=profile.derivatives; out.accepted=accepted;
-    out.stopped=status==Eigen::LevenbergMarquardtSpace::UserAsked || status==Eigen::LevenbergMarquardtSpace::TooManyFunctionEvaluation || !profile.failure.empty();
+    out.stopped=status==BoundedLmStatus::ProblemStopped || status==BoundedLmStatus::EvaluationBudget || !profile.failure.empty();
     out.bounded_lm_work=profile.bounded_lm_work;
     return out;
 }

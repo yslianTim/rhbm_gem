@@ -7,7 +7,6 @@
 #include "core/detail/joint_component/Problem.hpp"
 #include "support/JointSyntheticWorkload.hpp"
 #include "support/JointTestNumerics.hpp"
-#include <unsupported/Eigen/NonLinearOptimization>
 #include <array>
 #include <cmath>
 #include <cstring>

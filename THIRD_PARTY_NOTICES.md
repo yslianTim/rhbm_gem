@@ -38,6 +38,11 @@ this project or of any third-party component.
 | subpar | Parallelization abstraction used transitively by umappp | MIT | Used only with `RHBM_GEM_ENABLE_UMAP=ON`: installed package preferred in `SYSTEM`, otherwise pinned v0.5.0 fallback; `FETCH` uses pinned v0.5.0 | `https://github.com/LTLA/subpar/blob/v0.5.0/LICENSE` |
 | umappp | Header-only native C++ implementation used by the `umap_embedding` command | BSD-2-Clause | Used only with `RHBM_GEM_ENABLE_UMAP=ON`: installed v3.3.2 preferred in `SYSTEM`, otherwise pinned v3.3.2 fallback; `FETCH` uses pinned v3.3.2 | `https://github.com/libscran/umappp/blob/v3.3.2/LICENSE` |
 
+The bounded LM driver in `src/core/detail/joint_component/BoundedLmDriver.hpp`
+contains portions adapted from Eigen 5.0.1's
+`NonLinearOptimization/LevenbergMarquardt.h`. That source file retains the
+upstream copyright and is covered by [MPL 2.0](https://www.mozilla.org/MPL/2.0/).
+
 ## Optional System Dependencies (Not Bundled)
 
 - ROOT (optional plotting features): discovered via `find_package(ROOT ...)` and not bundled in this repository.
