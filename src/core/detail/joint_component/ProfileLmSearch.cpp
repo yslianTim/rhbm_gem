@@ -68,11 +68,16 @@ struct Profile
     std::string failure;
     std::optional<double> accepted_objective;
     bool accepted_width_stationary{};
-    std::optional<ActiveSetStep> last_bounded_subproblem;
     BoundedLmWork bounded_lm_work;
     ConstrainedAcWorkspace ac_workspace;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    std::optional<ActiveSetStep> last_bounded_subproblem{};
+#endif
     void RecordBoundedSubproblem(const ActiveSetStep & step)
     {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        last_bounded_subproblem=step;
+#endif
         ++bounded_lm_work.subproblem_solves;
         bounded_lm_work.damping_solves+=step.damping_solves;
         bounded_lm_work.bracket_solves+=step.bracket_solves;
@@ -92,19 +97,18 @@ struct Profile
         ActiveSetStep failed_step;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
         if(context.force_width_subproblem_failure_for_testing)
-        {failed_step.status="injected-width-subproblem-failure"; last_bounded_subproblem=failed_step;
+        {failed_step.status="injected-width-subproblem-failure";
             RecordBoundedSubproblem(failed_step); return failed_step;}
 #endif
         if(!context.eta_upper_bound || !std::isfinite(*context.eta_upper_bound))
-        {failed_step.status="invalid-width-upper-bound"; last_bounded_subproblem=failed_step;
+        {failed_step.status="invalid-width-upper-bound";
             RecordBoundedSubproblem(failed_step); return failed_step;}
         for(Eigen::Index i=0;i<eta.size();++i)
             if(eta(i)>*context.eta_upper_bound)
-            {failed_step.status="infeasible-current-width"; last_bounded_subproblem=failed_step;
+            {failed_step.status="infeasible-current-width";
                 RecordBoundedSubproblem(failed_step); return failed_step;}
         const Vector upper=Vector::Constant(eta.size(),*context.eta_upper_bound)-eta;
         auto result=SolveBoundedTrustRegionStep(jacobian,response,diagonal,upper,radius,damping);
-        last_bounded_subproblem=result;
         RecordBoundedSubproblem(result);
         return result;
     }
@@ -146,8 +150,8 @@ struct Profile
                     static_cast<Eigen::Index>(i)));
             }
         }
-#endif
         last_bounded_subproblem.reset();
+#endif
         row.lm=std::move(lm);
         bool trusted=cached.valid;
         if(proposed)
@@ -226,7 +230,7 @@ SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & init
     const EvaluationContext & context)
 {
     const auto eta_upper_bound=context.eta_upper_bound;
-    Profile profile{domain,y,context,{}, {},0,0,{}, {},false,{},{},{}};
+    Profile profile{domain,y,context,{}, {},0,0,{}, {},false,{},{}};
     Vector eta=initial_tau.array().log(); int accepted{};
     auto search=[&] {
         BoundedLmDriver lm(profile,{.initial_radius_factor=.1,.evaluation_budget=context.profile_budget,

@@ -93,17 +93,16 @@ BoundedSubproblemContext MakeBoundedSubproblemContext(const Eigen::MatrixXd & j,
     return context;
 }
 
-double KktScale(const Eigen::MatrixXd & j,const Eigen::VectorXd & r,const Eigen::VectorXd & d,
+double KktScale(const Eigen::MatrixXd & j,double residual_norm,const Eigen::VectorXd & d,
     const Eigen::VectorXd & p,double lambda,BoundedSubproblemContext & context)
 {
-    const double residual=(j*p+r).norm();
     if(!context.kkt_norms_ready)
     {
         context.jacobian_norm=j.norm();
         context.diagonal_squared_norm=d.squaredNorm();
         context.kkt_norms_ready=true;
     }
-    return std::max(1.0,context.jacobian_norm*(residual+context.jacobian_norm*p.norm())+
+    return std::max(1.0,context.jacobian_norm*(residual_norm+context.jacobian_norm*p.norm())+
         lambda*context.diagonal_squared_norm*std::max(1.0,p.norm()));
 }
 
@@ -233,7 +232,7 @@ void SolveAtDamping(BoundedSubproblemContext & context,BoundedLmWorkspace & work
         workspace.gradient=j.transpose()*workspace.residual+
             lambda*d.cwiseProduct(d).cwiseProduct(workspace.step);
         if(!workspace.gradient.allFinite()) {fail("non-finite-subproblem-gradient"); return;}
-        const double kkt_tolerance=2e-11*KktScale(j,r,d,workspace.step,lambda,context);
+        const double kkt_tolerance=2e-11*KktScale(j,workspace.residual.norm(),d,workspace.step,lambda,context);
         for(Eigen::Index i=0;i<n;++i)
             if(context.stationary_null_direction_mask[static_cast<std::size_t>(i)] &&
                 std::abs(workspace.gradient(i))>context.null_gradient_tolerance)
