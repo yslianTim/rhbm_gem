@@ -22,7 +22,7 @@ struct BcdExecutionPolicy
     std::string component_id;
     std::optional<double> eta_upper_bound;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    // Borrowed for the synchronous component/assembly regression tests.
+    // Borrowed for the synchronous fit. Only search budgets and fault controls are read.
     const BcdSearchPolicy * search_policy_for_testing{};
 #endif
 };

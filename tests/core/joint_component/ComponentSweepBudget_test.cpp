@@ -166,6 +166,9 @@ TEST(JointComponentSweepBudgetTest, ExtensionPreservesTheOriginalPathAndQualifie
     n::BcdExecutionPolicy policy; policy.eta_upper_bound=std::log(2.2);
     n::BcdSearchPolicy search;
     search.core_atoms=1; search.maximum_sweeps=40;
+    search.eta_upper_bound=std::log(1.0);
+    search.component_id="search-only-id";
+    search.production_progress=[](const auto &) {ADD_FAILURE()<<"Search callback escaped into component execution";};
     policy.search_policy_for_testing=&search;
     const auto fixed=n::FitBcdComponents(problem,{1.5,1.5},policy);
     search.nominal_sweeps=30;
@@ -177,6 +180,10 @@ TEST(JointComponentSweepBudgetTest, ExtensionPreservesTheOriginalPathAndQualifie
     ASSERT_GT(adaptive_component.search_sweeps,30u);
     EXPECT_EQ(adaptive_component.search_sweeps,fixed_component.search_sweeps);
     ASSERT_TRUE(adaptive_component.state && fixed_component.state);
+    ASSERT_TRUE(adaptive_component.candidate_diagnostic);
+    EXPECT_EQ(adaptive_component.candidate_diagnostic->convergence_criteria_id,"practical-v2");
+    ASSERT_FALSE(adaptive_component.local_conditioning.empty());
+    EXPECT_EQ(adaptive_component.local_conditioning.front().block_id,adaptive_component.id+"/block-1");
     EXPECT_EQ(adaptive_component.state->log_tau,fixed_component.state->log_tau);
     EXPECT_EQ(adaptive_component.state->ac,fixed_component.state->ac);
     ASSERT_TRUE(adaptive.prediction && fixed.prediction);

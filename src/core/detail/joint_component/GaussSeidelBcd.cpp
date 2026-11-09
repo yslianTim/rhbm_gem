@@ -1182,8 +1182,13 @@ BcdComponentResult SolveBcdComponent(
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     if(const auto * test_policy=production_policy.search_policy_for_testing)
     {
-        policy=*test_policy;
-        policy.production_progress={};
+        policy.core_atoms=test_policy->core_atoms;
+        policy.maximum_sweeps=test_policy->maximum_sweeps;
+        policy.nominal_sweeps=test_policy->nominal_sweeps;
+        policy.global_state_memory_budget_for_testing=test_policy->global_state_memory_budget_for_testing;
+        policy.force_width_failure_for_testing=test_policy->force_width_failure_for_testing;
+        policy.candidate_fault_for_testing=test_policy->candidate_fault_for_testing;
+        policy.perturb_sweep_replay_objective_for_testing=test_policy->perturb_sweep_replay_objective_for_testing;
     }
 #endif
     policy.convergence_criteria=PracticalJointConvergenceCriteria;
