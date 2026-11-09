@@ -59,7 +59,7 @@ Expected result contract:
   `JointNotConverged` when fitting did not qualify (including unavailable
   calibration after valid initialization), `JointDownstreamUnavailable` when
   Joint qualified but Halo reconstruction is unavailable, or `JointQualified`
-  after the runtime gates passed
+  when Joint qualifies and Halo reconstruction does not block downstream work
 - `result.issues` reports public validation diagnostics as option/message pairs
 
 The CLI uses the following exit codes:
@@ -146,26 +146,26 @@ continues to control whether hydrogen contributes to a simulated map.
 
 ```sh
 # Default: Joint Components for all non-hydrogen atoms in all chains
-rhbm_gem potential_analysis \
+RHBM-GEM potential_analysis \
     --model model.cif \
     --map map.mrc
 
 # One target chain
-rhbm_gem potential_analysis \
+RHBM-GEM potential_analysis \
     --estimator joint-components \
     --model model.cif \
     --map map.mrc \
     --select-chain A
 
 # Several target chains
-rhbm_gem potential_analysis \
+RHBM-GEM potential_analysis \
     --estimator joint-components \
     --model model.cif \
     --map map.mrc \
     --select-chain A,B,C
 
 # Explicitly select the Two-Stage estimator
-rhbm_gem potential_analysis \
+RHBM-GEM potential_analysis \
     --estimator two-stage \
     --model model.cif \
     --map map.mrc
