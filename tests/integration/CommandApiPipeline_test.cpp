@@ -57,6 +57,7 @@ std::size_t CountRegularFiles(const std::filesystem::path & directory)
     return count;
 }
 
+// Calls the instrumented command entry point in-process. The CLI smoke test runs the production executable.
 int RunCli(std::vector<std::string> arguments)
 {
     std::vector<char *> argv;
@@ -611,83 +612,69 @@ TEST(CommandApiPipelineTest, JointFailureAndUnavailableOutcomesPersistThroughApi
     request.selected_chain_ids={"A"};
     request.verbosity=0;
 
-    request.database_path=directory.path()/"search-failure.sqlite";
-    request.saved_key_tag="search-failure";
+    struct FailureCase
     {
-        ScopedJointPostprocessingSnapshotHook hook{&InjectJointSearchFailure};
-        const auto result=rgc::RunCommand(request);
-        ASSERT_TRUE(result.succeeded);
-        EXPECT_EQ(result.outcome,rgc::CommandOutcome::JointNotConverged);
-    }
+        const char * tag;
+        rgc::detail::JointPostprocessingSnapshotHook hook;
+        rgc::CommandOutcome outcome;
+        int cli_exit;
+    };
+    for(const auto & failure:{
+        FailureCase{"search-failure",&InjectJointSearchFailure,rgc::CommandOutcome::JointNotConverged,3},
+        FailureCase{"no-donor",&InjectJointNoDonors,rgc::CommandOutcome::JointDownstreamUnavailable,4}})
     {
-        rg::DataRepository repository{request.database_path};
-        const auto loaded=repository.LoadModel(request.saved_key_tag);
-        ASSERT_NE(loaded,nullptr);
-        const auto & fit=*loaded->GetAnalysisView().GetJointResult();
-        ASSERT_TRUE(fit.initialization.valid);
-        EXPECT_FALSE(rg::IsQualifiedJointAnalysisResult(fit));
-        ASSERT_FALSE(fit.components.empty());
-        EXPECT_EQ(fit.components.front().stop_reason,"block-recovery-exhausted");
-        for (const auto * atom:loaded->GetSelectedAtoms())
+        SCOPED_TRACE(failure.tag);
+        const bool qualified=failure.outcome==rgc::CommandOutcome::JointDownstreamUnavailable;
+        const auto check_persistence=[&](const std::filesystem::path & database,const std::string & key) {
+            SCOPED_TRACE(key);
+            rg::DataRepository repository{database};
+            const auto loaded=repository.LoadModel(key);
+            ASSERT_NE(loaded,nullptr);
+            const auto snapshot=loaded->GetAnalysisView().GetJointResult();
+            ASSERT_TRUE(snapshot);
+            ASSERT_TRUE(snapshot->initialization.valid);
+            EXPECT_EQ(rg::IsQualifiedJointAnalysisResult(*snapshot),qualified);
+            if(qualified)
+            {
+                EXPECT_TRUE(rg::HasUnavailableJointHaloMedianReconstruction(*snapshot));
+                EXPECT_FALSE(snapshot->halo_median_reconstruction);
+            }
+            else
+            {
+                ASSERT_FALSE(snapshot->components.empty());
+                EXPECT_EQ(snapshot->components.front().stop_reason,"block-recovery-exhausted");
+            }
+            for(const auto * atom:loaded->GetSelectedAtoms())
+            {
+                const auto view=rg::AtomLocalPotentialView::For(*atom);
+                EXPECT_EQ(view.GetStageEstimate(rg::FittingStage::Second).point.has_value(),qualified);
+                EXPECT_FALSE(view.GetPostFitPeeling());
+                EXPECT_FALSE(view.GetPostJointLocalResult());
+                EXPECT_FALSE(view.GetGroupMemberResult());
+            }
+        };
+
+        request.saved_key_tag=failure.tag;
+        request.database_path=directory.path()/(request.saved_key_tag+".sqlite");
         {
-            const auto view=rg::AtomLocalPotentialView::For(*atom);
-            EXPECT_FALSE(view.GetStageEstimate(rg::FittingStage::Second).point);
-            EXPECT_FALSE(view.GetPostFitPeeling());
-            EXPECT_FALSE(view.GetPostJointLocalResult());
-            EXPECT_FALSE(view.GetGroupMemberResult());
+            ScopedJointPostprocessingSnapshotHook hook{failure.hook};
+            const auto result=rgc::RunCommand(request);
+            ASSERT_TRUE(result.succeeded);
+            EXPECT_EQ(result.outcome,failure.outcome);
         }
-    }
+        check_persistence(request.database_path,request.saved_key_tag);
 
-    request.database_path=directory.path()/"search-failure-cli.sqlite";
-    request.saved_key_tag="search-failure-cli";
-    int cli_status{};
-    {
-        ScopedJointPostprocessingSnapshotHook hook{&InjectJointSearchFailure};
-        cli_status=RunCli({"RHBM-GEM","potential_analysis","--estimator","joint-components",
-            "--model",model_path.string(),"--map",map_path.string(),
-            "--database",request.database_path.string(),"--save-key",request.saved_key_tag,
-            "--select-chain","A","--verbose","0"});
-    }
-    EXPECT_EQ(cli_status,3);
-    ASSERT_TRUE(rg::DataRepository{request.database_path}.LoadModel(request.saved_key_tag));
-
-    request.database_path=directory.path()/"no-donor.sqlite";
-    request.saved_key_tag="no-donor";
-    {
-        ScopedJointPostprocessingSnapshotHook hook{&InjectJointNoDonors};
-        const auto result=rgc::RunCommand(request);
-        ASSERT_TRUE(result.succeeded);
-        EXPECT_EQ(result.outcome,rgc::CommandOutcome::JointDownstreamUnavailable);
-    }
-    {
-        rg::DataRepository repository{request.database_path};
-        const auto loaded=repository.LoadModel(request.saved_key_tag);
-        ASSERT_NE(loaded,nullptr);
-        const auto & fit=*loaded->GetAnalysisView().GetJointResult();
-        EXPECT_TRUE(rg::IsQualifiedJointAnalysisResult(fit));
-        EXPECT_TRUE(rg::HasUnavailableJointHaloMedianReconstruction(fit));
-        EXPECT_FALSE(fit.halo_median_reconstruction);
-        for (const auto * atom:loaded->GetSelectedAtoms())
+        request.saved_key_tag+="-cli";
+        request.database_path=directory.path()/(request.saved_key_tag+".sqlite");
         {
-            const auto view=rg::AtomLocalPotentialView::For(*atom);
-            EXPECT_TRUE(view.GetStageEstimate(rg::FittingStage::Second).point);
-            EXPECT_FALSE(view.GetPostFitPeeling());
-            EXPECT_FALSE(view.GetPostJointLocalResult());
-            EXPECT_FALSE(view.GetGroupMemberResult());
+            ScopedJointPostprocessingSnapshotHook hook{failure.hook};
+            EXPECT_EQ(RunCli({"RHBM-GEM","potential_analysis","--estimator","joint-components",
+                "--model",model_path.string(),"--map",map_path.string(),
+                "--database",request.database_path.string(),"--save-key",request.saved_key_tag,
+                "--select-chain","A","--verbose","0"}),failure.cli_exit);
         }
+        check_persistence(request.database_path,request.saved_key_tag);
     }
-
-    request.database_path=directory.path()/"no-donor-cli.sqlite";
-    request.saved_key_tag="no-donor-cli";
-    {
-        ScopedJointPostprocessingSnapshotHook hook{&InjectJointNoDonors};
-        cli_status=RunCli({"RHBM-GEM","potential_analysis","--estimator","joint-components",
-            "--model",model_path.string(),"--map",map_path.string(),
-            "--database",request.database_path.string(),"--save-key",request.saved_key_tag,
-            "--select-chain","A","--verbose","0"});
-    }
-    EXPECT_EQ(cli_status,4);
-    ASSERT_TRUE(rg::DataRepository{request.database_path}.LoadModel(request.saved_key_tag));
 }
 
 TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeedsPostprocessing)
