@@ -35,9 +35,10 @@ Local feasibility and `||u - P(u - g)||∞ ≤ 1e-10` are required, where `P`
 clips amplitude coordinates at zero and leaves charge coordinates alone.
 When the certificate is available but fails, the solver may refine on the
 same normalized face with full-rank pivoted dense QR and up to eight
-corrections. It adopts a refined point only if it passes the certificate
-and does not increase the original loss. A remaining failure rejects the
-profile evaluation even under the practical global convergence policy.
+corrections. The dense face is capped at one million elements. The solver
+adopts a refined point only if it passes the certificate and does not
+increase the original loss. A remaining failure rejects the profile
+evaluation even under the practical global convergence policy.
 
 ## Variable projection and the profile derivative
 
@@ -86,16 +87,19 @@ returned damping for predicted reduction, both for the actual feasible step.
 It proposes acceptance at ratio `≥ 1e-4` and updates the accepted width and
 residual norm only after the adapter trusts the proposal. An untrusted trial
 shrinks the radius by four and multiplies the damping seed by four while retry
-budget remains. A trusted low-ratio trial follows the ratio-based trust update
-instead. The adapter publishes acceptance separately from its trial cache.
+budget remains. For trusted trials, a ratio at or below 0.25 shrinks the
+radius and increases damping. A ratio at or above 0.75, or zero damping with
+a ratio above 0.25, sets the radius to twice the scaled step norm and halves
+damping. The adapter publishes acceptance separately from its trial cache.
 The block caller still performs global candidate acceptance.
 
 The driver reports reduction, step, stationarity, budget, precision or problem
-stops. The adapter records JCE reasons such as invalid inner solve, replay
-failure or `bounded-subproblem:<reason>`. Production uses `ftol=1e-14`,
-`xtol=1e-12`, `gtol=1e-12`, a 200-profile-evaluation budget and at most one
-accepted width update per block visit, after the separately checked initial
-profile. A tiny physical log-width step requires accepted bound-aware
+stops. The adapter records JCE failures such as an invalid inner solve or
+untrusted replay. The driver can also stop with a detailed cause, including
+`bounded-subproblem:<reason>` from the inner solver. Production uses
+`ftol=1e-14`, `xtol=1e-12`, `gtol=1e-12`, a 200-profile-evaluation budget
+and at most one accepted width update per block visit, after the separately
+checked initial profile. A tiny physical log-width step requires accepted bound-aware
 stationarity. Local stopping criteria control the iteration. Component
 convergence requires the global checks in the runtime guide.
 
@@ -118,8 +122,9 @@ Jacobian norm and gradient. Working bounds, frozen directions and geometric
 equality therefore describe different sets. The solver verifies feasibility and
 damped KKT in the original step coordinates. It tries zero damping first,
 then brackets and bisects a feasible damping when needed, including recovery
-from a deficient undamped free subproblem. A failed bounded solve reports its
-reason without replacing accepted state.
+from a deficient undamped free subproblem. The trust feasibility allowance is
+relative to the radius (`64 * epsilon * Delta`). A failed bounded solve
+reports its reason without replacing accepted state.
 
 ## Compact spectra and Local Conditioning
 
@@ -136,7 +141,7 @@ Jacobian where available. It reports rank, sensitivity near the rank threshold,
 and normalized spectra. Full-rank spectra warn when threshold-sensitive or
 `condition * epsilon ≥ 1e-8`. Active amplitude faces retain their separate
 classification. These read-only diagnostics assess local numerical geometry.
-They supply evidence to [Target Point Quality](joint-stage-integration.md)
+They supply evidence to [Target Point Quality](joint-stage-integration.md#target-point-quality)
 and carry no global rank, covariance or statistical precision certificate.
 
 See [ConstrainedAcLeastSquares.cpp](../../src/core/detail/joint_component/ConstrainedAcLeastSquares.cpp),

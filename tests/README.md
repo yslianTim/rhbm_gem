@@ -149,8 +149,8 @@ The 24 `EstimatorSecondStageDefenseTest` cases and two
 these suite filters: each would repeat the same tests. Acceptance and rollback
 checks stay with the production behavior they exercise.
 
-Use `tests/support/SecondStageTestSupport.hpp/.cpp` and its `second_stage_test`
-namespace for fixture builders and assertions shared across these files. Keep
+Use `tests/support/SecondStageTestSupport.hpp` and
+`tests/support/SecondStageTestSupport.cpp` with the `second_stage_test` namespace for fixture builders and assertions shared across these files. Keep
 single-file helpers in that file's anonymous namespace and support-only helpers
 private to the support implementation. Build fresh model/solver state per case;
 do not share mutable fixtures. Use `detail` for `rhbm_gem::core::detail` throughout

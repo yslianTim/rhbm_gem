@@ -29,14 +29,15 @@ Use the narrowest boundary that matches the change.
 If you add or change reusable typed operations:
 
 - the relevant shared helper or domain file under `/src/data/object/` or `/src/utils/domain/`
-- `/tests/data/DataObjectRuntimeBehavior_test.cpp`
+- `/tests/data/DataObjectModelAnalysis_test.cpp`
+- `/tests/data/DataObjectMapBehavior_test.cpp`
 - related command tests under `/tests/core/`
 - docs when the contract changes
 
 If you change file I/O behavior:
 
 - `/include/rhbm_gem/data/io/ModelMapFileIO.hpp`
-- `/src/data/io/file/ModelMapFileIO.cpp`
+- `/src/data/io/ModelMapFileIO.cpp`
 - format-specific codec files under `/src/data/io/file/`
 - `/tests/data/DataObjectFileIO_test.cpp`
 - `/tests/data/DataObjectImportRegression_test.cpp` when parser edge cases change
@@ -121,11 +122,11 @@ Add or update tests for:
 
 Common suites:
 
-- `/tests/data/DataPublicSurface_test.cpp`
 - `/tests/data/DataObjectFileIO_test.cpp`
 - `/tests/data/DataObjectImportRegression_test.cpp`
-- `/tests/data/DataObjectRuntimeBehavior_test.cpp`
-- `/tests/data/DataObjectDispatchAndIngestion_test.cpp`
+- `/tests/data/DataObjectModelAnalysis_test.cpp`
+- `/tests/data/DataObjectMapBehavior_test.cpp`
+- `/tests/data/DataObjectAssemblySpatialQuery_test.cpp`
 - `/tests/data/DataObjectPersistence_test.cpp`
 - `/tests/data/DataObjectSchemaLifecycle_test.cpp`
 - `/tests/data/DataObjectSchemaValidation_test.cpp`

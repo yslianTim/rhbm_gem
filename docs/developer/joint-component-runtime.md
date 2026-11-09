@@ -68,7 +68,7 @@ remain unavailable. There is no assembly-wide A/C reprofile.
 ## Initialization and global width bound
 
 The workflow obtains Target width seeds through
-[Joint FirstStage](joint-stage-integration.md).
+[Joint FirstStage](joint-stage-integration.md#firststage-initialization).
 Calibration uses finite positive native-qualified or recovered-qualified
 Target MDPDE widths, excluding median fallbacks and initialization exceptions.
 It requires at least 20 qualified donors and at least 95% Target coverage.
@@ -121,7 +121,9 @@ fitting rows. A/C uses the projected-gradient formula in
 component-wide design norms and the parent scale. Width uses
 `||eta - min(eta - dF/deta, eta_max)||∞` with feasibility and bound evidence.
 At an active upper face a nonpositive gradient satisfies the one-sided
-condition. The raw gradient remains a diagnostic. Production `practical-v2`
+condition. The bound check uses `64 * epsilon * max(1, |eta_max|)` for
+feasibility and face classification, and reports multiplier and complementarity
+evidence. The raw gradient remains a diagnostic. Production `practical-v2`
 requires A/C KKT ≤ `1e-7` and projected log-width KKT ≤ `1e-9`.
 The `strict-v2` thresholds are `1e-10` and `1e-12`, respectively.
 Confirmation needs at least two completed sweeps and a confirming sweep
@@ -138,11 +140,14 @@ Budget exhaustion can report `block-sweep-budget`,
 Endpoint Verification evaluates the accepted coefficients and widths.
 Independent Replay separately traverses recorded supports to verify
 prediction, residual, objective, feasibility and both KKT conditions.
-It checks A/C KKT agreement within `1e-13` and each log-width gradient
-within `1e-13 + 2e-9 |primary gradient|`. Agreement and stationarity are
-separate requirements. When stationarity remains confirmed, repeat attempts
-are spaced ten sweeps apart. A terminal sweep can receive a final check if
-recovery is clear and the sweep has not already been certified. The assembled endpoint is verified again on the
+It checks rowwise prediction and residual within
+`2e-12 + 2e-13 |primary prediction|`, the unnormalized half-RSS within
+`1e-12 + 2e-12 |primary half-RSS|`, A/C KKT agreement within `1e-13`,
+and each log-width gradient within `1e-13 + 2e-9 |primary gradient|`.
+Agreement and stationarity are separate requirements. When stationarity
+remains confirmed, repeat attempts are spaced ten sweeps apart. A terminal
+sweep can receive a final check if recovery is clear and the sweep has not
+already been certified. The assembled endpoint is verified again on the
 parent Fitting Domain. Local LM termination, a budget stop or conditioning
 diagnostics alone cannot qualify an endpoint.
 
@@ -165,8 +170,8 @@ state integrity, qualified component and assembled evidence, consistent
 mappings, valid Target parameters and available fitting rows. The captured
 snapshot maps identities and availability back to the Original Domain.
 An incomplete or unqualified endpoint can retain candidate diagnostics and
-explicit reasons. Publication and [Point Quality](joint-stage-integration.md)
-use separate rules.
+explicit reasons. Publication and
+[Point Quality](joint-stage-integration.md#target-point-quality) use separate rules.
 
 ## Implementation references
 
