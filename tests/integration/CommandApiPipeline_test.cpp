@@ -6,7 +6,6 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
-#include <optional>
 #include <string>
 #include <stdexcept>
 #include <vector>
@@ -66,7 +65,7 @@ int RunCli(std::vector<std::string> arguments)
     return rgc::RunCommandCLI(static_cast<int>(argv.size()), argv.data());
 }
 
-void InjectJointSearchFailure(rgc::JointFitResult & fit)
+void InjectJointSearchFailure(rg::JointAnalysisResult & fit)
 {
     fit.search_completed=false;
     for (auto & component:fit.components)
@@ -76,7 +75,7 @@ void InjectJointSearchFailure(rgc::JointFitResult & fit)
     }
 }
 
-void InjectJointNoDonors(rgc::JointFitResult & fit)
+void InjectJointNoDonors(rg::JointAnalysisResult & fit)
 {
     if (!fit.target_evidence) throw std::runtime_error("Test fixture lacks target evidence.");
     for (auto & point:fit.target_evidence->point_atoms) point.local_conditioning="Warning";
@@ -84,13 +83,6 @@ void InjectJointNoDonors(rgc::JointFitResult & fit)
         if (component.target_evidence)
             for (auto & point:component.target_evidence->point_atoms)
                 point.local_conditioning="Warning";
-}
-
-std::optional<rg::JointAnalysisResult> pre_postprocessing_joint_result;
-
-void CapturePrePostprocessingJointResult(rgc::JointFitResult & fit)
-{
-    pre_postprocessing_joint_result=rgc::CaptureJointAnalysisResult(fit);
 }
 
 void ExpectJointNumericalResultPreserved(
@@ -101,18 +93,21 @@ void ExpectJointNumericalResultPreserved(
     comparable_before.metadata=after.metadata;
     comparable_before.costs=after.costs;
     comparable_before.halo_median_reconstruction=after.halo_median_reconstruction;
+    ASSERT_EQ(comparable_before.components.size(),after.components.size());
+    for(std::size_t i=0;i<after.components.size();++i)
+        comparable_before.components[i].local_conditioning_seconds=after.components[i].local_conditioning_seconds;
     EXPECT_EQ(rg::joint_result_io::Encode(comparable_before),rg::joint_result_io::Encode(after));
 }
 
-struct ScopedJointWorkflowFitHook
+struct ScopedJointPostprocessingSnapshotHook
 {
-    explicit ScopedJointWorkflowFitHook(rgc::detail::JointWorkflowFitHook hook)
+    explicit ScopedJointPostprocessingSnapshotHook(rgc::detail::JointPostprocessingSnapshotHook hook)
     {
-        rgc::detail::JointWorkflowFitHookForTesting()=hook;
+        rgc::detail::JointPostprocessingSnapshotHookForTesting()=hook;
     }
-    ~ScopedJointWorkflowFitHook()
+    ~ScopedJointPostprocessingSnapshotHook()
     {
-        rgc::detail::JointWorkflowFitHookForTesting()=nullptr;
+        rgc::detail::JointPostprocessingSnapshotHookForTesting()=nullptr;
     }
 };
 
@@ -619,7 +614,7 @@ TEST(CommandApiPipelineTest, JointFailureAndUnavailableOutcomesPersistThroughApi
     request.database_path=directory.path()/"search-failure.sqlite";
     request.saved_key_tag="search-failure";
     {
-        ScopedJointWorkflowFitHook hook{&InjectJointSearchFailure};
+        ScopedJointPostprocessingSnapshotHook hook{&InjectJointSearchFailure};
         const auto result=rgc::RunCommand(request);
         ASSERT_TRUE(result.succeeded);
         EXPECT_EQ(result.outcome,rgc::CommandOutcome::JointNotConverged);
@@ -647,7 +642,7 @@ TEST(CommandApiPipelineTest, JointFailureAndUnavailableOutcomesPersistThroughApi
     request.saved_key_tag="search-failure-cli";
     int cli_status{};
     {
-        ScopedJointWorkflowFitHook hook{&InjectJointSearchFailure};
+        ScopedJointPostprocessingSnapshotHook hook{&InjectJointSearchFailure};
         cli_status=RunCli({"RHBM-GEM","potential_analysis","--estimator","joint-components",
             "--model",model_path.string(),"--map",map_path.string(),
             "--database",request.database_path.string(),"--save-key",request.saved_key_tag,
@@ -659,7 +654,7 @@ TEST(CommandApiPipelineTest, JointFailureAndUnavailableOutcomesPersistThroughApi
     request.database_path=directory.path()/"no-donor.sqlite";
     request.saved_key_tag="no-donor";
     {
-        ScopedJointWorkflowFitHook hook{&InjectJointNoDonors};
+        ScopedJointPostprocessingSnapshotHook hook{&InjectJointNoDonors};
         const auto result=rgc::RunCommand(request);
         ASSERT_TRUE(result.succeeded);
         EXPECT_EQ(result.outcome,rgc::CommandOutcome::JointDownstreamUnavailable);
@@ -685,7 +680,7 @@ TEST(CommandApiPipelineTest, JointFailureAndUnavailableOutcomesPersistThroughApi
     request.database_path=directory.path()/"no-donor-cli.sqlite";
     request.saved_key_tag="no-donor-cli";
     {
-        ScopedJointWorkflowFitHook hook{&InjectJointNoDonors};
+        ScopedJointPostprocessingSnapshotHook hook{&InjectJointNoDonors};
         cli_status=RunCli({"RHBM-GEM","potential_analysis","--estimator","joint-components",
             "--model",model_path.string(),"--map",map_path.string(),
             "--database",request.database_path.string(),"--save-key",request.saved_key_tag,
@@ -736,27 +731,29 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
 
     const auto database_path=directory.path()/"bounded.sqlite";
     constexpr const char * key="bounded-joint";
-    int cli_status{};
-    pre_postprocessing_joint_result.reset();
-    std::string joint_log;
-    {
-        ScopedJointWorkflowFitHook hook{&CapturePrePostprocessingJointResult};
-        testing::internal::CaptureStdout();
-        cli_status=RunCli({"RHBM-GEM","potential_analysis","--estimator","joint-components",
-            "--model",model_path.string(),"--map",map_path.string(),
-            "--database",database_path.string(),"--save-key",key,
-            "--select-chain","A","--verbose","4"});
-        joint_log=testing::internal::GetCapturedStdout();
-    }
+    testing::internal::CaptureStdout();
+    const auto cli_status=RunCli({"RHBM-GEM","potential_analysis","--estimator","joint-components",
+        "--model",model_path.string(),"--map",map_path.string(),
+        "--database",database_path.string(),"--save-key",key,
+        "--select-chain","A","--verbose","4"});
+    const auto joint_log=testing::internal::GetCapturedStdout();
     ASSERT_EQ(cli_status,0) << joint_log;
-    ASSERT_TRUE(pre_postprocessing_joint_result);
     EXPECT_NE(joint_log.find("Original-grid Peeling workspace="),std::string::npos);
 
     rg::DataRepository repository{database_path};
     const auto loaded=repository.LoadModel(key);
     ASSERT_NE(loaded,nullptr);
     const auto & stored=*loaded->GetAnalysisView().GetJointResult();
-    ExpectJointNumericalResultPreserved(*pre_postprocessing_joint_result,stored);
+    auto reference_map=rg::ReadMap(map_path);
+    auto reference_model=rg::ReadModel(model_path);
+    ASSERT_NE(reference_map,nullptr);
+    ASSERT_NE(reference_model,nullptr);
+    ASSERT_TRUE(reference_map->MapValueArrayNormalization());
+    reference_model->SelectAtoms([](const auto & atom) {return atom.GetChainID()=="A";});
+    const auto reference=rgc::CaptureJointAnalysisResult(
+        rgc::EstimateJointComponents(*reference_map,*reference_model));
+    ASSERT_TRUE(rg::IsQualifiedJointAnalysisResult(reference));
+    ExpectJointNumericalResultPreserved(reference,stored);
     ASSERT_TRUE(rg::IsQualifiedJointAnalysisResult(stored));
     ASSERT_TRUE(stored.selection_domain);
     EXPECT_EQ(stored.selection_domain->contributor_policy,"pure-halo-support-exclusion-v1");

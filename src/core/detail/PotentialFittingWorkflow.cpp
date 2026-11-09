@@ -176,9 +176,9 @@ void LogJointWarning(const std::string & message)
 }
 
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-JointWorkflowFitHook & JointWorkflowFitHookForTesting()
+JointPostprocessingSnapshotHook & JointPostprocessingSnapshotHookForTesting()
 {
-    static thread_local JointWorkflowFitHook hook{};
+    static thread_local JointPostprocessingSnapshotHook hook{};
     return hook;
 }
 #endif
@@ -253,13 +253,13 @@ void RunJointComponentWorkflow(
     }
     auto snapshot = [&] {
         auto fit = FitJointComponentsInitializedWithProgress(problem, initialization, observer);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        if (const auto hook = JointWorkflowFitHookForTesting()) hook(fit);
-#endif
         fit.costs.construction_seconds = construction_seconds;
         fit.costs.initialization_seconds = initialization_seconds;
         return CaptureJointAnalysisResult(std::move(fit));
     }();
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    if (const auto hook = JointPostprocessingSnapshotHookForTesting()) hook(snapshot);
+#endif
     RunJointPostprocessing(map, model, problem, std::move(snapshot), options, postprocessing_metrics);
 }
 

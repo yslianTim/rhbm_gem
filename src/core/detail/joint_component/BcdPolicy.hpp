@@ -3,9 +3,6 @@
 #include <cstddef>
 #include <optional>
 #include <string>
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-#include <functional>
-#endif
 
 namespace rhbm_gem::core::joint_component {
 
@@ -25,8 +22,8 @@ struct BcdExecutionPolicy
     std::string component_id;
     std::optional<double> eta_upper_bound;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    // Reuse production orchestration/assembly with a scoped test search policy.
-    std::function<void(BcdSearchPolicy &)> configure_for_testing;
+    // Borrowed for the synchronous component/assembly regression tests.
+    const BcdSearchPolicy * search_policy_for_testing{};
 #endif
 };
 

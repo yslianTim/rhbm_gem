@@ -883,35 +883,36 @@ TEST(PureHaloSupportExclusionTest, RunsPureWorkflowWithoutHalos)
 TEST(PureHaloSupportExclusionTest, ExtendedSearchQualifiesAssemblyAndFeedsEveryDownstreamStage)
 {
     auto fixture=WorkflowFixture(true,true);
-    struct ResetHook
-    {
-        ~ResetHook() {core::detail::JointWorkflowFitHookForTesting()=nullptr;}
-    } reset_hook;
-    core::detail::JointWorkflowFitHookForTesting()=[](core::JointFitResult & fit) {
-        namespace n=core::joint_component;
-        ASSERT_TRUE(fit.problem);
-        auto initialization=fit.initialization;
-        std::fill(initialization.tau.begin(),initialization.tau.end(),1.5);
-        const auto calibration=n::CalibrateGlobalWidth(initialization,"extension-workflow-test");
-        const auto bounded=n::MakeBoundedInitialization(initialization,calibration);
-        ASSERT_TRUE(bounded.available)<<bounded.reason;
-        n::BcdExecutionPolicy policy; policy.eta_upper_bound=calibration.eta_max4;
-        policy.configure_for_testing=[](auto & local) {
-            local.core_atoms=1; local.nominal_sweeps=35; local.maximum_sweeps=100;
-        };
-        auto extended=n::FitBcdComponents(*fit.problem,bounded.tau_values,policy);
-        extended.initialization=std::move(initialization);
-        for(const auto & check:fit.evidence)
-            if(check.name=="global-width-calibration" || check.name=="qualified-first-stage-donor-coverage")
-                extended.evidence.push_back(check);
-        extended.evidence.push_back({"bounded-initialization-projection",JointCheckStatus::Passed,
-            JointEvidenceScope::AssembledGlobal,static_cast<double>(bounded.projection_count),{},"test-start-projection"});
-        fit=std::move(extended);
-    };
+    namespace n=core::joint_component;
     FitOptions options; options.estimator=PotentialEstimator::JOINT_COMPONENTS;
     options.quiet_mode=true; options.thread_size=1;
+    fixture.model.EditAnalysis().InitializeFromSelection();
+    const auto fit=core::EstimateJointComponents(fixture.map,fixture.model);
+    ASSERT_TRUE(fit.problem);
+    ASSERT_TRUE(fit.initialization.valid)<<fit.initialization.reason;
+
+    auto initialization=fit.initialization;
+    std::fill(initialization.tau.begin(),initialization.tau.end(),1.5);
+    const auto calibration=n::CalibrateGlobalWidth(initialization,"extension-workflow-test");
+    const auto bounded=n::MakeBoundedInitialization(initialization,calibration);
+    ASSERT_TRUE(bounded.available)<<bounded.reason;
+    n::BcdExecutionPolicy policy; policy.eta_upper_bound=calibration.eta_max4;
+    n::BcdSearchPolicy search;
+    search.core_atoms=1; search.nominal_sweeps=35; search.maximum_sweeps=100;
+    policy.search_policy_for_testing=&search;
+    auto extended=n::FitBcdComponents(*fit.problem,bounded.tau_values,policy);
+    extended.initialization=std::move(initialization);
+    for(const auto & check:fit.evidence)
+        if(check.name=="global-width-calibration" || check.name=="qualified-first-stage-donor-coverage")
+            extended.evidence.push_back(check);
+    extended.evidence.push_back({"bounded-initialization-projection",JointCheckStatus::Passed,
+        JointEvidenceScope::AssembledGlobal,static_cast<double>(bounded.projection_count),{},"test-start-projection"});
+
+    auto snapshot=core::CaptureJointAnalysisResult(std::move(extended));
+    ASSERT_TRUE(IsQualifiedJointAnalysisResult(snapshot));
     core::detail::JointPostprocessingMetrics metrics;
-    ASSERT_NO_THROW(core::detail::RunJointComponentWorkflow(fixture.map,fixture.model,options,&metrics));
+    ASSERT_NO_THROW(core::detail::RunJointPostprocessing(
+        fixture.map,fixture.model,*fit.problem,std::move(snapshot),options,metrics));
     const auto result=fixture.model.GetAnalysisView().GetJointResult();
     ASSERT_TRUE(result);
     std::size_t maximum_sweeps{};

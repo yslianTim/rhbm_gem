@@ -323,18 +323,18 @@ RecoveryAssemblyRun RunRecoveryAssembly(bool inject,bool persistent=false,std::s
         input.observations.size(),input.observations.size(),0,0,0,0};
     const core::JointProblem problem(std::move(input));
     n::BcdExecutionPolicy policy; policy.eta_upper_bound=std::log(2.2);
-    policy.configure_for_testing=[&](n::BcdSearchPolicy & local) {
-        local.core_atoms=1; local.maximum_sweeps=sweeps;
-        local.force_width_failure_for_testing=[&](std::size_t block,std::size_t sweep) {
-            if(inject && block==0 && (persistent || sweep==0)) {++out.injected; return true;}
-            return false;
-        };
-        if(corrupt_candidate) local.candidate_fault_for_testing=[](std::size_t sweep,std::size_t block,
-            const n::BlockCoordinateState &) {
-            return sweep==3 && block==1 ? n::BcdCandidateFaultForTesting::NaNParameter :
-                n::BcdCandidateFaultForTesting::None;
-        };
+    n::BcdSearchPolicy search;
+    search.core_atoms=1; search.maximum_sweeps=sweeps; search.nominal_sweeps=n::ProductionBcdNominalSweeps;
+    search.force_width_failure_for_testing=[&](std::size_t block,std::size_t sweep) {
+        if(inject && block==0 && (persistent || sweep==0)) {++out.injected; return true;}
+        return false;
     };
+    if(corrupt_candidate) search.candidate_fault_for_testing=[](std::size_t sweep,std::size_t block,
+        const n::BlockCoordinateState &) {
+        return sweep==3 && block==1 ? n::BcdCandidateFaultForTesting::NaNParameter :
+            n::BcdCandidateFaultForTesting::None;
+    };
+    policy.search_policy_for_testing=&search;
     out.fit=n::FitBcdComponents(problem,{.55,.55},policy,[&](const auto & event) {
         if(event.phase==n::JointProgressPhase::CertificationStarted && event.bcd)
             out.projected_width_kkt=event.bcd->projected_width_kkt;
@@ -503,15 +503,15 @@ TEST(JointComponentRuntimeTest, ComponentValidationProvidesReasonWithoutEntering
         if(variant==7) prepared.local_to_parent_atoms[0]=widths.size();
         // Empty layouts retain precedence over invalid widths.
         if(variant<2) widths(0)=0;
-        bool configured{};
         n::BcdExecutionPolicy policy;
-        policy.configure_for_testing=[&](auto &) {configured=true;};
         std::vector<n::JointProgressEvent> events;
         const n::JointProgressComponent component{1,1,"component",3,prepared.local_to_parent_rows.size()};
         const auto result=n::SolveBcdComponent(prepared,widths,data.context,policy,
             [&](const auto & event) {events.push_back(event);},&component);
         EXPECT_EQ(result.search.reason,variant<2 ? "unobserved-full-parameters" : "invalid-initial-widths");
-        EXPECT_FALSE(configured); EXPECT_TRUE(events.empty());
+        EXPECT_TRUE(events.empty());
+        EXPECT_EQ(result.search.total_block_solves,0u);
+        EXPECT_EQ(result.search.certification_attempts,0u);
         EXPECT_FALSE(result.succeeded); EXPECT_FALSE(result.search.search_converged);
         EXPECT_FALSE(result.search.accepted_state_integrity); EXPECT_FALSE(result.search.certification);
         EXPECT_EQ(result.search.sweep_count,0u); EXPECT_EQ(result.search.state.eta.size(),0);
@@ -532,9 +532,7 @@ TEST(JointComponentRuntimeTest, ComponentViewPreflightPreservesReasonAndMemoryDi
         if(variant==1) mappings->atom_to_local[0]=-1;
         // Repeated valid selectors exercise the estimate without allocating the rejected domain.
         if(variant==2) layout.full_atoms.assign(100000,0);
-        bool configured{};
         n::BcdExecutionPolicy policy;
-        policy.configure_for_testing=[&](auto &) {configured=true;};
         std::vector<n::JointProgressEvent> events;
         const n::JointProgressComponent component{1,1,view.id,view.atoms.size(),view.rows.size()};
         const auto result=n::SolveBcdComponentView(view,layout,n::Vector::Constant(3,.55),
@@ -542,7 +540,9 @@ TEST(JointComponentRuntimeTest, ComponentViewPreflightPreservesReasonAndMemoryDi
         EXPECT_EQ(result.search.reason,variant==0 ? "block-invalid-partition" : variant==1 ?
             "resource-limit:bcd-preparation:size-overflow" :
             "resource-limit:bcd-preparation:estimated-peak-exceeds-budget");
-        EXPECT_FALSE(configured); EXPECT_TRUE(events.empty());
+        EXPECT_TRUE(events.empty());
+        EXPECT_EQ(result.search.total_block_solves,0u);
+        EXPECT_EQ(result.search.certification_attempts,0u);
         EXPECT_FALSE(result.succeeded); EXPECT_FALSE(result.search.search_converged);
         EXPECT_FALSE(result.search.accepted_state_integrity); EXPECT_FALSE(result.search.certification);
         EXPECT_EQ(result.search.sweep_count,0u); EXPECT_EQ(result.search.state.eta.size(),0);
@@ -602,19 +602,21 @@ TEST(JointComponentRuntimeTest, CanonicalReasonReachesComponentProgressAndCaptur
     {
         SCOPED_TRACE(variant);
         n::BcdExecutionPolicy policy; policy.eta_upper_bound=std::log(2.2);
-        policy.configure_for_testing=[&](auto & local) {
-            if(variant==1 || variant==2) {local.maximum_sweeps=1; local.nominal_sweeps=0;}
-            if(variant==2 || variant==3)
-            {
-                local.core_atoms=1;
-                local.force_width_failure_for_testing=[](auto,auto) {return true;};
-            }
-            if(variant==4) local.perturb_sweep_replay_objective_for_testing=true;
-            if(variant==5) local.candidate_fault_for_testing=[](auto,auto,const auto &) {
-                return n::BcdCandidateFaultForTesting::NaNParameter;
-            };
-            if(variant==6) local.global_state_memory_budget_for_testing=1;
+        n::BcdSearchPolicy search;
+        search.maximum_sweeps=n::ProductionBcdMaximumSweeps;
+        search.nominal_sweeps=n::ProductionBcdNominalSweeps;
+        if(variant==1 || variant==2) {search.maximum_sweeps=1; search.nominal_sweeps=0;}
+        if(variant==2 || variant==3)
+        {
+            search.core_atoms=1;
+            search.force_width_failure_for_testing=[](auto,auto) {return true;};
+        }
+        if(variant==4) search.perturb_sweep_replay_objective_for_testing=true;
+        if(variant==5) search.candidate_fault_for_testing=[](auto,auto,const auto &) {
+            return n::BcdCandidateFaultForTesting::NaNParameter;
         };
+        if(variant==6) search.global_state_memory_budget_for_testing=1;
+        if(variant!=0) policy.search_policy_for_testing=&search;
         std::vector<n::JointProgressEvent> events;
         const n::JointProgressComponent component{1,1,data.partition.components.front().id,3,
             prepared.local_to_parent_rows.size()};

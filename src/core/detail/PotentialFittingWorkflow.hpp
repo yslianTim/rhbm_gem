@@ -5,14 +5,14 @@
 
 #include <vector>
 
-namespace rhbm_gem::core { struct JointFitResult; }
 namespace rhbm_gem { struct JointAnalysisResult; }
 
 namespace rhbm_gem::core::detail {
 
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-using JointWorkflowFitHook = void (*)(JointFitResult &);
-JointWorkflowFitHook & JointWorkflowFitHookForTesting();
+// Exercises command outcomes with a qualified or rejected postprocessing snapshot.
+using JointPostprocessingSnapshotHook = void (*)(JointAnalysisResult &);
+JointPostprocessingSnapshotHook & JointPostprocessingSnapshotHookForTesting();
 #endif
 
 PostJointLocalResult FitPostJointLocalTarget(

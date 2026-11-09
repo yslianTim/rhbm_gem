@@ -1179,13 +1179,17 @@ BcdComponentResult SolveBcdComponent(
     policy.core_atoms=ProductionBcdCoreAtoms;
     policy.maximum_sweeps=ProductionBcdMaximumSweeps;
     policy.nominal_sweeps=ProductionBcdNominalSweeps;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    if(const auto * test_policy=production_policy.search_policy_for_testing)
+    {
+        policy=*test_policy;
+        policy.production_progress={};
+    }
+#endif
     policy.convergence_criteria=PracticalJointConvergenceCriteria;
     policy.component_index=production_policy.component_index;
     policy.component_id=production_policy.component_id;
     policy.eta_upper_bound=production_policy.eta_upper_bound;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    if(production_policy.configure_for_testing) production_policy.configure_for_testing(policy);
-#endif
     std::optional<JointBcdProgress> last_bcd_progress;
     if(progress_component && observer)
     {

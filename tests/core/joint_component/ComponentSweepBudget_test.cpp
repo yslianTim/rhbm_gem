@@ -162,13 +162,11 @@ TEST(JointComponentSweepBudgetTest, ExtensionPreservesTheOriginalPathAndQualifie
 {
     const auto problem=CoupledPair();
     n::BcdExecutionPolicy policy; policy.eta_upper_bound=std::log(2.2);
-    policy.configure_for_testing=[](auto & local) {
-        local.core_atoms=1; local.nominal_sweeps=0; local.maximum_sweeps=40;
-    };
+    n::BcdSearchPolicy search;
+    search.core_atoms=1; search.maximum_sweeps=40;
+    policy.search_policy_for_testing=&search;
     const auto fixed=n::FitBcdComponents(problem,{1.5,1.5},policy);
-    policy.configure_for_testing=[](auto & local) {
-        local.core_atoms=1; local.nominal_sweeps=30; local.maximum_sweeps=40;
-    };
+    search.nominal_sweeps=30;
     const auto adaptive=n::FitBcdComponents(problem,{1.5,1.5},policy);
     ASSERT_EQ(fixed.components.size(),1u);
     ASSERT_EQ(adaptive.components.size(),1u);
@@ -199,19 +197,17 @@ TEST(JointComponentSweepBudgetTest, UnqualifiedHardLimitAndMemoryRejectionCannot
 {
     const auto problem=CoupledPair();
     n::BcdExecutionPolicy policy; policy.eta_upper_bound=std::log(2.2);
-    policy.configure_for_testing=[](auto & local) {
-        local.core_atoms=1; local.nominal_sweeps=30; local.maximum_sweeps=31;
-    };
+    n::BcdSearchPolicy search;
+    search.core_atoms=1; search.nominal_sweeps=30; search.maximum_sweeps=31;
+    policy.search_policy_for_testing=&search;
     const auto limited=n::FitBcdComponents(problem,{1.5,1.5},policy);
     ASSERT_EQ(limited.components.size(),1u);
     EXPECT_EQ(limited.components[0].search_sweeps,31u);
     EXPECT_EQ(limited.components[0].stop_reason,"block-hard-sweep-budget");
     EXPECT_FALSE(limited.components[0].state); EXPECT_FALSE(limited.assembled_state);
     EXPECT_NE(limited.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
-    policy.configure_for_testing=[](auto & local) {
-        local.nominal_sweeps=30; local.maximum_sweeps=40;
-        local.global_state_memory_budget_for_testing=1;
-    };
+    search.core_atoms=n::ProductionBcdCoreAtoms; search.maximum_sweeps=40;
+    search.global_state_memory_budget_for_testing=1;
     const auto memory=n::FitBcdComponents(problem,{1.5,1.5},policy);
     EXPECT_EQ(memory.components[0].search_sweeps,0u);
     EXPECT_TRUE(memory.components[0].stop_reason.starts_with("resource-limit:"));
@@ -236,9 +232,9 @@ TEST(JointComponentSweepBudgetTest, MultipleComponentsExtendAndStopIndependently
         input.observations.size(),input.observations.size(),0,0,0,0};
     const rhbm_gem::core::JointProblem problem(std::move(input));
     n::BcdExecutionPolicy policy; policy.eta_upper_bound=std::log(2.2);
-    policy.configure_for_testing=[](auto & local) {
-        local.core_atoms=1; local.nominal_sweeps=30; local.maximum_sweeps=40;
-    };
+    n::BcdSearchPolicy search;
+    search.core_atoms=1; search.nominal_sweeps=30; search.maximum_sweeps=40;
+    policy.search_policy_for_testing=&search;
     const auto fit=n::FitBcdComponents(problem,{1.5,1.5,1.5},policy);
     ASSERT_EQ(fit.components.size(),2u);
     EXPECT_GT(fit.components[0].search_sweeps,30u);
