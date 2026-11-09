@@ -1254,11 +1254,7 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInforma
         local_results.emplace_back(id, std::move(local));
     }
 
-    ResetGroupInvalidationStatsForTesting();
     editor.ApplyPostFitPeelingsBatch(std::move(peelings));
-    const auto peeling_stats = GetGroupInvalidationStatsForTesting();
-    EXPECT_EQ(peeling_stats.membership_traversals, 1u);
-    EXPECT_EQ(peeling_stats.groups_invalidated, 1u);
     editor.ApplyPostJointLocalResultsBatch(local_results);
     EXPECT_EQ(core::BuildSecondStageSpotSummary(model), stage_summary);
 

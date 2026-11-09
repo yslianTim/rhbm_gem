@@ -23,14 +23,6 @@ namespace {
 constexpr double kInitialLocalAlpha{ 0.0 };
 constexpr double kInitialGroupAlpha{ 0.0 };
 
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-GroupInvalidationStats & GroupInvalidationStatsStorage()
-{
-    static thread_local GroupInvalidationStats stats;
-    return stats;
-}
-#endif
-
 LocalPotentialEntry & EnsureAtomLocalPotential(
     ModelObject & model_object,
     const AtomObject & atom_object)
@@ -62,9 +54,6 @@ bool SameUncertainty(const StageUncertainty & a, const StageUncertainty & b)
 
 void InvalidateGroup(ModelAnalysisData & data, GroupKey key)
 {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    ++GroupInvalidationStatsStorage().groups_invalidated;
-#endif
     auto & groups = data.AtomGroupEntry();
     for (const auto * atom : groups.GetMembers(key))
         if (auto * entry = data.FindAtomLocalEntry(*atom)) entry->ClearGroupMemberResult();
@@ -76,9 +65,6 @@ std::vector<GroupKey> CollectAffectedGroupKeys(ModelAnalysisData & data, const s
     auto & groups = data.AtomGroupEntry();
     std::vector<GroupKey> affected;
     affected.reserve(groups.GroupCount());
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    if (!ids.empty()) ++GroupInvalidationStatsStorage().membership_traversals;
-#endif
     if (ids.empty()) return affected;
     for (const auto key : groups.CollectGroupKeys())
         if (std::any_of(groups.GetMembers(key).begin(), groups.GetMembers(key).end(),
@@ -143,18 +129,6 @@ void InvalidateStageChange(ModelAnalysisData & data, int id,
 }
 
 } // namespace
-
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-GroupInvalidationStats GetGroupInvalidationStatsForTesting()
-{
-    return GroupInvalidationStatsStorage();
-}
-
-void ResetGroupInvalidationStatsForTesting()
-{
-    GroupInvalidationStatsStorage() = {};
-}
-#endif
 
 ModelAnalysisEditor::ModelAnalysisEditor(ModelObject & model_object) :
     m_model_object{ model_object }

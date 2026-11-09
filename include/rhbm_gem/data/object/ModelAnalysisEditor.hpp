@@ -1,6 +1,5 @@
 #pragma once
 #include <rhbm_gem/data/object/JointAnalysisResult.hpp>
-#include <cstddef>
 #include <map>
 #include <utility>
 #include <vector>
@@ -73,15 +72,5 @@ private:
     explicit ModelAnalysisEditor(ModelObject & model_object);
     friend class ModelObject;
 };
-
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-struct GroupInvalidationStats
-{
-    std::size_t membership_traversals{};
-    std::size_t groups_invalidated{};
-};
-GroupInvalidationStats GetGroupInvalidationStatsForTesting();
-void ResetGroupInvalidationStatsForTesting();
-#endif
 
 } // namespace rhbm_gem
