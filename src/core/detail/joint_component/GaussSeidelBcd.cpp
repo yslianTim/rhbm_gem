@@ -912,30 +912,17 @@ BcdSearchResult SearchBcdComponent(
                         candidate_affected_prediction.allFinite() && candidate_affected_residual.allFinite() :
                         replay_workspace.prediction.allFinite() && replay_workspace.residual.allFinite());
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            const auto observe_candidate=[&](bool accepted_candidate,bool unchanged_candidate) {
-                if(!policy.candidate_observer) return;
-                const auto evaluation_path=candidate_fast_unchanged ?
-                    BcdCandidateEvaluationPath::UnchangedFastPath : candidate_result_affected_rows_only ?
-                    BcdCandidateEvaluationPath::AffectedRowsIncremental : BcdCandidateEvaluationPath::FullReplay;
-                const auto & observed_eta=candidate_fast_unchanged ? out.state.eta : candidate_eta;
-                const auto & observed_beta=candidate_fast_unchanged ? out.state.beta : candidate_beta;
-                static const Vector empty_vector;
-                const auto & observed_affected_prediction=candidate_result_affected_rows_only ?
-                    candidate_affected_prediction : empty_vector;
-                const auto & observed_affected_residual=candidate_result_affected_rows_only ?
-                    candidate_affected_residual : empty_vector;
-                policy.candidate_observer({sweep_index+1,block_index+1,out.state,core_atoms,affected_rows,
-                    observed_eta,observed_beta,observed_affected_prediction,observed_affected_residual,
-                    candidate_objective,
-                    record.local_objective_before,record.local_objective_after,record.global_replay_delta,
-                    record.local_global_delta_error,record.objective_replay_enclosure,
-                    accepted_candidate,unchanged_candidate,evaluation_path});
+            const auto observe_candidate=[&](bool accepted_candidate) {
+                if(!candidate_result_affected_rows_only || !policy.candidate_observer) return;
+                policy.candidate_observer({out.state,affected_rows,candidate_eta,candidate_beta,
+                    candidate_affected_prediction,candidate_affected_residual,candidate_objective,
+                    record.local_objective_before,record.local_objective_after,accepted_candidate});
             };
 #endif
             if(!candidate_values_finite)
             {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-                observe_candidate(false,candidate_unchanged);
+                observe_candidate(false);
 #endif
                 record.status="failed"; record.reason="block-objective-replay-failed";
                 out.reason=record.reason;
@@ -944,7 +931,7 @@ BcdSearchResult SearchBcdComponent(
             if(!delta_enclosed)
             {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-                observe_candidate(false,candidate_unchanged);
+                observe_candidate(false);
 #endif
                 record.status="failed"; record.reason="block-objective-replay-failed"; out.reason=record.reason;
                 finish_record(std::move(record)); stop=true; break;
@@ -953,7 +940,7 @@ BcdSearchResult SearchBcdComponent(
                 record.global_replay_delta<=record.objective_replay_enclosure))
             {
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-                observe_candidate(false,candidate_unchanged);
+                observe_candidate(false);
 #endif
                 record.status=record.recovery_retry ? "failed" : "unchanged";
                 record.reason=record.recovery_retry ? "block-recovery-exhausted" : "block-objective-increase";
@@ -964,7 +951,7 @@ BcdSearchResult SearchBcdComponent(
             }
             const bool unchanged=candidate_unchanged;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            observe_candidate(!unchanged,unchanged);
+            observe_candidate(!unchanged);
 #endif
             if(!candidate_fast_unchanged)
             {

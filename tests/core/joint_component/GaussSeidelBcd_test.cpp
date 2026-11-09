@@ -117,7 +117,6 @@ void AuditIncrementalCandidate(const rhbm_gem::core::JointProblemInput & input,
     const rhbm_gem::JointParameterLayout & layout,n::VectorRef observations,double scale,
     const n::BcdCandidateEvent & event,IncrementalObjectiveAudit & audit)
 {
-    if(event.evaluation_path!=n::BcdCandidateEvaluationPath::AffectedRowsIncremental) return;
     ASSERT_TRUE(std::isfinite(event.candidate_objective));
     ++audit.candidates;
     const auto old_replay=b::Replay(input,layout,observations,event.accepted_before.eta,
@@ -139,16 +138,18 @@ void AuditIncrementalCandidate(const rhbm_gem::core::JointProblemInput & input,
         EXPECT_DOUBLE_EQ(event.accepted_before.prediction(row),candidate_replay.prediction(row));
         EXPECT_DOUBLE_EQ(event.accepted_before.residual(row),candidate_replay.residual(row));
     }
+    const bool unchanged=(event.candidate_eta.array()==event.accepted_before.eta.array()).all() &&
+        (event.candidate_beta.array()==event.accepted_before.beta.array()).all();
     const double old_reference=old_replay.objective;
     const double candidate_reference=candidate_replay.objective;
     EXPECT_LE(std::abs(event.candidate_objective-candidate_reference),
         n::BlockObjectiveReplayEnclosure(candidate_reference));
     EXPECT_EQ(event.accepted,ObjectiveDecision(event.accepted_before.objective,candidate_reference,
-        event.local_objective_before,event.local_objective_after,event.unchanged));
+        event.local_objective_before,event.local_objective_after,unchanged));
     const bool estimated_decision=ObjectiveDecision(event.accepted_before.objective,event.candidate_objective,
-        event.local_objective_before,event.local_objective_after,event.unchanged);
+        event.local_objective_before,event.local_objective_after,unchanged);
     const bool reference_decision=ObjectiveDecision(old_reference,candidate_reference,
-        event.local_objective_before,event.local_objective_after,event.unchanged);
+        event.local_objective_before,event.local_objective_after,unchanged);
     audit.decision_disagreements+=estimated_decision!=reference_decision || event.accepted!=reference_decision;
 }
 
@@ -233,16 +234,12 @@ TEST(JointBcdSearchTest, CandidateObserverDoesNotChangeSearch)
         ++candidate_count; accepted_count+=event.accepted;
         EXPECT_EQ(event.candidate_eta.size(),event.accepted_before.eta.size());
         EXPECT_EQ(event.candidate_beta.size(),event.accepted_before.beta.size());
-        EXPECT_GT(event.core_atoms.size(),0u);
         EXPECT_GT(event.affected_rows.size(),0u);
         EXPECT_TRUE(std::isfinite(event.candidate_objective));
-        if(event.evaluation_path!=n::BcdCandidateEvaluationPath::UnchangedFastPath)
-        {
-            const auto replay=b::Replay(*data.input,data.layout,data.y,event.candidate_eta,
-                event.candidate_beta,data.context.scale);
-            EXPECT_LE(std::abs(event.candidate_objective-replay.objective),
-                n::BlockObjectiveReplayEnclosure(replay.objective));
-        }
+        const auto replay=b::Replay(*data.input,data.layout,data.y,event.candidate_eta,
+            event.candidate_beta,data.context.scale);
+        EXPECT_LE(std::abs(event.candidate_objective-replay.objective),
+            n::BlockObjectiveReplayEnclosure(replay.objective));
     };
     const auto observed=n::RunBcdDiagnostic(problem,eta,policy);
 
@@ -549,9 +546,10 @@ TEST(JointBcdSearchTest, AffectedReplayFallsBackBeforeScratchExceedsMemoryBudget
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector eta=n::Vector::Constant(3,std::log(.55));
     n::BcdSearchPolicy policy; policy.core_atoms=2; policy.maximum_sweeps=5;
-    policy.stop_after_stationarity=false; policy.certify_endpoint=false;
+    policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
+    policy.collect_diagnostics=true;
     policy.collect_telemetry=true; policy.eta_upper_bound=std::log(2.2);
-    const auto affected=n::RunBcdDiagnostic(problem,eta,policy);
+    const auto affected=n::SearchBcdComponent(data.domain,data.layout,data.y,eta,data.context,policy);
     ASSERT_FALSE(affected.work.full_replay_memory_fallback);
     ASSERT_EQ(affected.global_state_memory_estimate.status,n::MemoryStatus::Pass);
 
@@ -565,26 +563,36 @@ TEST(JointBcdSearchTest, AffectedReplayFallsBackBeforeScratchExceedsMemoryBudget
 
     auto fallback_policy=policy;
     fallback_policy.global_state_memory_budget_for_testing=full_replay_plan.estimated_peak_bytes;
-    std::size_t fallback_candidate_count{};
-    fallback_policy.candidate_observer=[&](const n::BcdCandidateEvent & event) {
-        if(event.evaluation_path==n::BcdCandidateEvaluationPath::UnchangedFastPath) return;
-        ASSERT_EQ(event.evaluation_path,n::BcdCandidateEvaluationPath::FullReplay);
-        ++fallback_candidate_count;
-        const auto before=b::Replay(*data.input,data.layout,data.y,
-            event.accepted_before.eta,event.accepted_before.beta,data.context.scale);
-        const auto candidate=b::Replay(*data.input,data.layout,data.y,
-            event.candidate_eta,event.candidate_beta,data.context.scale);
-        EXPECT_LE(std::abs(event.accepted_before.objective-before.objective),
-            n::BlockObjectiveReplayEnclosure(before.objective));
-        EXPECT_LE(std::abs(event.candidate_objective-candidate.objective),
-            n::BlockObjectiveReplayEnclosure(candidate.objective));
-    };
-    const auto fallback=n::RunBcdDiagnostic(problem,eta,fallback_policy);
+    const auto fallback=n::SearchBcdComponent(data.domain,data.layout,data.y,eta,data.context,fallback_policy);
     ASSERT_TRUE(fallback.work.full_replay_memory_fallback);
     EXPECT_GT(fallback.work.full_candidate_replays,0u);
     EXPECT_EQ(fallback.work.affected_candidate_replays,0u);
     EXPECT_EQ(fallback.work.incremental_objective_evaluations,0u);
-    EXPECT_EQ(fallback_candidate_count,fallback.work.full_candidate_replays);
+    EXPECT_EQ(fallback.work.full_candidate_replays,affected.work.affected_candidate_replays);
+    ASSERT_TRUE(affected.search_converged);
+    EXPECT_EQ(fallback.search_converged,affected.search_converged);
+    ASSERT_TRUE(affected.accepted_state_integrity);
+    EXPECT_EQ(fallback.accepted_state_integrity,affected.accepted_state_integrity);
+    for(const auto * result:{&affected,&fallback})
+    {
+        ASSERT_TRUE(result->certification);
+        EXPECT_TRUE(result->certification->qualified());
+        EXPECT_TRUE(result->certification->assessment.endpoint_verified);
+        EXPECT_TRUE(result->certification->assessment.independent_replay.passed);
+    }
+    ASSERT_EQ(fallback.blocks.size(),affected.blocks.size());
+    for(std::size_t i=0;i<affected.blocks.size();++i)
+    {
+        SCOPED_TRACE(i);
+        const auto & incremental=affected.blocks[i];
+        const auto & full=fallback.blocks[i];
+        EXPECT_EQ(incremental.accepted,full.accepted);
+        EXPECT_EQ(incremental.reason,full.reason);
+        EXPECT_LE(std::abs(incremental.objective_before-full.objective_before),
+            n::BlockObjectiveReplayEnclosure(full.objective_before));
+        EXPECT_LE(std::abs(incremental.objective_after-full.objective_after),
+            n::BlockObjectiveReplayEnclosure(full.objective_after));
+    }
     EXPECT_EQ(affected.reason,fallback.reason);
     EXPECT_EQ(affected.sweep_count,fallback.sweep_count);
     EXPECT_TRUE(BitwiseEqual(affected.state.eta,fallback.state.eta));
@@ -592,6 +600,12 @@ TEST(JointBcdSearchTest, AffectedReplayFallsBackBeforeScratchExceedsMemoryBudget
     EXPECT_TRUE(BitwiseEqual(affected.state.prediction,fallback.state.prediction));
     EXPECT_TRUE(BitwiseEqual(affected.state.residual,fallback.state.residual));
     EXPECT_TRUE(BitwiseEqual(affected.state.objective,fallback.state.objective));
+    const auto replay=b::Replay(*data.input,data.layout,data.y,
+        fallback.state.eta,fallback.state.beta,data.context.scale);
+    EXPECT_TRUE(BitwiseEqual(fallback.state.prediction,replay.prediction));
+    EXPECT_TRUE(BitwiseEqual(fallback.state.residual,replay.residual));
+    EXPECT_LE(std::abs(fallback.state.objective-replay.objective),
+        n::BlockObjectiveReplayEnclosure(replay.objective));
 }
 
 TEST(JointBcdSearchTest, E1MemoryPreflightRejectsBeforeCreatingAcceptedState)
@@ -601,9 +615,7 @@ TEST(JointBcdSearchTest, E1MemoryPreflightRejectsBeforeCreatingAcceptedState)
     const n::Vector eta=n::Vector::Constant(3,std::log(.55));
     n::BcdSearchPolicy policy; policy.core_atoms=2; policy.maximum_sweeps=2;
     policy.eta_upper_bound=std::log(2.2);
-        policy.global_state_memory_budget_for_testing=1;
-    std::size_t candidates{};
-    policy.candidate_observer=[&](const auto &) {++candidates;};
+    policy.global_state_memory_budget_for_testing=1;
     const auto result=n::SearchBcdComponent(data.domain,data.layout,data.y,
         eta,data.context,policy);
 
@@ -611,7 +623,9 @@ TEST(JointBcdSearchTest, E1MemoryPreflightRejectsBeforeCreatingAcceptedState)
     EXPECT_EQ(result.memory_estimate.status,n::MemoryStatus::Reject);
     EXPECT_EQ(result.state.eta.size(),0);
     EXPECT_EQ(result.state.beta.size(),0);
-    EXPECT_EQ(candidates,0u);
+    EXPECT_EQ(result.total_block_solves,0u);
+    EXPECT_EQ(result.total_accepted_local_updates,0u);
+    EXPECT_FALSE(result.accepted_state_integrity);
 }
 
 TEST(JointBcdSearchTest, E1NonfiniteObservationsFailBeforeAcceptedStateCreation)
@@ -623,15 +637,15 @@ TEST(JointBcdSearchTest, E1NonfiniteObservationsFailBeforeAcceptedStateCreation)
     const n::Vector eta=n::Vector::Constant(3,std::log(.55));
     n::BcdSearchPolicy policy; policy.core_atoms=2; policy.maximum_sweeps=2;
     policy.eta_upper_bound=std::log(2.2);
-        std::size_t candidates{};
-    policy.candidate_observer=[&](const auto &) {++candidates;};
     const auto result=n::SearchBcdComponent(data.domain,data.layout,observations,
         eta,data.context,policy);
 
     EXPECT_EQ(result.reason,"block-invalid-partition");
     EXPECT_EQ(result.state.eta.size(),0);
     EXPECT_EQ(result.state.beta.size(),0);
-    EXPECT_EQ(candidates,0u);
+    EXPECT_EQ(result.total_block_solves,0u);
+    EXPECT_EQ(result.total_accepted_local_updates,0u);
+    EXPECT_FALSE(result.accepted_state_integrity);
 }
 
 TEST(JointBcdSearchTest, E1NonfiniteObjectiveDoesNotAcceptOrPartiallyCommitCandidate)
@@ -640,31 +654,24 @@ TEST(JointBcdSearchTest, E1NonfiniteObjectiveDoesNotAcceptOrPartiallyCommitCandi
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector observations=n::Vector::Constant(data.y.size(),1e200);
     const n::Vector eta=n::Vector::Constant(3,std::log(.55));
-    struct Run
-    {
-        n::BcdSearchResult result;
-        std::size_t candidates{},accepted{};
-    };
-    Run result;
     n::BcdSearchPolicy policy; policy.core_atoms=2; policy.maximum_sweeps=2;
-    policy.eta_upper_bound=std::log(2.2);
-    policy.candidate_observer=[&](const n::BcdCandidateEvent & event) {
-        if(event.evaluation_path!=n::BcdCandidateEvaluationPath::UnchangedFastPath) ++result.candidates;
-        result.accepted+=event.accepted;
-    };
-    result.result=n::SearchBcdComponent(data.domain,data.layout,observations,
+    policy.eta_upper_bound=std::log(2.2); policy.collect_telemetry=true;
+    const auto result=n::SearchBcdComponent(data.domain,data.layout,observations,
         eta,data.context,policy);
     const auto initial_replay=b::Replay(*data.input,data.layout,observations,
         eta,n::Vector::Zero(6),data.context.scale);
 
     ASSERT_TRUE(std::isinf(initial_replay.objective));
-    EXPECT_FALSE(result.result.search_converged);
-    EXPECT_EQ(result.result.reason,"block-cache-replay-failed");
-    EXPECT_TRUE(std::isinf(result.result.state.objective));
-    EXPECT_EQ(result.candidates,0u);
-    EXPECT_EQ(result.accepted,0u);
-    EXPECT_TRUE(BitwiseEqual(result.result.state.eta,eta));
-    EXPECT_TRUE(BitwiseEqual(result.result.state.beta,n::Vector::Zero(6)));
+    EXPECT_FALSE(result.search_converged);
+    EXPECT_EQ(result.reason,"block-cache-replay-failed");
+    EXPECT_TRUE(std::isinf(result.state.objective));
+    EXPECT_EQ(result.work.affected_candidate_replays,0u);
+    EXPECT_EQ(result.work.full_candidate_replays,0u);
+    EXPECT_EQ(result.work.candidate_replay_skipped_unchanged,0u);
+    EXPECT_EQ(result.total_accepted_local_updates,0u);
+    EXPECT_FALSE(result.accepted_state_integrity);
+    EXPECT_TRUE(BitwiseEqual(result.state.eta,eta));
+    EXPECT_TRUE(BitwiseEqual(result.state.beta,n::Vector::Zero(6)));
 }
 
 TEST(JointBcdSearchTest, CandidateLocalObjectiveIncreasePreservesAcceptedBeforeState)
@@ -674,6 +681,7 @@ TEST(JointBcdSearchTest, CandidateLocalObjectiveIncreasePreservesAcceptedBeforeS
     const n::Vector eta=n::Vector::Constant(3,std::log(.55));
     n::BcdSearchPolicy policy; policy.core_atoms=2; policy.maximum_sweeps=1;
     policy.eta_upper_bound=std::log(2.2);
+    policy.collect_diagnostics=true;
     std::optional<n::BlockCoordinateState> rejected_before;
     policy.candidate_fault_for_testing=[&](std::size_t sweep,std::size_t block,const auto & state) {
         if(sweep==1 && block==2)
@@ -683,13 +691,16 @@ TEST(JointBcdSearchTest, CandidateLocalObjectiveIncreasePreservesAcceptedBeforeS
         }
         return n::BcdCandidateFaultForTesting::None;
     };
-    const auto result=n::RunBcdDiagnostic(problem,eta,policy);
+    const auto result=n::SearchBcdComponent(data.domain,data.layout,data.y,eta,data.context,policy);
 
     ASSERT_TRUE(rejected_before.has_value());
     ASSERT_EQ(result.blocks.size(),2u);
     EXPECT_TRUE(result.blocks[0].accepted);
     EXPECT_EQ(result.blocks[1].status,"unchanged");
     EXPECT_EQ(result.blocks[1].reason,"block-objective-increase");
+    EXPECT_FALSE(result.blocks[1].accepted);
+    EXPECT_TRUE(result.accepted_state_integrity);
+    EXPECT_EQ(result.recovery_attempts,0u);
     EXPECT_TRUE(BitwiseEqual(result.state.eta,rejected_before->eta));
     EXPECT_TRUE(BitwiseEqual(result.state.beta,rejected_before->beta));
     EXPECT_TRUE(BitwiseEqual(result.state.prediction,rejected_before->prediction));
@@ -715,47 +726,61 @@ TEST(JointBcdSearchTest, CandidateConsistencyAndNonfiniteFaultsPreserveAcceptedB
         n::BcdCandidateFaultForTesting::InfiniteParameter,
         n::BcdCandidateFaultForTesting::InfinitePrediction,
         n::BcdCandidateFaultForTesting::InfiniteResidual};
-    for(const auto fault:faults)
+    n::BcdSearchPolicy policy; policy.core_atoms=2; policy.maximum_sweeps=1;
+    policy.eta_upper_bound=std::log(2.2);
+    policy.collect_diagnostics=true; policy.collect_telemetry=true;
+    auto run=[&] {return n::SearchBcdComponent(data.domain,data.layout,data.y,eta,data.context,policy);};
+    auto shape=run().global_state_memory_estimate.shape;
+    shape.affected_replay_scratch=false;
+    const auto plan=n::PlanMemory(shape,n::MemoryStage::GlobalStateEvaluation);
+    ASSERT_EQ(plan.status,n::MemoryStatus::Pass);
+    for(const bool fallback:{false,true})
     {
-        SCOPED_TRACE(static_cast<int>(fault));
-        n::BcdSearchPolicy policy; policy.core_atoms=2; policy.maximum_sweeps=1;
-        policy.eta_upper_bound=std::log(2.2);
-        std::optional<n::BlockCoordinateState> failed_candidate_before;
-        bool failure_event_seen{};
-        policy.candidate_fault_for_testing=[&](std::size_t sweep,std::size_t block,const auto & state) {
-            if(sweep==1 && block==2)
-            {
-                failed_candidate_before=state;
-                return fault;
-            }
-            return n::BcdCandidateFaultForTesting::None;
-        };
-        policy.candidate_observer=[&](const n::BcdCandidateEvent & event) {
-            if(event.block!=2) return;
-            failure_event_seen=true;
-            ASSERT_TRUE(failed_candidate_before.has_value());
-            EXPECT_FALSE(event.accepted);
-            EXPECT_NE(event.evaluation_path,n::BcdCandidateEvaluationPath::UnchangedFastPath);
-            if(fault==n::BcdCandidateFaultForTesting::NaNObjective) EXPECT_TRUE(std::isnan(event.candidate_objective));
-            if(fault==n::BcdCandidateFaultForTesting::InfiniteObjective) EXPECT_TRUE(std::isinf(event.candidate_objective));
-            EXPECT_TRUE(BitwiseEqual(event.accepted_before,*failed_candidate_before));
-        };
-        const auto result=n::RunBcdDiagnostic(problem,eta,policy);
+        SCOPED_TRACE(fallback);
+        if(fallback) policy.global_state_memory_budget_for_testing=plan.estimated_peak_bytes;
+        for(const auto fault:faults)
+        {
+            SCOPED_TRACE(static_cast<int>(fault));
+            std::optional<n::BlockCoordinateState> failed_candidate_before;
+            policy.candidate_fault_for_testing=[&](std::size_t sweep,std::size_t block,const auto & state) {
+                if(sweep==1 && block==2)
+                {
+                    failed_candidate_before=state;
+                    return fault;
+                }
+                return n::BcdCandidateFaultForTesting::None;
+            };
+            const auto result=run();
+            policy.candidate_fault_for_testing={};
 
-        ASSERT_TRUE(failed_candidate_before.has_value());
-        ASSERT_EQ(result.blocks.size(),2u);
-        EXPECT_TRUE(result.blocks[0].accepted);
-        EXPECT_EQ(result.blocks[1].status,"failed");
-        EXPECT_EQ(result.blocks[1].reason,"block-objective-replay-failed");
-        EXPECT_EQ(result.reason,"block-objective-replay-failed");
-        EXPECT_TRUE(failure_event_seen);
-        EXPECT_TRUE(BitwiseEqual(result.state,*failed_candidate_before));
-        const auto replay=b::Replay(*data.input,data.layout,data.y,
-            result.state.eta,result.state.beta,data.context.scale);
-        EXPECT_TRUE(BitwiseEqual(result.state.prediction,replay.prediction));
-        EXPECT_TRUE(BitwiseEqual(result.state.residual,replay.residual));
-        EXPECT_LE(std::abs(result.state.objective-replay.objective),
-            n::BlockObjectiveReplayEnclosure(replay.objective));
+            ASSERT_TRUE(failed_candidate_before.has_value());
+            ASSERT_EQ(result.blocks.size(),2u);
+            EXPECT_TRUE(result.blocks[0].accepted);
+            EXPECT_EQ(result.blocks[1].status,"failed");
+            EXPECT_EQ(result.blocks[1].reason,"block-objective-replay-failed");
+            EXPECT_EQ(result.reason,"block-objective-replay-failed");
+            const auto & failed=result.blocks[1];
+            EXPECT_FALSE(failed.accepted);
+            EXPECT_FALSE(result.accepted_state_integrity);
+            EXPECT_FALSE(result.certification);
+            EXPECT_EQ(result.recovery_attempts,0u);
+            EXPECT_EQ(result.work.full_replay_memory_fallback,fallback);
+            EXPECT_EQ(result.work.full_candidate_replays,fallback ? 2u : 0u);
+            EXPECT_EQ(result.work.affected_candidate_replays,fallback ? 0u : 2u);
+            if(fault==n::BcdCandidateFaultForTesting::NaNObjective)
+                EXPECT_TRUE(std::isnan(failed.objective_after));
+            if(fault==n::BcdCandidateFaultForTesting::InfiniteObjective)
+                EXPECT_TRUE(std::isinf(failed.objective_after));
+            if(fault==n::BcdCandidateFaultForTesting::ObjectiveConsistencyFailure)
+                EXPECT_GT(failed.local_global_delta_error,failed.objective_replay_enclosure);
+            EXPECT_TRUE(BitwiseEqual(result.state,*failed_candidate_before));
+            const auto replay=b::Replay(*data.input,data.layout,data.y,
+                result.state.eta,result.state.beta,data.context.scale);
+            EXPECT_TRUE(BitwiseEqual(result.state.prediction,replay.prediction));
+            EXPECT_TRUE(BitwiseEqual(result.state.residual,replay.residual));
+            EXPECT_LE(std::abs(result.state.objective-replay.objective),
+                n::BlockObjectiveReplayEnclosure(replay.objective));
+        }
     }
 }
 
@@ -781,20 +806,9 @@ TEST(JointBcdSearchTest, UnchangedCandidateSkipsOnlyCandidateReplay)
     n::BcdSearchPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=30;
     policy.stop_after_stationarity=false; policy.certify_endpoint=false;
     policy.collect_telemetry=true; policy.eta_upper_bound=std::log(2.2);
-    std::size_t fast_path_candidates{};
-    policy.candidate_observer=[&](const n::BcdCandidateEvent & event) {
-        if(event.evaluation_path!=n::BcdCandidateEvaluationPath::UnchangedFastPath) return;
-        ++fast_path_candidates;
-        EXPECT_FALSE(event.accepted);
-        EXPECT_TRUE(event.unchanged);
-        EXPECT_TRUE(BitwiseEqual(event.candidate_eta,event.accepted_before.eta));
-        EXPECT_TRUE(BitwiseEqual(event.candidate_beta,event.accepted_before.beta));
-        EXPECT_TRUE(BitwiseEqual(event.candidate_objective,event.accepted_before.objective));
-    };
     const auto result=n::RunBcdDiagnostic(problem,eta,policy);
 
     EXPECT_GT(result.work.candidate_replay_skipped_unchanged,0u);
-    EXPECT_EQ(fast_path_candidates,result.work.candidate_replay_skipped_unchanged);
     EXPECT_LT(result.work.full_candidate_replays+result.work.affected_candidate_replays,result.total_block_solves);
     EXPECT_LE(result.work.full_candidate_replays+result.work.affected_candidate_replays+
         result.work.candidate_replay_skipped_unchanged,
@@ -805,6 +819,8 @@ TEST(JointBcdSearchTest, UnchangedCandidateSkipsOnlyCandidateReplay)
         if(block.reason=="block-unchanged")
         {
             ++unchanged_records;
+            EXPECT_FALSE(block.accepted);
+            EXPECT_TRUE(BitwiseEqual(block.objective_before,block.objective_after));
             EXPECT_TRUE(BitwiseEqual(block.global_replay_delta,0.0));
             EXPECT_LE(block.local_global_delta_error,block.objective_replay_enclosure);
         }
@@ -999,61 +1015,41 @@ TEST(JointBcdSearchTest, FailedBlockRetriesAfterLaterBlocksUpdateTheNeighborStat
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector initial_eta=n::Vector::Constant(2,std::log(.55));
-    struct RecoveryRun
-    {
-        n::BcdSearchResult result;
-        std::optional<n::BlockCoordinateState> retry_candidate_before;
-        double retry_candidate_objective{},retry_candidate_reference{};
-        bool retry_candidate_seen{};
-    };
-    RecoveryRun current;
-    n::BcdSearchPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=6;
+    n::BcdSearchPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=1;
     policy.eta_upper_bound=std::log(2.2); policy.collect_telemetry=true; policy.collect_diagnostics=true;
     policy.force_no_trusted_profile_for_testing=[](std::size_t block,std::size_t sweep) {
         return block==0 && sweep==0;
     };
-    policy.candidate_observer=[&](const n::BcdCandidateEvent & event) {
-        if(event.sweep==2 && event.block==1)
-        {
-            current.retry_candidate_seen=true;
-            current.retry_candidate_before=event.accepted_before;
-            current.retry_candidate_objective=event.candidate_objective;
-            const auto replay=b::Replay(*data.input,data.layout,data.y,
-                event.candidate_eta,event.candidate_beta,data.context.scale);
-            current.retry_candidate_reference=replay.objective;
-        }
-    };
-    current.result=n::SearchBcdComponent(data.domain,data.layout,data.y,
-        initial_eta,data.context,policy);
-    ASSERT_TRUE(current.retry_candidate_seen);
-    ASSERT_TRUE(current.retry_candidate_before.has_value());
-    EXPECT_GT(current.retry_candidate_before->beta.norm(),0.0);
-    EXPECT_EQ(current.result.recovery_attempts,1u);
-    EXPECT_EQ(current.result.recovery_successes,1u);
-    EXPECT_TRUE(current.result.accepted_state_integrity);
-    EXPECT_EQ(current.result.unresolved_failures,0u);
-    const auto first_failure=std::find_if(current.result.blocks.begin(),current.result.blocks.end(),[](const auto & block) {
-        return block.block==1 && block.sweep==1;
-    });
-    ASSERT_NE(first_failure,current.result.blocks.end());
-    EXPECT_EQ(first_failure->status,"retry-pending");
-    const auto retried=std::find_if(current.result.blocks.begin(),current.result.blocks.end(),[](const auto & block) {
+    const auto prefix=n::SearchBcdComponent(data.domain,data.layout,data.y,initial_eta,data.context,policy);
+    ASSERT_EQ(prefix.sweep_count,1u);
+    ASSERT_EQ(prefix.blocks.size(),2u);
+    EXPECT_EQ(prefix.blocks.front().status,"retry-pending");
+    ASSERT_TRUE(prefix.blocks.back().accepted);
+    ASSERT_GT(prefix.state.beta.tail<2>().norm(),0.0);
+
+    policy.maximum_sweeps=6;
+    const auto result=n::SearchBcdComponent(data.domain,data.layout,data.y,initial_eta,data.context,policy);
+    EXPECT_EQ(result.recovery_attempts,1u);
+    EXPECT_EQ(result.recovery_successes,1u);
+    EXPECT_TRUE(result.accepted_state_integrity);
+    EXPECT_EQ(result.unresolved_failures,0u);
+    const auto retried=std::find_if(result.blocks.begin(),result.blocks.end(),[](const auto & block) {
         return block.block==1 && block.sweep==2;
     });
-    ASSERT_NE(retried,current.result.blocks.end());
+    ASSERT_NE(retried,result.blocks.end());
     EXPECT_TRUE(retried->recovery_retry);
     EXPECT_EQ(retried->recovery_attempt,1u);
-    EXPECT_LE(std::abs(retried->objective_before-current.retry_candidate_before->objective),
-        n::BlockObjectiveReplayEnclosure(current.retry_candidate_before->objective));
-    const auto trusted=b::Replay(*data.input,data.layout,data.y,
-        current.retry_candidate_before->eta,current.retry_candidate_before->beta,data.context.scale);
-    EXPECT_LE(std::abs(current.retry_candidate_before->objective-trusted.objective),
-        n::BlockObjectiveReplayEnclosure(trusted.objective));
-    EXPECT_LE(std::abs(current.retry_candidate_before->objective-trusted.objective),
-        n::BlockObjectiveReplayEnclosure(trusted.objective));
-    EXPECT_LE(std::abs(current.retry_candidate_objective-current.retry_candidate_reference),
-        n::BlockObjectiveReplayEnclosure(current.retry_candidate_reference));
-    EXPECT_GT(current.result.work.incremental_objective_evaluations,0u);
+    EXPECT_TRUE(retried->accepted);
+    EXPECT_TRUE(retried->recovery_success);
+    EXPECT_TRUE(BitwiseEqual(retried->objective_before,prefix.state.objective));
+    EXPECT_LE(retried->local_global_delta_error,retried->objective_replay_enclosure);
+    const auto replay=b::Replay(*data.input,data.layout,data.y,
+        result.state.eta,result.state.beta,data.context.scale);
+    EXPECT_TRUE(BitwiseEqual(result.state.prediction,replay.prediction));
+    EXPECT_TRUE(BitwiseEqual(result.state.residual,replay.residual));
+    EXPECT_LE(std::abs(result.state.objective-replay.objective),
+        n::BlockObjectiveReplayEnclosure(replay.objective));
+    EXPECT_GT(result.work.incremental_objective_evaluations,0u);
 }
 
 TEST(JointBcdSearchTest, ExhaustedBlockRecoveryLeavesTheLastAcceptedComponentStateUntouched)
@@ -1061,17 +1057,13 @@ TEST(JointBcdSearchTest, ExhaustedBlockRecoveryLeavesTheLastAcceptedComponentSta
     JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector initial_eta=n::Vector::Constant(2,std::log(.55));
-    n::Vector accepted_eta,accepted_beta;
-    n::BcdSearchPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=6;
+    n::BcdSearchPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=1;
     policy.eta_upper_bound=std::log(2.2);
     policy.force_no_trusted_profile_for_testing=[](std::size_t block,std::size_t) {return block==0;};
-    policy.candidate_observer=[&](const n::BcdCandidateEvent & event) {
-        if(event.sweep==1 && event.block==2)
-        {
-            accepted_eta=event.candidate_eta;
-            accepted_beta=event.candidate_beta;
-        }
-    };
+    const auto prefix=n::SearchBcdComponent(data.domain,data.layout,data.y,initial_eta,data.context,policy);
+    ASSERT_EQ(prefix.sweep_count,1u);
+    ASSERT_GT(prefix.state.beta.norm(),0.0);
+    policy.maximum_sweeps=6;
     const auto previous_level=Logger::GetLogLevel();
     Logger::SetLogLevel(LogLevel::Warning);
     testing::internal::CaptureStderr();
@@ -1093,10 +1085,7 @@ TEST(JointBcdSearchTest, ExhaustedBlockRecoveryLeavesTheLastAcceptedComponentSta
     EXPECT_GT(result.unresolved_failures,0u);
     EXPECT_EQ(result.sweep_count,1u);
     EXPECT_EQ(result.first_order_stationarity_sweep,0u);
-    ASSERT_EQ(accepted_eta.size(),result.state.eta.size());
-    ASSERT_EQ(accepted_beta.size(),result.state.beta.size());
-    EXPECT_TRUE((result.state.eta.array()==accepted_eta.array()).all());
-    EXPECT_TRUE((result.state.beta.array()==accepted_beta.array()).all());
+    EXPECT_TRUE(BitwiseEqual(result.state,prefix.state));
     const auto replay=b::Replay(*data.input,data.layout,data.y,
         result.state.eta,result.state.beta,data.context.scale);
     EXPECT_LE(std::abs(result.state.objective-replay.objective),
@@ -1391,25 +1380,15 @@ TEST(JointBcdSearchTest, WidthFailureIsScopedToOneBlockVisit)
     const n::Vector initial_eta=n::Vector::Constant(2,std::log(.55));
     n::BcdSearchPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=2;
     policy.eta_upper_bound=std::log(2.2); policy.collect_diagnostics=true;
-    std::size_t injected{},normal_retry{},rollback_checked{};
+    std::size_t injected{},normal_retry{};
     policy.force_width_failure_for_testing=[&](std::size_t block,std::size_t sweep) {
         if(block==0 && sweep==0) {++injected; return true;}
         if(block==0 && sweep==1) ++normal_retry;
         return false;
     };
-    policy.candidate_observer=[&](const n::BcdCandidateEvent & event) {
-        if(event.sweep!=1 || event.block!=2) return;
-        ++rollback_checked;
-        EXPECT_TRUE(BitwiseEqual(event.accepted_before.eta,initial_eta));
-        EXPECT_TRUE(event.accepted_before.beta.isZero(0));
-        EXPECT_TRUE(event.accepted_before.prediction.isZero(0));
-        EXPECT_TRUE((event.accepted_before.residual.array()==(-data.y).array()).all());
-        EXPECT_DOUBLE_EQ(event.accepted_before.objective,.5*data.y.squaredNorm()/
-            (data.context.scale*data.context.scale));
-    };
     const auto result=n::SearchBcdComponent(data.domain,data.layout,data.y,
         initial_eta,data.context,policy);
-    EXPECT_EQ(injected,1u); EXPECT_EQ(normal_retry,1u); EXPECT_EQ(rollback_checked,1u);
+    EXPECT_EQ(injected,1u); EXPECT_EQ(normal_retry,1u);
     ASSERT_GE(result.blocks.size(),3u);
     const auto & failed=result.blocks.front();
     EXPECT_EQ(failed.status,"retry-pending");
@@ -1428,4 +1407,17 @@ TEST(JointBcdSearchTest, WidthFailureIsScopedToOneBlockVisit)
     EXPECT_EQ(result.unresolved_failures,0u); EXPECT_TRUE(result.accepted_state_integrity);
     EXPECT_EQ(result.work.bounded_lm.failed_subproblems,1u);
     EXPECT_GT(result.work.bounded_lm.subproblem_solves,1u);
+    policy.maximum_sweeps=1;
+    const auto prefix=n::SearchBcdComponent(data.domain,data.layout,data.y,initial_eta,data.context,policy);
+    ASSERT_EQ(prefix.blocks.size(),2u);
+    EXPECT_EQ(prefix.blocks.front().status,"retry-pending");
+    EXPECT_TRUE(prefix.blocks.back().accepted);
+    EXPECT_TRUE(BitwiseEqual(prefix.state.eta(0),initial_eta(0)));
+    EXPECT_TRUE(prefix.state.beta.head<2>().isZero(0));
+    const auto replay=b::Replay(*data.input,data.layout,data.y,
+        prefix.state.eta,prefix.state.beta,data.context.scale);
+    EXPECT_TRUE(BitwiseEqual(prefix.state.prediction,replay.prediction));
+    EXPECT_TRUE(BitwiseEqual(prefix.state.residual,replay.residual));
+    EXPECT_LE(std::abs(prefix.state.objective-replay.objective),
+        n::BlockObjectiveReplayEnclosure(replay.objective));
 }

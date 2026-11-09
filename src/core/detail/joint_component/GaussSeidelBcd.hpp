@@ -16,22 +16,15 @@ struct BlockCoordinateState
 };
 
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-enum class BcdCandidateEvaluationPath
-{
-    UnchangedFastPath,AffectedRowsIncremental,FullReplay
-};
+// The sweep result cannot expose the incremental rows and objective before commit.
 struct BcdCandidateEvent
 {
-    std::size_t sweep{},block{};
     const BlockCoordinateState & accepted_before;
-    const Indices & core_atoms,& affected_rows;
+    const Indices & affected_rows;
     const Vector & candidate_eta,& candidate_beta;
     const Vector & affected_prediction,& affected_residual;
-    // Objective used for the acceptance decision, including any injected fault.
-    double candidate_objective{},local_objective_before{},local_objective_after{},global_replay_delta{},
-        local_global_delta_error{},objective_replay_enclosure{};
-    bool accepted{},unchanged{};
-    BcdCandidateEvaluationPath evaluation_path;
+    double candidate_objective{},local_objective_before{},local_objective_after{};
+    bool accepted{};
 };
 enum class BcdCandidateFaultForTesting
 {
