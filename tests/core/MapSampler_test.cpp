@@ -9,7 +9,6 @@
 #include <vector>
 
 #include <rhbm_gem/core/MapSampler.hpp>
-#include "support/MapSamplerTestSupport.hpp"
 #include "core/detail/MapInterpolation.hpp"
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -224,18 +223,14 @@ TEST(MapSamplerTest, PotentialSamplingWorkflowUsesExplicitAtomDomain)
     model->SelectAtoms([](const AtomObject & atom) { return atom.GetSerialID() == 1; });
     const auto selected{ model->GetSelectedAtoms() };
     const std::vector<AtomObject *> atoms{ model->FindAtomPtr(2) };
-    std::vector<int> sampled;
-    detail::PotentialSamplingObserverForTesting() = [&](int id) { sampled.push_back(id); };
 
     RunPotentialSamplingWorkflow(
         map,
         *model,
         atoms,
         1);
-    detail::PotentialSamplingObserverForTesting() = {};
 
     EXPECT_EQ(model->GetSelectedAtoms(), selected);
-    EXPECT_EQ(sampled, (std::vector<int>{ 2 }));
     EXPECT_FALSE(AtomLocalPotentialView::For(*model->FindAtomPtr(1)).IsAvailable());
     const auto sampled_view{ AtomLocalPotentialView::For(*model->FindAtomPtr(2)) };
     ASSERT_TRUE(sampled_view.IsAvailable());

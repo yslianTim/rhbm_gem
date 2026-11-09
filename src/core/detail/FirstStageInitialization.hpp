@@ -3,10 +3,6 @@
 #include "joint_component/JointComponentEstimator.hpp"
 #include "joint_component/JointProgress.hpp"
 #include <vector>
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-#include <functional>
-#include <string_view>
-#endif
 
 namespace rhbm_gem { class MapObject; class ModelAnalysisEditor; }
 
@@ -25,8 +21,4 @@ JointInitialization PrepareJointWidthInitialization(
 JointFitResult FitJointComponentsInitializedWithProgress(
     const JointProblem &, const JointInitialization &,
     const joint_component::JointProgressObserver &);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-using FirstStageObserver = std::function<void(int, std::string_view)>;
-FirstStageObserver & FirstStageObserverForTesting();
-#endif
 }

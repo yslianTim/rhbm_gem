@@ -17,13 +17,6 @@
 #include <vector>
 
 namespace rhbm_gem::core::detail {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-FirstStageObserver & FirstStageObserverForTesting()
-{
-    static thread_local FirstStageObserver observer;
-    return observer;
-}
-#endif
 void ApplyJointSeedFallback(JointInitialization & initialization)
 {
     std::vector<double> donors;
@@ -50,9 +43,6 @@ void ApplyJointSeedFallback(JointInitialization & initialization)
 
 LocalGaussianResult FitFirstStageAtom(const AtomObject & atom, const FitOptions & options)
 {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    if (FirstStageObserverForTesting()) FirstStageObserverForTesting()(atom.GetSerialID(), "first");
-#endif
     const auto view = AtomLocalPotentialView::For(atom);
     const auto samples = view.GetSamplingEntries(FittingStage::First);
     return EstimateLocalGaussian(samples, view.GetAlphaR(FittingStage::First),
@@ -102,7 +92,6 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
     std::vector<double> alphas(workspace_count, nan);
     std::vector<std::size_t> sample_counts(workspace_count);
     std::vector<unsigned char> alpha_ready(workspace_count);
-    std::vector<unsigned char> fit_attempted(workspace_count);
     std::vector<std::exception_ptr> failures(workspace_count);
     std::size_t completed_count = 0;
     for (std::size_t begin = 0; begin < workset.contributors.size(); begin += workspace_count)
@@ -111,7 +100,6 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
         std::fill(alphas.begin(), alphas.end(), nan);
         std::fill(sample_counts.begin(), sample_counts.end(), 0);
         std::fill(alpha_ready.begin(), alpha_ready.end(), 0);
-        std::fill(fit_attempted.begin(), fit_attempted.end(), 0);
         std::fill(failures.begin(), failures.end(), std::exception_ptr{});
 #ifdef USE_OPENMP
         #pragma omp parallel for num_threads(worker_count)
@@ -127,7 +115,6 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
                 sample_counts[slot] = samples.size();
                 alphas[slot] = EstimateLocalAlphaForAtom(*atom, atom_options, FittingStage::First);
                 alpha_ready[slot] = 1;
-                fit_attempted[slot] = 1;
                 estimates[slot] = EstimateLocalGaussian(samples, alphas[slot], atom_options,
                     view.GetEstimateMDPDE(FittingStage::First));
             }
@@ -150,10 +137,6 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
                     editor.SetAtomLocalAlphaR(FittingStage::First, *atom, alphas[slot]);
                     record.alpha = alphas[slot];
                 }
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-                if (fit_attempted[slot] && FirstStageObserverForTesting())
-                    FirstStageObserverForTesting()(atom->GetSerialID(), "first");
-#endif
                 if (failures[slot]) std::rethrow_exception(failures[slot]);
                 editor.SetAtomLocalGaussianResult(FittingStage::First, *atom, std::move(estimates[slot]));
                 const auto view = AtomLocalPotentialView::For(*atom);

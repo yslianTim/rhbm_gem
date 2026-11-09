@@ -1,8 +1,5 @@
 #include <rhbm_gem/core/MapSampler.hpp>
 #include "core/detail/MapInterpolation.hpp"
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-#include "support/MapSamplerTestSupport.hpp"
-#endif
 
 #include <array>
 #include <cstddef>
@@ -21,17 +18,6 @@
 #include <rhbm_gem/utils/domain/ScopeTimer.hpp>
 #include <rhbm_gem/utils/math/GridSampler.hpp>
 #include <rhbm_gem/utils/math/SphereSampler.hpp>
-
-namespace rhbm_gem::core::detail {
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-PotentialSamplingObserver & PotentialSamplingObserverForTesting()
-{
-    static thread_local PotentialSamplingObserver observer;
-    return observer;
-}
-#endif
-
-} // namespace rhbm_gem::core::detail
 
 namespace rhbm_gem::core {
 namespace {
@@ -108,10 +94,6 @@ void RunPotentialSamplingWorkflow(
     {
         try { raw_sampling_entries_list[i] = SampleAtomMapValues(map_object, *atom_list[i]); }
         catch (...) { failures[i] = std::current_exception(); }
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-        if (detail::PotentialSamplingObserverForTesting())
-            detail::PotentialSamplingObserverForTesting()(atom_list[i]->GetSerialID());
-#endif
 
 #ifdef USE_OPENMP
         #pragma omp critical

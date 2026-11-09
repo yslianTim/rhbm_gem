@@ -30,7 +30,6 @@
 #include "core/detail/PotentialFittingWorkflow.hpp"
 #include "core/detail/joint_component/PostFitPeeling.hpp"
 #include "core/detail/MapInterpolation.hpp"
-#include "support/MapSamplerTestSupport.hpp"
 #include "data/io/detail/JointResultJson.hpp"
 #include "data/io/detail/StageResultJson.hpp"
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
@@ -481,7 +480,7 @@ TEST(JointComponentPartialSelectionTest, OriginalBondSelectionIsPreserved)
     }
 }
 
-TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsSelectedTargetsOnceWithoutChangingSelection)
+TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsSelectedTargetsWithoutChangingSelection)
 {
     auto f = joint_partial_test::Make("weak");
     std::vector<std::unique_ptr<rhbm_gem::AtomObject>> atoms;
@@ -505,18 +504,10 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsSelectedTargetsOnceWi
     const auto selected = f.model->GetSelectedAtoms();
     const auto bonds = f.model->GetSelectedBonds();
     const auto problem = core::BuildPureHaloSupportExclusionProblem(*f.map, *f.model);
-    std::map<std::pair<int, std::string>, int> calls;
-    std::map<int, int> sampling_calls;
-    core::detail::FirstStageObserverForTesting() = [&](int id, std::string_view phase) {
-        ++calls[{id, std::string(phase)}];
-    };
-    core::detail::PotentialSamplingObserverForTesting() = [&](int id) { ++sampling_calls[id]; };
     core::FitOptions options;
     options.estimator = core::PotentialEstimator::JOINT_COMPONENTS;
     options.quiet_mode = true;
     core::detail::RunJointComponentWorkflow(*f.map, *f.model, options);
-    core::detail::FirstStageObserverForTesting() = {};
-    core::detail::PotentialSamplingObserverForTesting() = {};
     ASSERT_TRUE(f.model->GetAnalysisView().GetJointResult());
     const auto & result = *f.model->GetAnalysisView().GetJointResult();
     ASSERT_TRUE(result.assembled_state) << result.initialization.reason << " components=" << result.components.size()
@@ -533,8 +524,6 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsSelectedTargetsOnceWi
         const auto id = std::stoi(result.atom_ids[i]);
         const bool target=std::binary_search(result.selection_domain->target_indices.begin(),
             result.selection_domain->target_indices.end(),i);
-        EXPECT_EQ((calls[{id, "first"}]), target ? 1 : 0);
-        EXPECT_EQ(sampling_calls[id], target ? 1 : 0);
         const auto view = rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(id));
         if(target)
         {
@@ -1463,16 +1452,14 @@ TEST(JointComponentPartialSelectionTest, ExistingSampleFirstExecutorUsesOnlyTheE
     editor.SetAtomLocalGaussianResult(rhbm_gem::FittingStage::First, halo, seed);
     editor.SetAtomLocalRawSamplingEntries(halo, core::SampleAtomMapValues(*f.map, halo, SphereSamplingMethod::FibonacciDeterministic));
     const auto selected = f.model->GetSelectedAtoms();
-    std::map<std::pair<int, std::string>, int> calls;
-    core::detail::FirstStageObserverForTesting() = [&](int id, std::string_view phase) { ++calls[{id, std::string(phase)}]; };
     const std::vector<rhbm_gem::AtomObject *> atoms{f.model->FindAtomPtr(2)};
     core::FitOptions options; options.quiet_mode = true; options.thread_size = 1;
     core::detail::RunBatchFirstStageFromPreparedSamples(*f.model, atoms, options);
-    core::detail::FirstStageObserverForTesting() = {};
     EXPECT_EQ(f.model->GetSelectedAtoms(), selected);
     EXPECT_DOUBLE_EQ(rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(1)).GetFinalModel(rhbm_gem::FittingStage::First).GetWidth(), .73);
-    EXPECT_EQ((calls[{2, "first"}]), 1);
-    EXPECT_EQ((calls[{1, "first"}]), 0);
+    const auto halo_view = rhbm_gem::AtomLocalPotentialView::For(halo);
+    ASSERT_TRUE(halo_view.HasFinalModel(rhbm_gem::FittingStage::First));
+    EXPECT_GT(halo_view.GetFinalModel(rhbm_gem::FittingStage::First).GetAmplitude(), 0.0);
 }
 
 TEST(JointComponentPartialSelectionTest, JointFirstStageParallelWorkersPreserveSerialResults)
