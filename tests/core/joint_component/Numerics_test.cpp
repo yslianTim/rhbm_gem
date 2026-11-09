@@ -9,6 +9,7 @@
 #include "support/JointTestNumerics.hpp"
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <iomanip>
 #include <limits>
@@ -836,6 +837,38 @@ TEST(JointComponentNumericsTest, DenseSpectrumReferenceUsesGlobalRowsDecisionDim
     ASSERT_TRUE(decision_reference.available);
     EXPECT_DOUBLE_EQ(decision_reference.threshold,1000*std::numeric_limits<double>::epsilon());
     EXPECT_EQ(decision_reference.rank,3);
+}
+
+TEST(JointComponentNumericsTest, ProblemConstructionPreflightUsesTheEstimatedPeak)
+{
+    n::MemoryShape shape;
+    shape.component_atoms=2;
+    shape.component_observations=3;
+    shape.component_support_entries=4;
+    shape.identity_validation_bytes=128;
+    shape.resident_bytes=256;
+    shape.problem_scope=true;
+
+    const auto stage=n::MemoryStage::ProblemConstruction;
+    const auto temporary=3*sizeof(std::vector<Eigen::Index>)+36*sizeof(Eigen::Index)+
+        4*sizeof(std::size_t)+3*sizeof(std::uint8_t)+128;
+    const auto peak=shape.resident_bytes+temporary;
+    const auto pass=n::PlanMemory(shape,stage,peak);
+    EXPECT_EQ(pass.stage,stage);
+    EXPECT_EQ(pass.status,n::MemoryStatus::Pass);
+    EXPECT_EQ(pass.resident_bytes,shape.resident_bytes);
+    EXPECT_EQ(pass.temporary_bytes,temporary);
+    EXPECT_EQ(pass.estimated_peak_bytes,peak);
+    const auto rejected=n::PlanMemory(shape,stage,peak-1);
+    EXPECT_EQ(rejected.stage,stage);
+    EXPECT_EQ(rejected.status,n::MemoryStatus::Reject);
+    EXPECT_EQ(rejected.reason,"estimated-peak-exceeds-budget");
+
+    shape.component_support_entries=std::numeric_limits<std::size_t>::max();
+    const auto overflow=n::PlanMemory(shape,stage);
+    EXPECT_EQ(overflow.stage,stage);
+    EXPECT_EQ(overflow.status,n::MemoryStatus::Overflow);
+    EXPECT_EQ(overflow.reason,"size-overflow");
 }
 
 TEST(JointComponentNumericsTest, MemoryPlannerRetainsNonRankStagesAndLocalBudgets)
