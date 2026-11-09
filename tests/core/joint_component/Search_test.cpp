@@ -31,21 +31,24 @@ struct Sample
 };
 struct RejectOnce
 {
-    int calls{},rejected{},retry_limit{40}; bool always{},reject_all{},tiny_step{}; std::string failure;
+    int calls{},rejected{},retry_limit{40},fail_on_call{}; bool always{},reject_all{},tiny_step{}; std::string failure;
     bool worsen_first_trial{};
     std::vector<double> trial_ratios, solve_radii, solve_eta, solve_response;
     bool CanRetry() const {return calls<retry_limit;}
     int ResidualCount() const {return 2;}
-    bool Evaluate(const Vector & x,Vector & r)
+    bool Evaluate(const Vector & x,double & residual_norm)
     {
-        ++calls; r=Vector::Constant(2,tiny_step ? -1e-100 : x(0)-1);
+        if(++calls==fail_on_call) return false;
+        Vector r=Vector::Constant(2,tiny_step ? -1e-100 : x(0)-1);
         if(worsen_first_trial && calls==2) r.setConstant(-2);
+        residual_norm=r.stableNorm();
         return true;
     }
-    bool Linearize(const Vector &,const Vector & residual,Eigen::MatrixXd & d,Vector & response,Vector & norms)
+    bool Linearize(const Vector & x,Eigen::MatrixXd & d,Vector & response,Vector & norms)
     {
         d=Eigen::MatrixXd::Constant(2,1,tiny_step ? 1e100 : 1.);
-        response=residual; norms=d.colwise().blueNorm(); return true;
+        response=Vector::Constant(2,tiny_step ? -1e-100 : x(0)-1);
+        norms=d.colwise().blueNorm(); return true;
     }
     bool IsStationary(const Vector & eta) const {return !tiny_step && eta(0)==1.;}
     joint::ActiveSetStep SolveBoundedStep(const Eigen::MatrixXd & j,const Vector & response,
@@ -119,6 +122,28 @@ TEST(JointComponentSearchTest, TrustedLowRatioAndUntrustedTrialUseDifferentRetri
     }
 }
 
+TEST(JointComponentSearchTest, FailedEvaluationsDoNotReplaceAcceptedState)
+{
+    RejectOnce initial; initial.fail_on_call=1;
+    BoundedLmDriver failed(initial);
+    Vector eta=Vector::Zero(1);
+    EXPECT_EQ(failed.Initialize(eta),BoundedLmStatus::ProblemStopped);
+    EXPECT_EQ(failed.FunctionEvaluations(),1);
+    EXPECT_EQ(failed.AcceptedIterations(),0);
+    EXPECT_EQ(eta(0),0.);
+
+    RejectOnce trial; trial.fail_on_call=2; trial.worsen_first_trial=true;
+    BoundedLmDriver retry(trial,{.initial_radius_factor=.1});
+    ASSERT_EQ(retry.Initialize(eta),BoundedLmStatus::Ready);
+    EXPECT_EQ(retry.Advance(eta),BoundedLmStatus::Running);
+    EXPECT_EQ(trial.solve_eta,(std::vector<double>{0,0}));
+    EXPECT_EQ(trial.solve_response,(std::vector<double>{-1,-1}));
+    EXPECT_EQ(trial.calls,3);
+    EXPECT_EQ(retry.FunctionEvaluations(),2);
+    EXPECT_EQ(retry.AcceptedIterations(),1);
+    EXPECT_NEAR(eta(0),.025,1e-12);
+}
+
 TEST(JointComponentSearchTest, ProfileSearchPreservesAcceptedTrajectory)
 {
     const rhbm_gem::core::JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
@@ -173,6 +198,41 @@ TEST(JointComponentSearchTest, ProfileSearchPreservesAcceptedTrajectory)
     EXPECT_TRUE(joint::VerifyJointEndpoint(data.domain,data.y,endpoint,replay,context).numerical_qualified);
 }
 
+TEST(JointComponentSearchTest, ProfileBudgetKeepsTheTrustedInitialEndpoint)
+{
+    Sample sample; const p::Domain domain(sample.grid,sample.atoms);
+    auto context=p::MakeContext(sample.y,2); context.eta_upper_bound=std::log(2.2);
+    context.profile_budget=1;
+    const Vector tau=Eigen::Vector2d(.48,.59);
+    const auto search=joint::SearchProfile(domain,sample.y,tau,context);
+    ASSERT_EQ(search.trials.size(),1u);
+    ASSERT_TRUE(search.trials.front().trust && search.trials.front().trust->passed);
+    EXPECT_TRUE(search.initial_accepted);
+    EXPECT_EQ(search.eta,search.initial.eta);
+    EXPECT_EQ(search.accepted,0);
+    EXPECT_EQ(search.evaluations,1);
+    EXPECT_EQ(search.stop_reason,"profile-budget");
+    EXPECT_FALSE(search.width_failed);
+}
+
+TEST(JointComponentSearchTest, NormalizedResidualNormMatchesTheMaterializedVector)
+{
+    for(const double scale:{1e-310,1e-150,.7,1e150,1e307})
+        for(const Eigen::Index size:{1,7,4096,4097})
+        {
+            SCOPED_TRACE(scale);
+            SCOPED_TRACE(size);
+            Vector residual(size);
+            for(Eigen::Index i=0;i<size;++i)
+                residual(i)=scale*static_cast<double>(i%11-5);
+            const Vector normalized=residual/scale;
+            const double expected=normalized.stableNorm();
+            EXPECT_TRUE(std::isfinite(expected));
+            EXPECT_GT(expected,0.);
+            EXPECT_EQ((residual/scale).stableNorm(),expected);
+        }
+}
+
 TEST(JointComponentSearchTest, ExplicitSupportArithmeticKeepsStrictBoundary)
 {
     namespace sim=rhbm_gem::core::simulation;
@@ -218,9 +278,10 @@ struct LinearResidual
     {design<<1,2, 3,-1, 2,4, -1,3, 4,2, 2,-2, 0,1; target<<1,3,-2,5,2,-3,4;}
     int ResidualCount() const {return 7;}
     bool CanRetry() const {return false;}
-    bool Evaluate(const Vector & x,Vector & r) {r=design*x-target; return true;}
-    bool Linearize(const Vector &,const Vector & residual,Eigen::MatrixXd & factor,Vector & response,Vector & norms)
+    bool Evaluate(const Vector & x,double & norm) {norm=(design*x-target).eval().stableNorm(); return true;}
+    bool Linearize(const Vector & x,Eigen::MatrixXd & factor,Vector & response,Vector & norms)
     {
+        const Vector residual=design*x-target;
         norms=design.colwise().blueNorm();
         if(!tiled) {factor=design; response=residual; return true;}
         p::runtime::TiledQR reduced(2,1);
@@ -247,9 +308,9 @@ struct BoundedLinearResidual
     {design.setIdentity(); target<<20.0,0.0; upper_eta<<10.2,12.0;}
     int ResidualCount() const {return 2;}
     bool CanRetry() const {return false;}
-    bool Evaluate(const Vector & x,Vector & residual) {residual=design*x-target; return true;}
-    bool Linearize(const Vector &,const Vector & residual,Eigen::MatrixXd & factor,Vector & response,Vector & norms)
-    {factor=design; response=residual; norms=design.colwise().blueNorm(); return true;}
+    bool Evaluate(const Vector & x,double & norm) {norm=(design*x-target).eval().stableNorm(); return true;}
+    bool Linearize(const Vector & x,Eigen::MatrixXd & factor,Vector & response,Vector & norms)
+    {factor=design; response=design*x-target; norms=design.colwise().blueNorm(); return true;}
     joint::ActiveSetStep SolveBoundedStep(const Eigen::MatrixXd & j,const Vector & response,
         const Vector & x,const Vector & diagonal,double trust_radius,double lambda)
     {return joint::SolveBoundedTrustRegionStep(j,response,diagonal,upper_eta-x,trust_radius,lambda);}
@@ -395,10 +456,14 @@ struct ShiftedWidthResidual
     std::string failure;
     int ResidualCount() const {return 2;}
     bool CanRetry() const {return false;}
-    bool Evaluate(const Vector & x,Vector & residual)
-    {++evaluations; residual.resize(2); residual<<sensitivity*(x(0)+reference-target),background; return true;}
-    bool Linearize(const Vector &,const Vector & residual,Eigen::MatrixXd & j,Vector & response,Vector & norms)
-    {j=Eigen::MatrixXd::Zero(2,1); j(0,0)=sensitivity; response=residual; norms=Vector::Constant(1,sensitivity); return true;}
+    bool Evaluate(const Vector & x,double & norm)
+    {++evaluations; norm=Eigen::Vector2d(sensitivity*(x(0)+reference-target),background).stableNorm(); return true;}
+    bool Linearize(const Vector & x,Eigen::MatrixXd & j,Vector & response,Vector & norms)
+    {
+        j=Eigen::MatrixXd::Zero(2,1); j(0,0)=sensitivity;
+        response=Eigen::Vector2d(sensitivity*(x(0)+reference-target),background);
+        norms=Vector::Constant(1,sensitivity); return true;
+    }
     joint::ActiveSetStep SolveBoundedStep(const Eigen::MatrixXd & j,const Vector & r,
         const Vector & x,const Vector & diagonal,double radius,double damping)
     {initial_radius=radius; return joint::SolveBoundedTrustRegionStep(j,r,diagonal,

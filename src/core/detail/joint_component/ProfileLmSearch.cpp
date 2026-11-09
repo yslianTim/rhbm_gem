@@ -197,16 +197,17 @@ struct Profile
         if(!cached.valid) failure="inner-"+cached.reason;
         return cached.valid;
     }
-    bool Evaluate(const Vector & eta,Vector & residual)
+    bool Evaluate(const Vector & eta,double & residual_norm)
     {
         if(!context.eta_upper_bound || !std::isfinite(*context.eta_upper_bound))
         {failure="invalid-width-upper-bound"; return false;}
         if((eta.array()>*context.eta_upper_bound).any())
         {failure="bounded-step-infeasible"; return false;}
         if(!Get(eta)) return false;
-        residual=cached.residual/context.scale; return true;
+        // Normalize each coefficient before taking the norm, as in the full residual model.
+        residual_norm=(cached.residual/context.scale).stableNorm(); return true;
     }
-    bool Linearize(const Vector & eta,const Vector &,Matrix & factor,Vector & response,Vector & norms)
+    bool Linearize(const Vector & eta,Matrix & factor,Vector & response,Vector & norms)
     {
         if(!Get(eta)) return false;
         const auto prepared=PrepareDerivative(cached,context.scale,&context);

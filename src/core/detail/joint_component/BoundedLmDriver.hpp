@@ -33,14 +33,14 @@ enum class BoundedLmStatus
 
 struct BoundedLmState
 {
-    Eigen::VectorXd accepted_residual,diagonal,column_norms,reduced_response;
-    Eigen::VectorXd trial_eta,trial_residual,model_step;
+    Eigen::VectorXd diagonal,column_norms,reduced_response;
+    Eigen::VectorXd trial_eta,model_step;
     Eigen::MatrixXd reduced_jacobian;
     double accepted_residual_norm{},scaled_eta_norm{},scaled_gradient_norm{},trust_radius{},damping{};
     Eigen::Index accepted_iterations{},function_evaluations{};
 };
 
-// The problem supplies full residuals, a reduced linear model, a feasible damped
+// The problem supplies full residual norms, a reduced linear model, a feasible damped
 // step, and stationarity and trial checks. AssessTrial records the candidate and
 // returns its trustworthiness. The caller observes accepted updates after Advance.
 template<class Problem>
@@ -63,18 +63,17 @@ public:
             options_.gtol<0. || options_.evaluation_budget<=0 || options_.initial_radius_factor<=0.)
             return BoundedLmStatus::InvalidInput;
 
-        state_.accepted_residual.resize(rows);
-        state_.trial_residual.resize(rows);
         state_.function_evaluations=1;
-        if(!problem_.Evaluate(eta,state_.accepted_residual)) return BoundedLmStatus::ProblemStopped;
-        state_.accepted_residual_norm=state_.accepted_residual.stableNorm();
+        double residual_norm{};
+        if(!problem_.Evaluate(eta,residual_norm)) return BoundedLmStatus::ProblemStopped;
+        state_.accepted_residual_norm=residual_norm;
         return BoundedLmStatus::Ready;
     }
 
     BoundedLmStatus Advance(Eigen::VectorXd & eta)
     {
         auto & s=state_;
-        if(!problem_.Linearize(eta,s.accepted_residual,s.reduced_jacobian,s.reduced_response,s.column_norms))
+        if(!problem_.Linearize(eta,s.reduced_jacobian,s.reduced_response,s.column_norms))
             return BoundedLmStatus::ProblemStopped;
 
         // Preserve the reduced model for the bounded solve. The pivoted QR is
@@ -121,11 +120,10 @@ public:
 
             Reduction reduction{};
             double trial_residual_norm{};
-            const bool evaluated=problem_.Evaluate(s.trial_eta,s.trial_residual);
+            const bool evaluated=problem_.Evaluate(s.trial_eta,trial_residual_norm);
             if(evaluated)
             {
                 ++s.function_evaluations;
-                trial_residual_norm=s.trial_residual.stableNorm();
                 if(!std::isfinite(trial_residual_norm)) return Stop("non-finite-trial-residual");
 
                 // Actual reduction compares full residuals. Prediction uses the
@@ -165,7 +163,6 @@ public:
             {
                 eta=s.trial_eta;
                 s.scaled_eta_norm=s.diagonal.cwiseProduct(eta).stableNorm();
-                s.accepted_residual.swap(s.trial_residual);
                 s.accepted_residual_norm=trial_residual_norm;
                 ++s.accepted_iterations;
                 rejected_untrusted=false;
