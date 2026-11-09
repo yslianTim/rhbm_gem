@@ -607,7 +607,7 @@ TEST(JointComponentRuntimeTest, CanonicalReasonReachesComponentProgressAndCaptur
             if(variant==2 || variant==3)
             {
                 local.core_atoms=1;
-                local.force_no_trusted_profile_for_testing=[](auto,auto) {return true;};
+                local.force_width_failure_for_testing=[](auto,auto) {return true;};
             }
             if(variant==4) local.perturb_sweep_replay_objective_for_testing=true;
             if(variant==5) local.candidate_fault_for_testing=[](auto,auto,const auto &) {

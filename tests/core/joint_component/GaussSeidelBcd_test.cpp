@@ -1014,7 +1014,7 @@ TEST(JointBcdSearchTest, FailedBlockRetriesAfterLaterBlocksUpdateTheNeighborStat
     const n::Vector initial_eta=n::Vector::Constant(2,std::log(.55));
     n::BcdSearchPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=1;
     policy.eta_upper_bound=std::log(2.2); policy.collect_diagnostics=true;
-    policy.force_no_trusted_profile_for_testing=[](std::size_t block,std::size_t sweep) {
+    policy.force_width_failure_for_testing=[](std::size_t block,std::size_t sweep) {
         return block==0 && sweep==0;
     };
     const auto prefix=n::SearchBcdComponent(data.domain,data.layout,data.y,initial_eta,data.context,policy);
@@ -1056,7 +1056,7 @@ TEST(JointBcdSearchTest, ExhaustedBlockRecoveryLeavesTheLastAcceptedComponentSta
     const n::Vector initial_eta=n::Vector::Constant(2,std::log(.55));
     n::BcdSearchPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=1;
     policy.eta_upper_bound=std::log(2.2);
-    policy.force_no_trusted_profile_for_testing=[](std::size_t block,std::size_t) {return block==0;};
+    policy.force_width_failure_for_testing=[](std::size_t block,std::size_t) {return block==0;};
     const auto prefix=n::SearchBcdComponent(data.domain,data.layout,data.y,initial_eta,data.context,policy);
     ASSERT_EQ(prefix.sweep_count,1u);
     ASSERT_GT(prefix.state.beta.norm(),0.0);
@@ -1272,9 +1272,18 @@ TEST(JointBcdSearchTest, PracticalCriteriaDoNotQualifySweepsWithFailedBlocks)
     n::BcdSearchPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=6;
     policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
     policy.eta_upper_bound=std::log(2.2);
-    policy.force_no_trusted_profile_for_testing=[](std::size_t block,std::size_t) {return block==0;};
+    policy.collect_diagnostics=true;
+    auto context=data.context;
+    context.profile_budget=0;
     const auto result=n::SearchBcdComponent(data.domain,data.layout,data.y,
-        initial_eta,data.context,policy);
+        initial_eta,context,policy);
+    ASSERT_FALSE(result.blocks.empty());
+    ASSERT_TRUE(result.blocks.front().failure_diagnostics);
+    const auto & failure=*result.blocks.front().failure_diagnostics;
+    EXPECT_FALSE(failure.initial_profile_valid);
+    EXPECT_FALSE(failure.initial_profile_trusted);
+    EXPECT_EQ(result.total_profile_evaluations,0u);
+    EXPECT_EQ(result.work.bounded_lm.failed_subproblems,0u);
     EXPECT_FALSE(result.search_converged);
     EXPECT_EQ(result.reason,"block-recovery-exhausted");
     EXPECT_EQ(result.first_order_stationarity_sweep,0u);

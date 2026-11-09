@@ -677,17 +677,14 @@ BcdSearchResult SearchBcdComponent(
         };
         for(std::size_t block_index=0;block_index<partition.cores.size();++block_index)
         {
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+            if(policy.force_width_failure_for_testing)
+                prepared_blocks.at(block_index).context.force_width_subproblem_failure_for_testing=
+                    policy.force_width_failure_for_testing(block_index,sweep_index);
+#endif
             const auto & prepared=prepared_blocks.at(block_index);
             const auto & core_atoms=prepared.core_atoms; const auto & affected_rows=prepared.affected_rows;
             const auto & local_domain=prepared.domain;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            auto local_context=prepared.context;
-            if(policy.force_width_failure_for_testing)
-                local_context.force_width_subproblem_failure_for_testing=
-                    policy.force_width_failure_for_testing(block_index,sweep_index);
-#else
-            const auto & local_context=prepared.context;
-#endif
             const auto local_atoms=prepared.local_atoms;
             BcdBlockRecord record;
             record.sweep=sweep_index+1; record.block=block_index+1;
@@ -724,7 +721,7 @@ BcdSearchResult SearchBcdComponent(
             }
 
             const auto old_widths=old_eta.array().exp().eval();
-            const auto profile_search=SearchProfile(local_domain,local_y,old_widths,local_context);
+            const auto profile_search=SearchProfile(local_domain,local_y,old_widths,prepared.context);
             out.work.bounded_lm.Merge(profile_search.bounded_lm_work);
             record.accepted_updates=profile_search.accepted;
             ++sweep.block_solves; ++out.total_block_solves;
@@ -733,13 +730,7 @@ BcdSearchResult SearchBcdComponent(
             sweep.maximum_block_rows=std::max(sweep.maximum_block_rows,static_cast<std::size_t>(local_domain.rows));
             sweep.maximum_block_columns=std::max(sweep.maximum_block_columns,static_cast<std::size_t>(2*local_atoms));
             const Trial * accepted=nullptr;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            const bool force_no_trusted_profile=policy.force_no_trusted_profile_for_testing &&
-                policy.force_no_trusted_profile_for_testing(block_index,sweep_index);
-#else
-            const bool force_no_trusted_profile=false;
-#endif
-            if(!force_no_trusted_profile && !profile_search.width_failed)
+            if(!profile_search.width_failed)
                 for(auto it=profile_search.trials.rbegin();it!=profile_search.trials.rend();++it)
                 {
                     if(!it->accepted || !it->endpoint.valid || !it->trust || !it->trust->passed) continue;

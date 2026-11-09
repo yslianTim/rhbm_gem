@@ -136,7 +136,6 @@ struct BcdSearchPolicy
     std::function<void(const BcdSweepRecord &)> production_progress;
     std::optional<double> eta_upper_bound;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    std::function<bool(std::size_t,std::size_t)> force_no_trusted_profile_for_testing;
     // Zero-based block and sweep; affects only this visit's existing LM fault hook.
     std::function<bool(std::size_t,std::size_t)> force_width_failure_for_testing;
 #endif
