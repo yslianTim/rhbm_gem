@@ -417,12 +417,10 @@ BcdSearchResult SearchBcdComponent(
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     const bool stop_after_stationarity=policy.stop_after_stationarity;
     const bool assess_local_conditioning=policy.assess_local_conditioning;
-    const bool collect_telemetry=policy.collect_telemetry;
     const bool collect_diagnostics=policy.collect_diagnostics;
 #else
     constexpr bool stop_after_stationarity=true;
     constexpr bool assess_local_conditioning=true;
-    constexpr bool collect_telemetry=true;
     constexpr bool collect_diagnostics=false;
 #endif
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -667,7 +665,6 @@ BcdSearchResult SearchBcdComponent(
     for(const auto row:layout.informative_rows)
         row_position.at(static_cast<std::size_t>(row))=-1;
     std::size_t mapped_replay_block=std::numeric_limits<std::size_t>::max();
-    const bool retain_diagnostics=collect_diagnostics;
     bool stop=false;
     std::size_t next_certification_retry_sweep{};
     std::vector<std::size_t> block_failure_visits(partition.cores.size());
@@ -685,7 +682,7 @@ BcdSearchResult SearchBcdComponent(
                 out.total_accepted_local_updates+=static_cast<std::size_t>(record.accepted_updates);
             }
             else if(record.status=="unchanged") ++sweep.unchanged_blocks;
-            if(retain_diagnostics) out.blocks.push_back(std::move(record));
+            if(collect_diagnostics) out.blocks.push_back(std::move(record));
         };
         for(std::size_t block_index=0;block_index<partition.cores.size();++block_index)
         {
@@ -815,7 +812,7 @@ BcdSearchResult SearchBcdComponent(
             Vector candidate_eta,candidate_beta;
             if(candidate_fast_unchanged)
             {
-                if(collect_telemetry) ++out.work.candidate_replay_skipped_unchanged;
+                ++out.work.candidate_replay_skipped_unchanged;
             }
             else
             {
@@ -844,17 +841,14 @@ BcdSearchResult SearchBcdComponent(
                     candidate_affected_prediction=std::move(candidate.prediction);
                     candidate_affected_residual=std::move(candidate.residual);
                     replay_workspace.objective=candidate.objective;
-                    if(collect_telemetry)
-                    {
-                        ++out.work.affected_candidate_replays;
-                        ++out.work.incremental_objective_evaluations;
-                        out.work.affected_replay_peak_scratch_bytes=std::max(
-                            out.work.affected_replay_peak_scratch_bytes,candidate.scratch_bytes);
-                    }
+                    ++out.work.affected_candidate_replays;
+                    ++out.work.incremental_objective_evaluations;
+                    out.work.affected_replay_peak_scratch_bytes=std::max(
+                        out.work.affected_replay_peak_scratch_bytes,candidate.scratch_bytes);
                 }
                 else
                 {
-                    if(collect_telemetry) ++out.work.full_candidate_replays;
+                    ++out.work.full_candidate_replays;
                     ReplayInto(domain,layout,y,candidate_eta,candidate_beta,context.scale,replay_structure,
                         replay_workspace);
                 }
@@ -989,7 +983,7 @@ BcdSearchResult SearchBcdComponent(
         if(stop) break;
         sweep.objective_after=out.state.objective;
         {
-            if(collect_telemetry) ++out.work.sweep_replays;
+            ++out.work.sweep_replays;
             ReplayInto(domain,layout,y,out.state.eta,out.state.beta,context.scale,replay_structure,replay_workspace);
         }
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -1026,7 +1020,6 @@ BcdSearchResult SearchBcdComponent(
         sweep.stationarity_eta_gradient_inf_norm=stationarity_eta_gradient;
         sweep.wall_seconds=Seconds(sweep_started); out.search_seconds+=sweep.wall_seconds;
         ++out.sweep_count; out.final_sweep=sweep;
-        if(retain_diagnostics) out.sweeps.push_back(sweep);
         if(!sweep_replay_valid)
         {out.reason="block-cache-replay-failed"; stop=true; break;}
         // Reconciliation follows the successful audit and global-state evaluation.
@@ -1035,7 +1028,6 @@ BcdSearchResult SearchBcdComponent(
         sweep.objective_after=replay.objective;
         sweep.objective_cache_refreshed=true;
         out.final_sweep=sweep;
-        if(retain_diagnostics) out.sweeps.back()=sweep;
         budget.Observe(sweep.global_ac_kkt,stationarity_eta_gradient,sweep_had_block_failure);
         if(policy.production_progress) policy.production_progress(sweep);
         const auto stationarity=sweep_had_block_failure ? BcdStationarityState::NotStationary :
@@ -1277,9 +1269,6 @@ BcdComponentResult SolveBcdComponent(
         };
     }
     out.search=SearchBcdComponent(prepared.domain,local_layout,local_y,initial_eta,context,policy);
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    if(production_policy.observe_search_for_testing) production_policy.observe_search_for_testing(out.search);
-#endif
     const bool qualified=out.search.accepted_state_integrity && out.search.certification &&
         out.search.certification->qualified();
     out.succeeded=out.search.search_converged && qualified;

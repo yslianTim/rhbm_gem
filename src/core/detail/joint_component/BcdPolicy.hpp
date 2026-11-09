@@ -11,7 +11,6 @@ namespace rhbm_gem::core::joint_component {
 
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
 struct BcdSearchPolicy;
-struct BcdSearchResult;
 #endif
 
 inline constexpr std::size_t ProductionBcdCoreAtoms{ 12 };
@@ -28,7 +27,6 @@ struct BcdExecutionPolicy
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     // Reuse production orchestration/assembly with a scoped test search policy.
     std::function<void(BcdSearchPolicy &)> configure_for_testing;
-    std::function<void(const BcdSearchResult &)> observe_search_for_testing;
 #endif
 };
 

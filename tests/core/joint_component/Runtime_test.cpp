@@ -14,6 +14,7 @@
 #include "core/detail/joint_component/TiledDerivative.hpp"
 #include "support/JointSyntheticWorkload.hpp"
 #include <cmath>
+#include <string_view>
 #include "data/io/detail/JointResultJson.hpp"
 #include <rhbm_gem/utils/math/EigenHelper.hpp>
 
@@ -308,7 +309,7 @@ namespace {
 struct RecoveryAssemblyRun
 {
     core::JointFitResult fit;
-    n::BcdSearchResult search;
+    std::optional<double> projected_width_kkt;
     std::size_t injected{};
 };
 RecoveryAssemblyRun RunRecoveryAssembly(bool inject,bool persistent=false,std::size_t sweeps=200,
@@ -323,7 +324,7 @@ RecoveryAssemblyRun RunRecoveryAssembly(bool inject,bool persistent=false,std::s
     const core::JointProblem problem(std::move(input));
     n::BcdExecutionPolicy policy; policy.eta_upper_bound=std::log(2.2);
     policy.configure_for_testing=[&](n::BcdSearchPolicy & local) {
-        local.core_atoms=1; local.maximum_sweeps=sweeps; local.collect_diagnostics=true;
+        local.core_atoms=1; local.maximum_sweeps=sweeps;
         local.force_width_failure_for_testing=[&](std::size_t block,std::size_t sweep) {
             if(inject && block==0 && (persistent || sweep==0)) {++out.injected; return true;}
             return false;
@@ -334,9 +335,17 @@ RecoveryAssemblyRun RunRecoveryAssembly(bool inject,bool persistent=false,std::s
                 n::BcdCandidateFaultForTesting::None;
         };
     };
-    policy.observe_search_for_testing=[&](const auto & search) {out.search=search;};
-    out.fit=n::FitBcdComponents(problem,{.55,.55},policy);
+    out.fit=n::FitBcdComponents(problem,{.55,.55},policy,[&](const auto & event) {
+        if(event.phase==n::JointProgressPhase::CertificationStarted && event.bcd)
+            out.projected_width_kkt=event.bcd->projected_width_kkt;
+    });
     return out;
+}
+const rhbm_gem::JointCheck * FindEvidence(const core::JointComponentResult & component,std::string_view name)
+{
+    const auto it=std::find_if(component.evidence.begin(),component.evidence.end(),
+        [&](const auto & check) {return check.name==name;});
+    return it==component.evidence.end() ? nullptr : &*it;
 }
 }
 
@@ -346,35 +355,23 @@ TEST(JointComponentRuntimeTest, TransientWidthFailureRecoversAndAssemblesQualifi
     const auto baseline=RunRecoveryAssembly(false);
     ASSERT_EQ(baseline.fit.RuntimeConvergence(),Status::Passed);
     const auto recovered=RunRecoveryAssembly(true);
-    const auto & search=recovered.search;
     EXPECT_EQ(recovered.injected,1u);
-    ASSERT_FALSE(search.blocks.empty());
-    const auto & first=search.blocks.front();
-    EXPECT_EQ(first.status,"retry-pending"); EXPECT_FALSE(first.accepted);
-    ASSERT_TRUE(first.failure_diagnostics);
-    EXPECT_TRUE(first.failure_diagnostics->initial_profile_trusted);
-    EXPECT_EQ(first.failure_diagnostics->local_search_stop_reason,
-        "bounded-subproblem:injected-width-subproblem-failure");
-    ASSERT_GT(search.blocks.size(),2u);
-    const auto & retry=search.blocks[2];
-    EXPECT_EQ(retry.block,1u); EXPECT_EQ(retry.sweep,2u);
-    EXPECT_TRUE(retry.recovery_retry); EXPECT_TRUE(retry.recovery_success);
-    EXPECT_TRUE(retry.accepted); EXPECT_GT(retry.accepted_updates,0);
-    EXPECT_EQ(search.recovery_attempts,1u); EXPECT_EQ(search.recovery_successes,1u);
-    EXPECT_EQ(search.unresolved_failures,0u); EXPECT_TRUE(search.accepted_state_integrity);
-    EXPECT_EQ(search.work.bounded_lm.failed_subproblems,1u);
-    ASSERT_TRUE(search.final_sweep);
-    EXPECT_LE(search.final_sweep->global_ac_kkt,1e-7);
-    EXPECT_LE(search.final_sweep->projected_eta_gradient_inf_norm,1e-9);
-    EXPECT_EQ(search.final_sweep->maximum_width_bound_violation,0.0);
-    EXPECT_GT(search.confirmed_stationarity_sweep,0u);
-    ASSERT_TRUE(search.certification);
-    EXPECT_TRUE(search.certification->qualified());
-    EXPECT_TRUE(search.certification->assessment.endpoint_verified);
-    EXPECT_TRUE(search.certification->assessment.independent_replay.passed);
+    ASSERT_TRUE(recovered.projected_width_kkt);
+    EXPECT_LE(*recovered.projected_width_kkt,1e-9);
     ASSERT_EQ(recovered.fit.components.size(),1u);
     const auto & component=recovered.fit.components.front();
     EXPECT_TRUE(component.state); EXPECT_EQ(component.RuntimeConvergence(),Status::Passed);
+    EXPECT_GT(component.confirmed_stationarity_sweep,0u);
+    const auto * integrity=FindEvidence(component,"accepted-state-integrity");
+    ASSERT_TRUE(integrity);
+    EXPECT_EQ(integrity->status,Status::Passed);
+    EXPECT_EQ(integrity->reason,"recovery-attempts=1; recovery-successes=1; unresolved=0");
+    for(const auto * name:{"conditional-ac-optimality","width-bound-feasibility","endpoint-verification","independent-replay"})
+    {
+        const auto * check=FindEvidence(component,name);
+        ASSERT_TRUE(check)<<name;
+        EXPECT_EQ(check->status,Status::Passed)<<name;
+    }
     const auto lm=std::find_if(component.evidence.begin(),component.evidence.end(),[](const auto & check) {
         return check.name=="active-set-lm-subproblems";
     });
@@ -416,31 +413,48 @@ TEST(JointComponentRuntimeTest, WidthRecoveryExhaustionAndUnqualifiedTerminalSta
     using Status=core::JointCheckStatus;
     const auto exhausted=RunRecoveryAssembly(true,true);
     EXPECT_EQ(exhausted.injected,2u);
-    EXPECT_EQ(exhausted.search.reason,"block-recovery-exhausted");
-    EXPECT_EQ(exhausted.search.recovery_attempts,1u);
-    EXPECT_EQ(exhausted.search.recovery_successes,0u);
-    EXPECT_EQ(exhausted.search.unresolved_failures,1u);
-    EXPECT_FALSE(exhausted.fit.components.front().state);
+    ASSERT_EQ(exhausted.fit.components.size(),1u);
+    const auto & exhausted_component=exhausted.fit.components.front();
+    EXPECT_EQ(exhausted_component.stop_reason,"block-recovery-exhausted");
+    const auto * exhausted_integrity=FindEvidence(exhausted_component,"accepted-state-integrity");
+    ASSERT_TRUE(exhausted_integrity);
+    EXPECT_EQ(exhausted_integrity->status,Status::Failed);
+    EXPECT_EQ(exhausted_integrity->reason,"recovery-attempts=1; recovery-successes=0; unresolved=1");
+    EXPECT_FALSE(exhausted_component.state);
     EXPECT_FALSE(exhausted.fit.assembled_state);
     EXPECT_NE(exhausted.fit.RuntimeConvergence(),Status::Passed);
 
     const auto early=RunRecoveryAssembly(true,false,2);
-    EXPECT_EQ(early.search.recovery_successes,1u);
-    ASSERT_TRUE(early.search.final_sweep);
-    EXPECT_GT(early.search.final_sweep->projected_eta_gradient_inf_norm,1e-9);
-    EXPECT_FALSE(early.fit.components.front().state); EXPECT_FALSE(early.fit.assembled_state);
+    ASSERT_EQ(early.fit.components.size(),1u);
+    const auto & early_component=early.fit.components.front();
+    const auto * early_integrity=FindEvidence(early_component,"accepted-state-integrity");
+    ASSERT_TRUE(early_integrity);
+    EXPECT_EQ(early_integrity->reason,"recovery-attempts=1; recovery-successes=1; unresolved=0");
+    ASSERT_TRUE(early.projected_width_kkt);
+    EXPECT_GT(*early.projected_width_kkt,1e-9);
+    EXPECT_FALSE(early_component.state); EXPECT_FALSE(early.fit.assembled_state);
 
     const auto corrupt=RunRecoveryAssembly(true,false,200,true);
-    EXPECT_EQ(corrupt.search.recovery_successes,1u);
-    EXPECT_FALSE(corrupt.search.accepted_state_integrity);
-    EXPECT_FALSE(corrupt.fit.components.front().state); EXPECT_FALSE(corrupt.fit.assembled_state);
+    ASSERT_EQ(corrupt.fit.components.size(),1u);
+    const auto & corrupt_component=corrupt.fit.components.front();
+    EXPECT_EQ(corrupt_component.stop_reason,"block-objective-replay-failed");
+    const auto * corrupt_integrity=FindEvidence(corrupt_component,"accepted-state-integrity");
+    ASSERT_TRUE(corrupt_integrity);
+    EXPECT_EQ(corrupt_integrity->status,Status::Failed);
+    EXPECT_EQ(corrupt_integrity->reason,"recovery-attempts=1; recovery-successes=1; unresolved=0");
+    EXPECT_FALSE(corrupt_component.state); EXPECT_FALSE(corrupt.fit.assembled_state);
 
     // Start from genuinely recovered/certified evidence; only invalidate or remove it.
     const auto recovered=RunRecoveryAssembly(true);
     ASSERT_EQ(recovered.fit.RuntimeConvergence(),Status::Passed);
     const auto & data=core::JointProblemAccess::Get(*recovered.fit.problem);
     auto context=data.context; context.eta_upper_bound=std::log(2.2);
-    auto altered=recovered.search.state;
+    ASSERT_EQ(recovered.fit.components.size(),1u);
+    const auto & state=recovered.fit.components.front().state;
+    ASSERT_TRUE(state);
+    n::BlockCoordinateState altered;
+    altered.eta=n::VectorMap(state->log_tau.data(),static_cast<Eigen::Index>(state->log_tau.size()));
+    altered.beta=n::VectorMap(state->ac.data(),static_cast<Eigen::Index>(state->ac.size()));
     altered.beta(0)+=.1;
     const auto recertified=n::CertifyBcdEndpoint(data.domain,data.y,altered,context,
         0,n::PracticalJointConvergenceCriteria);
@@ -489,16 +503,15 @@ TEST(JointComponentRuntimeTest, ComponentValidationProvidesReasonWithoutEntering
         if(variant==7) prepared.local_to_parent_atoms[0]=widths.size();
         // Empty layouts retain precedence over invalid widths.
         if(variant<2) widths(0)=0;
-        bool configured{},invoked{};
+        bool configured{};
         n::BcdExecutionPolicy policy;
         policy.configure_for_testing=[&](auto &) {configured=true;};
-        policy.observe_search_for_testing=[&](const auto &) {invoked=true;};
         std::vector<n::JointProgressEvent> events;
         const n::JointProgressComponent component{1,1,"component",3,prepared.local_to_parent_rows.size()};
         const auto result=n::SolveBcdComponent(prepared,widths,data.context,policy,
             [&](const auto & event) {events.push_back(event);},&component);
         EXPECT_EQ(result.search.reason,variant<2 ? "unobserved-full-parameters" : "invalid-initial-widths");
-        EXPECT_FALSE(configured); EXPECT_FALSE(invoked); EXPECT_TRUE(events.empty());
+        EXPECT_FALSE(configured); EXPECT_TRUE(events.empty());
         EXPECT_FALSE(result.succeeded); EXPECT_FALSE(result.search.search_converged);
         EXPECT_FALSE(result.search.accepted_state_integrity); EXPECT_FALSE(result.search.certification);
         EXPECT_EQ(result.search.sweep_count,0u); EXPECT_EQ(result.search.state.eta.size(),0);
@@ -519,10 +532,9 @@ TEST(JointComponentRuntimeTest, ComponentViewPreflightPreservesReasonAndMemoryDi
         if(variant==1) mappings->atom_to_local[0]=-1;
         // Repeated valid selectors exercise the estimate without allocating the rejected domain.
         if(variant==2) layout.full_atoms.assign(100000,0);
-        bool configured{},invoked{};
+        bool configured{};
         n::BcdExecutionPolicy policy;
         policy.configure_for_testing=[&](auto &) {configured=true;};
-        policy.observe_search_for_testing=[&](const auto &) {invoked=true;};
         std::vector<n::JointProgressEvent> events;
         const n::JointProgressComponent component{1,1,view.id,view.atoms.size(),view.rows.size()};
         const auto result=n::SolveBcdComponentView(view,layout,n::Vector::Constant(3,.55),
@@ -530,7 +542,7 @@ TEST(JointComponentRuntimeTest, ComponentViewPreflightPreservesReasonAndMemoryDi
         EXPECT_EQ(result.search.reason,variant==0 ? "block-invalid-partition" : variant==1 ?
             "resource-limit:bcd-preparation:size-overflow" :
             "resource-limit:bcd-preparation:estimated-peak-exceeds-budget");
-        EXPECT_FALSE(configured); EXPECT_FALSE(invoked); EXPECT_TRUE(events.empty());
+        EXPECT_FALSE(configured); EXPECT_TRUE(events.empty());
         EXPECT_FALSE(result.succeeded); EXPECT_FALSE(result.search.search_converged);
         EXPECT_FALSE(result.search.accepted_state_integrity); EXPECT_FALSE(result.search.certification);
         EXPECT_EQ(result.search.sweep_count,0u); EXPECT_EQ(result.search.state.eta.size(),0);
@@ -561,15 +573,12 @@ TEST(JointComponentRuntimeTest, ComponentSearchPreflightKeepsValidationOrderAndC
         if(variant==2) policy.eta_upper_bound=std::numeric_limits<double>::infinity();
         if(variant==3) widths.setConstant(3);
         if(variant==4) prepared.row_ids=n::Identities{};
-        int invocations{}; std::string observed_reason;
-        policy.observe_search_for_testing=[&](const auto & search) {++invocations; observed_reason=search.reason;};
         std::vector<n::JointProgressEvent> events;
         const n::JointProgressComponent component{1,1,"component",3,prepared.local_to_parent_rows.size()};
         const auto result=n::SolveBcdComponent(prepared,widths,data.context,policy,
             [&](const auto & event) {events.push_back(event);},&component);
         EXPECT_EQ(result.search.reason,variant==0 ? "invalid-width-upper-bound" : variant<3 ?
             "invalid-global-width-bound" : variant==3 ? "bounded-initial-width-infeasible" : "block-invalid-partition");
-        EXPECT_EQ(invocations,1); EXPECT_EQ(result.search.reason,observed_reason);
         EXPECT_FALSE(result.succeeded); EXPECT_FALSE(result.search.search_converged);
         EXPECT_FALSE(result.search.accepted_state_integrity); EXPECT_FALSE(result.search.certification);
         EXPECT_EQ(result.search.sweep_count,0u); EXPECT_EQ(result.search.state.eta.size(),0);
@@ -608,15 +617,12 @@ TEST(JointComponentRuntimeTest, CanonicalReasonReachesComponentProgressAndCaptur
             if(variant==6) local.global_state_memory_budget_for_testing=1;
             if(variant==7) local.certify_endpoint=false;
         };
-        std::string observed_reason; int invocations{};
-        policy.observe_search_for_testing=[&](const auto & search) {++invocations; observed_reason=search.reason;};
         std::vector<n::JointProgressEvent> events;
         const n::JointProgressComponent component{1,1,data.partition.components.front().id,3,
             prepared.local_to_parent_rows.size()};
         const auto result=n::SolveBcdComponent(prepared,n::Vector::Constant(3,.55),data.context,policy,
             [&](const auto & event) {events.push_back(event);},&component);
-        EXPECT_EQ(invocations,1); EXPECT_EQ(result.search.reason,reasons[variant]);
-        EXPECT_EQ(result.search.reason,observed_reason);
+        EXPECT_EQ(result.search.reason,reasons[variant]);
         const bool qualified=result.search.accepted_state_integrity && result.search.certification &&
             result.search.certification->qualified();
         EXPECT_EQ(result.succeeded,result.search.search_converged && qualified);
@@ -634,7 +640,6 @@ TEST(JointComponentRuntimeTest, CanonicalReasonReachesComponentProgressAndCaptur
         events.clear();
         const auto fit=n::FitBcdComponents(problem,{.55,.55,.55},policy,
             [&](const auto & event) {events.push_back(event);});
-        EXPECT_EQ(invocations,2);
         ASSERT_EQ(fit.components.size(),1u);
         EXPECT_EQ(fit.components[0].stop_reason,result.search.reason);
         EXPECT_EQ(fit.components[0].search_completed,result.succeeded);

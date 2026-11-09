@@ -883,8 +883,6 @@ TEST(PureHaloSupportExclusionTest, RunsPureWorkflowWithoutHalos)
 TEST(PureHaloSupportExclusionTest, ExtendedSearchQualifiesAssemblyAndFeedsEveryDownstreamStage)
 {
     auto fixture=WorkflowFixture(true,true);
-    static std::size_t maximum_sweeps;
-    maximum_sweeps=0;
     struct ResetHook
     {
         ~ResetHook() {core::detail::JointWorkflowFitHookForTesting()=nullptr;}
@@ -901,9 +899,6 @@ TEST(PureHaloSupportExclusionTest, ExtendedSearchQualifiesAssemblyAndFeedsEveryD
         policy.configure_for_testing=[](auto & local) {
             local.core_atoms=1; local.nominal_sweeps=35; local.maximum_sweeps=100;
         };
-        policy.observe_search_for_testing=[](const auto & search) {
-            maximum_sweeps=std::max(maximum_sweeps,search.sweep_count);
-        };
         auto extended=n::FitBcdComponents(*fit.problem,bounded.tau_values,policy);
         extended.initialization=std::move(initialization);
         for(const auto & check:fit.evidence)
@@ -917,10 +912,13 @@ TEST(PureHaloSupportExclusionTest, ExtendedSearchQualifiesAssemblyAndFeedsEveryD
     options.quiet_mode=true; options.thread_size=1;
     core::detail::JointPostprocessingMetrics metrics;
     ASSERT_NO_THROW(core::detail::RunJointComponentWorkflow(fixture.map,fixture.model,options,&metrics));
-    ASSERT_GT(maximum_sweeps,35u);
-    ASSERT_LE(maximum_sweeps,100u);
     const auto result=fixture.model.GetAnalysisView().GetJointResult();
     ASSERT_TRUE(result);
+    std::size_t maximum_sweeps{};
+    for(const auto & component:result->components)
+        maximum_sweeps=std::max(maximum_sweeps,component.search_sweeps);
+    ASSERT_GT(maximum_sweeps,35u);
+    ASSERT_LE(maximum_sweeps,100u);
     ASSERT_TRUE(IsQualifiedJointAnalysisResult(*result));
     ASSERT_TRUE(result->assembled_state);
     ASSERT_TRUE(result->halo_median_reconstruction);

@@ -125,7 +125,7 @@ BcdComponentBatch OrchestrateBcdComponents(
             component.accepted_updates=static_cast<int>(fit.search.total_accepted_local_updates);
             component.candidate_diagnostic=CandidateDiagnostic(fit.search, layout.full_atoms.size());
             fit.search.state=joint_component::BlockCoordinateState{};
-            fit.search.blocks={}; fit.search.sweeps={}; fit.search.final_sweep.reset();
+            fit.search.blocks={}; fit.search.final_sweep.reset();
             component.local_conditioning=std::move(fit.search.local_conditioning);
             const auto remap_core_atoms=[&](auto & blocks) {
                 for(auto & block:blocks)

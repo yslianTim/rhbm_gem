@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <gtest/gtest.h>
 #include "core/detail/joint_component/ComponentSweepBudget.hpp"
 #include "core/detail/joint_component/Problem.hpp"
@@ -160,27 +161,33 @@ TEST(JointComponentSweepBudgetTest, EasyQualifiedSearchStopsWithoutExtraWorkOrPa
 TEST(JointComponentSweepBudgetTest, ExtensionPreservesTheOriginalPathAndQualifiesProductionAssembly)
 {
     const auto problem=CoupledPair();
-    std::vector<n::BcdSearchResult> searches;
     n::BcdExecutionPolicy policy; policy.eta_upper_bound=std::log(2.2);
     policy.configure_for_testing=[](auto & local) {
         local.core_atoms=1; local.nominal_sweeps=0; local.maximum_sweeps=40;
     };
-    policy.observe_search_for_testing=[&](const auto & search) {searches.push_back(search);};
     const auto fixed=n::FitBcdComponents(problem,{1.5,1.5},policy);
     policy.configure_for_testing=[](auto & local) {
         local.core_atoms=1; local.nominal_sweeps=30; local.maximum_sweeps=40;
     };
     const auto adaptive=n::FitBcdComponents(problem,{1.5,1.5},policy);
-    ASSERT_EQ(searches.size(),2u);
-    ASSERT_GT(searches[1].sweep_count,30u);
-    EXPECT_EQ(searches[0].sweep_count,searches[1].sweep_count);
-    EXPECT_EQ(searches[0].state.eta,searches[1].state.eta);
-    EXPECT_EQ(searches[0].state.beta,searches[1].state.beta);
-    EXPECT_EQ(searches[0].state.prediction,searches[1].state.prediction);
-    EXPECT_TRUE(searches[1].accepted_state_integrity);
-    ASSERT_TRUE(searches[1].certification);
-    EXPECT_TRUE(searches[1].certification->qualified());
-    EXPECT_TRUE(searches[1].certification->assessment.independent_replay.passed);
+    ASSERT_EQ(fixed.components.size(),1u);
+    ASSERT_EQ(adaptive.components.size(),1u);
+    const auto & fixed_component=fixed.components.front();
+    const auto & adaptive_component=adaptive.components.front();
+    ASSERT_GT(adaptive_component.search_sweeps,30u);
+    EXPECT_EQ(adaptive_component.search_sweeps,fixed_component.search_sweeps);
+    ASSERT_TRUE(adaptive_component.state && fixed_component.state);
+    EXPECT_EQ(adaptive_component.state->log_tau,fixed_component.state->log_tau);
+    EXPECT_EQ(adaptive_component.state->ac,fixed_component.state->ac);
+    ASSERT_TRUE(adaptive.prediction && fixed.prediction);
+    EXPECT_EQ(adaptive.prediction,fixed.prediction);
+    for(const auto * name:{"accepted-state-integrity","endpoint-verification","independent-replay","numerical-qualification"})
+    {
+        const auto check=std::find_if(adaptive_component.evidence.begin(),adaptive_component.evidence.end(),
+            [&](const auto & item) {return item.name==name;});
+        ASSERT_NE(check,adaptive_component.evidence.end())<<name;
+        EXPECT_EQ(check->status,rhbm_gem::JointCheckStatus::Passed)<<name;
+    }
     EXPECT_EQ(adaptive.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
     EXPECT_EQ(adaptive.TargetRuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
     ASSERT_TRUE(adaptive.assembled_state); ASSERT_TRUE(fixed.assembled_state);

@@ -48,10 +48,10 @@ void AssembleResult(const JointProblem & problem,const ProblemData & data,const 
     component.atoms.assign(component_view.atoms.begin(),component_view.atoms.end());
     component.rows.assign(component_view.rows.begin(),component_view.rows.end());
     component.layout=layout; component.search_completed=out.search_converged; component.stop_reason=out.reason;
-    component.search_sweeps=out.sweeps.size();
+    component.search_sweeps=out.sweep_count;
     component.first_order_stationarity_sweep=out.first_order_stationarity_sweep;
     component.confirmed_stationarity_sweep=out.confirmed_stationarity_sweep;
-    component.endpoint_certification_sweep=out.sweeps.size();
+    component.endpoint_certification_sweep=out.sweep_count;
     const bool qualified=certification.qualified() && accepted_state_integrity;
     if(qualified) component.state=State(out.assessment.primary,context.scale);
     component.evidence=AssessmentEvidence(out.assessment,JointEvidenceScope::ComponentLocal);
@@ -140,8 +140,12 @@ BcdDiagnosticResult RunBcdDiagnostic(const JointProblem & problem,VectorRef init
     const Vector y=Select(data.y,IndicesOf(layout.informative_rows));
     auto run_policy=policy;
     run_policy.collect_diagnostics=true;
+    run_policy.production_progress=[&](const BcdSweepRecord & sweep) {
+        out.sweeps.push_back(sweep);
+        if(policy.production_progress) policy.production_progress(sweep);
+    };
     auto search=SearchBcdComponent(domain,layout,y,initial_eta,context,run_policy);
-    out.state=std::move(search.state); out.blocks=std::move(search.blocks); out.sweeps=std::move(search.sweeps);
+    out.state=std::move(search.state); out.blocks=std::move(search.blocks);
     out.search_converged=search.search_converged; out.reason=search.reason;
     out.first_order_stationarity_sweep=search.first_order_stationarity_sweep;
     out.confirmed_stationarity_sweep=search.confirmed_stationarity_sweep;

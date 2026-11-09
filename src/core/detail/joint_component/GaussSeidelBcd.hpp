@@ -127,8 +127,7 @@ struct BcdSearchPolicy
     bool stop_after_stationarity{true};
     bool certify_endpoint{true}; // Diagnostic facade only; production components always certify.
     bool assess_local_conditioning{};
-    bool collect_telemetry{};
-    bool collect_diagnostics{};
+    bool collect_diagnostics{}; // Retain block records and allow diagnostic endpoint conditioning.
     std::optional<std::size_t> global_state_memory_budget_for_testing;
     std::function<void(const BcdCandidateEvent &)> candidate_observer;
     bool perturb_sweep_replay_objective_for_testing{};
@@ -152,7 +151,6 @@ struct BcdSearchResult
     std::optional<BcdEndpointCertification> certification;
     std::vector<JointBlockConditioning> local_conditioning;
     std::vector<BcdBlockRecord> blocks;
-    std::vector<BcdSweepRecord> sweeps;
     bool search_converged{},accepted_state_integrity{};
     std::size_t unresolved_failures{};
     std::string reason;
