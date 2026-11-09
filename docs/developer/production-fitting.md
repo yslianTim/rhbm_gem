@@ -64,8 +64,8 @@ that native success stays unchanged, rank-deficient endpoints remain ineligible,
 and an eligible generated failure can be refined. `ProductionFitting_test.cpp`
 checks that every nominal endpoint is qualified and that nominal evaluation is
 read-only and uses the unrestricted solve status. The failed-only cases generate
-their input data in the test itself; MDPDE equation helpers are declared in
-`MDPDETestSupport.hpp`.
+their input data in the test itself and use the MDPDE equation evaluator
+declared in `MDPDEEndpointRefinement.hpp`.
 
 ## Joint result persistence
 

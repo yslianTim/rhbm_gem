@@ -1,10 +1,6 @@
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include "utils/hrl/MDPDEEndpointRefinement.hpp"
 
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-#include "support/MDPDETestSupport.hpp"
-#endif
-
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>
@@ -460,28 +456,6 @@ RHBMDiagonalMatrix CalculateMDPDECovariance(double variance, const Eigen::Vector
     return CalculateDataCovariance(variance, weights.asDiagonal());
 }
 } // namespace rhbm_gem::mdpde_detail
-
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-namespace second_stage_test {
-
-Eigen::VectorXd MDPDETestBeta(const RHBMMemberDataset & data,
-    const Eigen::VectorXd & weights, const std::string & backend)
-{
-    const Eigen::MatrixXd X{ weights.cwiseSqrt().asDiagonal() * data.X };
-    const Eigen::VectorXd y{ weights.cwiseSqrt().asDiagonal() * data.y };
-    if (backend == "qr") return X.colPivHouseholderQr().solve(y);
-    if (backend == "svd") return X.jacobiSvd<Eigen::ComputeThinU | Eigen::ComputeThinV>().solve(y);
-    throw std::invalid_argument("Unknown test linear solver.");
-}
-
-double MDPDETestVariance(const RHBMMemberDataset & data, double alpha,
-    const Eigen::VectorXd & weights, const Eigen::VectorXd & beta)
-{
-    return CalculateDataVarianceSquare(alpha, data.X, data.y, weights.asDiagonal(), beta);
-}
-
-} // namespace second_stage_test
-#endif
 
 RHBMMemberDataset rhbm_helper::BuildMemberDataset(
     const LocalPotentialSampleList & sampling_entries,
