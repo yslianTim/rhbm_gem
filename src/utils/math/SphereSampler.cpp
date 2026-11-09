@@ -1,9 +1,9 @@
 #include <rhbm_gem/utils/math/SphereSampler.hpp>
 #include <rhbm_gem/utils/domain/Constants.hpp>
+#include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <algorithm>
 #include <cmath>
-#include <random>
 #include <stdexcept>
 #include <vector>
 
@@ -13,15 +13,16 @@ namespace {
 
 constexpr double kAnalysisDistanceMin{ 0.0 };
 constexpr double kAnalysisDistanceMax{ 2.0 };
-constexpr double kAnalysisFibonacciRadiusBinSize{ 0.1 };
+constexpr double kAnalysisRadiusBinSize{ 0.1 };
 constexpr unsigned int kAnalysisSampleCount{ 10 };
+constexpr double kSpiralSpacing{ 3.6 };
 
 static_assert(kAnalysisDistanceMin >= 0.0);
 static_assert(kAnalysisDistanceMax >= kAnalysisDistanceMin);
-static_assert(kAnalysisFibonacciRadiusBinSize > 0.0);
+static_assert(kAnalysisRadiusBinSize > 0.0);
 static_assert(kAnalysisSampleCount > 0);
 
-std::vector<double> BuildFibonacciShellCenters()
+std::vector<double> BuildAnalysisShellCenters()
 {
     std::vector<double> shell_centers;
     constexpr double epsilon{ 1e-9 };
@@ -32,35 +33,19 @@ std::vector<double> BuildFibonacciShellCenters()
     }
 
     const double distance_span{ kAnalysisDistanceMax - kAnalysisDistanceMin };
-    if (distance_span + epsilon < kAnalysisFibonacciRadiusBinSize)
+    if (distance_span + epsilon < kAnalysisRadiusBinSize)
     {
         shell_centers.push_back((kAnalysisDistanceMin + kAnalysisDistanceMax) * 0.5);
         return shell_centers;
     }
 
-    for (double shell_center{ kAnalysisDistanceMin + kAnalysisFibonacciRadiusBinSize * 0.5 };
+    for (double shell_center{ kAnalysisDistanceMin + kAnalysisRadiusBinSize * 0.5 };
          shell_center <= kAnalysisDistanceMax + epsilon;
-         shell_center += kAnalysisFibonacciRadiusBinSize)
+         shell_center += kAnalysisRadiusBinSize)
     {
         shell_centers.push_back(shell_center);
     }
     return shell_centers;
-}
-
-std::array<double, 3> GenerateRandomUnitDirection(
-    std::mt19937 & engine,
-    std::uniform_real_distribution<double> & dist_phi,
-    std::uniform_real_distribution<double> & dist_cos_theta)
-{
-    const double phi{ dist_phi(engine) };
-    const double cos_theta{ dist_cos_theta(engine) };
-    const double sin_theta{ std::sqrt(1.0 - cos_theta * cos_theta) };
-
-    return {
-        sin_theta * std::cos(phi),
-        sin_theta * std::sin(phi),
-        cos_theta
-    };
 }
 
 SamplingPoint BuildSamplingPoint(
@@ -78,42 +63,47 @@ SamplingPoint BuildSamplingPoint(
     };
 }
 
-} // namespace
-
-SamplingPointList GenerateVolumeUniformRandom(const std::array<double, 3> & center_position)
+void AppendSpiralShell(
+    SamplingPointList & points,
+    const std::array<double, 3> & center,
+    double radius,
+    std::size_t point_count)
 {
-    SamplingPointList out;
-    out.resize(kAnalysisSampleCount);
-
-    static thread_local std::mt19937 engine{ std::random_device{}() };
-    std::uniform_real_distribution<double> dist_unit(0.0, 1.0);
-    std::uniform_real_distribution<double> dist_phi(0.0, Constants::two_pi);
-    std::uniform_real_distribution<double> dist_cos_theta(-1.0, 1.0);
-    const double min_radius_cube{
-        kAnalysisDistanceMin * kAnalysisDistanceMin * kAnalysisDistanceMin
-    };
-    const double max_radius_cube{
-        kAnalysisDistanceMax * kAnalysisDistanceMax * kAnalysisDistanceMax
-    };
-
-    for (unsigned int i = 0; i < kAnalysisSampleCount; i++)
+    double previous_theta{ 0.0 };
+    for (std::size_t i = 0; i < point_count; ++i)
     {
-        const double radius_unit{ dist_unit(engine) };
-        const double radius{
-            std::cbrt(min_radius_cube + radius_unit * (max_radius_cube - min_radius_cube))
+        const auto height{
+            -1.0 + 2.0 * static_cast<double>(i) / static_cast<double>(point_count - 1)
         };
+        const auto phi{ std::acos(height) };
+        double theta{ 0.0 };
+        if (i > 0 && i + 1 < point_count)
+        {
+            theta = std::fmod(
+                previous_theta +
+                    kSpiralSpacing /
+                    std::sqrt(static_cast<double>(point_count) * (1.0 - height * height)),
+                Constants::two_pi);
+        }
+        previous_theta = theta;
 
-        out[i] = BuildSamplingPoint(
-            center_position,
+        const auto sin_phi{ std::sin(phi) };
+        points.emplace_back(SamplingPoint{
             radius,
-            GenerateRandomUnitDirection(engine, dist_phi, dist_cos_theta));
+            {
+                center.at(0) + radius * sin_phi * std::cos(theta),
+                center.at(1) + radius * sin_phi * std::sin(theta),
+                center.at(2) + radius * std::cos(phi)
+            }
+        });
     }
-    return out;
 }
+
+} // namespace
 
 SamplingPointList GenerateFibonacciDeterministic(const std::array<double, 3> & center_position)
 {
-    const auto shell_radii{ BuildFibonacciShellCenters() };
+    const auto shell_radii{ BuildAnalysisShellCenters() };
     SamplingPointList out;
     out.reserve(shell_radii.size() * kAnalysisSampleCount);
 
@@ -145,27 +135,18 @@ SamplingPointList GenerateFibonacciDeterministic(const std::array<double, 3> & c
     return out;
 }
 
-SamplingPointList GenerateRadiusUniformRandom(const std::array<double, 3> & center_position)
+SamplingPointList GenerateSpiralShell(
+    const std::array<double, 3> & center_position,
+    double radius,
+    std::size_t point_count)
 {
-    SamplingPointList out;
-    out.resize(kAnalysisSampleCount);
+    numeric_validation::RequireFinitePositive(radius, "GenerateSpiralShell radius");
+    numeric_validation::RequireAtLeast(point_count, std::size_t{ 2 }, "GenerateSpiralShell point_count");
 
-    static thread_local std::mt19937 engine{ std::random_device{}() };
-    std::uniform_real_distribution<double> dist_radius(
-        kAnalysisDistanceMin, kAnalysisDistanceMax
-    );
-    std::uniform_real_distribution<double> dist_phi(0.0, Constants::two_pi);
-    std::uniform_real_distribution<double> dist_cos_theta(-1.0, 1.0);
-
-    for (unsigned int i = 0; i < kAnalysisSampleCount; i++)
-    {
-        const double radius{ dist_radius(engine) };
-        out[i] = BuildSamplingPoint(
-            center_position,
-            radius,
-            GenerateRandomUnitDirection(engine, dist_phi, dist_cos_theta));
-    }
-    return out;
+    SamplingPointList points;
+    points.reserve(point_count);
+    AppendSpiralShell(points, center_position, radius, point_count);
+    return points;
 }
 
 SamplingPointList GenerateSamplingPointList(
@@ -174,12 +155,19 @@ SamplingPointList GenerateSamplingPointList(
 {
     switch (method)
     {
-        case SphereSamplingMethod::RadiusUniformRandom:
-            return GenerateRadiusUniformRandom(center_position);
-        case SphereSamplingMethod::VolumeUniformRandom:
-            return GenerateVolumeUniformRandom(center_position);
         case SphereSamplingMethod::FibonacciDeterministic:
             return GenerateFibonacciDeterministic(center_position);
+        case SphereSamplingMethod::SpiralDeterministic:
+        {
+            const auto shell_radii{ BuildAnalysisShellCenters() };
+            SamplingPointList points;
+            points.reserve(shell_radii.size() * kAnalysisSampleCount);
+            for (const double radius : shell_radii)
+            {
+                AppendSpiralShell(points, center_position, radius, kAnalysisSampleCount);
+            }
+            return points;
+        }
     }
     throw std::invalid_argument("Unsupported SphereSamplingMethod.");
 }

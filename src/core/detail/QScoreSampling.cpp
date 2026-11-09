@@ -1,11 +1,9 @@
 #include "QScoreSampling.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/utils/domain/Constants.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
+#include <rhbm_gem/utils/math/SphereSampler.hpp>
 #include <algorithm>
-#include <cmath>
-#include <vector>
 
 namespace rhbm_gem::core::detail {
 namespace {
@@ -13,44 +11,6 @@ constexpr int kMaximumRadialPointAttempts{ 50 };
 constexpr std::size_t kCandidatePointIncrement{ 2 };
 constexpr double kNeighborExclusionRadiusRatio{ 0.9 };
 constexpr double kNeighborSearchRadiusRatio{ 2.0 };
-constexpr double kSpiralSpacing{ 3.6 };
-using RadialPoint = std::array<double, 3>;
-std::vector<RadialPoint> GenerateSpiralSpherePoints(
-    const std::array<double, 3> & center,
-    double radius,
-    std::size_t point_count)
-{
-    std::vector<RadialPoint> points;
-    points.reserve(point_count);
-
-    double previous_theta{ 0.0 };
-    for (std::size_t i = 0; i < point_count; ++i)
-    {
-        const auto height{
-            -1.0 + 2.0 * static_cast<double>(i) / static_cast<double>(point_count - 1)
-        };
-        const auto phi{ std::acos(height) };
-        double theta{ 0.0 };
-        if (i > 0 && i + 1 < point_count)
-        {
-            theta = std::fmod(
-                previous_theta +
-                    kSpiralSpacing /
-                    std::sqrt(static_cast<double>(point_count) * (1.0 - height * height)),
-                Constants::two_pi);
-        }
-        previous_theta = theta;
-
-        const auto sin_phi{ std::sin(phi) };
-        points.emplace_back(RadialPoint{
-            center.at(0) + radius * sin_phi * std::cos(theta),
-            center.at(1) + radius * sin_phi * std::sin(theta),
-            center.at(2) + radius * std::cos(phi)
-        });
-    }
-    return points;
-}
-
 } // namespace
 
 bool IsInsideNeighborExclusion(
@@ -106,39 +66,17 @@ SamplingPointList SampleQScoreShell(
         const auto candidate_point_count{
             target_point_count + static_cast<std::size_t>(attempt) * kCandidatePointIncrement
         };
-        const auto candidate_points{
-            GenerateSpiralSpherePoints(
-                atom.GetPositionRef(),
-                radius,
-                candidate_point_count)
+        auto accepted_points{
+            sphere_sampler::GenerateSpiralShell(atom.GetPositionRef(), radius, candidate_point_count)
         };
-
-        SamplingPointList accepted_points;
-        accepted_points.reserve(candidate_points.size());
-        for (const auto & candidate_point : candidate_points)
+        std::erase_if(accepted_points, [&](const SamplingPoint & point)
         {
-            bool is_rejected{ false };
-            for (const auto * neighbor_atom : neighbor_atoms)
+            return std::any_of(neighbor_atoms.begin(), neighbor_atoms.end(), [&](const AtomObject * neighbor)
             {
-                const auto & neighbor_position{
-                    neighbor_atom->GetPositionRef()
-                };
-                if (IsInsideNeighborExclusion(
-                        candidate_point, neighbor_position, exclusion_radius_square))
-                {
-                    is_rejected = true;
-                    break;
-                }
-            }
-            if (!is_rejected)
-            {
-                accepted_points.emplace_back(SamplingPoint{
-                    radius,
-                    candidate_point,
-                    true
-                });
-            }
-        }
+                return IsInsideNeighborExclusion(
+                    point.position, neighbor->GetPositionRef(), exclusion_radius_square);
+            });
+        });
 
         if (accepted_points.size() >= target_point_count)
         {

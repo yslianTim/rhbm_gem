@@ -46,7 +46,8 @@ def assert_module_surface() -> None:
     assert hasattr(m.TesterType, "BENCHMARK")
     assert hasattr(m.TesterType, "ATOMIC_MODEL")
     assert hasattr(m, "SphereSamplingMethod")
-    assert hasattr(m.SphereSamplingMethod, "FIBONACCI_DETERMINISTIC")
+    assert int(m.SphereSamplingMethod.FIBONACCI_DETERMINISTIC) == 2
+    assert int(m.SphereSamplingMethod.SPIRAL_DETERMINISTIC) == 3
 
     if EXPERIMENTAL_FEATURE_ENABLED:
         assert hasattr(m, "MapVisualizationRequest")

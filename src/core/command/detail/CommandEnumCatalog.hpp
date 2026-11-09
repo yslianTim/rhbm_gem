@@ -88,16 +88,13 @@ template <>
 struct CommandEnumTraits<SphereSamplingMethod>
 {
     inline static constexpr std::array<
-        CommandEnumDefinition<SphereSamplingMethod, 2>, 3> kOptions{{
-        { SphereSamplingMethod::RadiusUniformRandom,
-            "RADIUS_UNIFORM_RANDOM",
-            { "0", "radius_uniform" } },
-        { SphereSamplingMethod::VolumeUniformRandom,
-            "VOLUME_UNIFORM_RANDOM",
-            { "1", "volume_uniform" } },
+        CommandEnumDefinition<SphereSamplingMethod, 2>, 2> kOptions{{
         { SphereSamplingMethod::FibonacciDeterministic,
             "FIBONACCI_DETERMINISTIC",
-            { "2", "fibonacci" } }
+            { "2", "fibonacci" } },
+        { SphereSamplingMethod::SpiralDeterministic,
+            "SPIRAL_DETERMINISTIC",
+            { "3", "spiral" } }
     }};
 };
 

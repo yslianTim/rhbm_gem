@@ -9,9 +9,8 @@
 
 enum class SphereSamplingMethod
 {
-    RadiusUniformRandom,
-    VolumeUniformRandom,
-    FibonacciDeterministic
+    FibonacciDeterministic = 2,
+    SpiralDeterministic = 3
 };
 
 struct SamplingPoint

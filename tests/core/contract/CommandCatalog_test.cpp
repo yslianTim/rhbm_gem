@@ -134,12 +134,12 @@ struct EnumMappingTraits<TesterType>
 template <>
 struct EnumMappingTraits<SphereSamplingMethod>
 {
-    static constexpr std::string_view kFirstBindingToken{ "RADIUS_UNIFORM_RANDOM" };
+    static constexpr std::string_view kFirstBindingToken{ "FIBONACCI_DETERMINISTIC" };
     static constexpr std::array<EnumMappingExpectation<SphereSamplingMethod>, 4> kExpectations{{
-        { "radius_uniform", SphereSamplingMethod::RadiusUniformRandom },
-        { "0", SphereSamplingMethod::RadiusUniformRandom },
         { "fibonacci", SphereSamplingMethod::FibonacciDeterministic },
         { "2", SphereSamplingMethod::FibonacciDeterministic },
+        { "spiral", SphereSamplingMethod::SpiralDeterministic },
+        { "3", SphereSamplingMethod::SpiralDeterministic },
     }};
 };
 
