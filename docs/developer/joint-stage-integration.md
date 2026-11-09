@@ -1,159 +1,201 @@
-# Joint stage integration
+# Joint Stage Integration
 
-This guide describes data ownership from the production Joint fit through
-Original-domain peeling, Post-Joint Local MDPDE, and Group Fitting. Solver
-details are in the [Joint runtime guide](joint-component-runtime.md).
+Joint Components is the default potential estimator. The
+[command contract](commands/potential_analysis.md) also exposes `two-stage`.
+Potential fitting excludes hydrogen from targets and eligible contributors.
+The Joint workflow builds the Original and Fitting Domains, initializes
+Target widths, runs the [Joint estimator](joint-component-runtime.md), and
+captures a snapshot. A qualified snapshot feeds Halo reconstruction,
+Original-grid peeling, Post-Joint Local fitting and Group Fitting.
 
-Joint Components is the default potential estimator; `two-stage` remains an
-explicit choice. Potential fitting excludes hydrogen from targets and eligible
-contributors, including direct C++ workflow entrypoints. FirstStage sampling
-uses the Sampler's deterministic Fibonacci default. Post-Joint observations
-come directly from original map voxels. These input policies do not change
-Joint problem construction or its Pure Halo-Support Exclusion model.
+## FirstStage initialization
 
-Joint FirstStage has one sampling and initialization path: 20 deterministic
-Fibonacci shells at 0.05, 0.15, …, 1.95 Å, ten points per shell in the existing
-order. Non-hydrogen neighbors use the existing search and strict Ownership +
-30-degree cone exclusions. Tricubic responses feed the original alpha training
-and OLS/MDPDE estimator on selected positive responses in 0–1.0 Å. JCE Width
-seeds use MDPDE with the existing failed-only recovery, qualification and target
-median fallback. OLS/MDPDE records and the persistence schema are unchanged.
+The Joint workset resolves selected Target identities from the Fitting
+Domain. FirstStage uses 20 deterministic Fibonacci shells at
+0.05, 0.15, …, 1.95 Å, with ten points per shell. Non-hydrogen neighbors
+apply the strict Ownership and 30° cone exclusions. Tricubic samples feed
+alpha training and OLS/MDPDE on selected positive responses within 1 Å.
+FirstStage can sample outside the Joint voxel domain. Raw FirstStage records
+retain their sample coordinates and selection independently of grid results.
 
-Global Width calibration uses qualified target MDPDE donors, at least 20 and
-95% coverage, Type-7 quantiles and the single bound 4 × p95. The original bounded
-projection feeds the unchanged Joint BCD solver. Raw FirstStage entries retain
-actual coordinates/selection and never become Post-Joint original-grid identities.
+Joint uses finite positive FirstStage MDPDE widths as seeds and the Target
+median to fill missing or invalid seeds when donors exist. FirstStage uses
+the native local fit and records its qualification. The
+[width calibration](joint-component-runtime.md#initialization-and-global-width-bound)
+uses a stricter donor gate than seed fallback. See
+[Production Fitting](production-fitting.md) for the shared fitting and
+recovery contract.
 
-QScore is an independent production feature. It keeps Spiral radial sampling,
-neighbor-distance exclusion, adaptive retry, original repeated-center weighting,
-Trilinear interpolation and mean-subtracted correlation.
+## Joint result ownership
 
-`src/core/detail/MapInterpolation.hpp` provides the separate numerical kernels.
-Trilinear retains inclusive half-voxel margins and coordinate clamping; Tricubic
-retains MapObject floor indices and clamped 4×4×4 stencil nodes, including its
-finite out-of-range sentinel behavior. Both reject nonfinite positions before
-index conversion.
+The snapshot retains the target-only state, Original and Fitting mappings,
+available rows, component and Target evidence, conditioning, and candidate
+diagnostics. `IsQualifiedJointAnalysisResult` requires valid initialization,
+completed search and Passed runtime and Target convergence. Unqualified
+snapshots can be saved with diagnostics and reasons. The workflow skips
+publication and downstream fitting for them.
 
-## Result ownership
+The stage adapter exposes qualified Target A/tau/C and convergence in
+estimator-neutral Second-stage records. Source identity includes method,
+atom, component, run and role. Missing or unqualified points remain
+unavailable. Halo records and reconstructed values have separate provenance.
+Local and Group results live alongside Joint state and never rewrite it.
 
-The Joint result stores the target-only Pure Exclusion state, component
-identities, target point validation, convergence evidence, candidate
-diagnostics, local conditioning, and optional
-Halo-reconstruction evidence.
+## Target Point Quality
 
-The estimator-neutral Second-stage records expose available Joint Target
-A/tau/C values, target/Halo roles, component and run identity, and convergence
-status to existing model consumers. A missing or unqualified target remains
-unavailable with its reason.
+`target-point-validation-v2` records component convergence, parameter
+validity, Local Conditioning, conditioning block IDs, quality and reason.
+Parameter validity checks dimensions, finite A ≥ 0, signed finite C,
+finite tau > 0 and agreement of physical and log widths. Blocks must have
+nonempty unique IDs and valid unique Target membership. Missing membership
+in a nonempty diagnostic set is invalid. An empty set is NotAssessed.
 
-Post-Joint Local results are separate target-keyed records. They contain local
-alpha, OLS and MDPDE results, solver diagnostics, sample counts, failure
-reasons, and compact information used by Group Fitting. They do not modify the
-Joint state or its objective. Halo atoms contribute to reconstruction and
-peeling; they do not receive target-local or group results.
+The first matching rule determines quality.
 
-## Data flow
+| Evidence | Point quality | Reason |
+| --- | --- | --- |
+| Component convergence did not pass | Unavailable | `component-not-converged` |
+| Invalid or unavailable parameters | Unavailable | `invalid-or-unavailable-parameters` |
+| Invalid diagnostic block mapping | Warning | `invalid-diagnostic-block-mapping` |
+| Singular, IllConditioned, ActiveFace or Unavailable conditioning | Warning | `conditioning-warning` |
+| NotAssessed conditioning | NotAssessed | `quality-diagnostics-not-assessed` |
+| Passed numerical checks and WellConditioned evidence | Available | `numerically-converged-point` |
 
-1. The workflow builds a Pure Halo-Support Exclusion problem with support
-   radius 2.5 Å. Non-target Halo support selects rows for exclusion; Halo atoms
-   are not free Joint parameters.
-2. Qualified FirstStage Target widths initialize the Joint fit and provide the
-   global width calibration. A result with unavailable calibration keeps its
-   diagnostics and does not proceed as a successful Joint endpoint.
-3. Gauss–Seidel BCD updates component blocks sequentially. Each block uses
-   Variable Projection with Constrained A/C Active-set QR and Bounded Active-set
-   LM to produce the target-only state. Global convergence, Endpoint
-   Certification, Independent Replay, target qualification and Local
-   Conditioning are recorded.
-4. Qualified Target A/tau/C points provide geometry-local kNN-4 Halo medians.
-   Each reconstructed Halo records its qualified donor Target IDs. An
-   unavailable reconstruction remains a separate status from Joint numerical
-   convergence.
-5. Original-domain PostFitPeeling uses available Target points and reconstructed
-   Halo points to subtract other contributors from original voxel responses.
-   Candidate observations come from OriginalInput support with r² <= 4 Å²,
-   including the 2 Å boundary, in increasing Original-row order. The Fitting
-   mask never removes reconstruction observations. Contributions use their
-   actual 2.5 Å kernel support, exclude hydrogen and exclude the Target itself.
-   Each sparse support contribution is evaluated once and shared across Targets;
-   direct non-self sums avoid cancellation against the own Gaussian signal.
-   Missing qualified contributor state makes the affected response unavailable.
-6. The Target's own Joint C/tau charge is evaluated directly at each candidate
-   voxel and subtracted from its peeled response. No Post-Joint step interpolates
-   map responses or predictions, or depends on Fibonacci sample count/selection.
-   Qualified Local fitting uses the positive finite corrected observations in
-   0 <= r <= 1 Å. Alpha training, OLS/MDPDE, QR qualification, working covariance
-   and information all consume the same selected design. The candidate domain
-   remains 2 Å; the production fitting range is a separate Post-Joint contract.
-   Group alpha training and
-   Group Fitting consume qualified local estimates and their compact
-   MDPDE-derived information.
+ActiveFace flags possible active-set switching. The
+[conditioning calculation](joint-component-numerics.md#compact-spectra-and-local-conditioning)
+is diagnostic and does not establish statistical identifiability or
+precision. `TargetRuntimeConvergence` combines numerical convergence,
+parameter and selection checks, and at assembly also requires complete
+fitting-row availability and mapping consistency. A Point Quality warning
+can coexist with a qualified endpoint.
 
-Only selected targets enter local fitting, group alpha training, or group
-statistics. Local results never rewrite Joint parameters. Group posterior
-Gaussian values remain separate from each member's Joint charge profile.
+## Halo reconstruction
 
-## Invalidation and availability
+During fitting, Halo support supplies only the exclusion mask. After
+qualification, Halo receives a geometry-local median from up to four
+nearest eligible Target points by Euclidean distance in Å, with ties
+ordered by Atom ID. Donors must match the snapshot and selection, have
+Passed component convergence and parameter validity, have `Adequate`
+Local Conditioning, and provide finite valid A/tau/C and positions.
+Chemical labels play no role. The algorithm takes the median of each
+parameter separately and preserves signed charge.
 
-Derived records retain their Joint source and run identity. Grid observations
-store Original row index, global grid index, squared distance, physical voxel
-position and raw map response, alongside optional peeled response and its
-unavailable reason. Local failures use the same Original row/global grid pair.
-Finite nonpositive corrected responses are valid corrections, then excluded by
-the Gaussian estimator's positive-response policy. Local counts distinguish all
-2 Å candidates, corrected responses, positive responses and radius-retained
-solver rows.
+The `geometry-local-target-median-v1` record carries Halo identity, donor
+IDs, count, run and donor policy. The global donor median is recorded as
+evidence. Reconstruction remains outside the Joint objective. If retained
+Halo atoms have no valid donors, the workflow records
+`halo-median-no-valid-targets`, publishes the qualified Target endpoints and
+skips peeling and subsequent fits. No Halo is a valid case with no required
+reconstruction record.
 
-A Joint endpoint change invalidates the run's peeling, Local and Group results
-and snapshot. Replacing or clearing the snapshot invalidates downstream grid
-evidence. Peeling changes invalidate Local and Group results; Local changes
-invalidate the affected Group. Unrelated FirstStage raw sample edits retain
-independent grid results. Atom position edits clear analysis and spatial caches.
+## Original-grid peeling
 
-A live Joint analysis binds to its source map's observation revision. Replacing,
-clearing or normalizing that map invalidates the bound model analysis before
-its next access, including model copies. Map copies have independent revisions.
-Map geometry is immutable. Destroying a map does not invalidate stored evidence;
-loading a persisted model restores historical evidence without a live map binding.
-A new workflow builds fresh Original observations and a new binding. Contexts
-borrow immutable inputs and must not outlive or mutate them.
+For each Target, collect Original support rows in increasing Original-row
+order at `r² ≤ 4 Å²`, including rows excluded from fitting. Subtract the
+direct contributions of every other supported non-hydrogen atom from the
+raw voxel response, using qualified Target or reconstructed Halo values
+and their actual 2.5 Å support. Each sparse contribution is evaluated once
+and shared across Targets. Direct non-self summation preserves the own
+signal. Missing contributor state makes that response unavailable.
 
-Initialization failure, unavailable width calibration, failed search,
-unqualified endpoint, missing component state, unavailable reconstruction, or
-incomplete downstream results are legal current Joint outcomes. Downstream
-consumers preserve unavailable states and reasons; they do not treat absent
-data as zero.
+For Local fitting subtract the Target's own charge,
+`y_Gaussian = y_peeled - C_joint * K(r; tau_joint)`. All response and
+prediction evaluations here use the Original grid without interpolation.
+The fixed-charge profile preserves the Joint C and width independently of
+the Gaussian estimates. Each observation records Original row, global
+grid index, squared distance, voxel position, raw response and either
+a peeled response or an unavailable reason.
+
+## Post-Joint Local and Group Fitting
+
+Post-Joint Local uses selected, converged Joint Targets and current peeling
+from the same source. From the 2 Å candidates it retains finite corrected
+responses, then strictly positive responses within the inclusive 1 Å
+fitting radius. Finite nonpositive corrections are valid observations
+excluded from the fit. Counts distinguish candidates, corrected responses,
+positive responses and effective solver rows.
+
+One selected log-response Gaussian design serves alpha training, OLS/MDPDE,
+working covariance and information. Availability requires more than two
+effective rows, rank two, finite nonnegative alpha, qualified successful
+MDPDE, valid positive Gaussian A and width, and finite positive working
+variance, weights and covariance. The compact information is
+`Xᵀ V⁻¹ X` and `Xᵀ V⁻¹ y`, with positive-definite precision for working
+covariance `V`. Unavailable or ineligible records carry reasons and
+supply no measurement information.
+
+Group Fitting uses only eligible current Local results and their compact
+information within a Joint run. Alpha training uses main-chain groups
+with at least ten eligible members. Group inference requires at least
+two eligible members and a qualified group covariance and posterior
+solve. The Group posterior is Gaussian and preserves each member's
+separate fixed Joint charge. Local information and Group covariance
+are conditional working quantities.
+
+## Invalidation
+
+Changing a Joint stage endpoint invalidates its run's peeling, Local and
+Group results and snapshot. Replacing or clearing the snapshot invalidates
+dependent grid evidence. Peeling changes invalidate Local and Group
+results, and Local changes invalidate affected Groups. Independent FirstStage
+raw sample edits leave grid evidence intact. Atom position edits clear
+analysis and spatial caches.
+
+Published live results bind to the source map's observation revision.
+Replacing, clearing or normalizing that map invalidates the bound analysis
+on next access, including model copies. Map copies have independent
+revisions. Map geometry is immutable. Destroying the map leaves recorded
+evidence available. Loading a saved model restores evidence without a
+live map binding. A new workflow collects fresh observations. Runtime
+postprocessing contexts borrow their immutable inputs.
 
 ## Persistence
 
-SQLite schema v21 stores the current model structure, Joint Result JSON schema
-24, and Stage Result JSON version 5. Joint JSON is target-only Pure Exclusion.
-Joint results require the complete BCD solver provenance v6 described in the
-[Joint runtime guide](joint-component-runtime.md), including pre-search failures.
-Stage JSON retains current FirstStage and SecondStage estimates, FirstStage raw
-samples, original-grid peeling observations, Local results, Group posterior,
-fixed-charge profiles, summaries and provenance. Readers validate ordered unique
-Original/global grid identities, response/reason pairing, snapshot row mapping,
-voxel positions against recorded map geometry, source/run identity, correction
-counts and fixed charge. Grid peeling requires its Joint snapshot; available
-Halo-subtracted responses require reconstruction provenance. Old raw-index
-Post-Joint records are rejected, with no compatibility reader.
+[DataObject I/O](architecture/dataobject-io-architecture.md) owns version
+acceptance and the database lifecycle. SQLite v21 stores Joint Result
+JSON schema 24 and Stage Result JSON version 5. Joint JSON requires
+`target-only-pure-halo-support-exclusion-v1`, the current point validation
+contract, and `strict-v2` or `practical-v2` convergence criteria. Its state
+keys are `ac`, `tau`, `log_tau`, `eta_gradient` and `objective`.
+Initialization uses `tau`, `original_tau` and `used_tau`. Candidate
+diagnostics use `candidate_eta_gradient_inf_norm` and
+`global_eta_gradient_threshold` (the projected threshold). Units use
+`joint-kernel-map-units-v2` with tau in Å. Joint CSV orders parameters
+`A,tau,C`.
 
-The persisted Local `fitting_radius` must equal exactly 1.0 Å for Available,
-Unavailable and Ineligible records. It records the estimation contract and
-does not select a runtime policy. Editor updates, persistence validation and
-Group eligibility use the same check; the field and schema versions are kept.
+Every saved Joint result, including pre-search failures, requires the
+configured solver identity. The reader rejects missing, unknown or mixed
+solver fields.
 
-The numerical and statistical range assessment is recorded in the
-[production decision record](post-joint-grid-validation.md). Information and
-Group covariance remain conditional working quantities; voxel count alone does not
-establish independent observations or calibrated posterior coverage.
+```json
+{
+  "search_method": "gauss-seidel-bcd",
+  "contract_version": "joint-solver-provenance-v6",
+  "sparse_backend": "EIGEN",
+  "bcd_core_atoms": 12,
+  "bcd_policy_version": "gauss-seidel-bcd-production-v1",
+  "bcd_maximum_sweeps": 300,
+  "bcd_order": "forward",
+  "bcd_local_search": "active-set-lm"
+}
+```
 
-Only an empty database is initialized. An existing database must have the
-exact v21 schema. Stage and Joint readers accept only their current versions.
-There are no migrations or historical decoders; unsupported inputs are
-rejected without changing the database.
+Stage JSON retains FirstStage samples and estimates, Second-stage records,
+grid peeling, `post_joint_local` and Group results. Grid peeling requires
+its snapshot. Available Halo-subtracted responses require reconstruction
+provenance. Validation checks ordered unique `original_row` and `grid`
+identities, snapshot row mapping and voxel geometry, response/reason pairs,
+source/run identity, and Local failure-row identities and counts. It
+replays the correction for available Local records. `fixed_charge` must
+match the Joint endpoint and `fitting_radius` must be exactly 1.0 Å for
+Available, Unavailable and Ineligible records. Persisted Group members
+must match their Local source and fixed charge. Nullable diagnostics,
+missing states and unavailable reconstruction are representable outcomes.
 
-See the [data I/O architecture](architecture/dataobject-io-architecture.md)
-for schema checks and the [Joint runtime guide](joint-component-runtime.md)
-for solver qualification.
+See [PotentialFittingWorkflow.cpp](../../src/core/detail/PotentialFittingWorkflow.cpp),
+[FirstStageInitialization.cpp](../../src/core/detail/FirstStageInitialization.cpp),
+[TargetEvidence.cpp](../../src/core/detail/joint_component/TargetEvidence.cpp),
+[HaloMedianReconstruction.cpp](../../src/core/detail/joint_component/HaloMedianReconstruction.cpp),
+[PostFitPeeling.cpp](../../src/core/detail/joint_component/PostFitPeeling.cpp),
+[GroupPotentialFitting.cpp](../../src/core/detail/GroupPotentialFitting.cpp)
+and [PostJointLocalValidation.cpp](../../src/data/detail/PostJointLocalValidation.cpp).
