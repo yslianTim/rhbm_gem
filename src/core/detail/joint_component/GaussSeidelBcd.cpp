@@ -807,9 +807,6 @@ BcdSearchResult SearchBcdComponent(
             // parameter state unchanged and the current full-replay cache remains valid.
             bool candidate_result_affected_rows_only{};
             Vector candidate_affected_prediction,candidate_affected_residual;
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-            double incremental_candidate_objective=std::numeric_limits<double>::quiet_NaN();
-#endif
             const bool candidate_fast_unchanged=state_cache_valid && std::isfinite(out.state.objective) &&
                 IsBitwiseIdenticalCoreCandidate(out.state,core_atoms,accepted->endpoint)
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -855,9 +852,6 @@ BcdSearchResult SearchBcdComponent(
                         out.work.affected_replay_peak_scratch_bytes=std::max(
                             out.work.affected_replay_peak_scratch_bytes,candidate.scratch_bytes);
                     }
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-                    incremental_candidate_objective=candidate.objective;
-#endif
                 }
                 else
                 {
@@ -921,6 +915,9 @@ BcdSearchResult SearchBcdComponent(
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
             const auto observe_candidate=[&](bool accepted_candidate,bool unchanged_candidate) {
                 if(!policy.candidate_observer) return;
+                const auto evaluation_path=candidate_fast_unchanged ?
+                    BcdCandidateEvaluationPath::UnchangedFastPath : candidate_result_affected_rows_only ?
+                    BcdCandidateEvaluationPath::AffectedRowsIncremental : BcdCandidateEvaluationPath::FullReplay;
                 const auto & observed_eta=candidate_fast_unchanged ? out.state.eta : candidate_eta;
                 const auto & observed_beta=candidate_fast_unchanged ? out.state.beta : candidate_beta;
                 static const Vector empty_vector;
@@ -932,9 +929,8 @@ BcdSearchResult SearchBcdComponent(
                     observed_eta,observed_beta,observed_affected_prediction,observed_affected_residual,
                     candidate_objective,
                     record.local_objective_before,record.local_objective_after,record.global_replay_delta,
-                    record.local_global_delta_error,record.objective_replay_enclosure,incremental_candidate_objective,
-                    accepted_candidate,
-                    unchanged_candidate,!candidate_fast_unchanged});
+                    record.local_global_delta_error,record.objective_replay_enclosure,
+                    accepted_candidate,unchanged_candidate,evaluation_path});
             };
 #endif
             if(!candidate_values_finite)

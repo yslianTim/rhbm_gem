@@ -112,13 +112,13 @@ bool ObjectiveDecision(double before,double after,double local_before,double loc
 struct IncrementalObjectiveAudit
 {
     std::size_t candidates{},decision_disagreements{};
-    double maximum_absolute_error{};
 };
 void AuditIncrementalCandidate(const rhbm_gem::core::JointProblemInput & input,
     const rhbm_gem::JointParameterLayout & layout,n::VectorRef observations,double scale,
     const n::BcdCandidateEvent & event,IncrementalObjectiveAudit & audit)
 {
-    if(!event.candidate_replay_ran || !std::isfinite(event.incremental_objective)) return;
+    if(event.evaluation_path!=n::BcdCandidateEvaluationPath::AffectedRowsIncremental) return;
+    ASSERT_TRUE(std::isfinite(event.candidate_objective));
     ++audit.candidates;
     const auto old_replay=b::Replay(input,layout,observations,event.accepted_before.eta,
         event.accepted_before.beta,scale);
@@ -141,9 +141,11 @@ void AuditIncrementalCandidate(const rhbm_gem::core::JointProblemInput & input,
     }
     const double old_reference=old_replay.objective;
     const double candidate_reference=candidate_replay.objective;
-    audit.maximum_absolute_error=std::max(audit.maximum_absolute_error,
-        std::abs(event.incremental_objective-candidate_reference));
-    const bool estimated_decision=ObjectiveDecision(event.accepted_before.objective,event.incremental_objective,
+    EXPECT_LE(std::abs(event.candidate_objective-candidate_reference),
+        n::BlockObjectiveReplayEnclosure(candidate_reference));
+    EXPECT_EQ(event.accepted,ObjectiveDecision(event.accepted_before.objective,candidate_reference,
+        event.local_objective_before,event.local_objective_after,event.unchanged));
+    const bool estimated_decision=ObjectiveDecision(event.accepted_before.objective,event.candidate_objective,
         event.local_objective_before,event.local_objective_after,event.unchanged);
     const bool reference_decision=ObjectiveDecision(old_reference,candidate_reference,
         event.local_objective_before,event.local_objective_after,event.unchanged);
@@ -234,7 +236,7 @@ TEST(JointBcdSearchTest, CandidateObserverDoesNotChangeSearch)
         EXPECT_GT(event.core_atoms.size(),0u);
         EXPECT_GT(event.affected_rows.size(),0u);
         EXPECT_TRUE(std::isfinite(event.candidate_objective));
-        if(event.candidate_replay_ran)
+        if(event.evaluation_path!=n::BcdCandidateEvaluationPath::UnchangedFastPath)
         {
             const auto replay=b::Replay(*data.input,data.layout,data.y,event.candidate_eta,
                 event.candidate_beta,data.context.scale);
@@ -267,13 +269,6 @@ TEST(JointBcdSearchTest, IncrementalObjectiveMatchesIndependentFullReplay)
     IncrementalObjectiveAudit e1_audit;
     policy.candidate_observer=[&](const n::BcdCandidateEvent & event) {
         AuditIncrementalCandidate(*data.input,data.layout,data.y,data.context.scale,event,e1_audit);
-        if(!event.candidate_replay_ran) return;
-        const auto replay=b::Replay(*data.input,data.layout,data.y,
-            event.candidate_eta,event.candidate_beta,data.context.scale);
-        EXPECT_LE(std::abs(event.candidate_objective-replay.objective),
-            n::BlockObjectiveReplayEnclosure(replay.objective));
-        EXPECT_EQ(event.accepted,ObjectiveDecision(event.accepted_before.objective,replay.objective,
-            event.local_objective_before,event.local_objective_after,event.unchanged));
     };
     const auto e1=n::RunBcdDiagnostic(problem,eta,policy);
 
@@ -570,9 +565,10 @@ TEST(JointBcdSearchTest, AffectedReplayFallsBackBeforeScratchExceedsMemoryBudget
 
     auto fallback_policy=policy;
     fallback_policy.global_state_memory_budget_for_testing=full_replay_plan.estimated_peak_bytes;
-        std::size_t fallback_candidate_count{};
+    std::size_t fallback_candidate_count{};
     fallback_policy.candidate_observer=[&](const n::BcdCandidateEvent & event) {
-        if(!event.candidate_replay_ran) return;
+        if(event.evaluation_path==n::BcdCandidateEvaluationPath::UnchangedFastPath) return;
+        ASSERT_EQ(event.evaluation_path,n::BcdCandidateEvaluationPath::FullReplay);
         ++fallback_candidate_count;
         const auto before=b::Replay(*data.input,data.layout,data.y,
             event.accepted_before.eta,event.accepted_before.beta,data.context.scale);
@@ -582,14 +578,13 @@ TEST(JointBcdSearchTest, AffectedReplayFallsBackBeforeScratchExceedsMemoryBudget
             n::BlockObjectiveReplayEnclosure(before.objective));
         EXPECT_LE(std::abs(event.candidate_objective-candidate.objective),
             n::BlockObjectiveReplayEnclosure(candidate.objective));
-        EXPECT_FALSE(std::isfinite(event.incremental_objective));
     };
     const auto fallback=n::RunBcdDiagnostic(problem,eta,fallback_policy);
     ASSERT_TRUE(fallback.work.full_replay_memory_fallback);
     EXPECT_GT(fallback.work.full_candidate_replays,0u);
     EXPECT_EQ(fallback.work.affected_candidate_replays,0u);
     EXPECT_EQ(fallback.work.incremental_objective_evaluations,0u);
-    EXPECT_GT(fallback_candidate_count,0u);
+    EXPECT_EQ(fallback_candidate_count,fallback.work.full_candidate_replays);
     EXPECT_EQ(affected.reason,fallback.reason);
     EXPECT_EQ(affected.sweep_count,fallback.sweep_count);
     EXPECT_TRUE(BitwiseEqual(affected.state.eta,fallback.state.eta));
@@ -654,7 +649,7 @@ TEST(JointBcdSearchTest, E1NonfiniteObjectiveDoesNotAcceptOrPartiallyCommitCandi
     n::BcdSearchPolicy policy; policy.core_atoms=2; policy.maximum_sweeps=2;
     policy.eta_upper_bound=std::log(2.2);
     policy.candidate_observer=[&](const n::BcdCandidateEvent & event) {
-        if(event.candidate_replay_ran) ++result.candidates;
+        if(event.evaluation_path!=n::BcdCandidateEvaluationPath::UnchangedFastPath) ++result.candidates;
         result.accepted+=event.accepted;
     };
     result.result=n::SearchBcdComponent(data.domain,data.layout,observations,
@@ -740,6 +735,9 @@ TEST(JointBcdSearchTest, CandidateConsistencyAndNonfiniteFaultsPreserveAcceptedB
             failure_event_seen=true;
             ASSERT_TRUE(failed_candidate_before.has_value());
             EXPECT_FALSE(event.accepted);
+            EXPECT_NE(event.evaluation_path,n::BcdCandidateEvaluationPath::UnchangedFastPath);
+            if(fault==n::BcdCandidateFaultForTesting::NaNObjective) EXPECT_TRUE(std::isnan(event.candidate_objective));
+            if(fault==n::BcdCandidateFaultForTesting::InfiniteObjective) EXPECT_TRUE(std::isinf(event.candidate_objective));
             EXPECT_TRUE(BitwiseEqual(event.accepted_before,*failed_candidate_before));
         };
         const auto result=n::RunBcdDiagnostic(problem,eta,policy);
@@ -783,9 +781,20 @@ TEST(JointBcdSearchTest, UnchangedCandidateSkipsOnlyCandidateReplay)
     n::BcdSearchPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=30;
     policy.stop_after_stationarity=false; policy.certify_endpoint=false;
     policy.collect_telemetry=true; policy.eta_upper_bound=std::log(2.2);
+    std::size_t fast_path_candidates{};
+    policy.candidate_observer=[&](const n::BcdCandidateEvent & event) {
+        if(event.evaluation_path!=n::BcdCandidateEvaluationPath::UnchangedFastPath) return;
+        ++fast_path_candidates;
+        EXPECT_FALSE(event.accepted);
+        EXPECT_TRUE(event.unchanged);
+        EXPECT_TRUE(BitwiseEqual(event.candidate_eta,event.accepted_before.eta));
+        EXPECT_TRUE(BitwiseEqual(event.candidate_beta,event.accepted_before.beta));
+        EXPECT_TRUE(BitwiseEqual(event.candidate_objective,event.accepted_before.objective));
+    };
     const auto result=n::RunBcdDiagnostic(problem,eta,policy);
 
     EXPECT_GT(result.work.candidate_replay_skipped_unchanged,0u);
+    EXPECT_EQ(fast_path_candidates,result.work.candidate_replay_skipped_unchanged);
     EXPECT_LT(result.work.full_candidate_replays+result.work.affected_candidate_replays,result.total_block_solves);
     EXPECT_LE(result.work.full_candidate_replays+result.work.affected_candidate_replays+
         result.work.candidate_replay_skipped_unchanged,
