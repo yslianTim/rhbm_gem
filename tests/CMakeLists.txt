@@ -248,7 +248,6 @@ endforeach()
 
 add_library(rhbm_gem_test STATIC
     ${_rhbm_gem_test_sources}
-    support/JointBcdDiagnostic.cpp
 )
 foreach(_property IN ITEMS
     COMPILE_FEATURES INTERFACE_COMPILE_FEATURES
@@ -265,13 +264,10 @@ endforeach()
 target_link_libraries(rhbm_gem_test PUBLIC rhbm_gem_dependencies PRIVATE CompilerFlags)
 if(RHBM_GEM_ENABLE_UMAP)
     target_link_libraries(rhbm_gem_test PRIVATE "$<BUILD_INTERFACE:libscran::umappp>")
-    target_compile_definitions(rhbm_gem_test PUBLIC RHBM_GEM_ENABLE_UMAP)
 endif()
-target_include_directories(rhbm_gem_test PRIVATE "${PROJECT_SOURCE_DIR}/tests")
 target_compile_definitions(rhbm_gem_test PUBLIC RHBM_GEM_TEST_INSTRUMENTATION)
 
 add_executable(rhbm_tests ${RHBM_GEM_ALL_GTEST_SOURCES})
-target_sources(rhbm_tests PRIVATE support/SecondStageTestSupport.cpp)
 set_target_properties(rhbm_tests PROPERTIES
     OUTPUT_NAME "${PROJECT_DISPLAY_NAME}-TEST"
 )
@@ -292,6 +288,8 @@ add_dependencies(tests_all rhbm_tests)
 
 # Shared test-only helpers compile into the test executable.
 target_sources(rhbm_tests PRIVATE
+    support/SecondStageTestSupport.cpp
+    support/JointBcdDiagnostic.cpp
     support/JointSyntheticWorkload.cpp
     support/JointBlockCoordinate.cpp
     support/JointTestGeometry.cpp support/JointTestNumerics.cpp support/JointDenseReference.cpp
@@ -436,6 +434,14 @@ add_test(NAME gtest_registration_coverage_self_test
 set_tests_properties(gtest_registration_coverage gtest_registration_coverage_self_test
     PROPERTIES LABELS "core;domain:integration;intent:contract" TIMEOUT 120)
 
+if(CMAKE_EXPORT_COMPILE_COMMANDS AND CMAKE_GENERATOR MATCHES "Ninja|Makefiles")
+    add_test(NAME test_build_isolation
+        COMMAND ${Python_EXECUTABLE} -B ${CMAKE_CURRENT_SOURCE_DIR}/cmake/check_build_isolation.py
+            ${PROJECT_BINARY_DIR}/compile_commands.json)
+    set_tests_properties(test_build_isolation
+        PROPERTIES LABELS "core;domain:integration;intent:contract")
+endif()
+
 if(DEFINED Python_EXECUTABLE AND NOT Python_EXECUTABLE STREQUAL "")
     add_test(NAME joint_workflow_cli_smoke_test
         COMMAND ${Python_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tests/integration/joint_workflow_cli_smoke.py
@@ -506,13 +512,13 @@ if(BUILD_PYTHON_BINDINGS AND TARGET rhbm_gem_module AND DEFINED Python_EXECUTABL
     )
 endif()
 
-get_target_property(_production_sources rhbm_gem SOURCES)
-foreach(_source IN LISTS _production_sources)
-    if(_source MATCHES "(^|/)tests/support/")
-        message(FATAL_ERROR "Test support source leaked into rhbm_gem: ${_source}")
-    endif()
-endforeach()
 foreach(_production_target IN ITEMS rhbm_gem rhbm_gem_cli)
+    get_target_property(_production_sources ${_production_target} SOURCES)
+    foreach(_source IN LISTS _production_sources)
+        if(_source MATCHES "(^|/)tests/support/")
+            message(FATAL_ERROR "Test support source leaked into ${_production_target}: ${_source}")
+        endif()
+    endforeach()
     get_target_property(_production_definitions ${_production_target} COMPILE_DEFINITIONS)
     if(_production_definitions MATCHES "RHBM_GEM_TEST_INSTRUMENTATION")
         message(FATAL_ERROR "Test instrumentation leaked into ${_production_target}")
