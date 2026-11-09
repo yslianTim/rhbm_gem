@@ -164,16 +164,19 @@ TrustEvidence CheckTrust(const Domain &,VectorRef,const Evaluation &,const Evalu
 TrustEvidence CheckTrust(const Evaluation &,const IndependentReplayEvidence &);
 struct LmTrial
 {
-    Vector accepted_eta,step,diagonal; // LM step is in eta coordinates.
-    double radius{},damping{},actual_decrease{unavailable},predicted_decrease{},ratio{unavailable};
-    bool proposed_acceptance{};
-    bool bounded_subproblem{};
+    Vector step; // LM step is in eta coordinates.
+    double actual_decrease{unavailable},predicted_decrease{},ratio{unavailable};
     std::string subproblem_status;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    Vector accepted_eta,diagonal;
+    double radius{},damping{};
+    bool proposed_acceptance{},bounded_subproblem{};
     double subproblem_kkt_inf_norm{unavailable};
     std::size_t active_set_iterations{},working_set_releases{};
     // Attained working bounds from the valid LM step; stationary-null bounds may be absent.
     std::vector<std::size_t> active_bound_indices;
     std::vector<double> active_bound_multipliers;
+#endif
 };
 struct Trial
 {
@@ -194,12 +197,18 @@ struct WeakWidthStepAssessment
 WeakWidthStepAssessment AssessWeakWidthStep(const Matrix &,VectorRef,const RankPolicy &);
 bool RejectWeakWidthTrial(double step_inf,double weak_step_fraction,double objective_before,
     double objective_after);
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+enum class BoundedLmStatus;
+#endif
 struct SearchResult
 {
     Endpoint initial;
     Vector eta;
     std::vector<Trial> trials;
-    int lm_status{},evaluations{},derivatives{},accepted{};
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    BoundedLmStatus lm_status{};
+#endif
+    int evaluations{},derivatives{},accepted{};
     bool stopped{},initial_accepted{},width_failed{};
     std::string stop_reason;
     BoundedLmWork bounded_lm_work;

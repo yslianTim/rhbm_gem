@@ -1,4 +1,5 @@
 #pragma once
+#include "core/detail/joint_component/BoundedLmDriver.hpp"
 #include "core/detail/joint_component/Numerics.hpp"
 #include <boost/json.hpp>
 #include <cmath>
@@ -120,10 +121,30 @@ inline j::object Assessment(const r::Assessment & a)
         {"numerical_qualification",a.numerical_qualified}};
     return out;
 }
+inline const char * LmStatus(r::BoundedLmStatus status)
+{
+    using S=r::BoundedLmStatus;
+    switch(status)
+    {
+    case S::Ready: return "ready";
+    case S::Running: return "running";
+    case S::InvalidInput: return "invalid-input";
+    case S::ReductionTolerance: return "reduction-tolerance";
+    case S::StepTolerance: return "step-tolerance";
+    case S::ReductionAndStepTolerance: return "reduction-and-step-tolerance";
+    case S::Stationary: return "stationary";
+    case S::EvaluationBudget: return "evaluation-budget";
+    case S::ReductionPrecisionLimit: return "reduction-precision-limit";
+    case S::StepPrecisionLimit: return "step-precision-limit";
+    case S::GradientPrecisionLimit: return "gradient-precision-limit";
+    case S::ProblemStopped: return "problem-stopped";
+    }
+    throw std::invalid_argument("Unknown bounded LM status.");
+}
 inline j::object Search(const r::SearchResult & s,const r::EvaluationContext & c,Eigen::Index rows)
 {
-    j::object out{{"schema_version",2},{"experiment","joint-tau-profile"},{"alpha",0},{"execution_complete",true},{"runtime_convergence","unavailable"},
-        {"initial",Endpoint(s.initial)},{"lm_status",s.lm_status},{"stop_reason",s.stop_reason},{"profile_evaluations",s.evaluations},
+    j::object out{{"schema_version",3},{"experiment","joint-tau-profile"},{"alpha",0},{"execution_complete",true},{"runtime_convergence","unavailable"},
+        {"initial",Endpoint(s.initial)},{"lm_status",LmStatus(s.lm_status)},{"stop_reason",s.stop_reason},{"profile_evaluations",s.evaluations},
         {"jacobian_evaluations",s.derivatives},{"accepted_updates",s.accepted},{"row_count",rows},
         {"settings",j::object{{"factor",.1},{"ftol",1e-14},{"xtol",1e-12},{"gtol",1e-12},{"profile_budget",c.profile_budget},{"accepted_update_budget",c.update_budget}}},
         {"linear_solver","sparse-qr-householder-1024"},

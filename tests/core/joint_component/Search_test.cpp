@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include "support/JointTestNumerics.hpp"
+#include "support/JointRuntimeJson.hpp"
 #include "core/detail/joint_component/BoundedLmDriver.hpp"
 #include "support/JointSyntheticWorkload.hpp"
 #include "core/detail/joint_component/ActiveSetBoundedLM.hpp"
@@ -181,7 +182,8 @@ TEST(JointComponentSearchTest, ProfileSearchPreservesAcceptedTrajectory)
         }
     }
     EXPECT_TRUE(search.eta.isApprox(expected_eta.back(),1e-11));
-    EXPECT_EQ(search.lm_status,-1);
+    EXPECT_EQ(search.lm_status,BoundedLmStatus::Running);
+    EXPECT_EQ(m::runtime_json::Search(search,context,data.domain.rows).at("lm_status"),"running");
     EXPECT_EQ(search.stop_reason,"accepted-update-budget");
     EXPECT_TRUE(search.stopped);
     EXPECT_FALSE(search.width_failed);

@@ -6,7 +6,6 @@
 #include "ActiveSetBoundedLM.hpp"
 #include <algorithm>
 #include <cmath>
-#include <cstdlib>
 
 namespace rhbm_gem::core::joint_component {
 WeakWidthStepAssessment AssessWeakWidthStep(const Matrix & jacobian,VectorRef step,const RankPolicy & policy)
@@ -36,27 +35,6 @@ bool RejectWeakWidthTrial(double step_inf,double weak_step_fraction,double objec
     return improvement>=0 && improvement<=replay_enclosure;
 }
 namespace {
-// The diagnostic JSON uses the historical LM status codes.
-int DiagnosticLmStatus(BoundedLmStatus status)
-{
-    switch(status)
-    {
-        case BoundedLmStatus::Ready: return -2;
-        case BoundedLmStatus::Running: return -1;
-        case BoundedLmStatus::InvalidInput: return 0;
-        case BoundedLmStatus::ReductionTolerance: return 1;
-        case BoundedLmStatus::StepTolerance: return 2;
-        case BoundedLmStatus::ReductionAndStepTolerance: return 3;
-        case BoundedLmStatus::Stationary: return 4;
-        case BoundedLmStatus::EvaluationBudget: return 5;
-        case BoundedLmStatus::ReductionPrecisionLimit: return 6;
-        case BoundedLmStatus::StepPrecisionLimit: return 7;
-        case BoundedLmStatus::GradientPrecisionLimit: return 8;
-        case BoundedLmStatus::ProblemStopped: return 9;
-    }
-    std::abort();
-}
-
 struct Profile
 {
     const Domain & domain;
@@ -122,19 +100,21 @@ struct Profile
     // A retry may have replaced the cached candidate while eta is still accepted.
     bool IsStationary(const Vector &) const {return accepted_width_stationary;}
     bool CanRetry() const {return evaluations<context.profile_budget && failure!="unrepresentable-step";}
-    bool AssessTrial(const Vector & accepted,const Vector & step,const Vector & diagonal,
-        double radius,double damping,double actual,double predicted,double ratio,bool proposed)
+    bool AssessTrial([[maybe_unused]] const Vector & accepted,const Vector & step,
+        [[maybe_unused]] const Vector & diagonal,[[maybe_unused]] double radius,
+        [[maybe_unused]] double damping,double actual,double predicted,double ratio,bool proposed)
     {
         // A rejected evaluation can exit before creating a row.
         if(trace.empty() || trace.back().accepted) return false;
         auto & row=trace.back();
         LmTrial lm;
-        lm.accepted_eta=accepted; lm.step=step; lm.diagonal=diagonal;
-        lm.radius=radius; lm.damping=damping;
+        lm.step=step;
         lm.actual_decrease=cached.valid ? actual : unavailable;
         lm.predicted_decrease=predicted; lm.ratio=cached.valid ? ratio : unavailable;
-        lm.proposed_acceptance=proposed;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
+        lm.accepted_eta=accepted; lm.diagonal=diagonal;
+        lm.radius=radius; lm.damping=damping;
+        lm.proposed_acceptance=proposed;
         if(last_bounded_subproblem)
         {
             lm.bounded_subproblem=true;
@@ -269,7 +249,10 @@ SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & init
     else status=search();
     SearchResult out; out.initial=profile.trace.empty() ? static_cast<Endpoint>(profile.cached) : profile.trace.front().endpoint;
     out.initial_accepted=!profile.trace.empty() && profile.trace.front().accepted;
-    out.trials=std::move(profile.trace); out.eta=eta; out.lm_status=DiagnosticLmStatus(status);
+    out.trials=std::move(profile.trace); out.eta=eta;
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    out.lm_status=status;
+#endif
     out.stop_reason=profile.failure.empty() ? "native-lm-stop" : profile.failure;
     out.width_failed=profile.bounded_lm_work.failed_subproblems>0 ||
         out.stop_reason=="bounded-tiny-step-nonstationary" ||
