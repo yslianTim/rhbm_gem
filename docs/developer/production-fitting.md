@@ -38,9 +38,8 @@ First-stage fitting, Joint initialization, alpha training, group solvers, and
 generic local/MDPDE calls retain their existing native behavior.
 
 Potential-fitting workflows exclude hydrogen from targets, sample-neighbor
-masks and contributors. `FitOptions` exposes only `estimator`, `thread_size`
-and `quiet_mode`; sampling and Second Stage fixed policies are owned by their
-implementations. Refinement uses the same Powell hybrid method in
+masks and contributors. Sampling and Second Stage policies are fixed by the
+workflow. Refinement uses the same Powell hybrid method in
 `(beta0, log(beta1), log(variance))`, a central-difference Jacobian,
 `xtol=1e-12`, and a 128-equation budget.
 
@@ -67,16 +66,9 @@ read-only and uses the unrestricted solve status. The failed-only cases generate
 their input data in the test itself and use the MDPDE equation evaluator
 declared in `MDPDEEndpointRefinement.hpp`.
 
-## Joint result persistence
+## Joint workflow
 
-Joint component estimation uses the separate production contract in the
-[Joint runtime guide](joint-component-runtime.md). Its saved data supports
-SQLite schema v21, Stage Result JSON version 5, and Joint Result JSON schema
-v24 only. These formats do not migrate or decode older formats.
-
-Post-Joint Local fitting collects original voxels within 2 Å, subtracts
-non-self contributors with 2.5 Å support, and directly corrects own charge.
-Its fixed 1 Å positive finite dataset supplies alpha, OLS/MDPDE, rank and
-measurement information together. Wider research fitting ranges are retired;
-the [production decision record](post-joint-grid-validation.md) preserves the
-statistical rationale. Group qualification and WEB remain unchanged.
+The [Joint runtime guide](joint-component-runtime.md) owns the Joint
+objective and endpoint qualification. [Stage Integration](joint-stage-integration.md)
+owns Joint FirstStage initialization, the downstream Local fitting dataset
+and persistence dependencies.

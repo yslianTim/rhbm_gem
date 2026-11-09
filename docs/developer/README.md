@@ -20,30 +20,21 @@ with project internals.
 
 ## Production fitting
 
-- [First-stage fitting](estimate-local-gaussian-with-offset.md) describes local
-  Gaussian initialization.
 - [Production fitting](production-fitting.md) owns per-atom MDPDE solves,
   failed-only refinement, covariance, numerical failure handling, and solver
   replay.
-- [Second-stage local fitting](second-stage-local-fitting.md) owns outer
+- [Two-Stage local fitting](second-stage-local-fitting.md) owns outer
   iteration, candidate acceptance, recovery, convergence, and finalization.
 
-## Joint Component estimator
+## Joint Component Estimator
 
-- [Runtime guide](joint-component-runtime.md) is the production API and
-  regression authority.
-- [Stage integration](joint-stage-integration.md) describes integration with
-  the fitting workflow.
-- [Capabilities and limitations](joint-capabilities-limitations.md) identifies
-  supported behavior and current evidence limits.
-- [Target point validation](joint-target-estimability.md) defines v2 quality and
-  schema 24 persistence.
-- [Memory planning](joint-component-memory-census.md) documents production
-  preflight estimates and their limits.
-- [Certification contract](joint_abc_certification_contract.md),
-  [component contract](joint_abc_components_contract.md), and the
-  [compact-SVD implementation contract](joint-component-compact-svd.md) own
-  the maintained mathematical and numerical rules.
+- [Runtime](joint-component-runtime.md) defines the Target model, observation
+  domains, BCD updates and global qualification.
+- [Numerics](joint-component-numerics.md) explains constrained A/C, Variable
+  Projection and the bounded LM solve.
+- [Stage Integration](joint-stage-integration.md) follows FirstStage
+  initialization through Target publication, Halo reconstruction, peeling,
+  Local and Group fitting, and persistence.
 
 ## Testing and release
 

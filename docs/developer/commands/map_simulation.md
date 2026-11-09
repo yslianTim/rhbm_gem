@@ -56,7 +56,7 @@ The combination of source fingerprint, preparation index, and identity fields id
 
 For `single_gaus`, the width policy is O × 0.8, N × 0.9 and other elements × 1, supplied by the same width decision function used by evaluation. The five-Gaussian model has no single Gaussian width. V2 removes the misleading global charge width from `kernel`.
 
-Grid coordinates use explicit `fma(index, spacing, origin)`. Squared distances use `fma(dz, dz, fma(dy, dy, dx*dx))`, with strict `r² <= cutoff²` membership and no support tolerance. Historical maps and v1 manifests remain unchanged. Consumers of v1 must use a hash-identified frozen width contract; unknown legacy widths must not be inferred from the current generator. Historical experiment readers reject v2 until they explicitly support its semantics. See the [certification contract](../joint_abc_certification_contract.md).
+Grid coordinates use explicit `fma(index, spacing, origin)`. Squared distances use `fma(dz, dz, fma(dy, dy, dx*dx))`, with strict `r² <= cutoff²` membership and no support tolerance. Historical maps and v1 manifests remain unchanged. Consumers of v1 must use a hash-identified frozen width contract; unknown legacy widths must not be inferred from the current generator. Historical experiment readers reject v2 until they explicitly support its semantics.
 
 ### Build fingerprints
 

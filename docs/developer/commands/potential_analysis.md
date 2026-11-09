@@ -25,43 +25,25 @@ Concrete implementation:
 
 `PotentialAnalysisRequest` is a plain DTO that inherits shared fields from `CommandRequestBase`.
 
-Shared fields:
+| Request field | CLI flags |
+| --- | --- |
+| `job_count` | `-j, --jobs` |
+| `verbosity` | `-v, --verbose` |
+| `output_dir` | `-o, --folder` |
+| `estimator` | `--estimator` |
+| `database_path` | `-d, --database` |
+| `model_file_path` | `-a, --model` |
+| `map_file_path` | `-m, --map` |
+| `selected_chain_ids` | `--select-chain` |
+| `simulation_flag` | `--simulation` |
+| `simulated_map_resolution` | `-r, --sim-resolution` |
+| `saved_key_tag` | `-k, --save-key` |
 
-- `job_count`
-- `verbosity`
-- `output_dir`
-
-Command-specific fields:
-
-- `estimator` (default `PotentialEstimator::JOINT_COMPONENTS`; `TWO_STAGE`
-  remains explicitly selectable)
-- `database_path`
-- `model_file_path`
-- `map_file_path`
-- `selected_chain_ids` (empty means all chains)
-- `simulation_flag`
-- `simulated_map_resolution`
-- `saved_key_tag`
-
-The request catalog generates both CLI options and Python bindings. C++ and
-Python requests share the same estimator default. Potential analysis always
-excludes hydrogen from its target, sampling mask and contributor domains. The
-sampler owns the deterministic Fibonacci sampling default; generic sampling
-APIs retain explicit `SphereSamplingMethod` selection. Second Stage refinement
-and dependency-polish settings are fixed production policies, not request
-fields. Alpha training is enabled, with initial local/group alpha values set
-internally to `0.0`.
-
-`FitOptions` contains only the estimator and execution settings:
-
-```cpp
-struct FitOptions
-{
-    PotentialEstimator estimator{ PotentialEstimator::JOINT_COMPONENTS };
-    int thread_size{ 1 };
-    bool quiet_mode{ false };
-};
-```
+The request catalog supplies the CLI and Python bindings. All surfaces default
+to Joint Components (`PotentialEstimator::JOINT_COMPONENTS`), with
+`two-stage` (`PotentialEstimator::TWO_STAGE`) available explicitly. Joint uses
+the job count for FirstStage, capped at four workers. Two-Stage passes it
+through as its fitting thread count.
 
 ## Execution Contract
 
@@ -73,10 +55,11 @@ Expected result contract:
   including a Joint diagnostic result whose fitting did not qualify
 - `result.succeeded == false` when normalization, validation, preflight, or execution stops the command
 - `result.outcome` is `Completed` for ordinary command completion,
-  `JointInitializationFailed` when Joint setup failed, `JointNotConverged` when
-  fitting did not qualify, `JointDownstreamUnavailable` when Joint qualified but
-  Halo reconstruction is unavailable, or `JointQualified` after all runtime
-  gates passed
+  `JointInitializationFailed` when the saved initialization is invalid,
+  `JointNotConverged` when fitting did not qualify (including unavailable
+  calibration after valid initialization), `JointDownstreamUnavailable` when
+  Joint qualified but Halo reconstruction is unavailable, or `JointQualified`
+  after the runtime gates passed
 - `result.issues` reports public validation diagnostics as option/message pairs
 
 The CLI uses the following exit codes:
@@ -154,7 +137,6 @@ For Joint Components, selected chains define targets and their voxel
 observations. Other non-hydrogen atoms remain eligible as halo contributors
 when their support overlaps those observations. Chain selection does not crop
 the contributor model or change the target/halo distinction.
-Production Joint fitting uses bounded Active-set LM.
 
 Simulation maps skip normalization. Every non-simulation map is normalized by
 its standard deviation when that operation succeeds; no mean is subtracted. A
@@ -189,55 +171,12 @@ rhbm_gem potential_analysis \
     --map map.mrc
 ```
 
-## Failed-only endpoint refinement
+## Fixed fitting policies
 
-Second Stage always enables failed-only refinement for its shape refits. Native
-successes remain unchanged; only eligible failed endpoints can be refined.
-First Stage, Joint initialization, alpha training, group estimation and generic
-`EstimateLocalGaussian` / `EstimateBetaMDPDE` entrypoints retain their existing
-native behavior. Final dependency polish is enabled with the production
-10-round limit and runs only after the existing eligible convergence stop.
-
-A native successful solve is used unchanged, without a fresh-equation evaluation.
-A failed solve may be refined from its own endpoint. Acceptance requires fresh
-scaled equations at `1e-8`, a valid positive-variance Gaussian, weighted rank and
-denominator checks, and agreement with a fixed-point continuation from the
-original endpoint. The reference must reach `1e-10`; transformed coordinates and
-weights must agree within `1e-6`, with identical weight-floor activation.
-
-The endpoint-refinement candidate budget is 128 equation evaluations including
-verification. Reference continuation is separate work, capped at 10,000 total
-fixed-point updates including the native iterations. These constants are not
-public tuning options. Exact-fit variance boundaries are not promoted to
-successful solves. Rejection preserves the original numerical result; the
-reference is never used as a fallback.
-
-`RHBMBetaEstimateResult.status` and `diagnostics` retain native solver history.
-Use `Qualification()` to distinguish `NativeSuccess`, `RefinedSuccess` and
-`Unqualified`. The optional `refinement` diagnostics record acceptance, rejection
-reason, residuals, branch differences and candidate/reference work. Audit shape
-records retain effective `status` for existing consumers and additionally
-expose `native_status`, `qualification` and optional refinement/recovery
-evidence.
-
-Recovery continues to require qualified inner endpoints. Refinement does not
-relax outer convergence, offset IRLS or the best-objective bound, and does not
-itself establish convergence. See the [production fitting contract](../production-fitting.md).
-
-## Internal fitting ranges
-
-Fitting ranges are internal constants in `src/core/detail/gaussian_fit/FittingRanges.hpp`.
-Signal fitting and alpha training use `[0, 1.0]` Å; the second-stage tail
-objective uses `[1.2, 2.0]` Å. Both boundaries are inclusive. The two ranges
-are independent and may overlap or leave a gap when the constants are changed.
-An overlapping sample contributes to both objective terms, each with its own
-scale and sample-count normalization. Samples in neither region contribute to
-neither residual objective term.
-
-Offset fitting still uses all raw samples, and joint polish keeps its existing
-sample sources. The gap is therefore not excluded from every estimation step;
-tail is an objective constraint region, not a strictly held-out validation set.
-Neither PotentialAnalysis nor RHBMTest accepts `--fit-min` or `--fit-max`.
+[Production Fitting](../production-fitting.md) owns the shared per-atom
+MDPDE and failed-only refinement contract.
+[Two-Stage local fitting](../second-stage-local-fitting.md) owns its outer
+iteration, signal and tail ranges, and final dependency polish.
 
 ## Tests to Update When Behavior Changes
 
@@ -247,39 +186,12 @@ Neither PotentialAnalysis nor RHBMTest accepts `--fit-min` or `--fit-max`.
 - [`tests/integration/CommandApiPipeline_test.cpp`](/tests/integration/CommandApiPipeline_test.cpp)
 - [`tests/integration/python_bindings_runtime_smoke.py`](/tests/integration/python_bindings_runtime_smoke.py)
 
-## Joint component production
+## Joint component workflow
 
-The map-aware `RunPotentialFittingWorkflow(map, model, options)` dispatches
-`JOINT_COMPONENTS` to the production target-only Pure Halo-Support Exclusion
-workflow. Selected non-hydrogen atoms are Targets. Halo support is used only to
-exclude fitting rows within 2.5 Å; Halos are not free Joint parameters.
-
-Qualified FirstStage Target widths initialize the fit and determine the global
-width bound `tau_max = 4 × P95`. Calibration needs at least 20 qualified Target
-donors and 95% Target coverage. If calibration is unavailable, the saved
-result retains that status and does not retry with an unbounded search.
-
-Production uses Gauss–Seidel BCD core size 12, forward serial Gauss-Seidel,
-a nominal budget of 200 sweeps, a progress-qualified extension up to 300, and
-no more than one trusted accepted update per block visit.
-Bounded Active-set LM updates widths. Constrained A/C subproblems use Eigen
-SparseQR; A is nonnegative and C is signed. Global convergence, complete-sweep
-stationarity, endpoint verification, Independent Replay, Local Conditioning
-and target point validation remain explicit evidence. See the
-[Joint runtime guide](../joint-component-runtime.md).
-
-Qualified target A/tau/C points provide geometry-local kNN-4 Halo Median
-Reconstruction. Original-domain PostFitPeeling uses available Target and
-reconstructed Halo points, followed by Post-Joint Local MDPDE and Group
-Fitting for qualified Targets. These downstream results retain their own
-availability and qualification states.
-
-Initialization failure, unavailable width calibration, search failure,
-unqualified endpoint, missing component state, absent Halos, unavailable Halo
-reconstruction, and incomplete downstream results are valid saved outcomes.
-`CommandResult.succeeded` means command execution and persistence completed; it
-does not mean the Joint estimate qualified. Invalid input or a persistence
-failure remains a command failure.
+See [Runtime](../joint-component-runtime.md) for the Target-only fitting
+problem and endpoint qualification, [Numerics](../joint-component-numerics.md)
+for the block solver, and [Stage Integration](../joint-stage-integration.md)
+for downstream data and result availability.
 
 ```cpp
 rhbm_gem::core::PotentialAnalysisRequest request;
@@ -299,25 +211,6 @@ CSV layout. No singleton contribution file is written. Available unqualified
 Target states remain distinguishable from unavailable point estimates through
 convergence and point-quality columns.
 
-## Joint persistence formats
-
-| Data | Accepted format |
-| --- | --- |
-| SQLite database | Schema v21 only |
-| Stage Result JSON | Version 5 only |
-| Joint Result JSON | Schema v24 only |
-
-An empty database is initialized as v21. An existing database must have the
-exact v21 schema. Stage JSON accepts only version 5; Joint JSON always writes
-schema 24 and reads only schema 24. No migrations, upgrades, historical
-fallbacks, or automatic repairs are performed. Unsupported inputs are rejected
-without modifying the database. See the
-[data I/O architecture](../architecture/dataobject-io-architecture.md).
-
-## Tests to update when behavior changes
-
-- [`tests/data/DataObjectPersistence_test.cpp`](/tests/data/DataObjectPersistence_test.cpp)
-- [`tests/data/DataObjectSchemaLifecycle_test.cpp`](/tests/data/DataObjectSchemaLifecycle_test.cpp)
-- [`tests/data/DataObjectSchemaValidation_test.cpp`](/tests/data/DataObjectSchemaValidation_test.cpp)
-- [`tests/core/joint_component`](/tests/core/joint_component)
-- [`tests/integration/joint_workflow_cli_smoke.py`](/tests/integration/joint_workflow_cli_smoke.py)
+The [data I/O architecture](../architecture/dataobject-io-architecture.md)
+defines which database and JSON versions the persistence entrypoints accept.
+Joint workflow test groups are indexed in the [test guide](../../../tests/README.md#joint-component-regression).

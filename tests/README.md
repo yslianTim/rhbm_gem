@@ -118,8 +118,10 @@ Run the Joint groups:
 ctest --test-dir build -L 'joint:(contract|workflow|numerical)' --parallel 4 --output-on-failure
 ```
 
-The [runtime guide](../docs/developer/joint-component-runtime.md) describes the
-current production contract. Full CTest covers adaptive sweep budgets,
+[Runtime](../docs/developer/joint-component-runtime.md),
+[Numerics](../docs/developer/joint-component-numerics.md) and
+[Stage Integration](../docs/developer/joint-stage-integration.md) describe the
+contracts covered by these tests. Full CTest covers adaptive sweep budgets,
 conditioning, strict local certificates, projected width KKT, endpoint/replay,
 rank/near-singular recovery, persistence, Halo/peeling and workflow behavior.
 The Eigen scope test group sets its required two-thread environment.

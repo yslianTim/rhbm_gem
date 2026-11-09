@@ -45,11 +45,12 @@ codecs decode float32 mode-2 voxels into the runtime's contiguous double map.
 | Stage Result JSON | Version 5 only |
 | Joint Result JSON | Schema v24 only |
 
-No layer migrates historical data. A genuinely empty SQLite database is
-initialized as v21. An existing database opens only when its `user_version`
-is 20 and its exact current schema validates. Unsupported versions or
-structures are rejected before schema or row mutation; the repository does
-not repair, upgrade, delete, or replace them.
+SQLite initializes schema v21 when `PRAGMA user_version` is zero and
+`sqlite_master` contains no user schema objects. An existing database opens
+only when `user_version` is 21 and the exact current schema validates.
+SQLite and both JSON codecs require their current formats without migration.
+The repository rejects unsupported versions or structures before schema or
+row mutation.
 
 Stage JSON readers require `{"version":5}`. Joint JSON writers always emit
 schema 24, and Joint readers require schema 24 with the
@@ -109,5 +110,5 @@ in place.
 - `tests/data/DataObjectPersistence_test.cpp`: current JSON and model
   round-trips.
 
-See the [Joint runtime guide](../joint-component-runtime.md) for the
-target-only parameterization and production solver contract.
+See [Joint Stage Integration](../joint-stage-integration.md#persistence)
+for Joint and downstream payload validation.

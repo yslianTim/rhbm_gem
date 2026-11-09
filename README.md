@@ -30,7 +30,7 @@ Browse runnable examples and helper assets in [`resources/README.md`](/resources
 ## Joint component workflow (default)
 
 The default estimator is `joint-components`; use `--estimator two-stage` to
-select the two-stage workflow. New results use **SQLite v20**. Existing
+select the two-stage workflow. New results use **SQLite v21**. Existing
 databases must use the current schema; older schemas are rejected.
 
 ```sh
@@ -38,21 +38,22 @@ RHBM-GEM potential_analysis --estimator joint-components -a model.cif -m map.mrc
 RHBM-GEM result_dump --printer joint -d joint.sqlite -k example -o results
 ```
 
-Joint output contains A/tau/C, component availability and runtime convergence. The C++/Python `CommandResult.succeeded`
-field reports whether execution completed and the result was saved; its
-`outcome` distinguishes Joint initialization failure, an unqualified fit, and a
-qualified fit. CLI exit codes are `1` for execution or saving failure, `2` when
-Joint initialization failed after saving diagnostics, `3` when Joint fitting
-did not qualify after saving diagnostics, and `0` for a qualified Joint fit (or
-a completed non-Joint command). See the
-[joint workflow contract](docs/developer/commands/potential_analysis.md#joint-component-opt-in)
-for options, C++/Python examples and JSON/CSV output. Joint endpoints populate the
+Joint output contains A/tau/C, component availability and runtime convergence.
+The C++/Python `CommandResult.succeeded` field reports whether execution
+completed and the result was saved. Its `outcome` distinguishes initialization
+failure, an unqualified fit, unavailable Halo reconstruction, and a qualified
+fit. CLI exit codes are `1` for execution or saving failure, `2` when Joint
+initialization failed after saving diagnostics, `3` when Joint fitting
+did not qualify after saving diagnostics, `4` when Joint qualified but Halo
+reconstruction was unavailable, and `0` for a qualified Joint fit or completed
+Two-Stage command. See the
+[joint workflow contract](docs/developer/commands/potential_analysis.md#joint-component-workflow)
+for options and JSON/CSV output. Joint endpoints populate the
 common Second stage. Plots, comparisons, Gaussian/outlier dumps and UMAP use the
 available saved data; missing uncertainty or peeling coverage is never replaced
 with zero. Qualified Target A/tau/C points provide geometry-local kNN-4 Halo
-medians for downstream peeling. Joint JSON schema 24 and Stage JSON version 4
-accept only their current contracts; older payloads are rejected. See the
-[Joint workflow contract](docs/developer/commands/potential_analysis.md#joint-component-opt-in).
+medians for downstream peeling. The current formats are Joint JSON schema 24
+and Stage JSON version 5. See [Joint Stage Integration](docs/developer/joint-stage-integration.md).
 
 ## License, Citation, and Third-Party Notices
 
