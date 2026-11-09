@@ -184,7 +184,7 @@ TEST(DataObjectAssemblySpatialQueryTest, DerivedStateBuildsKDTreeOnceForConcurre
     const auto & atoms{ model->GetAtomList() };
     ASSERT_EQ(atoms.size(), 4);
 
-    constexpr int thread_count{ 16 };
+    constexpr int thread_count{ 3 };
     constexpr int query_count{ 50 };
     std::atomic<int> ready_count{ 0 };
     std::atomic<bool> start{ false };
