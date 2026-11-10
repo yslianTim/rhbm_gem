@@ -19,7 +19,7 @@ Internal schema and wiring:
 Concrete implementation:
 
 - [`src/core/command/PotentialAnalysisCommand.cpp`](/src/core/command/PotentialAnalysisCommand.cpp)
-- [`src/core/MapSampler.cpp`](/src/core/MapSampler.cpp)
+- [`src/core/sampling/MapSampler.cpp`](/src/core/sampling/MapSampler.cpp)
 
 ## Request Surface
 

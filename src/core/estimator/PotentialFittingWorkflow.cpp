@@ -9,7 +9,6 @@
 #include "core/estimator/joint_component/ResourceWork.hpp"
 #include "data/detail/PostJointLocalValidation.hpp"
 
-#include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>

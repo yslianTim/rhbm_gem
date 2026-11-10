@@ -1,4 +1,4 @@
-#include <rhbm_gem/core/GaussianEstimator.hpp>
+#include "core/estimator/GaussianEstimator.hpp"
 #include "core/estimator/InitialStage.hpp"
 #include "core/estimator/joint_component/Numerics.hpp"
 #include "core/estimator/gaussian_fit/PreparedLocalGaussianFit.hpp"

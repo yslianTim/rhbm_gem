@@ -1,15 +1,21 @@
 #pragma once
 
-#include <cstddef>
 #include <vector>
 
+#include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
 namespace rhbm_gem {
 class ModelObject;
-class MapObject;
 class AtomObject;
+
+struct GroupGaussianMemberInput
+{
+    LocalPotentialSampleList sample_entries{};
+    double alpha_r{ 0.0 };
+    GaussianModel3D local_model{};
+};
 
 namespace core {
 
@@ -50,7 +56,6 @@ void RunFirstStageLocalAlphaTraining(ModelObject &, const FitOptions &,
     const std::vector<AtomObject *> & atoms);
 void RunFirstStageLocalFitting(ModelObject &, const FitOptions &,
     const std::vector<AtomObject *> & atoms);
-void RunPotentialFittingWorkflow(MapObject &, ModelObject &, const FitOptions &);
 
 } // namespace core
 

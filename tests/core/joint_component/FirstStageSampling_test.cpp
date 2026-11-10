@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 #include "core/estimator/InitialStage.hpp"
-#include <rhbm_gem/core/MapSampler.hpp>
+#include "core/sampling/MapSampler.hpp"
 #include <rhbm_gem/core/QScoreHelper.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>

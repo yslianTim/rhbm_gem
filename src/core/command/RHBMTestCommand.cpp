@@ -1,7 +1,7 @@
 #include "detail/CommandRunner.hpp"
 #include "detail/RHBMTestPlotting.hpp"
 
-#include <rhbm_gem/core/EstimatorTester.hpp>
+#include "core/estimator/EstimatorTester.hpp"
 #include <rhbm_gem/core/TestDataFactory.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 

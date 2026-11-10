@@ -20,7 +20,7 @@ set(RHBM_GEM_EXPERIMENTAL_SOURCES
 
 target_sources(rhbm_gem PRIVATE
     # core
-    core/EstimatorTester.cpp
+    core/estimator/EstimatorTester.cpp
     core/estimator/joint_component/Numerics.cpp
     core/estimator/joint_component/TiledDerivative.cpp
     core/estimator/joint_component/LocalConditioning.cpp
@@ -37,7 +37,7 @@ target_sources(rhbm_gem PRIVATE
     core/estimator/joint_component/ComponentAssembly.cpp
     core/estimator/joint_component/TargetEvidence.cpp
     core/estimator/joint_component/JointComponentEstimator.cpp
-    core/GaussianEstimator.cpp
+    core/estimator/GaussianEstimator.cpp
     core/estimator/joint_component/JointCliProgressReporter.cpp
     core/estimator/PotentialFittingWorkflow.cpp
     core/estimator/InitialStage.cpp
@@ -45,7 +45,7 @@ target_sources(rhbm_gem PRIVATE
     core/estimator/joint_component/HaloMedianReconstruction.cpp
     core/estimator/joint_component/PostFitPeeling.cpp
     core/estimator/gaussian_fit/PreparedLocalGaussianFit.cpp
-    core/MapSampler.cpp
+    core/sampling/MapSampler.cpp
     core/QScoreHelper.cpp
     core/TestDataFactory.cpp
     core/command/CommandSystem.cpp

@@ -9,7 +9,7 @@
 #include <utility>
 #include <vector>
 
-#include <rhbm_gem/core/MapSampler.hpp>
+#include "core/sampling/MapSampler.hpp"
 #include "core/sampling/MapInterpolation.hpp"
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>

@@ -6,7 +6,7 @@
 #include "core/estimator/joint_component/Problem.hpp"
 #include "core/estimator/joint_component/WidthCalibration.hpp"
 #include "data/io/detail/JointResultJson.hpp"
-#include <rhbm_gem/core/MapSampler.hpp>
+#include "core/sampling/MapSampler.hpp"
 #include <rhbm_gem/core/QScoreHelper.hpp>
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>

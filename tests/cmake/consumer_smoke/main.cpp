@@ -1,7 +1,5 @@
 #include <rhbm_gem/core/CommandSystem.hpp>
 #include <rhbm_gem/core/CommandTypes.hpp>
-#include <rhbm_gem/core/GaussianEstimator.hpp>
-#include <rhbm_gem/core/MapSampler.hpp>
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/JointAnalysisFileIO.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
@@ -18,18 +16,15 @@
 #include <utility>
 #include <vector>
 
-template <typename T>
-constexpr bool kHeaderExposesCompleteType = sizeof(T) > 0;
-
 int main()
 {
     using namespace rhbm_gem;
     using namespace rhbm_gem::core;
 
-    static_assert(kHeaderExposesCompleteType<FitOptions>);
-    using PotentialFittingWorkflow = void (*)(MapObject &, ModelObject &, const FitOptions &);
-    PotentialFittingWorkflow volatile workflow_entry{&RunPotentialFittingWorkflow};
-    if (workflow_entry == nullptr) return 2;
+    PotentialAnalysisRequest request;
+    request.verbosity = 0;
+    const auto rejected = RunCommand(request);
+    if (rejected.succeeded || rejected.issues.empty()) return 2;
 
     JointAnalysisResult result;
     result.atom_ids = {"1"};
@@ -74,7 +69,9 @@ int main()
     ModelObject model(std::move(atoms));
     model.EditAnalysis().ApplyJointResult(result, "consumer-smoke");
     const auto local = AtomLocalPotentialView::For(*model.FindAtomPtr(1));
-    if (local.GetJointEstimate().source.method != EstimateMethod::JointComponents ||
+    const auto & source = local.GetJointEstimate().source;
+    if (source.method != EstimateMethod::JointComponents || source.atom_id != "1" ||
+        source.run_id != "consumer-smoke" || source.role != FittingRole::Target ||
         local.GetFirstStageEstimate().source.method != EstimateMethod::Unspecified)
         return 5;
 
@@ -82,9 +79,14 @@ int main()
     repository.SaveModel(model, "consumer");
     const auto loaded = repository.LoadModel("consumer");
     const auto & loaded_result = loaded->GetAnalysisView().GetJointResult();
+    const auto & loaded_source =
+        AtomLocalPotentialView::For(*loaded->FindAtomPtr(1)).GetJointEstimate().source;
     if (!loaded_result || loaded_result->atom_ids != result.atom_ids ||
         !loaded_result->metadata.solver ||
+        loaded_result->metadata.solver->contract_version != JointSolverProvenanceContractVersion ||
         loaded_result->metadata.solver->bcd_policy_version != BcdPolicyContractVersion ||
+        loaded_source.method != source.method || loaded_source.atom_id != source.atom_id ||
+        loaded_source.run_id != source.run_id || loaded_source.role != source.role ||
         IsQualifiedJointAnalysisResult(*loaded_result))
         return 4;
 

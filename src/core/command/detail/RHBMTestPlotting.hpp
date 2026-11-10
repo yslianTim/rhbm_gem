@@ -5,7 +5,7 @@
 #include <vector>
 
 #include <rhbm_gem/core/CommandSystem.hpp>
-#include <rhbm_gem/core/EstimatorTester.hpp>
+#include "core/estimator/EstimatorTester.hpp"
 #include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 
 namespace rhbm_gem::core::command_detail::rhbm_test_plotting {

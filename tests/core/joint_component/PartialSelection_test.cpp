@@ -1,8 +1,8 @@
 #include "core/estimator/GroupingStage.hpp"
 #include <gtest/gtest.h>
 #include <boost/json.hpp>
-#include <rhbm_gem/core/GaussianEstimator.hpp>
-#include <rhbm_gem/core/MapSampler.hpp>
+#include "core/estimator/GaussianEstimator.hpp"
+#include "core/sampling/MapSampler.hpp"
 #include <rhbm_gem/data/io/JointAnalysisFileIO.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <algorithm>

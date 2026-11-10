@@ -5,6 +5,7 @@
 #include <vector>
 
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
+#include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
 
 namespace rhbm_gem {

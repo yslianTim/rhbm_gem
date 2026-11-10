@@ -5,7 +5,7 @@
 #include "core/command/detail/SimulationGeometry.hpp"
 #include "SimulationBuildInfo.hpp"
 
-#include <rhbm_gem/core/GaussianEstimator.hpp>
+#include "core/estimator/GaussianEstimator.hpp"
 #include <rhbm_gem/utils/math/EigenHelper.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>

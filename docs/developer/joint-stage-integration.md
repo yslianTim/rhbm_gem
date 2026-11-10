@@ -22,14 +22,14 @@ their existing data and persistence contracts.
 
 The initialization workset resolves contributor identities and Target roles
 in Fitting Domain order. FirstStage uses 20 deterministic shells at 0.05, 0.15, …, 1.95 Å,
-with ten points per shell. C++ callers can set `FitOptions::first_stage_sampling_method`
-to `SphereSamplingMethod::SpiralDeterministic`. The default is
+with ten points per shell. The internal `FitOptions::first_stage_sampling_method`
+can select `SphereSamplingMethod::SpiralDeterministic`. The default is
 `SphereSamplingMethod::FibonacciDeterministic`. Both methods apply the
 strict Ownership and 30° cone exclusions for non-hydrogen neighbors.
 Tricubic samples feed alpha training and OLS/MDPDE on selected positive
 responses within 1 Å.
-Standalone C++ callers can run `RunFirstStageLocalAlphaTraining` and
-`RunFirstStageLocalFitting` with the current selection or an explicit atom list.
+The internal `RunFirstStageLocalAlphaTraining` and
+`RunFirstStageLocalFitting` support the current selection or an explicit atom list.
 FirstStage can sample outside the Joint voxel domain. Raw FirstStage records
 retain their sample coordinates and selection independently of grid results.
 

@@ -4,7 +4,7 @@
 
 #include <Eigen/Dense>
 
-#include <rhbm_gem/core/GaussianEstimator.hpp>
+#include "core/estimator/GaussianEstimator.hpp"
 #include <rhbm_gem/core/TestDataFactory.hpp>
 
 namespace rhbm_gem::core {

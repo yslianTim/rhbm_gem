@@ -12,7 +12,7 @@
 #include <tuple>
 #include <vector>
 
-#include <rhbm_gem/core/GaussianEstimator.hpp>
+#include "core/estimator/PotentialFittingWorkflow.hpp"
 #include <rhbm_gem/core/CommandTypes.hpp>
 #include "core/estimator/joint_component/JointComponentEstimator.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>

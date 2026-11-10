@@ -246,6 +246,12 @@ function(rhbm_guard_check_structure)
     rhbm_guard_find_git(GIT_EXECUTABLE)
 
     foreach(REQUIRED_PATH IN ITEMS
+        "src/core/sampling/MapSampler.cpp"
+        "src/core/sampling/MapSampler.hpp"
+        "src/core/estimator/GaussianEstimator.cpp"
+        "src/core/estimator/GaussianEstimator.hpp"
+        "src/core/estimator/EstimatorTester.cpp"
+        "src/core/estimator/EstimatorTester.hpp"
         "src/core/estimator/joint_component/JointComponentEstimator.cpp"
         "src/core/estimator/joint_component/JointComponentEstimator.hpp"
         "src/core/estimator/PotentialFittingWorkflow.cpp"
@@ -263,6 +269,12 @@ function(rhbm_guard_check_structure)
     endforeach()
 
     foreach(RETIRED_PATH IN ITEMS
+        "src/core/MapSampler.cpp"
+        "include/rhbm_gem/core/MapSampler.hpp"
+        "src/core/GaussianEstimator.cpp"
+        "include/rhbm_gem/core/GaussianEstimator.hpp"
+        "src/core/EstimatorTester.cpp"
+        "include/rhbm_gem/core/EstimatorTester.hpp"
         "src/core/JointComponentEstimator.cpp"
         "src/core/PotentialFittingWorkflow.cpp"
         "src/core/detail"
@@ -467,11 +479,16 @@ function(rhbm_guard_run_install_smoke)
             "stderr:\n${INSTALL_STDERR}\n")
     endif()
 
-    set(INSTALLED_CORE_INCLUDE_DIR "${INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR}/rhbm_gem/core")
-    if(EXISTS "${INSTALLED_CORE_INCLUDE_DIR}/JointComponentEstimator.hpp")
+    file(GLOB_RECURSE INSTALLED_PRIVATE_HEADERS RELATIVE "${INSTALL_PREFIX}"
+        "${INSTALL_PREFIX}/GaussianEstimator.hpp"
+        "${INSTALL_PREFIX}/EstimatorTester.hpp"
+        "${INSTALL_PREFIX}/MapSampler.hpp"
+        "${INSTALL_PREFIX}/MapInterpolation.hpp"
+        "${INSTALL_PREFIX}/JointComponentEstimator.hpp")
+    if(INSTALLED_PRIVATE_HEADERS)
         message(FATAL_ERROR
-            "Install consumer smoke test found private header in install prefix: "
-            "${INSTALLED_CORE_INCLUDE_DIR}/JointComponentEstimator.hpp")
+            "Install consumer smoke test found private headers in install prefix: "
+            "${INSTALLED_PRIVATE_HEADERS}")
     endif()
 
     set(CLI_EXAMPLE_INSTALL_DIR "${INSTALL_PREFIX}/share/RHBM_GEM/resources/examples/cli")

@@ -114,6 +114,15 @@ Supported labels:
 compiled into the non-installed `rhbm_gem_test` and `rhbm_tests` targets.
 `BUILD_TESTING=OFF` builds production without test targets.
 
+## Installed C++ API
+
+The `RHBM_GEM::rhbm_gem` target exposes the command headers and scientific data
+contracts under `include/rhbm_gem/`. The standalone Gaussian fitting and map
+sampling entry points, `FitOptions`, and `EstimatorTester` are private to the
+source tree. The install smoke test builds an independent consumer from a
+fresh prefix and exercises command dispatch, result publication, Joint JSON,
+and SQLite round trips.
+
 ## Repository Lint Checks
 
 Repository guard checks (style/structure/hygiene/fixture tracking/absolute-path/install consumer smoke) are executed through `lint_repo`:

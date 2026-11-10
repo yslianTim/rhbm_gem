@@ -1,4 +1,4 @@
-#include <rhbm_gem/core/MapSampler.hpp>
+#include "core/sampling/MapSampler.hpp"
 
 #include <string_view>
 #include <type_traits>

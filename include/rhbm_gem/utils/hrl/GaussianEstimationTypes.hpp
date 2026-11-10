@@ -1,12 +1,12 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <optional>
 #include <string>
 #include <vector>
 
 #include <rhbm_gem/utils/domain/JointEstimationTypes.hpp>
-#include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
@@ -153,13 +153,6 @@ struct GroupGaussianMemberResult
     bool charge_inferred{ true };
     std::optional<Eigen::Matrix2d> parameter_covariance;
     std::optional<JointFixedChargeProfile> fixed_charge;
-};
-
-struct GroupGaussianMemberInput
-{
-    LocalPotentialSampleList sample_entries{};
-    double alpha_r{ 0.0 };
-    GaussianModel3D local_model{};
 };
 
 struct GroupGaussianResult

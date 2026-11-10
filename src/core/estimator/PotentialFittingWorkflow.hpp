@@ -1,6 +1,6 @@
 #pragma once
 
-#include <rhbm_gem/core/GaussianEstimator.hpp>
+#include "core/estimator/GaussianEstimator.hpp"
 #include "joint_component/PostFitPeeling.hpp"
 
 #include <string>
@@ -8,6 +8,8 @@
 namespace rhbm_gem { struct JointAnalysisResult; }
 
 namespace rhbm_gem::core {
+void RunPotentialFittingWorkflow(MapObject &, ModelObject &, const FitOptions &);
+
 std::string BuildJointTargetSpotSummary(const ModelObject &);
 }
 

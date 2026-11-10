@@ -1,4 +1,4 @@
-#include <rhbm_gem/core/EstimatorTester.hpp>
+#include "core/estimator/EstimatorTester.hpp"
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/math/EigenValidation.hpp>

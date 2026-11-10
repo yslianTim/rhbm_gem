@@ -1,4 +1,4 @@
-#include <rhbm_gem/core/GaussianEstimator.hpp>
+#include "core/estimator/GaussianEstimator.hpp"
 
 static_assert(rhbm_gem::core::FitOptions{}.first_stage_sampling_method ==
     SphereSamplingMethod::FibonacciDeterministic);

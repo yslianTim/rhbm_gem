@@ -1,7 +1,7 @@
 #include "GroupingStage.hpp"
 #include "data/detail/PostJointLocalValidation.hpp"
 
-#include <rhbm_gem/core/GaussianEstimator.hpp>
+#include "core/estimator/GaussianEstimator.hpp"
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>

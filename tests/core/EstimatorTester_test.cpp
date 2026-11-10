@@ -7,9 +7,9 @@
 #include <vector>
 
 #include "core/estimator/gaussian_fit/PreparedLocalGaussianFit.hpp"
-#include <rhbm_gem/core/GaussianEstimator.hpp>
+#include "core/estimator/GaussianEstimator.hpp"
 #include <rhbm_gem/core/TestDataFactory.hpp>
-#include <rhbm_gem/core/EstimatorTester.hpp>
+#include "core/estimator/EstimatorTester.hpp"
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 
 namespace {

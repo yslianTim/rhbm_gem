@@ -6,7 +6,9 @@ find_package(RHBM_GEM CONFIG REQUIRED)
 add_executable(rhbm_gem_consumer_smoke
     main.cpp
     CommandTypesHeaderSmoke.cpp
-    GaussianEstimatorHeaderSmoke.cpp
-    MapSamplerHeaderSmoke.cpp
+    JointAnalysisResultHeaderSmoke.cpp
+    AtomLocalPotentialViewHeaderSmoke.cpp
+    ModelAnalysisViewHeaderSmoke.cpp
+    ModelAnalysisEditorHeaderSmoke.cpp
 )
 target_link_libraries(rhbm_gem_consumer_smoke PRIVATE RHBM_GEM::rhbm_gem)

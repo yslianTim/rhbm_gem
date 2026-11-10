@@ -1,4 +1,4 @@
-#include <rhbm_gem/core/MapSampler.hpp>
+#include "core/sampling/MapSampler.hpp"
 #include "core/sampling/MapInterpolation.hpp"
 
 #include <array>

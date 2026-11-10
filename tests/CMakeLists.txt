@@ -279,8 +279,10 @@ target_include_directories(rhbm_tests PRIVATE
 
 add_dependencies(tests_all rhbm_tests)
 
-# Shared test-only helpers compile into the test executable.
+# Private header checks and shared test-only helpers compile into the test executable.
 target_sources(rhbm_tests PRIVATE
+    core/GaussianEstimatorHeaderSmoke.cpp
+    core/MapSamplerHeaderSmoke.cpp
     support/JointBcdDiagnostic.cpp
     support/JointSyntheticWorkload.cpp
     support/JointBlockCoordinate.cpp

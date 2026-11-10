@@ -61,6 +61,13 @@ flowchart LR
 
 `ModelAnalysisView` and `ModelAnalysisEditor` constructors are private. Callers obtain them only from their owning `ModelObject`, so a facade cannot be constructed against arbitrary storage.
 
+The installed data API exposes Gaussian stage estimates and diagnostics,
+peeling observations, Post-Joint Local fits, and group priors and posteriors
+through `GaussianEstimationTypes.hpp`. `JointEstimationTypes.hpp` provides the
+selection, initialization, endpoint, evidence, and Halo provenance records
+used by `JointAnalysisResult`. Fitting options and the group-fitting input
+record belong to the private estimator.
+
 ### 4.1 Read access
 
 `ModelAnalysisView` provides typed atom-group queries only: group keys, membership, means, robust estimates, priors, uncertainty, and alpha-g values. It does not format summaries or CSV output.
@@ -101,7 +108,7 @@ This keeps formatting changes out of the object API while preserving command out
 
 ## 6. Sampling and Parallelism
 
-`MapSampler` computes atom sampling results into an indexed temporary result vector in parallel. After workers finish, it writes results through `ModelAnalysisEditor` in a sequential pass.
+The private `MapSampler` computes atom sampling results into an indexed temporary result vector in parallel. After workers finish, it writes results through `ModelAnalysisEditor` in a sequential pass.
 
 The separation is deliberate: map reads and local calculations are parallel, while mutation of the analysis entry map is serialized. No concurrent entry-map insertion is permitted.
 

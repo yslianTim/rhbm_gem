@@ -22,6 +22,15 @@ manifests nor truth parameters.
 5. Save the Joint snapshot and stage records. An unqualified run saves its
    diagnostics with the corresponding command outcome.
 
+The CLI and Python use the same public Command API. Installed C++ consumers
+can run Potential Analysis through `CommandSystem.hpp` and `CommandTypes.hpp`.
+The workflow and standalone Gaussian fitting routines live in the private
+`src/core/estimator/` module. Map sampling and shared interpolation live in
+`src/core/sampling/`.
+
+`JointAnalysisResult`, the analysis views and editor, and the Gaussian and Joint
+result types remain part of the installed data API.
+
 The [command contract](commands/potential_analysis.md) defines input, selection,
 and outcome semantics. [Runtime](joint-component-runtime.md) and
 [Numerics](joint-component-numerics.md) specify the solver and qualification.

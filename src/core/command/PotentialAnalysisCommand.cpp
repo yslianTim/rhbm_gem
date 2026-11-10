@@ -1,9 +1,8 @@
 #include "detail/CommandRunner.hpp"
+#include "core/estimator/PotentialFittingWorkflow.hpp"
 #include "utils/domain/FileFingerprint.hpp"
 #include "data/io/detail/JointResultJson.hpp"
 
-#include <rhbm_gem/core/GaussianEstimator.hpp>
-#include <rhbm_gem/core/MapSampler.hpp>
 #include <rhbm_gem/core/QScoreHelper.hpp>
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
