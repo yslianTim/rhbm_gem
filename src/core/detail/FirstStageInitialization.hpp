@@ -4,12 +4,9 @@
 #include "joint_component/JointProgress.hpp"
 #include <vector>
 
-namespace rhbm_gem { class MapObject; class ModelAnalysisEditor; }
-
 namespace rhbm_gem::core::detail {
 struct FittingWorkset;
-double EstimateLocalAlphaForAtom(const AtomObject &, const FitOptions &, FittingStage);
-void TrainLocalAlphaForAtom(ModelAnalysisEditor &, const FitOptions &, FittingStage, AtomObject &);
+double EstimateFirstStageAlpha(const LocalPotentialSampleList &, const FitOptions &);
 void ApplyJointSeedFallback(JointInitialization &);
 LocalGaussianResult FitFirstStageAtom(const AtomObject &, const FitOptions &);
 JointInitialization RunJointFirstStageInitializationFromPreparedSamples(

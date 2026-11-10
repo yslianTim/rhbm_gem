@@ -43,19 +43,12 @@ GroupGaussianResult EstimateGroupGaussian(
 // Reconstructs a Joint group member's posterior signal with its fixed Joint charge profile.
 double EvaluateGroupMemberResponseAtDistance(const GroupGaussianMemberResult &, double distance);
 
-void RunLocalAlphaTraining(
-    ModelObject & model_object,
-    const FitOptions & options,
-    FittingStage stage);
+void RunFirstStageLocalAlphaTraining(ModelObject &, const FitOptions &);
+void RunFirstStageLocalFitting(ModelObject &, const FitOptions &);
 
-void RunFixedOffsetLocalFitting(
-    ModelObject & model_object,
-    const FitOptions & options,
-    FittingStage stage);
-
-void RunLocalAlphaTraining(ModelObject &, const FitOptions &, FittingStage,
+void RunFirstStageLocalAlphaTraining(ModelObject &, const FitOptions &,
     const std::vector<AtomObject *> & atoms);
-void RunFixedOffsetLocalFitting(ModelObject &, const FitOptions &, FittingStage,
+void RunFirstStageLocalFitting(ModelObject &, const FitOptions &,
     const std::vector<AtomObject *> & atoms);
 void RunPotentialFittingWorkflow(MapObject &, ModelObject &, const FitOptions &);
 

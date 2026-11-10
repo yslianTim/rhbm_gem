@@ -262,8 +262,8 @@ std::unique_ptr<rg::ModelObject> BuildFeatureModel(
             peeling.samples.back().reason = "outside-joint-domain";
         }
         analysis.SetAtomPostFitPeeling(*atom, std::move(peeling));
-        analysis.SetAtomLocalGaussianResult(
-            rg::FittingStage::First, *atom, MakeGaussianResult(serial_id, 0, options));
+        analysis.SetAtomFirstStageGaussianResult(
+            *atom, MakeGaussianResult(serial_id, 0, options));
         row += 12;
     }
     model->SelectAtoms([&](const rg::AtomObject & atom) {

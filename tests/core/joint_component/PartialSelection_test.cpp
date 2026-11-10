@@ -246,7 +246,7 @@ TEST(JointComponentPartialSelectionTest, InitializationPreservesTargetHistoryAnd
     sentinel.mdpde=rhbm_gem::GaussianModel3DWithUncertainty{rhbm_gem::GaussianModel3D{7.,.91,.23},{}};
     for(const auto & atom:f.model->GetAtomList())
     {
-        f.model->EditAnalysis().SetAtomLocalGaussianResult(rhbm_gem::FittingStage::First,*atom,sentinel);
+        f.model->EditAnalysis().SetAtomFirstStageGaussianResult(*atom,sentinel);
         rhbm_gem::LocalStageEstimate endpoint;
         endpoint.source.method = rhbm_gem::EstimateMethod::JointComponents;
         endpoint.point = sentinel.mdpde.GetModel();
@@ -260,7 +260,7 @@ TEST(JointComponentPartialSelectionTest, InitializationPreservesTargetHistoryAnd
     EXPECT_EQ(f.model->GetAnalysisView().CollectAtomGroupKeys(),groups);
     for(auto group:groups) EXPECT_EQ(f.model->GetAnalysisView().GetAtomAlphaG(group),.432);
     const auto halo=rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(2));
-    EXPECT_EQ(halo.GetEstimateMDPDE(rhbm_gem::FittingStage::First).GetWidth(),.91);
+    EXPECT_EQ(halo.GetFirstStageMDPDE().GetWidth(),.91);
     for(const auto & atom:f.model->GetAtomList())
         EXPECT_EQ(rhbm_gem::AtomLocalPotentialView::For(*atom).GetFinalModel(rhbm_gem::FittingStage::Second).GetWidth(),.91);
     const auto prediction_before=fit.prediction;
@@ -1430,16 +1430,16 @@ TEST(JointComponentPartialSelectionTest, ExistingSampleFirstExecutorUsesOnlyTheE
     editor.InitializeFromSelection();
     rhbm_gem::LocalGaussianResult seed;
     seed.mdpde = {rhbm_gem::GaussianModel3D{7, .73, 0}, {}};
-    editor.SetAtomLocalGaussianResult(rhbm_gem::FittingStage::First, *f.model->FindAtomPtr(1), seed);
+    editor.SetAtomFirstStageGaussianResult(*f.model->FindAtomPtr(1), seed);
     seed.mdpde = {rhbm_gem::GaussianModel3D{0, 1, 0}, {}};
     const auto & halo = *f.model->FindAtomPtr(2);
-    editor.SetAtomLocalGaussianResult(rhbm_gem::FittingStage::First, halo, seed);
+    editor.SetAtomFirstStageGaussianResult(halo, seed);
     editor.SetAtomLocalRawSamplingEntries(halo, core::SampleAtomMapValues(*f.map, halo, SphereSamplingMethod::FibonacciDeterministic));
     const auto selected = f.model->GetSelectedAtoms();
     const std::vector<rhbm_gem::AtomObject *> atoms{f.model->FindAtomPtr(2)};
     core::FitOptions options; options.quiet_mode = true; options.thread_size = 1;
-    core::RunLocalAlphaTraining(*f.model, options, rhbm_gem::FittingStage::First, atoms);
-    core::RunFixedOffsetLocalFitting(*f.model, options, rhbm_gem::FittingStage::First, atoms);
+    core::RunFirstStageLocalAlphaTraining(*f.model, options, atoms);
+    core::RunFirstStageLocalFitting(*f.model, options, atoms);
     EXPECT_EQ(f.model->GetSelectedAtoms(), selected);
     EXPECT_DOUBLE_EQ(rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(1)).GetFinalModel(rhbm_gem::FittingStage::First).GetWidth(), .73);
     const auto halo_view = rhbm_gem::AtomLocalPotentialView::For(halo);
@@ -1500,14 +1500,14 @@ TEST(JointComponentPartialSelectionTest, JointFirstStageParallelWorkersPreserveS
                 *serial_fixture.model->FindAtomPtr(atom_id));
             const auto parallel_view = rhbm_gem::AtomLocalPotentialView::For(
                 *parallel_fixture.model->FindAtomPtr(atom_id));
-            EXPECT_DOUBLE_EQ(serial_view.GetAlphaR(rhbm_gem::FittingStage::First),
-                parallel_view.GetAlphaR(rhbm_gem::FittingStage::First));
+            EXPECT_DOUBLE_EQ(serial_view.GetFirstStageAlphaR(),
+                parallel_view.GetFirstStageAlphaR());
             EXPECT_EQ(serial_view.GetStageEstimate(rhbm_gem::FittingStage::First).source.role,
                 parallel_view.GetStageEstimate(rhbm_gem::FittingStage::First).source.role);
-            const auto serial_ols = serial_view.GetGaussianResult(rhbm_gem::FittingStage::First).ols.GetModel().ToVector();
-            const auto parallel_ols = parallel_view.GetGaussianResult(rhbm_gem::FittingStage::First).ols.GetModel().ToVector();
-            const auto serial_mdpde = serial_view.GetGaussianResult(rhbm_gem::FittingStage::First).mdpde.GetModel().ToVector();
-            const auto parallel_mdpde = parallel_view.GetGaussianResult(rhbm_gem::FittingStage::First).mdpde.GetModel().ToVector();
+            const auto serial_ols = serial_view.GetFirstStageGaussianResult().ols.GetModel().ToVector();
+            const auto parallel_ols = parallel_view.GetFirstStageGaussianResult().ols.GetModel().ToVector();
+            const auto serial_mdpde = serial_view.GetFirstStageGaussianResult().mdpde.GetModel().ToVector();
+            const auto parallel_mdpde = parallel_view.GetFirstStageGaussianResult().mdpde.GetModel().ToVector();
             for (Eigen::Index k = 0; k < 3; ++k)
             {
                 EXPECT_DOUBLE_EQ(serial_ols(k), parallel_ols(k));

@@ -39,16 +39,14 @@ public:
     void SetAtomLocalRawSamplingEntries(
         const AtomObject & atom_object,
         LocalPotentialSampleList value);
-    void SetAtomLocalGaussianResult(
-        FittingStage stage,
+    void SetAtomFirstStageGaussianResult(
         const AtomObject & atom_object,
         LocalGaussianResult result);
-    void SetAtomLocalAlphaR(
-        FittingStage stage,
+    void SetAtomFirstStageAlphaR(
         const AtomObject & atom_object,
         double alpha_r);
     void RebuildAtomGroupsFromSelection();
-    void InitializeLocalAlpha(FittingStage stage, double alpha_r);
+    void InitializeFirstStageAlpha(double alpha_r);
     void InitializeGroupAlpha(double alpha_g);
     void ApplyAtomGroupGaussianResult(
         GroupKey group_key,

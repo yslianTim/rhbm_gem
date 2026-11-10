@@ -249,16 +249,14 @@ PostJointLocalResult PostJointLocal(const V & value)
 }
 V FirstNative(const LocalPotentialEntry & e)
 {
-    constexpr auto stage=FittingStage::First;
-    const auto r=e.GaussianResult(stage,false); const auto & sd=r.mdpde.GetStandardDeviationModel();
+    const auto r=e.FirstStageGaussianResult(false); const auto & sd=r.mdpde.GetStandardDeviationModel();
     return O{{"alpha",r.alpha_r},{"ols",Pack(r.ols.GetModel())},{"ols_sd",r.uncertainty_recorded ? Pack(r.ols).as_object().at("sd"):V{}},
         {"mdpde_sd",r.uncertainty_recorded ? V(A{NativeNumber(sd.GetAmplitude()),NativeNumber(sd.GetWidth()),NativeNumber(sd.GetOffset())}):V{}},
-        {"unfitted",e.StageEstimate(stage).point ? V{} : Pack(r.mdpde.GetModel())},
+        {"unfitted",e.StageEstimate(FittingStage::First).point ? V{} : Pack(r.mdpde.GetModel())},
         {"diagnostics",r.diagnostics ? Pack(*r.diagnostics):V{}}};
 }
 void RestoreFirstNative(LocalPotentialEntry & e, const V & native, LocalStageEstimate estimate)
 {
-    constexpr auto stage=FittingStage::First;
     const auto & o=native.as_object(); LocalGaussianResult r; r.alpha_r=Number(o.at("alpha"));
     r.uncertainty_recorded=!o.at("mdpde_sd").is_null();
     if(r.uncertainty_recorded!=!o.at("ols_sd").is_null()) throw std::invalid_argument("Incomplete native uncertainty.");
@@ -270,8 +268,8 @@ void RestoreFirstNative(LocalPotentialEntry & e, const V & native, LocalStageEst
         r.mdpde=Uncertain(O{{"point",Pack(r.mdpde.GetModel())},{"sd",o.at("mdpde_sd")}});
     }
     if(!o.at("diagnostics").is_null()) r.diagnostics=Diagnostics(o.at("diagnostics"));
-    e.SetGaussianResult(stage,std::move(r));
-    e.SetStageEstimate(stage,std::move(estimate));
+    e.SetFirstStageGaussianResult(std::move(r));
+    e.SetStageEstimate(FittingStage::First,std::move(estimate));
 }
 V Pack(const GroupGaussianMemberResult & m) { return O{{"posterior",Pack(m.posterior)},{"outlier",m.is_outlier},{"distance",m.statistical_distance},{"source",m.evidence_source_id},{"charge_inferred",m.charge_inferred},{"covariance",m.parameter_covariance ? Matrix(*m.parameter_covariance):V{}},{"fixed_charge",m.fixed_charge ? Pack(*m.fixed_charge):V{}}}; }
 GroupGaussianMemberResult Member(const V & v)

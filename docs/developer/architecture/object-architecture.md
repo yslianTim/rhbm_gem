@@ -45,7 +45,7 @@ The internal `ModelAnalysisData` contains:
 - atom-local entries keyed by atom serial ID;
 - one concrete `AtomGroupPotentialEntry` for atom groups.
 
-There is no bond-group analysis alias or bond-analysis storage path. Local results have exactly three fitting stages, stored in a fixed-length `std::array` with checked stage-to-index conversion. Group membership and statistics use a single group map. Each atom stores one optional `GroupGaussianMemberResult` independently of its local stages.
+Each atom-local entry stores FirstStage diagnostics, a Joint estimate, and optional Original-grid peeling and Post-Joint Local results. Group membership and statistics use a single group map. Each atom stores its optional `GroupGaussianMemberResult` separately.
 
 The public access flow is:
 
@@ -67,7 +67,7 @@ flowchart LR
 
 `AtomLocalPotentialView::For(atom)` is the only atom-local view factory. `IsAvailable()` supports optional probing. All data getters use one consistent missing-entry check and throw when the atom is detached or its entry does not exist.
 
-Group-result and membership queries take no fitting stage. `GetGroupMemberResult()` returns an optional containing the posterior, outlier flag, and statistical distance; it is empty until a group result is applied. Local OLS, MDPDE, and alpha-r queries are atom-local and select a fitting stage through `AtomLocalPotentialView`.
+Group-result and membership queries take no fitting stage. `GetGroupMemberResult()` returns an optional containing the posterior, outlier flag, and statistical distance. The view provides native diagnostics through `GetFirstStageGaussianResult()`, `GetFirstStageOLS()`, `GetFirstStageMDPDE()`, and `GetFirstStageAlphaR()`.
 
 Views are lightweight value objects containing a non-owning model or atom reference. Consumers, including painters, store them by value rather than allocating them through `unique_ptr`.
 
@@ -76,14 +76,13 @@ Views are lightweight value objects containing a non-owning model or atom refere
 `ModelAnalysisEditor` owns all supported analysis mutation operations. Its direct atom-local setters are:
 
 - `SetAtomLocalRawSamplingEntries(...)`;
-- `SetAtomLocalPeelingSamplingEntries(...)`;
-- `SetAtomLocalGaussianResult(...)`;
-- `SetAtomLocalAlphaR(...)`;
-- `SetAtomLocalNeighborCountForPeeling(...)`.
+- `SetAtomFirstStageGaussianResult(...)`;
+- `SetAtomFirstStageAlphaR(...)`;
+- `SetAtomPostFitPeeling(...)`.
 
 Each setter creates the atom-local entry when it is missing. Composite operations remain where they enforce a real invariant, including Joint endpoint publication, paired peeling and Local updates, group-result application, and alpha-g updates.
 
-`InitializeFromSelection()` is the single analysis initialization operation. It clears previous analysis, rebuilds atom groups from current selection, creates the selected atoms' local entries, initializes local alpha values for both local stages, and initializes group alpha once. `ApplyAtomGroupGaussianResult(group_key, result)` updates the group statistics and independent member results together after validating membership count. Local stage copying does not copy or overwrite member results; workflow seed initialization clears selected atoms' member results.
+`InitializeFromSelection()` clears previous analysis, rebuilds atom groups from current selection, creates the selected atoms' local entries, and initializes FirstStage alpha and group alpha. `ApplyAtomGroupGaussianResult(group_key, result)` updates the group statistics and independent member results together after validating membership count.
 
 Transient fitting state is cleared through `ModelAnalysisEditor`; `ModelObject` does not provide a forwarding wrapper.
 

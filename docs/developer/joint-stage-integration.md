@@ -18,6 +18,8 @@ to `SphereSamplingMethod::SpiralDeterministic`. The default is
 strict Ownership and 30° cone exclusions for non-hydrogen neighbors.
 Tricubic samples feed alpha training and OLS/MDPDE on selected positive
 responses within 1 Å.
+Standalone C++ callers can run `RunFirstStageLocalAlphaTraining` and
+`RunFirstStageLocalFitting` with the current selection or an explicit atom list.
 FirstStage can sample outside the Joint voxel domain. Raw FirstStage records
 retain their sample coordinates and selection independently of grid results.
 

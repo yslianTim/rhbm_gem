@@ -78,8 +78,8 @@ inline void SeedSavedModel(
     auto analysis{ model->EditAnalysis() };
     for (auto & atom : model->GetAtomList())
     {
-        analysis.SetAtomLocalAlphaR(
-            rhbm_gem::FittingStage::First, *atom, 0.0);
+        analysis.SetAtomFirstStageAlphaR(
+            *atom, 0.0);
     }
     repository.SaveModel(*model, saved_key);
 }

@@ -44,9 +44,9 @@ void ApplyJointSeedFallback(JointInitialization & initialization)
 LocalGaussianResult FitFirstStageAtom(const AtomObject & atom, const FitOptions & options)
 {
     const auto view = AtomLocalPotentialView::For(atom);
-    const auto samples = view.GetSamplingEntries(FittingStage::First);
-    return EstimateLocalGaussian(samples, view.GetAlphaR(FittingStage::First),
-        options, view.GetEstimateMDPDE(FittingStage::First));
+    const auto samples = view.GetRawSamplingEntries();
+    return EstimateLocalGaussian(samples, view.GetFirstStageAlphaR(),
+        options, view.GetFirstStageMDPDE());
 }
 
 JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
@@ -76,7 +76,7 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
         record.alpha = nan;
         LocalGaussianResult seed;
         seed.ols = seed.mdpde = GaussianModel3DWithUncertainty{GaussianModel3D{0, 1, 0}, {}};
-        editor.SetAtomLocalGaussianResult(FittingStage::First, *atom, seed);
+        editor.SetAtomFirstStageGaussianResult(*atom, seed);
         editor.SetAtomStageEstimate(FittingStage::First, *atom, LocalStageEstimate{});
     }
 
@@ -104,12 +104,12 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
             try
             {
                 const auto view = AtomLocalPotentialView::For(*atom);
-                const auto & samples = view.GetSamplingEntries(FittingStage::First);
+                const auto samples = view.GetRawSamplingEntries();
                 sample_counts[slot] = samples.size();
-                alphas[slot] = EstimateLocalAlphaForAtom(*atom, atom_options, FittingStage::First);
+                alphas[slot] = EstimateFirstStageAlpha(samples, atom_options);
                 alpha_ready[slot] = 1;
                 estimates[slot] = EstimateLocalGaussian(samples, alphas[slot], atom_options,
-                    view.GetEstimateMDPDE(FittingStage::First));
+                    view.GetFirstStageMDPDE());
             }
             catch (...)
             {
@@ -127,16 +127,16 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
             {
                 if (alpha_ready[slot])
                 {
-                    editor.SetAtomLocalAlphaR(FittingStage::First, *atom, alphas[slot]);
+                    editor.SetAtomFirstStageAlphaR(*atom, alphas[slot]);
                     record.alpha = alphas[slot];
                 }
                 if (failures[slot]) std::rethrow_exception(failures[slot]);
-                editor.SetAtomLocalGaussianResult(FittingStage::First, *atom, std::move(estimates[slot]));
+                editor.SetAtomFirstStageGaussianResult(*atom, std::move(estimates[slot]));
                 const auto view = AtomLocalPotentialView::For(*atom);
                 auto first = view.GetStageEstimate(FittingStage::First);
                 first.source.role = record.target ? FittingRole::Target : FittingRole::Halo;
                 editor.SetAtomStageEstimate(FittingStage::First, *atom, first);
-                const auto & local = view.GetGaussianResult(FittingStage::First);
+                const auto & local = view.GetFirstStageGaussianResult();
                 const auto ols = local.ols.GetModel().ToVector(), mdpde = local.mdpde.GetModel().ToVector();
                 for (std::size_t k = 0; k < 3; ++k)
                 {

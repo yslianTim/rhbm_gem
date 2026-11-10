@@ -215,8 +215,8 @@ TEST(DataObjectPersistenceTest, GaussianOffsetRoundTripPreservesAnalysisResults)
     group_result.member_results.resize(
         view.GetAtomObjectList(group_key).size());
     group_result.member_results.front() = member_result;
-    editor.SetAtomLocalGaussianResult(
-        rg::FittingStage::First, *atom, local_result);
+    editor.SetAtomFirstStageGaussianResult(
+        *atom, local_result);
     editor.ApplyAtomGroupGaussianResult(group_key, group_result);
 
     repository.SaveModel(*model, "model");
@@ -226,7 +226,7 @@ TEST(DataObjectPersistenceTest, GaussianOffsetRoundTripPreservesAnalysisResults)
     const auto loaded_local{
         rg::AtomLocalPotentialView::For(*loaded_model->FindAtomPtr(atom->GetSerialID())) };
     const auto loaded_local_result{
-        loaded_local.GetGaussianResult(rg::FittingStage::First) };
+        loaded_local.GetFirstStageGaussianResult() };
     EXPECT_DOUBLE_EQ(loaded_local_result.alpha_r, 0.5);
     EXPECT_DOUBLE_EQ(loaded_local_result.ols.GetModel().GetOffset(), 0.11);
     EXPECT_DOUBLE_EQ(loaded_local_result.mdpde.GetModel().GetOffset(), -0.22);
@@ -340,8 +340,8 @@ TEST(DataObjectPersistenceTest, LoadModelRestoresSelectionFromPersistedColumns)
     model->SelectAllBonds(false);
     model->SetBondSelected(
         atoms.at(0)->GetSerialID(), atoms.at(1)->GetSerialID(), true);
-    model->EditAnalysis().SetAtomLocalAlphaR(
-        rg::FittingStage::First, *atoms.at(1), 0.9);
+    model->EditAnalysis().SetAtomFirstStageAlphaR(
+        *atoms.at(1), 0.9);
 
     rg::DataRepository repository{ database_path };
     repository.SaveModel(*model, "model");
@@ -1318,7 +1318,7 @@ TEST(DataObjectPersistenceTest, CanonicalNativeDiagnosticsAndMissingStatesRoundT
     auto & fit=*result.fit_result; fit.status=rg::RHBMEstimationStatus::MAX_ITERATIONS_REACHED;
     fit.sigma_square=.123456789012345; fit.diagnostics={17,.0001,.0002};
     fit.refinement=rg::RHBMEndpointRefinementDiagnostics{false,"rejected",12,25,"converged",.3,.2,.1,std::array<double,3>{.01,.02,.03},std::numeric_limits<double>::infinity(),false};
-    editor.SetAtomLocalGaussianResult(rg::FittingStage::First,*model->FindAtomPtr(1),result);
+    editor.SetAtomFirstStageGaussianResult(*model->FindAtomPtr(1),result);
     editor.ClearTransientFitStates();
     rg::LocalStageEstimate missing; missing.source.method=rg::EstimateMethod::JointComponents;
     missing.source.run_id="no-snapshot"; missing.reason="initialization-failed"; missing.source.role=rg::FittingRole::Halo;
@@ -1333,7 +1333,7 @@ TEST(DataObjectPersistenceTest, CanonicalNativeDiagnosticsAndMissingStatesRoundT
     const auto expected=rg::stage_result_io::Encode(*model);
     rg::DataRepository repo(path); repo.SaveModel(*model,"mixed"); const auto loaded=repo.LoadModel("mixed");
     EXPECT_EQ(rg::stage_result_io::Encode(*loaded),expected);
-    const auto actual=rg::AtomLocalPotentialView::For(*loaded->FindAtomPtr(1)).GetGaussianResult(rg::FittingStage::First);
+    const auto actual=rg::AtomLocalPotentialView::For(*loaded->FindAtomPtr(1)).GetFirstStageGaussianResult();
     EXPECT_DOUBLE_EQ(loaded->GetAnalysisView().GetAtomAlphaG(group),.87);
     EXPECT_FALSE(actual.fit_result); ASSERT_TRUE(actual.diagnostics); EXPECT_EQ(actual.diagnostics->iterations.iterations,17);
     EXPECT_EQ(actual.diagnostics->refinement->relative_coordinate_difference,fit.refinement->relative_coordinate_difference);

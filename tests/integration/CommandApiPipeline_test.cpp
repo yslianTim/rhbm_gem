@@ -119,8 +119,7 @@ void ExpectSelectedAtomsHaveFiniteNonNegativeAlphaR(const rg::ModelObject & mode
     for (const auto * atom : atom_list)
     {
         const auto alpha_r{
-            rg::AtomLocalPotentialView::For(*atom).GetAlphaR(
-                rg::FittingStage::First)
+            rg::AtomLocalPotentialView::For(*atom).GetFirstStageAlphaR()
         };
         EXPECT_TRUE(std::isfinite(alpha_r));
         EXPECT_GE(alpha_r, 0.0);
@@ -173,13 +172,13 @@ TEST(CommandApiPipelineTest, FittingIgnoresSimulationTruthAndResolutionMetadata)
         for (const auto & atom : model->GetAtomList())
         {
             const auto view{rg::AtomLocalPotentialView::For(*atom)};
-            const auto fit{view.GetGaussianResult(rg::FittingStage::First)};
+            const auto fit{view.GetFirstStageGaussianResult()};
             for (const auto & gaussian : {fit.ols.GetModel(), fit.mdpde.GetModel()})
             {
                 values.push_back(gaussian.GetAmplitude()); values.push_back(gaussian.GetWidth());
                 values.push_back(gaussian.GetOffset());
             }
-            values.push_back(view.GetAlphaR(rg::FittingStage::First));
+            values.push_back(view.GetFirstStageAlphaR());
             for (const auto & sample : view.GetRawSamplingEntriesView())
             { values.push_back(sample.point.distance); values.push_back(sample.response); }
         }

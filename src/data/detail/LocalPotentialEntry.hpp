@@ -13,7 +13,7 @@ namespace rhbm_gem {
 
 class LocalPotentialEntry
 {
-    struct StageRecord
+    struct FirstStageRecord
     {
         LocalStageEstimate estimate;
         double alpha_r{};
@@ -26,7 +26,7 @@ class LocalPotentialEntry
         std::optional<RHBMBetaEstimateResult> fit_result;
     };
     LocalPotentialSampleList m_raw_sampling_entries;
-    StageRecord m_first_stage;
+    FirstStageRecord m_first_stage;
     LocalStageEstimate m_joint_estimate;
     std::optional<PostFitPeelingResult> m_post_fit_peeling;
     std::optional<PostJointLocalResult> m_post_joint_local_result;
@@ -34,13 +34,13 @@ class LocalPotentialEntry
     std::optional<GroupGaussianMemberResult> m_group_member_result{};
 
 public:
-    void SetAlphaR(FittingStage stage, double value) { NativeRecord(stage).alpha_r = value; }
-    double AlphaR(FittingStage stage) const { return NativeRecord(stage).alpha_r; }
+    void SetFirstStageAlphaR(double value) { m_first_stage.alpha_r = value; }
+    double FirstStageAlphaR() const { return m_first_stage.alpha_r; }
     void SetRawSamplingEntries(LocalPotentialSampleList value) { m_raw_sampling_entries = std::move(value); }
-    void SetGaussianResult(FittingStage stage, LocalGaussianResult value)
+    void SetFirstStageGaussianResult(LocalGaussianResult value)
     {
-        auto & record = NativeRecord(stage);
-        record = StageRecord{};
+        auto & record = m_first_stage;
+        record = FirstStageRecord{};
         const auto & model = value.mdpde.GetModel();
         if (std::isfinite(model.GetAmplitude()) && std::isfinite(model.GetOffset()) &&
             std::isfinite(model.GetWidth()) && model.GetWidth() > 0)
@@ -63,7 +63,8 @@ public:
     const LocalStageEstimate & StageEstimate(FittingStage stage) const
     {
         if (stage == FittingStage::Second) return m_joint_estimate;
-        return NativeRecord(stage).estimate;
+        RequireFirstStage(stage);
+        return m_first_stage.estimate;
     }
     void SetStageEstimate(FittingStage stage, LocalStageEstimate value)
     {
@@ -72,7 +73,8 @@ public:
             m_joint_estimate = std::move(value);
             return;
         }
-        auto & record = NativeRecord(stage);
+        RequireFirstStage(stage);
+        auto & record = m_first_stage;
         if (!value.point && record.estimate.point) record.unfitted_model = record.estimate.point;
         if (record.estimate.point && value.point && record.estimate.point->ToVector() != value.point->ToVector())
         {
@@ -81,20 +83,20 @@ public:
         if (value.point) record.unfitted_model.reset();
         record.estimate = std::move(value);
     }
-    LocalGaussianResult GaussianResult(FittingStage stage, bool include_transient = true) const
+    LocalGaussianResult FirstStageGaussianResult(bool include_transient = true) const
     {
-        const auto & r = NativeRecord(stage);
-        return {r.alpha_r, r.ols, {MDPDEModel(stage), r.mdpde_uncertainty}, include_transient ? r.fit_result : std::nullopt, r.diagnostics, r.uncertainty_recorded};
+        const auto & r = m_first_stage;
+        return {r.alpha_r, r.ols, {FirstStageMDPDEModel(), r.mdpde_uncertainty}, include_transient ? r.fit_result : std::nullopt, r.diagnostics, r.uncertainty_recorded};
     }
-    const GaussianModel3D & MDPDEModel(FittingStage stage) const
+    const GaussianModel3D & FirstStageMDPDEModel() const
     {
-        const auto & r = NativeRecord(stage);
+        const auto & r = m_first_stage;
         if (r.estimate.point) return *r.estimate.point;
         if (r.unfitted_model) return *r.unfitted_model;
         static const GaussianModel3D missing{0, 0};
         return missing;
     }
-    const GaussianModel3D & OLSModel(FittingStage stage) const { return NativeRecord(stage).ols.GetModel(); }
+    const GaussianModel3D & FirstStageOLSModel() const { return m_first_stage.ols.GetModel(); }
     const std::optional<PostFitPeelingResult> & PostFitPeeling() const { return m_post_fit_peeling; }
     void SetPostFitPeeling(PostFitPeelingResult value)
     {
@@ -113,7 +115,7 @@ public:
         m_post_joint_local_result.reset();
     }
     void ClearGroupMemberResult() { m_group_member_result.reset(); }
-    void ClearTransientFitState(FittingStage stage) { NativeRecord(stage).fit_result.reset(); }
+    void ClearFirstStageTransientFitState() { m_first_stage.fit_result.reset(); }
     void ClearPostJointTransientFitState()
     {
         if (m_post_joint_local_result) m_post_joint_local_result->fit.fit_result.reset();
@@ -143,18 +145,6 @@ private:
     {
         if (stage != FittingStage::First)
             throw std::invalid_argument("Native local fitting diagnostics require FirstStage.");
-    }
-
-    StageRecord & NativeRecord(FittingStage stage)
-    {
-        RequireFirstStage(stage);
-        return m_first_stage;
-    }
-
-    const StageRecord & NativeRecord(FittingStage stage) const
-    {
-        RequireFirstStage(stage);
-        return m_first_stage;
     }
 };
 

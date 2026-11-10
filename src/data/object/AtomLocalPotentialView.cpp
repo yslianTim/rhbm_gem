@@ -124,18 +124,22 @@ bool AtomLocalPotentialView::HasSampleGeometry() const
 }
 
 
-LocalGaussianResult AtomLocalPotentialView::GetGaussianResult(FittingStage stage) const
+const LocalPotentialEntry & AtomLocalPotentialView::RequireFirstStageEntry(const char * diagnostic_error) const
 {
-    if (GetStageEstimate(stage).source.method == EstimateMethod::JointComponents)
-        throw std::runtime_error("OLS/MDPDE diagnostics unavailable for Joint stage.");
-    return RequireEntry("Local Gaussian result").GaussianResult(stage);
+    const auto & entry = RequireEntry("Stage estimate");
+    if (entry.StageEstimate(FittingStage::First).source.method == EstimateMethod::JointComponents)
+        throw std::runtime_error(diagnostic_error);
+    return entry;
 }
 
-const GaussianModel3D & AtomLocalPotentialView::GetEstimateOLS(FittingStage stage) const
+LocalGaussianResult AtomLocalPotentialView::GetFirstStageGaussianResult() const
 {
-    if (GetStageEstimate(stage).source.method == EstimateMethod::JointComponents)
-        throw std::runtime_error("OLS diagnostics unavailable for Joint stage.");
-    return RequireEntry("Local Gaussian result").OLSModel(stage);
+    return RequireFirstStageEntry("OLS/MDPDE diagnostics unavailable for Joint stage.").FirstStageGaussianResult();
+}
+
+const GaussianModel3D & AtomLocalPotentialView::GetFirstStageOLS() const
+{
+    return RequireFirstStageEntry("OLS diagnostics unavailable for Joint stage.").FirstStageOLSModel();
 }
 
 const std::optional<GroupGaussianMemberResult> & AtomLocalPotentialView::GetGroupMemberResult() const
@@ -143,11 +147,9 @@ const std::optional<GroupGaussianMemberResult> & AtomLocalPotentialView::GetGrou
     return RequireEntry("Group Gaussian member result").GroupMemberResult();
 }
 
-const GaussianModel3D & AtomLocalPotentialView::GetEstimateMDPDE(FittingStage stage) const
+const GaussianModel3D & AtomLocalPotentialView::GetFirstStageMDPDE() const
 {
-    if (GetStageEstimate(stage).source.method == EstimateMethod::JointComponents)
-        throw std::runtime_error("MDPDE diagnostics unavailable for Joint stage.");
-    return RequireEntry("Local Gaussian result").MDPDEModel(stage);
+    return RequireFirstStageEntry("MDPDE diagnostics unavailable for Joint stage.").FirstStageMDPDEModel();
 }
 
 LocalPotentialSampleList AtomLocalPotentialView::GetRawSamplingEntries(bool apply_selection) const
@@ -177,22 +179,6 @@ LocalPotentialSampleList AtomLocalPotentialView::GetSamplingEntries(FittingStage
             return GetPeelingSamplingEntries(false);
     }
     throw std::invalid_argument("Unknown local fitting stage.");
-}
-
-bool AtomLocalPotentialView::HasEnoughSamplingEntriesInRange(
-    FittingStage stage,
-    double distance_min,
-    double distance_max,
-    std::size_t minimum_sample_count) const
-{
-    std::size_t count{ 0 };
-    for (const auto & sample : GetSamplingEntries(stage))
-    {
-        if (sample.point.distance < distance_min || sample.point.distance > distance_max) continue;
-        count++;
-        if (count >= minimum_sample_count) return true;
-    }
-    return false;
 }
 
 PeelingRatioAssessment AtomLocalPotentialView::AssessLocalFittingPeelingRatio(
@@ -294,11 +280,9 @@ int AtomLocalPotentialView::GetNeighborCountForPeeling() const
     return RequireEntry("Local peeling neighbor count").NeighborCountForPeeling();
 }
 
-double AtomLocalPotentialView::GetAlphaR(FittingStage stage) const
+double AtomLocalPotentialView::GetFirstStageAlphaR() const
 {
-    if (GetStageEstimate(stage).source.method == EstimateMethod::JointComponents)
-        throw std::runtime_error("MDPDE alpha unavailable for Joint stage.");
-    return RequireEntry("Local Gaussian result").AlphaR(stage);
+    return RequireFirstStageEntry("MDPDE alpha unavailable for Joint stage.").FirstStageAlphaR();
 }
 
 } // namespace rhbm_gem

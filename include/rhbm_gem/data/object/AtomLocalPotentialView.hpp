@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstddef>
 #include <optional>
 
 #include <rhbm_gem/utils/domain/SamplingTypes.hpp>
@@ -25,31 +24,27 @@ public:
     const std::optional<PostFitPeelingResult> & GetPostFitPeeling() const;
     const std::optional<PostJointLocalResult> & GetPostJointLocalResult() const;
     bool HasSampleGeometry() const;
-    LocalGaussianResult GetGaussianResult(FittingStage stage) const;
+    LocalGaussianResult GetFirstStageGaussianResult() const;
     const std::optional<GroupGaussianMemberResult> & GetGroupMemberResult() const;
-    const GaussianModel3D & GetEstimateOLS(FittingStage stage) const;
-    const GaussianModel3D & GetEstimateMDPDE(FittingStage stage) const;
+    const GaussianModel3D & GetFirstStageOLS() const;
+    const GaussianModel3D & GetFirstStageMDPDE() const;
     LocalPotentialSampleList GetRawSamplingEntries(bool apply_selection = true) const;
     const LocalPotentialSampleList & GetRawSamplingEntriesView() const;
     LocalPotentialSampleList GetPeelingSamplingEntries(bool apply_selection = false) const;
     LocalPotentialSampleList GetSamplingEntries(FittingStage stage) const;
-    bool HasEnoughSamplingEntriesInRange(
-        FittingStage stage,
-        double distance_min,
-        double distance_max,
-        std::size_t minimum_sample_count) const;
     PeelingRatioAssessment AssessLocalFittingPeelingRatio(
         double distance_min, double distance_max) const;
     std::optional<double> GetLocalFittingPeelingRatio(
         double distance_min,
         double distance_max) const;
     int GetNeighborCountForPeeling() const;
-    double GetAlphaR(FittingStage stage) const;
+    double GetFirstStageAlphaR() const;
 
 private:
     explicit AtomLocalPotentialView(const AtomObject * atom_object);
     const LocalPotentialEntry * FindEntry() const;
     const LocalPotentialEntry & RequireEntry(const char * context) const;
+    const LocalPotentialEntry & RequireFirstStageEntry(const char * diagnostic_error) const;
 };
 
 } // namespace rhbm_gem

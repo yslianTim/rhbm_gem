@@ -136,23 +136,17 @@ double EvaluateGroupMemberResponseAtDistance(const GroupGaussianMemberResult & m
     return gaussian.SignalAtDistance(distance) + member.fixed_charge->coefficient * charge;
 }
 
-void RunFixedOffsetLocalFitting(
-    ModelObject & model_object,
-    const FitOptions & options,
-    FittingStage stage)
+void RunFirstStageLocalFitting(ModelObject & model_object, const FitOptions & options)
 {
     model_object.EditAnalysis().EnsureSelectedAtomLocalPotentials();
-    RunFixedOffsetLocalFitting(model_object, options, stage, model_object.GetSelectedAtoms());
+    RunFirstStageLocalFitting(model_object, options, model_object.GetSelectedAtoms());
 }
 
-void RunFixedOffsetLocalFitting(
+void RunFirstStageLocalFitting(
     ModelObject & model_object,
     const FitOptions & options,
-    FittingStage stage,
     const std::vector<AtomObject *> & atom_list)
 {
-    if (stage != FittingStage::First)
-        throw std::invalid_argument("Native local fitting requires FirstStage.");
     const auto selected_atom_size{ atom_list.size() };
     auto analysis{ model_object.EditAnalysis() };
     std::vector<LocalGaussianResult> local_results(selected_atom_size);
@@ -185,8 +179,7 @@ void RunFixedOffsetLocalFitting(
 
     for (size_t i = 0; i < selected_atom_size; i++)
     {
-        analysis.SetAtomLocalGaussianResult(
-            stage, *atom_list[i], std::move(local_results[i]));
+        analysis.SetAtomFirstStageGaussianResult(*atom_list[i], std::move(local_results[i]));
     }
 }
 
@@ -285,47 +278,27 @@ GroupGaussianResult EstimateGroupGaussian(
     return DecodeGroupGaussianResult(alpha_g, raw_result, member_offset_list);
 }
 
-void RunLocalAlphaTraining(
-    ModelObject & model_object,
-    const FitOptions & options,
-    FittingStage stage)
+void RunFirstStageLocalAlphaTraining(ModelObject & model_object, const FitOptions & options)
 {
     model_object.EditAnalysis().EnsureSelectedAtomLocalPotentials();
-    RunLocalAlphaTraining(model_object, options, stage, model_object.GetSelectedAtoms());
+    RunFirstStageLocalAlphaTraining(model_object, options, model_object.GetSelectedAtoms());
 }
 
-double detail::EstimateLocalAlphaForAtom(
-    const AtomObject & atom,
-    const FitOptions & options,
-    FittingStage stage)
+double detail::EstimateFirstStageAlpha(
+    const LocalPotentialSampleList & samples, const FitOptions & options)
 {
-    const auto local_view{ AtomLocalPotentialView::For(atom) };
-    auto alpha_r{ MakeTrainingOptions(options).alpha_min };
-    if (local_view.HasEnoughSamplingEntriesInRange(
-            stage,
-            0.0,
-            detail::kSignalDistanceMax,
-            kMinimumAlphaRTrainingSampleCount))
+    std::size_t count{ 0 };
+    for (const auto & sample : samples)
     {
-        alpha_r = TrainAlphaR(local_view.GetSamplingEntries(stage), options);
+        if (sample.point.distance < 0.0 || sample.point.distance > detail::kSignalDistanceMax) continue;
+        if (++count >= kMinimumAlphaRTrainingSampleCount) return TrainAlphaR(samples, options);
     }
-    return alpha_r;
+    return MakeTrainingOptions(options).alpha_min;
 }
 
-void detail::TrainLocalAlphaForAtom(
-    ModelAnalysisEditor & analysis,
-    const FitOptions & options,
-    FittingStage stage,
-    AtomObject & atom)
-{
-    analysis.SetAtomLocalAlphaR(stage, atom,
-        detail::EstimateLocalAlphaForAtom(atom, options, stage));
-}
-
-void RunLocalAlphaTraining(
+void RunFirstStageLocalAlphaTraining(
     ModelObject & model_object,
     const FitOptions & options,
-    FittingStage stage,
     const std::vector<AtomObject *> & atom_list)
 {
     auto analysis{ model_object.EditAnalysis() };
@@ -339,7 +312,8 @@ void RunLocalAlphaTraining(
     }
     for (auto * atom : atom_list)
     {
-        detail::TrainLocalAlphaForAtom(analysis, options, stage, *atom);
+        const auto samples = AtomLocalPotentialView::For(*atom).GetRawSamplingEntries();
+        analysis.SetAtomFirstStageAlphaR(*atom, detail::EstimateFirstStageAlpha(samples, options));
         count++;
         if (!options.quiet_mode)
         {

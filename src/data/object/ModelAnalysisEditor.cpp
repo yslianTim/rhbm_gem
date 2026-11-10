@@ -359,7 +359,7 @@ void ModelAnalysisEditor::ClearTransientFitStates()
         (void)serial_id;
         if (entry != nullptr)
         {
-            entry->ClearTransientFitState(FittingStage::First);
+            entry->ClearFirstStageTransientFitState();
             entry->ClearPostJointTransientFitState();
         }
     }
@@ -369,7 +369,7 @@ void ModelAnalysisEditor::InitializeFromSelection()
 {
     Clear();
     RebuildAtomGroupsFromSelection();
-    InitializeLocalAlpha(FittingStage::First, kInitialLocalAlpha);
+    InitializeFirstStageAlpha(kInitialLocalAlpha);
     InitializeGroupAlpha(kInitialGroupAlpha);
 }
 
@@ -394,26 +394,22 @@ void ModelAnalysisEditor::SetAtomLocalRawSamplingEntries(
     entry.SetRawSamplingEntries(std::move(value));
 }
 
-void ModelAnalysisEditor::SetAtomLocalGaussianResult(
-    FittingStage stage,
+void ModelAnalysisEditor::SetAtomFirstStageGaussianResult(
     const AtomObject & atom_object,
     LocalGaussianResult result)
 {
-    if (stage != FittingStage::First)
-        throw std::invalid_argument("Native local fitting diagnostics require FirstStage.");
     auto & entry = EnsureAtomLocalPotential(m_model_object, atom_object);
-    entry.SetGaussianResult(stage, std::move(result));
-    auto estimate = entry.StageEstimate(stage);
+    entry.SetFirstStageGaussianResult(std::move(result));
+    auto estimate = entry.StageEstimate(FittingStage::First);
     estimate.source.atom_id = std::to_string(atom_object.GetSerialID());
-    entry.SetStageEstimate(stage, std::move(estimate));
+    entry.SetStageEstimate(FittingStage::First, std::move(estimate));
 }
 
-void ModelAnalysisEditor::SetAtomLocalAlphaR(
-    FittingStage stage,
+void ModelAnalysisEditor::SetAtomFirstStageAlphaR(
     const AtomObject & atom_object,
     double alpha_r)
 {
-    EnsureAtomLocalPotential(m_model_object, atom_object).SetAlphaR(stage, alpha_r);
+    EnsureAtomLocalPotential(m_model_object, atom_object).SetFirstStageAlphaR(alpha_r);
 }
 
 void ModelAnalysisEditor::RebuildAtomGroupsFromSelection()
@@ -429,11 +425,11 @@ void ModelAnalysisEditor::RebuildAtomGroupsFromSelection()
     }
 }
 
-void ModelAnalysisEditor::InitializeLocalAlpha(FittingStage stage, double alpha_r)
+void ModelAnalysisEditor::InitializeFirstStageAlpha(double alpha_r)
 {
     for (auto * atom : m_model_object.GetSelectedAtoms())
     {
-        SetAtomLocalAlphaR(stage, *atom, alpha_r);
+        SetAtomFirstStageAlphaR(*atom, alpha_r);
     }
 }
 
