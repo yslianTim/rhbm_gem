@@ -1,30 +1,34 @@
 #include <rhbm_gem/core/GaussianEstimator.hpp>
-#include "core/detail/joint_component/JointComponentEstimator.hpp"
-#include "core/detail/joint_component/JointCliProgressReporter.hpp"
-#include "core/detail/FirstStageInitialization.hpp"
-#include "core/detail/FittingWorkset.hpp"
-#include "core/detail/PotentialFittingWorkflow.hpp"
-#include "core/detail/joint_component/HaloMedianReconstruction.hpp"
-#include "core/detail/StageSummary.hpp"
-#include "core/detail/joint_component/PostFitPeeling.hpp"
-#include "core/detail/GroupPotentialFitting.hpp"
-#include "core/detail/joint_component/ResourceWork.hpp"
+#include "core/estimator/joint_component/JointComponentEstimator.hpp"
+#include "core/estimator/joint_component/JointCliProgressReporter.hpp"
+#include "core/estimator/InitialStage.hpp"
+#include "core/estimator/PotentialFittingWorkflow.hpp"
+#include "core/estimator/joint_component/HaloMedianReconstruction.hpp"
+#include "core/estimator/joint_component/PostFitPeeling.hpp"
+#include "core/estimator/GroupingStage.hpp"
+#include "core/estimator/joint_component/ResourceWork.hpp"
 #include "data/detail/PostJointLocalValidation.hpp"
-#include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
+#include "core/estimator/gaussian_fit/PreparedLocalGaussianFit.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
+#include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
+#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <Eigen/Cholesky>
 #include <Eigen/QR>
+#include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
+#include <iomanip>
 #include <limits>
+#include <map>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -180,7 +184,30 @@ JointPostprocessingSnapshotHook & JointPostprocessingSnapshotHookForTesting()
 }
 #endif
 
-void RunJointComponentWorkflow(
+namespace {
+JointAnalysisResult SolveJointStage(
+    const JointProblem & problem, const JointInitialization & initialization, const FitOptions & options,
+    double construction_seconds, double initialization_seconds)
+{
+    std::optional<JointCliProgressReporter> reporter;
+    joint_component::JointProgressObserver observer;
+    if (!options.quiet_mode)
+    {
+        reporter.emplace();
+        observer = reporter->Observer();
+    }
+    auto fit = FitJointComponentsInitializedWithProgress(problem, initialization, observer);
+    fit.costs.construction_seconds = construction_seconds;
+    fit.costs.initialization_seconds = initialization_seconds;
+    auto snapshot = CaptureJointAnalysisResult(std::move(fit));
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+    if (const auto hook = JointPostprocessingSnapshotHookForTesting()) hook(snapshot);
+#endif
+    return snapshot;
+}
+} // namespace
+
+void RunPotentialFittingWorkflowForSelection(
     MapObject & map, ModelObject & model, const FitOptions & options,
     JointPostprocessingMetrics * supplied_metrics)
 {
@@ -205,54 +232,31 @@ void RunJointComponentWorkflow(
             << " | contributors=" << input.atom_ids.size();
         LogJointDebug(detail.str());
     }
-    const auto initialization_start = std::chrono::steady_clock::now();
-    const auto initialization = [&] {
-        const auto workset = MakeJointFittingWorkset(model, problem);
+    const auto initial_stage_start = std::chrono::steady_clock::now();
+    const auto initial_stage_result = [&] {
+        const auto workset = BuildInitialStageWorkset(model, problem);
         model.EditAnalysis().InitializeFromSelection();
-        return PrepareJointWidthInitialization(map, model, workset, options);
+        return RunInitialStage(map, model, workset, options);
     }();
     const auto initialization_seconds = std::chrono::duration<double>(
-        std::chrono::steady_clock::now() - initialization_start).count();
-    std::optional<JointCliProgressReporter> reporter;
-    joint_component::JointProgressObserver observer;
-    if (!options.quiet_mode)
-    {
-        reporter.emplace();
-        observer = reporter->Observer();
-    }
-    auto snapshot = [&] {
-        auto fit = FitJointComponentsInitializedWithProgress(problem, initialization, observer);
-        fit.costs.construction_seconds = construction_seconds;
-        fit.costs.initialization_seconds = initialization_seconds;
-        return CaptureJointAnalysisResult(std::move(fit));
-    }();
-#ifdef RHBM_GEM_TEST_INSTRUMENTATION
-    if (const auto hook = JointPostprocessingSnapshotHookForTesting()) hook(snapshot);
-#endif
-    RunJointPostprocessing(map, model, problem, std::move(snapshot), options, postprocessing_metrics);
+        std::chrono::steady_clock::now() - initial_stage_start).count();
+    auto snapshot = SolveJointStage(
+        problem, initial_stage_result, options, construction_seconds, initialization_seconds);
+    CompletePotentialFittingWorkflow(map, model, problem, std::move(snapshot), options, postprocessing_metrics);
 }
 
-void RunJointPostprocessing(
+namespace {
+bool RunJointStagePostprocessing(
     MapObject & map, ModelObject & model, const JointProblem & problem, JointAnalysisResult snapshot,
     const FitOptions & options, JointPostprocessingMetrics & postprocessing_metrics)
 {
-    postprocessing_metrics = {};
-    snapshot.metadata.grid_size=map.GetGridSize();
-    snapshot.metadata.grid_spacing=map.GetGridSpacing();
-    snapshot.metadata.origin=map.GetOrigin();
-    const auto postprocessing_start = std::chrono::steady_clock::now();
     postprocessing_metrics.rss_before_postprocessing_bytes = joint_component::CurrentRssBytes();
     const auto joint_run_id=boost::uuids::to_string(boost::uuids::random_generator()());
-    const auto finish_without_downstream = [&] {
-        postprocessing_metrics.total_postprocessing_seconds = std::chrono::duration<double>(
-            std::chrono::steady_clock::now() - postprocessing_start).count();
-    };
     if (!IsQualifiedJointAnalysisResult(snapshot))
     {
         LogJointWarning("[Joint] Qualification failed; preserving diagnostics and skipping downstream processing.");
         model.EditAnalysis().SetJointResult(std::move(snapshot));
-        finish_without_downstream();
-        return;
+        return false;
     }
     bool halo_reconstruction_unavailable{};
     std::optional<HaloMedianBuildResult> halo_median_build;
@@ -281,11 +285,7 @@ void RunJointPostprocessing(
     }
     model.EditAnalysis().ApplyJointResult(std::move(snapshot), joint_run_id);
     model.EditAnalysis().BindJointMapObservations(map);
-    if (halo_reconstruction_unavailable)
-    {
-        finish_without_downstream();
-        return;
-    }
+    if (halo_reconstruction_unavailable) return false;
     const auto & joint_snapshot = *model.GetAnalysisView().GetJointResult();
     auto phase_start = std::chrono::steady_clock::now();
     auto contributor_universe=BuildJointPeelingContributorUniverse(model,problem,joint_snapshot);
@@ -310,8 +310,8 @@ void RunJointPostprocessing(
     for (const auto * atom : model.GetSelectedAtoms())
     {
         const auto local = AtomLocalPotentialView::For(*atom);
-        const auto & stage = local.GetJointEstimate();
-        if (stage.source.method != EstimateMethod::JointComponents || stage.source.role != FittingRole::Target)
+        const auto & estimate = local.GetJointEstimate();
+        if (estimate.source.method != EstimateMethod::JointComponents || estimate.source.role != FittingRole::Target)
             continue;
         joint_targets.push_back(atom);
         const auto assessment = local.AssessLocalFittingPeelingRatio(1.0, 2.0);
@@ -356,21 +356,21 @@ void RunJointPostprocessing(
     for (const auto * atom : joint_targets)
     {
         const auto local = AtomLocalPotentialView::For(*atom);
-        const auto & stage = local.GetJointEstimate();
-        if (stage.source.method != EstimateMethod::JointComponents || stage.source.role != FittingRole::Target ||
-            stage.source.component_id.empty()) continue;
+        const auto & estimate = local.GetJointEstimate();
+        if (estimate.source.method != EstimateMethod::JointComponents || estimate.source.role != FittingRole::Target ||
+            estimate.source.component_id.empty()) continue;
         const auto & peeling = local.GetPostFitPeeling();
         PostJointLocalResult result;
         if (peeling) result = FitPostJointLocalTarget(
             postprocessing, model, atom->GetSerialID(), *peeling, options, postprocessing_metrics);
         else
         {
-            result.source = stage.source;
+            result.source = estimate.source;
             result.status = EvidenceStatus::Unavailable;
             result.reason = "peeling-unavailable";
             result.sample_count = 0;
-            if (stage.point)
-                result.fixed_charge = {stage.point->GetOffset(), stage.point->GetWidth()};
+            if (estimate.point)
+                result.fixed_charge = {estimate.point->GetOffset(), estimate.point->GetWidth()};
         }
         local_updates.emplace_back(atom->GetSerialID(), std::move(result));
     }
@@ -379,7 +379,31 @@ void RunJointPostprocessing(
         joint_targets.capacity() * sizeof(const AtomObject *);
     postprocessing_metrics.rss_after_local_bytes = joint_component::CurrentRssBytes();
     if (!options.quiet_mode) LogJointInfo(BuildJointTargetSpotSummary(model));
-    RunJointGroupPotentialFitting(model, options, &postprocessing_metrics);
+    return true;
+}
+} // namespace
+
+void CompletePotentialFittingWorkflow(
+    MapObject & map, ModelObject & model, const JointProblem & problem, JointAnalysisResult snapshot,
+    const FitOptions & options, JointPostprocessingMetrics & postprocessing_metrics)
+{
+    postprocessing_metrics = {};
+    snapshot.metadata.grid_size=map.GetGridSize();
+    snapshot.metadata.grid_spacing=map.GetGridSpacing();
+    snapshot.metadata.origin=map.GetOrigin();
+    const auto postprocessing_start = std::chrono::steady_clock::now();
+    const auto record_postprocessing_time = [&] {
+        postprocessing_metrics.total_postprocessing_seconds = std::chrono::duration<double>(
+            std::chrono::steady_clock::now() - postprocessing_start).count();
+    };
+    if (!RunJointStagePostprocessing(
+        map, model, problem, std::move(snapshot), options, postprocessing_metrics))
+    {
+        record_postprocessing_time();
+        return;
+    }
+    if (!options.quiet_mode) LogJointInfo("[GroupingStage] Fitting groups from Post-Joint Local results.");
+    RunGroupingStage(model, options, &postprocessing_metrics);
     postprocessing_metrics.rss_after_group_bytes = joint_component::CurrentRssBytes();
     if (!options.quiet_mode)
     {
@@ -414,14 +438,94 @@ void RunJointPostprocessing(
         LogJointDebug("[Joint] Original-grid Peeling workspace="+
             std::to_string(postprocessing_metrics.estimated_peeling_workspace_bytes)+" bytes");
     }
-    postprocessing_metrics.total_postprocessing_seconds = std::chrono::duration<double>(
-        std::chrono::steady_clock::now() - postprocessing_start).count();
+    record_postprocessing_time();
     if (!options.quiet_mode) LogJointInfo("[Joint] Completed.");
 }
 
 } // namespace rhbm_gem::core::detail
 
 namespace rhbm_gem::core {
+namespace {
+constexpr std::array<Spot, 5> kLocalMDPDESummarySpotList{
+    Spot::C, Spot::CA, Spot::CB, Spot::N, Spot::O
+};
+
+struct GaussianModelParameterSamples
+{
+    std::vector<double> amplitude_list, width_list, offset_list;
+    std::size_t unavailable{}, not_converged{};
+};
+} // namespace
+
+std::string BuildJointTargetSpotSummary(const ModelObject & model_object)
+{
+    constexpr int kSpotColumnWidth = 4;
+    constexpr int kValidColumnWidth = 5;
+    constexpr int kNotConvergedColumnWidth = 13;
+    constexpr int kUnavailableColumnWidth = 11;
+    constexpr int kMeanColumnWidth = 6;
+    constexpr int kStandardDeviationColumnWidth = 4;
+    constexpr int kParameterColumnWidth = kMeanColumnWidth + 3 + kStandardDeviationColumnWidth;
+    std::map<Spot, GaussianModelParameterSamples> spots;
+    for (const auto * atom : model_object.GetSelectedAtoms())
+    {
+        if (atom->GetSpecialAtomFlag()) continue;
+        const auto spot = atom->GetSpot();
+        if (std::find(kLocalMDPDESummarySpotList.begin(), kLocalMDPDESummarySpotList.end(), spot) ==
+            kLocalMDPDESummarySpotList.end()) continue;
+        const auto view = AtomLocalPotentialView::For(*atom);
+        const auto * estimate = view.IsAvailable() ? &view.GetJointEstimate() : nullptr;
+        const bool joint = estimate && estimate->source.method == EstimateMethod::JointComponents;
+        if (joint && estimate->source.role != FittingRole::Target) continue;
+        auto & samples = spots[spot];
+        if (!joint) { ++samples.unavailable; continue; }
+        if (estimate->convergence != JointCheckStatus::Passed || !estimate->point)
+        {
+            if (estimate->convergence == JointCheckStatus::Failed) ++samples.not_converged;
+            else ++samples.unavailable;
+            continue;
+        }
+        const auto & point = *estimate->point;
+        samples.amplitude_list.push_back(point.GetAmplitude());
+        samples.width_list.push_back(point.GetWidth());
+        samples.offset_list.push_back(point.GetOffset());
+    }
+    std::ostringstream summary;
+    summary << "Joint Target estimate summary by Spot:\nEstimator: joint-components"
+        "\nPopulation: selected targets excluding special atoms; A/tau/C: Joint Target estimates; "
+        "C(J): Joint charge coefficient; s.d.: between-atom dispersion"
+        << "\n| " << std::left << std::setw(kSpotColumnWidth) << "Spot"
+        << " | " << std::setw(kValidColumnWidth) << "valid"
+        << " | " << std::setw(kNotConvergedColumnWidth) << "not-converged"
+        << " | " << std::setw(kUnavailableColumnWidth) << "unavailable"
+        << " | " << std::setw(kParameterColumnWidth) << "A mean / s.d."
+        << " | " << std::setw(kParameterColumnWidth) << "tau mean / s.d."
+        << " | " << std::setw(kParameterColumnWidth) << "C(J) mean / s.d."
+        << " |";
+    for (const auto & [spot, samples] : spots)
+    {
+        summary << "\n| " << std::left << std::setw(kSpotColumnWidth) << ChemicalDataHelper::GetLabel(spot)
+            << " | " << std::right << std::setw(kValidColumnWidth) << samples.amplitude_list.size()
+            << " | " << std::setw(kNotConvergedColumnWidth) << samples.not_converged
+            << " | " << std::setw(kUnavailableColumnWidth) << samples.unavailable;
+        for (const auto * values : {&samples.amplitude_list, &samples.width_list, &samples.offset_list})
+        {
+            if (values->empty())
+            {
+                summary << " | " << std::left << std::setw(kParameterColumnWidth) << "unavailable";
+                continue;
+            }
+            const auto mean = array_helper::ComputeMean(values->data(), values->size());
+            summary << " | " << std::right << std::fixed << std::setprecision(2)
+                << std::setw(kMeanColumnWidth) << mean << " / "
+                << std::setw(kStandardDeviationColumnWidth)
+                << array_helper::ComputeStandardDeviation(values->data(), values->size(), mean);
+        }
+        summary << " |";
+    }
+    if (spots.empty()) summary << "\nNo matching selected targets available.";
+    return summary.str();
+}
 
 void RunPotentialFittingWorkflow(MapObject & map, ModelObject & model, const FitOptions & options)
 {
@@ -429,7 +533,7 @@ void RunPotentialFittingWorkflow(MapObject & map, ModelObject & model, const Fit
     if (model.GetSelectedAtoms().empty())
         throw std::invalid_argument("Potential fitting requires at least one selected non-hydrogen target.");
 
-    detail::RunJointComponentWorkflow(map, model, options);
+    detail::RunPotentialFittingWorkflowForSelection(map, model, options);
 }
 
 } // namespace rhbm_gem::core

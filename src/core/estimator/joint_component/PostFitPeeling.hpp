@@ -1,5 +1,5 @@
 #pragma once
-#include "core/detail/joint_component/JointComponentEstimator.hpp"
+#include "core/estimator/joint_component/JointComponentEstimator.hpp"
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
 #include <array>
 #include <cstddef>

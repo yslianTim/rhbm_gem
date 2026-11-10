@@ -21,10 +21,9 @@ The goal is stable, maintainable, and diagnosable software.
 - `[Required]` Keep responsibilities separated: command orchestration in `core`, file/persistence logic in `data`, reusable helpers in `utils`.
 - `[Required]` Keep tests in `/tests/` and test fixtures in `/tests/fixtures/`.
 - `[Required]` Keep test sources aligned to domain folders (`/tests/core`, `/tests/data`, `/tests/utils`, `/tests/integration`) and intent-specific subfolders where applicable.
-- `[Required]` For `/src/core`, place command orchestration in `/src/core/command/`, workflow implementation in `/src/core/workflow/`, painter implementation in `/src/core/painter/`; keep concrete private headers next to their implementation and place shared subsystem-private helpers under a local `detail/` directory.
+- `[Required]` For `/src/core`, place command orchestration in `/src/core/command/`, estimator workflows in `/src/core/estimator/`, shared map interpolation in `/src/core/sampling/`, and painter implementation in `/src/core/painter/`; keep concrete private headers next to their implementation and place shared subsystem-private helpers under a local `detail/` directory.
 - `[Required]` Keep the Python binding adapter layer in `/src/python/`; it should expose pybind11 surfaces only and should not become a home for core business logic.
 - `[Required]` Treat any header outside `/include/` as internal implementation detail; use subsystem-local `detail/` directories for shared private helpers instead of broad cross-domain `internal/` buckets.
-- `[Required]` For workflow code, keep implementation units (`*.cpp`) in `/src/core/workflow/`; place shared workflow-private headers in `/src/core/workflow/detail/` when they are not part of workflow-facing contracts.
 - `[Required]` Keep reusable automation tools under `/resources/tools/`; do not add scripts at repository root.
 - `[Required]` Project-owned public types in `core` must use namespace `rhbm_gem::core`; project-owned public types in `data` and `utils` use namespace `rhbm_gem` or an established nested utility namespace.
 - `[Required]` Do not use `using namespace` in headers.

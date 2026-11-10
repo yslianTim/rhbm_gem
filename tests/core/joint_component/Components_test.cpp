@@ -2,7 +2,7 @@
 #include "support/JointComponentChecks.hpp"
 #include "support/JointDomainHelpers.hpp"
 #include "support/CommandTestHelpers.hpp"
-#include "core/detail/joint_component/Problem.hpp"
+#include "core/estimator/joint_component/Problem.hpp"
 #include <algorithm>
 #include <fstream>
 

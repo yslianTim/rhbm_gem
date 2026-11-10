@@ -14,7 +14,7 @@
 
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/core/CommandTypes.hpp>
-#include "core/detail/joint_component/JointComponentEstimator.hpp"
+#include "core/estimator/joint_component/JointComponentEstimator.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
@@ -23,9 +23,9 @@
 
 #include "core/command/detail/MapSimulation.hpp"
 #include "core/command/detail/SimulationGeometry.hpp"
-#include "core/detail/joint_component/JointCliProgressReporter.hpp"
-#include "core/detail/joint_component/Problem.hpp"
-#include "core/detail/joint_component/ResourceWork.hpp"
+#include "core/estimator/joint_component/JointCliProgressReporter.hpp"
+#include "core/estimator/joint_component/Problem.hpp"
+#include "core/estimator/joint_component/ResourceWork.hpp"
 #include "support/JointSyntheticWorkload.hpp"
 #include "support/JointComponentChecks.hpp"
 

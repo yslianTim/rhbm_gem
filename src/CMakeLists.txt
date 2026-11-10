@@ -21,32 +21,30 @@ set(RHBM_GEM_EXPERIMENTAL_SOURCES
 target_sources(rhbm_gem PRIVATE
     # core
     core/EstimatorTester.cpp
-    core/detail/joint_component/Numerics.cpp
-    core/detail/joint_component/TiledDerivative.cpp
-    core/detail/joint_component/LocalConditioning.cpp
-    core/detail/joint_component/ConstrainedAcLeastSquares.cpp
-    core/detail/joint_component/CompactSvd.cpp
-    core/detail/joint_component/ActiveSetBoundedLM.cpp
-    core/detail/joint_component/WidthCalibration.cpp
-    core/detail/joint_component/ResourceWork.cpp
-    core/detail/joint_component/StructuralPartition.cpp
-    core/detail/joint_component/GaussSeidelBcd.cpp
-    core/detail/joint_component/ProfileLmSearch.cpp
-    core/detail/joint_component/ComponentPartition.cpp
-    core/detail/joint_component/ComponentOrchestration.cpp
-    core/detail/joint_component/ComponentAssembly.cpp
-    core/detail/joint_component/TargetEvidence.cpp
-    core/detail/joint_component/JointComponentEstimator.cpp
+    core/estimator/joint_component/Numerics.cpp
+    core/estimator/joint_component/TiledDerivative.cpp
+    core/estimator/joint_component/LocalConditioning.cpp
+    core/estimator/joint_component/ConstrainedAcLeastSquares.cpp
+    core/estimator/joint_component/CompactSvd.cpp
+    core/estimator/joint_component/ActiveSetBoundedLM.cpp
+    core/estimator/joint_component/WidthCalibration.cpp
+    core/estimator/joint_component/ResourceWork.cpp
+    core/estimator/joint_component/StructuralPartition.cpp
+    core/estimator/joint_component/GaussSeidelBcd.cpp
+    core/estimator/joint_component/ProfileLmSearch.cpp
+    core/estimator/joint_component/ComponentPartition.cpp
+    core/estimator/joint_component/ComponentOrchestration.cpp
+    core/estimator/joint_component/ComponentAssembly.cpp
+    core/estimator/joint_component/TargetEvidence.cpp
+    core/estimator/joint_component/JointComponentEstimator.cpp
     core/GaussianEstimator.cpp
-    core/detail/joint_component/JointCliProgressReporter.cpp
-    core/detail/PotentialFittingWorkflow.cpp
-    core/detail/StageSummary.cpp
-    core/detail/FirstStageInitialization.cpp
-    core/detail/FittingWorkset.cpp
-    core/detail/GroupPotentialFitting.cpp
-    core/detail/joint_component/HaloMedianReconstruction.cpp
-    core/detail/joint_component/PostFitPeeling.cpp
-    core/detail/gaussian_fit/PreparedLocalGaussianFit.cpp
+    core/estimator/joint_component/JointCliProgressReporter.cpp
+    core/estimator/PotentialFittingWorkflow.cpp
+    core/estimator/InitialStage.cpp
+    core/estimator/GroupingStage.cpp
+    core/estimator/joint_component/HaloMedianReconstruction.cpp
+    core/estimator/joint_component/PostFitPeeling.cpp
+    core/estimator/gaussian_fit/PreparedLocalGaussianFit.cpp
     core/MapSampler.cpp
     core/QScoreHelper.cpp
     core/TestDataFactory.cpp

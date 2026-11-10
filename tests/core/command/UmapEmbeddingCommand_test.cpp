@@ -10,12 +10,12 @@
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
-#include "core/detail/joint_component/JointComponentEstimator.hpp"
+#include "core/estimator/joint_component/JointComponentEstimator.hpp"
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include "data/detail/JointStageAdapter.hpp"
-#include "core/detail/joint_component/Numerics.hpp"
+#include "core/estimator/joint_component/Numerics.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
-#include "core/detail/joint_component/HaloMedianReconstruction.hpp"
+#include "core/estimator/joint_component/HaloMedianReconstruction.hpp"
 #include "support/JointPostprocessingTestHelpers.hpp"
 #include "core/command/detail/LocalFittingFeatures.hpp"
 #include "io/sqlite/SQLiteWrapper.hpp"

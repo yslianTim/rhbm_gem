@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/detail/joint_component/JointComponentEstimator.hpp"
+#include "core/estimator/joint_component/JointComponentEstimator.hpp"
 #include <Eigen/Core>
 #include <array>
 #include <cstdint>

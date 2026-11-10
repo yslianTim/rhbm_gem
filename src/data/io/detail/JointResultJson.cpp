@@ -1,6 +1,6 @@
 #include "JointResultJson.hpp"
 #include "PersistenceSchema.hpp"
-#include "core/detail/joint_component/ConvergenceCriteria.hpp"
+#include "core/estimator/joint_component/ConvergenceCriteria.hpp"
 #include <boost/json.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 #include <algorithm>

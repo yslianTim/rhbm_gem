@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "core/detail/joint_component/WidthCalibration.hpp"
+#include "core/estimator/joint_component/WidthCalibration.hpp"
 
 #include <algorithm>
 #include <cmath>

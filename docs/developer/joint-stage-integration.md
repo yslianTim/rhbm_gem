@@ -3,15 +3,25 @@
 The [Potential Analysis command](commands/potential_analysis.md) uses the Joint
 Component Estimator.
 Potential fitting excludes hydrogen from targets and eligible contributors.
-The Joint workflow builds the Original and Fitting Domains, initializes
-Target widths, runs the [Joint estimator](joint-component-runtime.md), and
-captures a snapshot. A qualified snapshot feeds Halo reconstruction,
-Original-grid peeling, Post-Joint Local fitting and Group Fitting.
+The workflow builds the Original and Fitting Domains before running three
+execution stages.
 
-## FirstStage initialization
+1. **InitialStage** samples contributors and fits native OLS/MDPDE estimates,
+   including local alpha training and width seeds.
+2. **JointStage** runs the [Joint Component Estimator](joint-component-runtime.md)
+   and certifies the endpoint. A qualified snapshot feeds Halo reconstruction,
+   Original-grid peeling, charge correction and Post-Joint Local MDPDE.
+3. **GroupingStage** uses eligible Post-Joint Local evidence for group alpha
+   training, group MDPDE, WEB posterior inference and publication. It runs only
+   after JointStage completes downstream processing.
 
-The Joint workset resolves selected Target identities from the Fitting
-Domain. FirstStage uses 20 deterministic shells at 0.05, 0.15, …, 1.95 Å,
+These stages describe execution. FirstStage and Joint estimate records retain
+their existing data and persistence contracts.
+
+## InitialStage
+
+The initialization workset resolves contributor identities and Target roles
+in Fitting Domain order. FirstStage uses 20 deterministic shells at 0.05, 0.15, …, 1.95 Å,
 with ten points per shell. C++ callers can set `FitOptions::first_stage_sampling_method`
 to `SphereSamplingMethod::SpiralDeterministic`. The default is
 `SphereSamplingMethod::FibonacciDeterministic`. Both methods apply the
@@ -201,10 +211,10 @@ Available, Unavailable and Ineligible records. Persisted Group members
 must match their Local source and fixed charge. Nullable diagnostics,
 missing states and unavailable reconstruction are representable outcomes.
 
-See [PotentialFittingWorkflow.cpp](../../src/core/detail/PotentialFittingWorkflow.cpp),
-[FirstStageInitialization.cpp](../../src/core/detail/FirstStageInitialization.cpp),
-[TargetEvidence.cpp](../../src/core/detail/joint_component/TargetEvidence.cpp),
-[HaloMedianReconstruction.cpp](../../src/core/detail/joint_component/HaloMedianReconstruction.cpp),
-[PostFitPeeling.cpp](../../src/core/detail/joint_component/PostFitPeeling.cpp),
-[GroupPotentialFitting.cpp](../../src/core/detail/GroupPotentialFitting.cpp)
+See [PotentialFittingWorkflow.cpp](../../src/core/estimator/PotentialFittingWorkflow.cpp),
+[InitialStage.cpp](../../src/core/estimator/InitialStage.cpp),
+[TargetEvidence.cpp](../../src/core/estimator/joint_component/TargetEvidence.cpp),
+[HaloMedianReconstruction.cpp](../../src/core/estimator/joint_component/HaloMedianReconstruction.cpp),
+[PostFitPeeling.cpp](../../src/core/estimator/joint_component/PostFitPeeling.cpp),
+[GroupingStage.cpp](../../src/core/estimator/GroupingStage.cpp)
 and [PostJointLocalValidation.cpp](../../src/data/detail/PostJointLocalValidation.cpp).

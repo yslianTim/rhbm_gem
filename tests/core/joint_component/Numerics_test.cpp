@@ -1,10 +1,10 @@
 #include <gtest/gtest.h>
-#include "core/detail/joint_component/TiledDerivative.hpp"
-#include "core/detail/joint_component/TiledQR.hpp"
-#include "core/detail/joint_component/ResourceWork.hpp"
-#include "core/detail/joint_component/ConstrainedAcLeastSquares.hpp"
-#include "core/detail/joint_component/CompactSvd.hpp"
-#include "core/detail/joint_component/Problem.hpp"
+#include "core/estimator/joint_component/TiledDerivative.hpp"
+#include "core/estimator/joint_component/TiledQR.hpp"
+#include "core/estimator/joint_component/ResourceWork.hpp"
+#include "core/estimator/joint_component/ConstrainedAcLeastSquares.hpp"
+#include "core/estimator/joint_component/CompactSvd.hpp"
+#include "core/estimator/joint_component/Problem.hpp"
 #include "support/JointSyntheticWorkload.hpp"
 #include "support/JointTestNumerics.hpp"
 #include <array>

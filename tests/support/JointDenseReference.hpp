@@ -1,5 +1,5 @@
 #pragma once
-#include "core/detail/joint_component/Numerics.hpp"
+#include "core/estimator/joint_component/Numerics.hpp"
 namespace joint_component_test::matched::joint_component {
 namespace runtime=rhbm_gem::core::joint_component;
 struct DenseDifferential {runtime::Matrix projected,jacobian; bool valid{}; std::string reason;};

@@ -2,11 +2,11 @@
 #include "support/JointBcdDiagnostic.hpp"
 #include "support/JointBlockCoordinate.hpp"
 #include "support/JointComponentChecks.hpp"
-#include "core/detail/joint_component/Problem.hpp"
-#include "core/detail/joint_component/ResourceWork.hpp"
-#include "core/detail/joint_component/StructuralPartition.hpp"
-#include "core/detail/joint_component/TargetEvidence.hpp"
-#include "core/detail/joint_component/JointComponentEstimator.hpp"
+#include "core/estimator/joint_component/Problem.hpp"
+#include "core/estimator/joint_component/ResourceWork.hpp"
+#include "core/estimator/joint_component/StructuralPartition.hpp"
+#include "core/estimator/joint_component/TargetEvidence.hpp"
+#include "core/estimator/joint_component/JointComponentEstimator.hpp"
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <algorithm>
 #include <array>

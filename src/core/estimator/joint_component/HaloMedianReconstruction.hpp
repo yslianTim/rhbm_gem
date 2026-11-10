@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/detail/joint_component/JointComponentEstimator.hpp"
+#include "core/estimator/joint_component/JointComponentEstimator.hpp"
 #include <rhbm_gem/data/object/JointAnalysisResult.hpp>
 #include <cstddef>
 #include <array>

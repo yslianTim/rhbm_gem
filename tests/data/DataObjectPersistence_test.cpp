@@ -9,8 +9,7 @@
 #include <rhbm_gem/data/io/JointAnalysisFileIO.hpp>
 #include "data/io/detail/JointResultJson.hpp"
 #include "data/io/detail/StageResultJson.hpp"
-#include "core/detail/FirstStageInitialization.hpp"
-#include "core/detail/PotentialFittingWorkflow.hpp"
+#include "core/estimator/PotentialFittingWorkflow.hpp"
 
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>

@@ -1,6 +1,6 @@
 #pragma once
 #include "support/JointTestNumerics.hpp"
-#include "core/detail/joint_component/GaussSeidelBcd.hpp"
+#include "core/estimator/joint_component/GaussSeidelBcd.hpp"
 #include <cstddef>
 #include <optional>
 #include <vector>

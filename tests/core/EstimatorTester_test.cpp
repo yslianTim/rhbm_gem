@@ -6,14 +6,15 @@
 #include <stdexcept>
 #include <vector>
 
-#include "core/detail/gaussian_fit/FittingRanges.hpp"
-#include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
+#include "core/estimator/gaussian_fit/PreparedLocalGaussianFit.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/core/TestDataFactory.hpp>
 #include <rhbm_gem/core/EstimatorTester.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 
 namespace {
+constexpr double kExpectedLocalFittingRadius{1.0};
+
 namespace rt = rhbm_gem::core;
 namespace rt_detail = rhbm_gem::core::detail;
 namespace tdf = rhbm_gem::core;
@@ -100,7 +101,7 @@ TEST(EstimatorTesterTest, PreparedLocalGaussianDatasetMatchesLegacyBuilder)
     EXPECT_TRUE(prepared_dataset.y.isApprox(legacy_dataset.y, 0.0));
 
     const rt_detail::PreparedLocalGaussianDesign signal_design{
-        samples, 0.0, rt_detail::kSignalDistanceMax
+        samples, 0.0, kExpectedLocalFittingRadius
     };
     const auto signal_dataset{ signal_design.BuildDataset(response_list, offset_model) };
     ASSERT_EQ(signal_dataset.X.rows(), 3);

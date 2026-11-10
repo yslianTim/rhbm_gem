@@ -4,7 +4,7 @@
 #include "JointProgress.hpp"
 #include "BcdPolicy.hpp"
 #include "ResourceWork.hpp"
-#include "core/detail/joint_component/JointComponentEstimator.hpp"
+#include "core/estimator/joint_component/JointComponentEstimator.hpp"
 #include <numeric>
 namespace rhbm_gem::core::joint_component {
 JointInitialization InitializeContributors(MapObject &,ModelObject &,const JointProblem &);

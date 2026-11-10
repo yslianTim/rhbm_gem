@@ -67,7 +67,7 @@ to report deficient-rank evidence.
 
 ## Bounded log-width LM
 
-[ProfileLmSearch.cpp](../../src/core/detail/joint_component/ProfileLmSearch.cpp)
+[ProfileLmSearch.cpp](../../src/core/estimator/joint_component/ProfileLmSearch.cpp)
 owns the JCE problem adapter. It supplies the qualified A/C evaluations, full
 residual norms, reduced derivatives and cached accepted stationarity. It
 requires a finite `eta_max = log(tau_max)`, validates initial and trial
@@ -77,7 +77,7 @@ checks. A step exceeding one log-width decade is rejected when at least 95%
 of its norm lies in weak right-singular directions of the trial Jacobian and
 its nonnegative improvement fits within `1e-12 + 2e-12 |phi_before|`.
 
-[BoundedLmDriver.hpp](../../src/core/detail/joint_component/BoundedLmDriver.hpp)
+[BoundedLmDriver.hpp](../../src/core/estimator/joint_component/BoundedLmDriver.hpp)
 owns the outer LM state and retry loop. It scales by Jacobian column norms,
 substituting one for a zero initial norm and retaining columnwise maxima
 across accepted iterations. Its initial radius is `0.1 ||D||₂` (the norm of
@@ -103,7 +103,7 @@ checked initial profile. A tiny physical log-width step requires accepted bound-
 stationarity. Local stopping criteria control the iteration. Component
 convergence requires the global checks in the runtime guide.
 
-[ActiveSetBoundedLM.cpp](../../src/core/detail/joint_component/ActiveSetBoundedLM.cpp)
+[ActiveSetBoundedLM.cpp](../../src/core/estimator/joint_component/ActiveSetBoundedLM.cpp)
 owns the inner subproblem. With reduced model `J_r, r_r`, diagonal `D`,
 radius `Delta` and damping `lambda`, it solves damped bound-constrained
 least squares and selects damping to meet the trust radius.
@@ -144,9 +144,9 @@ classification. These read-only diagnostics assess local numerical geometry.
 They supply evidence to [Target Point Quality](joint-stage-integration.md#target-point-quality)
 and carry no global rank, covariance or statistical precision certificate.
 
-See [ConstrainedAcLeastSquares.cpp](../../src/core/detail/joint_component/ConstrainedAcLeastSquares.cpp),
-[TiledDerivative.cpp](../../src/core/detail/joint_component/TiledDerivative.cpp),
-[CompactSvd.cpp](../../src/core/detail/joint_component/CompactSvd.cpp) and
-[LocalConditioning.cpp](../../src/core/detail/joint_component/LocalConditioning.cpp).
+See [ConstrainedAcLeastSquares.cpp](../../src/core/estimator/joint_component/ConstrainedAcLeastSquares.cpp),
+[TiledDerivative.cpp](../../src/core/estimator/joint_component/TiledDerivative.cpp),
+[CompactSvd.cpp](../../src/core/estimator/joint_component/CompactSvd.cpp) and
+[LocalConditioning.cpp](../../src/core/estimator/joint_component/LocalConditioning.cpp).
 The focused [numerical tests](../../tests/core/joint_component) cover active
 faces, replay, derivative and rank boundaries, and feasible bounded steps.

@@ -1,4 +1,4 @@
-#include "GroupPotentialFitting.hpp"
+#include "GroupingStage.hpp"
 #include "data/detail/PostJointLocalValidation.hpp"
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
@@ -48,7 +48,7 @@ GaussianModel3DWithUncertainty Decode(
 }
 }
 
-void RunJointGroupPotentialFitting(
+void RunGroupingStage(
     ModelObject & model, const FitOptions & options, JointPostprocessingMetrics * metrics)
 {
     const auto view = model.GetAnalysisView();

@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "core/detail/joint_component/ActiveSetBoundedLM.hpp"
+#include "core/estimator/joint_component/ActiveSetBoundedLM.hpp"
 
 #include <bit>
 #include <cmath>

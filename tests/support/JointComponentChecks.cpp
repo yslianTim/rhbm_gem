@@ -1,7 +1,7 @@
 #include "support/JointComponentChecks.hpp"
 #include "support/JointRuntimeJson.hpp"
-#include "core/detail/joint_component/GaussSeidelBcd.hpp"
-#include "core/detail/joint_component/Problem.hpp"
+#include "core/estimator/joint_component/GaussSeidelBcd.hpp"
+#include "core/estimator/joint_component/Problem.hpp"
 #include <algorithm>
 #include <map>
 #include <numeric>

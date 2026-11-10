@@ -17,7 +17,7 @@ raw rows. Direct serial/parallel comparisons retain per-sample diagnostics.
 
 The shared normalized Gaussian generator lives in
 `tests/support/FirstStageSynthetic.hpp`; it is independent of retired study
-runners. `FirstStageInitialization_test.cpp` also covers truth at two spacings,
+runners. `InitialStage_test.cpp` also covers truth at two spacings,
 median fallback, certified endpoints, persistence and grid invalidation.
 `WidthCalibration_test.cpp` owns donor gating, Type-7 quantiles, 20/95% limits
 and immutable bounded projection. Existing workflow/schema tests cover Group

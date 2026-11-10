@@ -68,7 +68,7 @@ remain unavailable. There is no assembly-wide A/C reprofile.
 ## Initialization and global width bound
 
 The workflow obtains Target width seeds through
-[Joint FirstStage](joint-stage-integration.md#firststage-initialization).
+[InitialStage](joint-stage-integration.md#initialstage).
 Calibration uses finite positive native-qualified or recovered-qualified
 Target MDPDE widths, excluding median fallbacks and initialization exceptions.
 It requires at least 20 qualified donors and at least 95% Target coverage.
@@ -175,20 +175,20 @@ explicit reasons. Publication and
 
 ## Implementation references
 
-- [JointComponentEstimator.cpp](../../src/core/detail/joint_component/JointComponentEstimator.cpp),
-  [ComponentPartition.cpp](../../src/core/detail/joint_component/ComponentPartition.cpp),
-  [StructuralPartition.cpp](../../src/core/detail/joint_component/StructuralPartition.cpp)
-  and [WidthCalibration.cpp](../../src/core/detail/joint_component/WidthCalibration.cpp) build
+- [JointComponentEstimator.cpp](../../src/core/estimator/joint_component/JointComponentEstimator.cpp),
+  [ComponentPartition.cpp](../../src/core/estimator/joint_component/ComponentPartition.cpp),
+  [StructuralPartition.cpp](../../src/core/estimator/joint_component/StructuralPartition.cpp)
+  and [WidthCalibration.cpp](../../src/core/estimator/joint_component/WidthCalibration.cpp) build
   the domains, components, block topology and bound.
-- [ComponentOrchestration.cpp](../../src/core/detail/joint_component/ComponentOrchestration.cpp),
-  [ComponentAssembly.cpp](../../src/core/detail/joint_component/ComponentAssembly.cpp),
-  [GaussSeidelBcd.cpp](../../src/core/detail/joint_component/GaussSeidelBcd.cpp),
-  [BcdPolicy.hpp](../../src/core/detail/joint_component/BcdPolicy.hpp) and
-  [ComponentSweepBudget.hpp](../../src/core/detail/joint_component/ComponentSweepBudget.hpp)
+- [ComponentOrchestration.cpp](../../src/core/estimator/joint_component/ComponentOrchestration.cpp),
+  [ComponentAssembly.cpp](../../src/core/estimator/joint_component/ComponentAssembly.cpp),
+  [GaussSeidelBcd.cpp](../../src/core/estimator/joint_component/GaussSeidelBcd.cpp),
+  [BcdPolicy.hpp](../../src/core/estimator/joint_component/BcdPolicy.hpp) and
+  [ComponentSweepBudget.hpp](../../src/core/estimator/joint_component/ComponentSweepBudget.hpp)
   own execution, assembly, production settings and budget decisions.
-- [Numerics.cpp](../../src/core/detail/joint_component/Numerics.cpp),
-  [BoundedLmDriver.hpp](../../src/core/detail/joint_component/BoundedLmDriver.hpp)
-  and [ResourceWork.cpp](../../src/core/detail/joint_component/ResourceWork.cpp)
+- [Numerics.cpp](../../src/core/estimator/joint_component/Numerics.cpp),
+  [BoundedLmDriver.hpp](../../src/core/estimator/joint_component/BoundedLmDriver.hpp)
+  and [ResourceWork.cpp](../../src/core/estimator/joint_component/ResourceWork.cpp)
   implement evaluation and replay, the local LM loop and memory preflight.
 - [Component tests](../../tests/core/joint_component) cover domain exclusion,
   calibration, connectivity, acceptance, recovery, replay and qualification.

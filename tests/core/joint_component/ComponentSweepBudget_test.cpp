@@ -1,7 +1,7 @@
 #include <algorithm>
 #include <gtest/gtest.h>
-#include "core/detail/joint_component/ComponentSweepBudget.hpp"
-#include "core/detail/joint_component/Problem.hpp"
+#include "core/estimator/joint_component/ComponentSweepBudget.hpp"
+#include "core/estimator/joint_component/Problem.hpp"
 #include "support/JointBcdDiagnostic.hpp"
 #include "support/JointSyntheticWorkload.hpp"
 #include <limits>

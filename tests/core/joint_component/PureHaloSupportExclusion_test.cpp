@@ -5,23 +5,22 @@
 #include <boost/json.hpp>
 #include <boost/system/system_error.hpp>
 
-#include "core/detail/FirstStageInitialization.hpp"
-#include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
+#include "core/estimator/gaussian_fit/PreparedLocalGaussianFit.hpp"
 #include "core/sampling/MapInterpolation.hpp"
-#include "core/detail/joint_component/HaloMedianReconstruction.hpp"
-#include "core/detail/GroupPotentialFitting.hpp"
-#include "core/detail/joint_component/PostFitPeeling.hpp"
+#include "core/estimator/joint_component/HaloMedianReconstruction.hpp"
+#include "core/estimator/GroupingStage.hpp"
+#include "core/estimator/joint_component/PostFitPeeling.hpp"
 #include "support/JointPostprocessingTestHelpers.hpp"
-#include "core/detail/PotentialFittingWorkflow.hpp"
-#include "core/detail/joint_component/Problem.hpp"
-#include "core/detail/joint_component/GaussSeidelBcd.hpp"
-#include "core/detail/joint_component/WidthCalibration.hpp"
+#include "core/estimator/PotentialFittingWorkflow.hpp"
+#include "core/estimator/joint_component/Problem.hpp"
+#include "core/estimator/joint_component/GaussSeidelBcd.hpp"
+#include "core/estimator/joint_component/WidthCalibration.hpp"
 #include "core/command/detail/SimulationGeometry.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include "data/detail/JointStageAdapter.hpp"
 #include "data/io/detail/JointResultJson.hpp"
 #include "data/io/detail/StageResultJson.hpp"
-#include "core/detail/joint_component/JointComponentEstimator.hpp"
+#include "core/estimator/joint_component/JointComponentEstimator.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
@@ -757,7 +756,7 @@ TEST(PureHaloSupportExclusionTest, RunsFullPureWorkflowWithGeometryLocalHaloSour
     options.quiet_mode=true;
     options.thread_size=1;
     core::detail::JointPostprocessingMetrics metrics;
-    ASSERT_NO_THROW(core::detail::RunJointComponentWorkflow(
+    ASSERT_NO_THROW(core::detail::RunPotentialFittingWorkflowForSelection(
         fixture.map,fixture.model,options,&metrics));
     const auto result=fixture.model.GetAnalysisView().GetJointResult();
     ASSERT_TRUE(result);
@@ -872,7 +871,7 @@ TEST(PureHaloSupportExclusionTest, RunsPureWorkflowWithoutHalos)
     options.quiet_mode=true;
     options.thread_size=1;
     core::detail::JointPostprocessingMetrics metrics;
-    ASSERT_NO_THROW(core::detail::RunJointComponentWorkflow(
+    ASSERT_NO_THROW(core::detail::RunPotentialFittingWorkflowForSelection(
         fixture.map,fixture.model,options,&metrics));
     const auto result=fixture.model.GetAnalysisView().GetJointResult();
     ASSERT_TRUE(result);
@@ -913,7 +912,7 @@ TEST(PureHaloSupportExclusionTest, ExtendedSearchQualifiesAssemblyAndFeedsEveryD
     auto snapshot=core::CaptureJointAnalysisResult(std::move(extended));
     ASSERT_TRUE(IsQualifiedJointAnalysisResult(snapshot));
     core::detail::JointPostprocessingMetrics metrics;
-    ASSERT_NO_THROW(core::detail::RunJointPostprocessing(
+    ASSERT_NO_THROW(core::detail::CompletePotentialFittingWorkflow(
         fixture.map,fixture.model,*fit.problem,std::move(snapshot),options,metrics));
     const auto result=fixture.model.GetAnalysisView().GetJointResult();
     ASSERT_TRUE(result);
@@ -945,7 +944,7 @@ TEST(PureHaloSupportExclusionTest, SkipsDownstreamWhenJointQualificationFails)
     options.quiet_mode=true;
     options.thread_size=1;
     core::detail::JointPostprocessingMetrics metrics;
-    ASSERT_NO_THROW(core::detail::RunJointComponentWorkflow(
+    ASSERT_NO_THROW(core::detail::RunPotentialFittingWorkflowForSelection(
         fixture.map,fixture.model,options,&metrics));
     const auto result=fixture.model.GetAnalysisView().GetJointResult();
     ASSERT_TRUE(result);
@@ -1200,7 +1199,7 @@ TEST(PureHaloSupportExclusionTest, GridEvidenceTracksMapRevisionGeometryAndSnaps
     {
         auto fixture=WorkflowFixture(true);
         FitOptions options; options.quiet_mode=true;
-        core::detail::RunJointComponentWorkflow(fixture.map,fixture.model,options);
+        core::detail::RunPotentialFittingWorkflowForSelection(fixture.map,fixture.model,options);
         auto * target=fixture.model.FindAtomPtr(1);
         const auto view=AtomLocalPotentialView::For(*target);
         ASSERT_TRUE(view.GetPostJointLocalResult());
@@ -1262,7 +1261,7 @@ TEST(PureHaloSupportExclusionTest, GridPersistenceRejectsForeignIdentitiesAndInv
     }
     fixture.map.SetMapValueArray(std::move(values));
     FitOptions options; options.quiet_mode=true;
-    core::detail::RunJointComponentWorkflow(fixture.map,fixture.model,options);
+    core::detail::RunPotentialFittingWorkflowForSelection(fixture.map,fixture.model,options);
     const auto keys=fixture.model.GetAnalysisView().CollectAtomGroupKeys();
     ASSERT_EQ(keys.size(),1u);
     const auto & group=fixture.model.GetAnalysisView().GetGroupParameterSummary(keys.front());

@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
-#include "core/detail/FirstStageInitialization.hpp"
-#include "core/detail/FittingWorkset.hpp"
+#include "core/estimator/InitialStage.hpp"
 #include <rhbm_gem/core/MapSampler.hpp>
 #include <rhbm_gem/core/QScoreHelper.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
@@ -65,11 +64,11 @@ TEST(JointFirstStageSamplingTest, DefaultExactlyMatchesExplicitFirstStageSamplin
 {
     auto map=Map(); auto explicit_sampling=Model(); auto current=Model();
     FitOptions options; options.quiet_mode=true;
-    const auto explicit_workset=d::MakeJointFittingWorkset(*explicit_sampling,BuildPureHaloSupportExclusionProblem(map,*explicit_sampling));
+    const auto explicit_workset=d::BuildInitialStageWorkset(*explicit_sampling,BuildPureHaloSupportExclusionProblem(map,*explicit_sampling));
     RunPotentialSamplingWorkflow(map,*explicit_sampling,explicit_workset.contributors,1,{},true);
-    const auto explicit_init=d::RunJointFirstStageInitializationFromPreparedSamples(*explicit_sampling,explicit_workset,options);
-    const auto new_workset=d::MakeJointFittingWorkset(*current,BuildPureHaloSupportExclusionProblem(map,*current));
-    const auto new_init=d::PrepareJointWidthInitialization(map,*current,new_workset,options);
+    const auto explicit_init=d::FitInitialStageFromPreparedSamples(*explicit_sampling,explicit_workset,options);
+    const auto new_workset=d::BuildInitialStageWorkset(*current,BuildPureHaloSupportExclusionProblem(map,*current));
+    const auto new_init=d::RunInitialStage(map,*current,new_workset,options);
     SameInitialization(explicit_init,new_init);
     for (std::size_t i=0;i<2;++i)
         SameSamples(AtomLocalPotentialView::For(*explicit_workset.contributors[i]).GetRawSamplingEntriesView(),
@@ -85,15 +84,15 @@ TEST(JointFirstStageSamplingTest, DeterministicAcrossWorkersAndRepeatedRuns)
         FitOptions options; options.quiet_mode=true; options.first_stage_sampling_method=method;
         auto serial=Model(); auto parallel=Model();
         const auto problem=BuildPureHaloSupportExclusionProblem(map,*serial);
-        const auto sw=d::MakeJointFittingWorkset(*serial,problem);
-        const auto pw=d::MakeJointFittingWorkset(*parallel,problem);
-        const auto baseline=d::PrepareJointWidthInitialization(map,*serial,sw,options);
+        const auto sw=d::BuildInitialStageWorkset(*serial,problem);
+        const auto pw=d::BuildInitialStageWorkset(*parallel,problem);
+        const auto baseline=d::RunInitialStage(map,*serial,sw,options);
         ASSERT_TRUE(baseline.valid);
         for (const int workers : { 2, 4, 4 })
         {
             SCOPED_TRACE(workers);
             options.joint_initialization_thread_size=workers;
-            const auto result=d::PrepareJointWidthInitialization(map,*parallel,pw,options);
+            const auto result=d::RunInitialStage(map,*parallel,pw,options);
             SameInitialization(baseline,result);
             for (std::size_t i=0;i<sw.contributors.size();++i)
                 SameSamples(AtomLocalPotentialView::For(*sw.contributors[i]).GetRawSamplingEntriesView(),
@@ -129,8 +128,8 @@ TEST(JointFirstStageSamplingTest, SpiralInitializesWidthsAndLeavesQScoreUnchange
     const auto default_samples=SampleAtomMapValues(map,*atoms[0]);
     FitOptions options; options.quiet_mode=true;
     options.first_stage_sampling_method=SphereSamplingMethod::SpiralDeterministic;
-    const auto workset=d::MakeJointFittingWorkset(*model,BuildPureHaloSupportExclusionProblem(map,*model));
-    const auto initialization=d::PrepareJointWidthInitialization(map,*model,workset,options);
+    const auto workset=d::BuildInitialStageWorkset(*model,BuildPureHaloSupportExclusionProblem(map,*model));
+    const auto initialization=d::RunInitialStage(map,*model,workset,options);
     ASSERT_TRUE(initialization.valid);
     ASSERT_EQ(initialization.atoms.size(),atoms.size());
     EXPECT_EQ(initialization.atoms.front().seed_source,"fitted");

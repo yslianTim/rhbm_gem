@@ -1,8 +1,7 @@
 #include <rhbm_gem/core/GaussianEstimator.hpp>
-#include "core/detail/FirstStageInitialization.hpp"
-#include "core/detail/joint_component/Numerics.hpp"
-#include "core/detail/gaussian_fit/FittingRanges.hpp"
-#include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
+#include "core/estimator/InitialStage.hpp"
+#include "core/estimator/joint_component/Numerics.hpp"
+#include "core/estimator/gaussian_fit/PreparedLocalGaussianFit.hpp"
 
 #include <cstddef>
 #include <stdexcept>
@@ -26,6 +25,8 @@
 
 namespace rhbm_gem::core {
 namespace {
+constexpr double kLocalGaussianFittingRadius{1.0};
+
 constexpr std::size_t kMinimumAlphaRTrainingSampleCount{ 10 };
 rhbm_trainer::RHBMTrainingOptions MakeTrainingOptions(const FitOptions & options)
 {
@@ -188,7 +189,7 @@ double TrainAlphaR(
     const FitOptions & options)
 {
     return detail::TrainLocalGaussianAlpha(
-        rhbm_helper::BuildMemberDataset(sample_entries,0.0,detail::kSignalDistanceMax),options.thread_size);
+        rhbm_helper::BuildMemberDataset(sample_entries,0.0,kLocalGaussianFittingRadius),options.thread_size);
 }
 
 double TrainAlphaG(
@@ -227,7 +228,7 @@ LocalGaussianResult EstimateLocalGaussian(
     const detail::PreparedLocalGaussianDesign design{
         sample_entries,
         0.0,
-        detail::kSignalDistanceMax
+        kLocalGaussianFittingRadius
     };
     const auto sample_response_list{ CollectSampleResponses(sample_entries) };
     return design.Estimate(
@@ -258,7 +259,7 @@ GroupGaussianResult EstimateGroupGaussian(
         const detail::PreparedLocalGaussianDesign design{
             member.sample_entries,
             0.0,
-            detail::kSignalDistanceMax
+            kLocalGaussianFittingRadius
         };
         auto dataset{
             design.BuildDataset(
@@ -290,7 +291,7 @@ double detail::EstimateFirstStageAlpha(
     std::size_t count{ 0 };
     for (const auto & sample : samples)
     {
-        if (sample.point.distance < 0.0 || sample.point.distance > detail::kSignalDistanceMax) continue;
+        if (sample.point.distance < 0.0 || sample.point.distance > kLocalGaussianFittingRadius) continue;
         if (++count >= kMinimumAlphaRTrainingSampleCount) return TrainAlphaR(samples, options);
     }
     return MakeTrainingOptions(options).alpha_min;

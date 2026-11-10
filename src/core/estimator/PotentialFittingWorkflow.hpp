@@ -2,8 +2,13 @@
 
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include "joint_component/PostFitPeeling.hpp"
+#include <string>
 
 namespace rhbm_gem { struct JointAnalysisResult; }
+
+namespace rhbm_gem::core {
+std::string BuildJointTargetSpotSummary(const ModelObject &);
+}
 
 namespace rhbm_gem::core::detail {
 
@@ -17,11 +22,12 @@ PostJointLocalResult FitPostJointLocalTarget(
     const JointPostprocessingContext &, const ModelObject &, int, const PostFitPeelingResult &,
     const FitOptions &, JointPostprocessingMetrics &);
 
-void RunJointComponentWorkflow(
+void RunPotentialFittingWorkflowForSelection(
     MapObject & map, ModelObject & model, const FitOptions & options,
     JointPostprocessingMetrics * metrics = nullptr);
 
-void RunJointPostprocessing(
+// Completes JointStage publication and runs GroupingStage only when downstream inputs are ready.
+void CompletePotentialFittingWorkflow(
     MapObject &, ModelObject &, const JointProblem &, JointAnalysisResult,
     const FitOptions &, JointPostprocessingMetrics &);
 

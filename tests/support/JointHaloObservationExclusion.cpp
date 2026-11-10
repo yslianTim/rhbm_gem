@@ -1,5 +1,5 @@
 #include "JointHaloObservationExclusion.hpp"
-#include "core/detail/joint_component/LocalConditioning.hpp"
+#include "core/estimator/joint_component/LocalConditioning.hpp"
 #include <algorithm>
 #include <cmath>
 #include <Eigen/SVD>

@@ -5,7 +5,7 @@ class ModelObject;
 namespace core {
 struct FitOptions;
 namespace detail {
-void RunJointGroupPotentialFitting(ModelObject &, const FitOptions &, JointPostprocessingMetrics * = nullptr);
+void RunGroupingStage(ModelObject &, const FitOptions &, JointPostprocessingMetrics * = nullptr);
 }
 }
 }

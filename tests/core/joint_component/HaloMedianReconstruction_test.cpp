@@ -1,9 +1,9 @@
 #include <gtest/gtest.h>
 
-#include "core/detail/joint_component/HaloMedianReconstruction.hpp"
-#include "core/detail/joint_component/Problem.hpp"
-#include "core/detail/joint_component/LocalConditioning.hpp"
-#include "core/detail/joint_component/TargetEvidence.hpp"
+#include "core/estimator/joint_component/HaloMedianReconstruction.hpp"
+#include "core/estimator/joint_component/Problem.hpp"
+#include "core/estimator/joint_component/LocalConditioning.hpp"
+#include "core/estimator/joint_component/TargetEvidence.hpp"
 #include "support/JointTestContext.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>

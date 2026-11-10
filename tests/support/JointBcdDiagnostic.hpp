@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/detail/joint_component/GaussSeidelBcd.hpp"
+#include "core/estimator/joint_component/GaussSeidelBcd.hpp"
 
 namespace joint_component_test {
 rhbm_gem::core::joint_component::BcdSearchResult SearchBcdFixture(

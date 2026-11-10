@@ -1,4 +1,4 @@
-#include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
+#include "core/estimator/gaussian_fit/PreparedLocalGaussianFit.hpp"
 #include <rhbm_gem/utils/hrl/RHBMTrainer.hpp>
 
 #include <cmath>

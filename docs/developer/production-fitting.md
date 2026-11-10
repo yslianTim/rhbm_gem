@@ -7,18 +7,19 @@ manifests nor truth parameters.
 
 1. Prepare the selected non-hydrogen Targets, check the model and map
    fingerprints, and build the Joint observation domains.
-2. Sample FirstStage responses on deterministic spheres. The native local
-   OLS/MDPDE fit supplies initial widths. Global calibration uses only qualified
-   Target donors and supplies the width bound.
-3. Partition the Joint problem by structural component. Gauss–Seidel block
+2. **InitialStage** samples FirstStage responses on deterministic spheres and
+   fits native OLS/MDPDE estimates that supply initial widths.
+3. **JointStage** calibrates the global width bound using qualified Target donors
+   and partitions the problem by structural component. Gauss–Seidel block
    coordinate descent uses constrained A/C variable projection and bounded
-   active-set LM for width updates.
-4. Verify global practical convergence, endpoint feasibility, and independent
-   replay. Record Local Conditioning and Target Point Quality.
-5. Publish qualified Target points and reconstruct Halo profiles. Pair
-   Original-grid raw and peeled responses, correct the target charge, and fit
-   Post-Joint Local MDPDE and eligible Group results.
-6. Save the Joint snapshot and stage records. An unqualified run saves its
+   active-set LM for width updates. The stage verifies global practical convergence,
+   endpoint feasibility, and independent replay, and records Local Conditioning
+   and Target Point Quality. After qualification it reconstructs Halo profiles
+   and publishes Target points, peels the Original grid, corrects target charge,
+   and fits Post-Joint Local MDPDE.
+4. **GroupingStage** uses eligible Post-Joint Local results for group alpha
+   training, group MDPDE, and WEB posterior inference.
+5. Save the Joint snapshot and stage records. An unqualified run saves its
    diagnostics with the corresponding command outcome.
 
 The [command contract](commands/potential_analysis.md) defines input, selection,

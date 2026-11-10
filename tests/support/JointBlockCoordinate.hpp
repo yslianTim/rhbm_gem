@@ -1,6 +1,6 @@
 #pragma once
-#include "core/detail/joint_component/StructuralPartition.hpp"
-#include "core/detail/joint_component/Numerics.hpp"
+#include "core/estimator/joint_component/StructuralPartition.hpp"
+#include "core/estimator/joint_component/Numerics.hpp"
 
 namespace joint_component_test::joint_block {
 namespace n=rhbm_gem::core::joint_component;

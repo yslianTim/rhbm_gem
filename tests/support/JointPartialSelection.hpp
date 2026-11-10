@@ -1,10 +1,10 @@
 #pragma once
-#include "core/detail/joint_component/JointComponentEstimator.hpp"
+#include "core/estimator/joint_component/JointComponentEstimator.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include "core/command/detail/SimulationGeometry.hpp"
-#include "core/detail/joint_component/Numerics.hpp"
+#include "core/estimator/joint_component/Numerics.hpp"
 #include <memory>
 #include <string>
 

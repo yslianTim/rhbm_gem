@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/detail/joint_component/SnapshotViews.hpp"
+#include "core/estimator/joint_component/SnapshotViews.hpp"
 
 namespace joint_component_test::joint_domain {
 

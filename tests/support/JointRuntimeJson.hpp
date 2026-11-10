@@ -1,5 +1,5 @@
 #pragma once
-#include "core/detail/joint_component/Numerics.hpp"
+#include "core/estimator/joint_component/Numerics.hpp"
 #include <boost/json.hpp>
 #include <cmath>
 

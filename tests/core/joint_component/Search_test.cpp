@@ -1,10 +1,10 @@
 #include <gtest/gtest.h>
 #include "support/JointTestNumerics.hpp"
-#include "core/detail/joint_component/BoundedLmDriver.hpp"
+#include "core/estimator/joint_component/BoundedLmDriver.hpp"
 #include "support/JointSyntheticWorkload.hpp"
-#include "core/detail/joint_component/ActiveSetBoundedLM.hpp"
-#include "core/detail/joint_component/Problem.hpp"
-#include "core/detail/joint_component/TiledQR.hpp"
+#include "core/estimator/joint_component/ActiveSetBoundedLM.hpp"
+#include "core/estimator/joint_component/Problem.hpp"
+#include "core/estimator/joint_component/TiledQR.hpp"
 #include "support/CommandTestHelpers.hpp"
 #include "core/command/detail/SimulationGeometry.hpp"
 #include <rhbm_gem/utils/math/ElectricPotential.hpp>

@@ -1,8 +1,0 @@
-#pragma once
-#include <string>
-namespace rhbm_gem {
-class ModelObject;
-namespace core {
-std::string BuildJointTargetSpotSummary(const ModelObject &);
-}
-}

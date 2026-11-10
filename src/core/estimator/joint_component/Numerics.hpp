@@ -3,7 +3,7 @@
 #include "SnapshotViews.hpp"
 #include "ResourceWork.hpp"
 #include "ConvergenceCriteria.hpp"
-#include "core/detail/joint_component/JointComponentEstimator.hpp"
+#include "core/estimator/joint_component/JointComponentEstimator.hpp"
 
 #include <Eigen/Dense>
 #include <Eigen/SparseCore>

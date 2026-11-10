@@ -1,5 +1,4 @@
-#include "FirstStageInitialization.hpp"
-#include "FittingWorkset.hpp"
+#include "InitialStage.hpp"
 #include <rhbm_gem/core/MapSampler.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -14,9 +13,27 @@
 #include <limits>
 #include <optional>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 namespace rhbm_gem::core::detail {
+InitialStageWorkset BuildInitialStageWorkset(ModelObject & model, const JointProblem & problem)
+{
+    const auto & input = problem.Input();
+    if (!input.selection_domain) throw std::invalid_argument("Joint workset requires recorded selection.");
+    InitialStageWorkset workset;
+    for (std::size_t i = 0; i < input.atom_ids.size(); ++i)
+    {
+        auto * atom = model.FindAtomPtr(std::stoi(input.atom_ids[i]));
+        if (!atom || std::to_string(atom->GetSerialID()) != input.atom_ids[i])
+            throw std::invalid_argument("Unknown joint contributor identity.");
+        workset.contributors.push_back(atom);
+        const auto & targets = input.selection_domain->target_indices;
+        workset.target_mask.push_back(std::binary_search(targets.begin(), targets.end(), i));
+    }
+    return workset;
+}
+
 void ApplyJointSeedFallback(JointInitialization & initialization)
 {
     std::vector<double> donors;
@@ -49,8 +66,8 @@ LocalGaussianResult FitFirstStageAtom(const AtomObject & atom, const FitOptions 
         options, view.GetFirstStageMDPDE());
 }
 
-JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
-    ModelObject & model, const FittingWorkset & workset, const FitOptions & options)
+JointInitialization FitInitialStageFromPreparedSamples(
+    ModelObject & model, const InitialStageWorkset & workset, const FitOptions & options)
 {
     if (workset.target_mask.size() != workset.contributors.size())
         throw std::invalid_argument("First-stage workset role count mismatch.");
@@ -58,7 +75,7 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
     initialization.data_scope = "contributor-local-sampling-may-read-outside-target-domain";
     auto editor = model.EditAnalysis();
     std::optional<ScopeTimer> timer;
-    if (!options.quiet_mode) timer.emplace("Joint FirstStage initialization");
+    if (!options.quiet_mode) timer.emplace("[InitialStage] Initialization");
     const auto nan = std::numeric_limits<double>::quiet_NaN();
     const auto worker_count = std::clamp(options.joint_initialization_thread_size, 1, 4);
     FitOptions atom_options = options;
@@ -176,7 +193,7 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
             ++completed_count;
             if (!options.quiet_mode)
             {
-                Logger::ProgressPercent(completed_count, workset.contributors.size(), 50, " Joint initialization");
+                Logger::ProgressPercent(completed_count, workset.contributors.size(), 50, " [InitialStage] initialization");
             }
         }
     }
@@ -184,26 +201,26 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
     return initialization;
 }
 
-JointInitialization PrepareJointWidthInitialization(
-    MapObject & map, ModelObject & model, const FittingWorkset & workset, const FitOptions & options)
+JointInitialization RunInitialStage(
+    MapObject & map, ModelObject & model, const InitialStageWorkset & workset, const FitOptions & options)
 {
     if (!options.quiet_mode)
     {
         const auto sampling_name{ options.first_stage_sampling_method == SphereSamplingMethod::SpiralDeterministic
             ? "SpiralShells" : "FibonacciShells" };
         Logger::FinishProgressLine();
-        Logger::Log(LogLevel::Info, "[Joint] Sampling " +
+        Logger::Log(LogLevel::Info, "[InitialStage] Sampling " +
             std::to_string(workset.contributors.size()) +
             " Joint contributors | sampling=" + sampling_name + " | interpolation=Tricubic");
     }
     RunPotentialSamplingWorkflow(map, model, workset.contributors, std::clamp(options.joint_initialization_thread_size, 1, 4),
-        " Joint sampling", options.quiet_mode, options.first_stage_sampling_method);
+        " [InitialStage] sampling", options.quiet_mode, options.first_stage_sampling_method);
     if (!options.quiet_mode)
     {
         Logger::FinishProgressLine();
-        Logger::Log(LogLevel::Info, "[Joint] Initializing " +
+        Logger::Log(LogLevel::Info, "[InitialStage] Initializing " +
             std::to_string(workset.contributors.size()) + " contributors");
     }
-    return RunJointFirstStageInitializationFromPreparedSamples(model, workset, options);
+    return FitInitialStageFromPreparedSamples(model, workset, options);
 }
 }

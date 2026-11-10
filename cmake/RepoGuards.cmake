@@ -246,10 +246,14 @@ function(rhbm_guard_check_structure)
     rhbm_guard_find_git(GIT_EXECUTABLE)
 
     foreach(REQUIRED_PATH IN ITEMS
-        "src/core/detail/joint_component/JointComponentEstimator.cpp"
-        "src/core/detail/joint_component/JointComponentEstimator.hpp"
-        "src/core/detail/PotentialFittingWorkflow.cpp"
-        "src/core/detail/PotentialFittingWorkflow.hpp"
+        "src/core/estimator/joint_component/JointComponentEstimator.cpp"
+        "src/core/estimator/joint_component/JointComponentEstimator.hpp"
+        "src/core/estimator/PotentialFittingWorkflow.cpp"
+        "src/core/estimator/PotentialFittingWorkflow.hpp"
+        "src/core/estimator/InitialStage.cpp"
+        "src/core/estimator/InitialStage.hpp"
+        "src/core/estimator/GroupingStage.cpp"
+        "src/core/estimator/GroupingStage.hpp"
         "src/core/sampling/MapInterpolation.hpp"
     )
         if(NOT EXISTS "${PROJECT_SOURCE_DIR}/${REQUIRED_PATH}")
@@ -261,7 +265,7 @@ function(rhbm_guard_check_structure)
     foreach(RETIRED_PATH IN ITEMS
         "src/core/JointComponentEstimator.cpp"
         "src/core/PotentialFittingWorkflow.cpp"
-        "src/core/detail/MapSampler.hpp"
+        "src/core/detail"
     )
         if(EXISTS "${PROJECT_SOURCE_DIR}/${RETIRED_PATH}")
             message(FATAL_ERROR
@@ -304,7 +308,7 @@ function(rhbm_guard_check_structure)
             "Structure guard failed.\n"
             "  - src/core root must not contain forwarding headers.\n"
             "  - ${CORE_ROOT_HPP_TEXT}\n"
-            "Move these headers into src/core/command/, src/core/painter/, a subsystem detail/ directory, src/core/workflow/, or remove them.")
+            "Move these headers under the owning subsystem, such as src/core/command/, src/core/estimator/, src/core/painter/, or src/core/sampling/.")
     endif()
 
     file(GLOB_RECURSE PUBLIC_CORE_SUBFOLDER_HPP

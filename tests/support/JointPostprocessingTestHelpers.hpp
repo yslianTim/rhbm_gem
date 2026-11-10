@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/detail/joint_component/PostFitPeeling.hpp"
+#include "core/estimator/joint_component/PostFitPeeling.hpp"
 
 #include <stdexcept>
 #include <utility>

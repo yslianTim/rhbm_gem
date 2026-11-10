@@ -1,5 +1,5 @@
 #include "support/JointTestGeometry.hpp"
-#include "core/detail/joint_component/Numerics.hpp"
+#include "core/estimator/joint_component/Numerics.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <algorithm>
 #include <cmath>

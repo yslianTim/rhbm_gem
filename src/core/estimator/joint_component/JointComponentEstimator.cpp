@@ -1,8 +1,7 @@
-#include "core/detail/joint_component/JointComponentEstimator.hpp"
-#include "core/detail/joint_component/Problem.hpp"
-#include "core/detail/joint_component/WidthCalibration.hpp"
-#include "core/detail/FirstStageInitialization.hpp"
-#include "core/detail/FittingWorkset.hpp"
+#include "core/estimator/joint_component/JointComponentEstimator.hpp"
+#include "core/estimator/joint_component/Problem.hpp"
+#include "core/estimator/joint_component/WidthCalibration.hpp"
+#include "core/estimator/InitialStage.hpp"
 #include "core/command/detail/SimulationGeometry.hpp"
 #include "SimulationBuildInfo.hpp"
 
@@ -867,9 +866,9 @@ JointAnalysisResult CaptureJointAnalysisResult(JointFitResult && fit,JointAnalys
 JointInitialization joint_component::InitializeContributors(MapObject & map,ModelObject & model,const JointProblem & problem)
 {
     ModelObject initializer(model);
-    const auto workset = detail::MakeJointFittingWorkset(initializer, problem);
+    const auto workset = detail::BuildInitialStageWorkset(initializer, problem);
     FitOptions options; options.thread_size = 1; options.quiet_mode = true;
-    const auto initialization = detail::PrepareJointWidthInitialization(map, initializer, workset, options);
+    const auto initialization = detail::RunInitialStage(map, initializer, workset, options);
     for (std::size_t i = 0; i < workset.contributors.size(); ++i)
     {
         if (!workset.target_mask[i] || initialization.atoms[i].reason != "valid-width") continue;

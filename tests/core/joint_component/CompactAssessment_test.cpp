@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
-#include "core/detail/joint_component/Numerics.hpp"
-#include "core/detail/joint_component/TiledDerivative.hpp"
-#include "core/detail/joint_component/Problem.hpp"
+#include "core/estimator/joint_component/Numerics.hpp"
+#include "core/estimator/joint_component/TiledDerivative.hpp"
+#include "core/estimator/joint_component/Problem.hpp"
 #include "support/JointSyntheticWorkload.hpp"
 #include "support/JointTestContext.hpp"
 #include "support/JointDenseReference.hpp"

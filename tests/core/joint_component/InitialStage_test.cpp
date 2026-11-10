@@ -1,11 +1,10 @@
 #include <gtest/gtest.h>
 #include "support/FirstStageSynthetic.hpp"
 #include "support/CommandTestHelpers.hpp"
-#include "core/detail/FirstStageInitialization.hpp"
-#include "core/detail/FittingWorkset.hpp"
-#include "core/detail/PotentialFittingWorkflow.hpp"
-#include "core/detail/joint_component/Problem.hpp"
-#include "core/detail/joint_component/WidthCalibration.hpp"
+#include "core/estimator/InitialStage.hpp"
+#include "core/estimator/PotentialFittingWorkflow.hpp"
+#include "core/estimator/joint_component/Problem.hpp"
+#include "core/estimator/joint_component/WidthCalibration.hpp"
 #include "data/io/detail/JointResultJson.hpp"
 #include <rhbm_gem/core/MapSampler.hpp>
 #include <rhbm_gem/core/QScoreHelper.hpp>
@@ -69,16 +68,16 @@ j::object SampleFingerprint(const LocalPotentialSampleList & samples)
         {"raw",samples.size()},{"selected",selected}};
 }
 
-TEST(FirstStageInitializationTest, ExactProductionBaselineAndCertifiedEndpoint)
+TEST(InitialStageTest, ExactProductionBaselineAndCertifiedEndpoint)
 {
     const auto baseline=Baseline();
     auto model=joint_component_test::FirstStageSyntheticModel(5.5);
     auto map=joint_component_test::FirstStageSyntheticMap(*model,.4);
     const auto problem=BuildPureHaloSupportExclusionProblem(*map,*model);
-    const auto workset=d::MakeJointFittingWorkset(*model,problem);
+    const auto workset=d::BuildInitialStageWorkset(*model,problem);
     model->EditAnalysis().InitializeFromSelection();
     FitOptions options; options.quiet_mode=true;
-    const auto init=d::PrepareJointWidthInitialization(*map,*model,workset,options);
+    const auto init=d::RunInitialStage(*map,*model,workset,options);
     ASSERT_TRUE(init.valid); ASSERT_EQ(init.atoms.size(),24u);
     for(std::size_t i=0;i<init.atoms.size();++i)
     {
@@ -139,7 +138,7 @@ TEST(FirstStageInitializationTest, ExactProductionBaselineAndCertifiedEndpoint)
     EXPECT_EQ(CalculateQScoreForAtom(*workset.contributors[0],*map,*model,1.,0.),
         j::value_to<double>(baseline.at(qscore_key)));
     d::JointPostprocessingMetrics metrics;
-    d::RunJointPostprocessing(*map,*model,problem,CaptureJointAnalysisResult(fit),options,metrics);
+    d::CompletePotentialFittingWorkflow(*map,*model,problem,CaptureJointAnalysisResult(fit),options,metrics);
     EXPECT_EQ(metrics.available_peeling_sample_count,metrics.grid_peeling_sample_count);
     j::array downstream;
     for(const auto * atom:workset.contributors)
@@ -165,7 +164,7 @@ TEST(FirstStageInitializationTest, ExactProductionBaselineAndCertifiedEndpoint)
     EXPECT_EQ(joint_result_io::Encode(joint_result_io::Decode(encoded)),encoded);
 }
 
-TEST(FirstStageInitializationTest, ExactRawSamplingAcrossWorkersAndCrowdedSelection)
+TEST(InitialStageTest, ExactRawSamplingAcrossWorkersAndCrowdedSelection)
 {
     j::array captured;
     for(double separation:{5.5,1.4})
@@ -173,7 +172,7 @@ TEST(FirstStageInitializationTest, ExactRawSamplingAcrossWorkersAndCrowdedSelect
         auto model=joint_component_test::FirstStageSyntheticModel(separation);
         auto map=joint_component_test::FirstStageSyntheticMap(*model,.4);
         model->EditAnalysis().InitializeFromSelection();
-        const auto workset=d::MakeJointFittingWorkset(*model,BuildPureHaloSupportExclusionProblem(*map,*model));
+        const auto workset=d::BuildInitialStageWorkset(*model,BuildPureHaloSupportExclusionProblem(*map,*model));
         std::vector<LocalPotentialSampleList> serial;
         RunPotentialSamplingWorkflow(*map,*model,workset.contributors,1,{},true);
         for(const auto * atom:workset.contributors)
@@ -182,7 +181,7 @@ TEST(FirstStageInitializationTest, ExactRawSamplingAcrossWorkersAndCrowdedSelect
             captured.push_back(SampleFingerprint(serial.back()));
         }
         FitOptions options; options.quiet_mode=true; options.joint_initialization_thread_size=4;
-        const auto init=d::PrepareJointWidthInitialization(*map,*model,workset,options);
+        const auto init=d::RunInitialStage(*map,*model,workset,options);
         const auto calibration=n::CalibrateGlobalWidth(init,"sampling-regression");
         EXPECT_EQ(calibration.qualified_donor_count,24u); EXPECT_EQ(calibration.fallback_count,0u);
         if(separation==1.4)
@@ -211,7 +210,7 @@ TEST(FirstStageInitializationTest, ExactRawSamplingAcrossWorkersAndCrowdedSelect
     EXPECT_EQ(captured,Baseline().at("sampling_fingerprints"));
 }
 
-TEST(FirstStageInitializationTest, MedianFallbackPreservesRawEvidenceAndExcludesCalibrationDonors)
+TEST(InitialStageTest, MedianFallbackPreservesRawEvidenceAndExcludesCalibrationDonors)
 {
     JointInitialization init;
     for(int i=0;i<24;++i)
@@ -242,7 +241,7 @@ TEST(FirstStageInitializationTest, MedianFallbackPreservesRawEvidenceAndExcludes
     std::fill(init.tau.begin(),init.tau.end(),0.);
     d::ApplyJointSeedFallback(init); EXPECT_FALSE(init.valid);
 }
-TEST(FirstStageInitializationTest, WidthTruthRecoveryAndQualificationAtTwoVoxelSpacings)
+TEST(InitialStageTest, WidthTruthRecoveryAndQualificationAtTwoVoxelSpacings)
 {
     for(double spacing:{.2,.4})
     {
@@ -251,8 +250,8 @@ TEST(FirstStageInitializationTest, WidthTruthRecoveryAndQualificationAtTwoVoxelS
         const auto problem=BuildPureHaloSupportExclusionProblem(*map,*model);
         model->EditAnalysis().InitializeFromSelection();
         FitOptions options; options.quiet_mode=true;
-        const auto workset=d::MakeJointFittingWorkset(*model,problem);
-        const auto init=d::PrepareJointWidthInitialization(*map,*model,workset,options);
+        const auto workset=d::BuildInitialStageWorkset(*model,problem);
+        const auto init=d::RunInitialStage(*map,*model,workset,options);
         const auto calibration=n::CalibrateGlobalWidth(init,"synthetic-truth-regression");
         EXPECT_EQ(calibration.status,"Available"); EXPECT_EQ(calibration.qualified_donor_count,24u);
         EXPECT_EQ(calibration.qualified_donor_coverage,1.); EXPECT_EQ(calibration.fallback_count,0u);
@@ -267,12 +266,12 @@ TEST(FirstStageInitializationTest, WidthTruthRecoveryAndQualificationAtTwoVoxelS
     }
 }
 
-TEST(FirstStageInitializationTest, RawSamplingPersistenceAndGridInvalidationIndependence)
+TEST(InitialStageTest, RawSamplingPersistenceAndGridInvalidationIndependence)
 {
     auto model=joint_component_test::FirstStageSyntheticModel(5.5);
     auto map=joint_component_test::FirstStageSyntheticMap(*model,.4);
     FitOptions options; options.quiet_mode=true;
-    d::RunJointComponentWorkflow(*map,*model,options);
+    d::RunPotentialFittingWorkflowForSelection(*map,*model,options);
     ASSERT_TRUE(model->GetAnalysisView().GetJointResult());
     const auto original=AtomLocalPotentialView::For(*model->FindAtomPtr(1));
     const auto raw=original.GetRawSamplingEntries(false);

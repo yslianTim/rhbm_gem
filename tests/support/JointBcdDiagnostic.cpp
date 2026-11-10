@@ -1,5 +1,5 @@
 #include "support/JointBcdDiagnostic.hpp"
-#include "core/detail/joint_component/Problem.hpp"
+#include "core/estimator/joint_component/Problem.hpp"
 
 namespace joint_component_test {
 namespace n=rhbm_gem::core::joint_component;

@@ -1,4 +1,5 @@
 #pragma once
+#include "JointProgress.hpp"
 #include <rhbm_gem/data/object/JointAnalysisResult.hpp>
 #include <cstddef>
 #include <memory>
@@ -87,5 +88,11 @@ JointFitResult FitJointComponentsInitialized(const JointProblem &,const JointIni
 // into the existing second-stage or group-fitting result fields. Replacing raw samples
 // invalidates sample-derived peeling, while fixed Second and group results are retained.
 JointFitResult EstimateJointComponents(MapObject &,ModelObject &);
+
+namespace detail {
+JointFitResult FitJointComponentsInitializedWithProgress(
+    const JointProblem &, const JointInitialization &,
+    const joint_component::JointProgressObserver &);
+}
 }
 }

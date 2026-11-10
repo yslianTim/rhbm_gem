@@ -136,7 +136,7 @@ void JointCliProgressReporter::OnProgress(const JointProgressEvent & event)
     case JointProgressPhase::ComponentStarted:
         if (!m_solver_started)
         {
-            LogJointInfo("[Joint] Solving " + std::to_string(event.component_count) + " structural components");
+            LogJointInfo("[JointStage] Solving " + std::to_string(event.component_count) + " structural components");
             m_solver_started = true;
         }
         ShowProgress(event, false);

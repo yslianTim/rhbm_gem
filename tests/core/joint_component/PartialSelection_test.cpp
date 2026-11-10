@@ -1,4 +1,4 @@
-#include "core/detail/GroupPotentialFitting.hpp"
+#include "core/estimator/GroupingStage.hpp"
 #include <gtest/gtest.h>
 #include <boost/json.hpp>
 #include <rhbm_gem/core/GaussianEstimator.hpp>
@@ -16,9 +16,8 @@
 #include "support/JointSyntheticWorkload.hpp"
 #include "support/JointHaloObservationExclusion.hpp"
 #include "support/DataObjectTestSupport.hpp"
-#include "core/detail/joint_component/Problem.hpp"
-#include "core/detail/FirstStageInitialization.hpp"
-#include "core/detail/FittingWorkset.hpp"
+#include "core/estimator/joint_component/Problem.hpp"
+#include "core/estimator/InitialStage.hpp"
 #include <map>
 #include <numeric>
 #include <utility>
@@ -26,10 +25,9 @@
 #include "support/CommandTestHelpers.hpp"
 #include "data/detail/JointStageAdapter.hpp"
 #include "data/detail/PostJointLocalValidation.hpp"
-#include "core/detail/StageSummary.hpp"
-#include "core/detail/joint_component/HaloMedianReconstruction.hpp"
-#include "core/detail/PotentialFittingWorkflow.hpp"
-#include "core/detail/joint_component/PostFitPeeling.hpp"
+#include "core/estimator/joint_component/HaloMedianReconstruction.hpp"
+#include "core/estimator/PotentialFittingWorkflow.hpp"
+#include "core/estimator/joint_component/PostFitPeeling.hpp"
 #include "core/sampling/MapInterpolation.hpp"
 #include "data/io/detail/JointResultJson.hpp"
 #include "data/io/detail/StageResultJson.hpp"
@@ -495,7 +493,7 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsSelectedTargetsWithou
     const auto problem = core::BuildPureHaloSupportExclusionProblem(*f.map, *f.model);
     core::FitOptions options;
     options.quiet_mode = true;
-    core::detail::RunJointComponentWorkflow(*f.map, *f.model, options);
+    core::detail::RunPotentialFittingWorkflowForSelection(*f.map, *f.model, options);
     ASSERT_TRUE(f.model->GetAnalysisView().GetJointResult());
     const auto & result = *f.model->GetAnalysisView().GetJointResult();
     ASSERT_TRUE(result.assembled_state) << result.initialization.reason << " components=" << result.components.size()
@@ -660,7 +658,7 @@ TEST(JointComponentPartialSelectionTest, StageAdapterUsesIdentityAndClearsMissin
     expectSummaryRowWidths(summary, true);
 }
 
-TEST(JointComponentPartialSelectionTest, SummaryIncludesOnlyConvergedSecondStagePoints)
+TEST(JointComponentPartialSelectionTest, SummaryIncludesOnlyConvergedJointTargetPoints)
 {
     using namespace rhbm_gem;
     auto f = joint_partial_test::Make("all");
@@ -1251,7 +1249,7 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInforma
     EXPECT_EQ(core::BuildJointTargetSpotSummary(model), stage_summary);
 
     core::FitOptions options; options.quiet_mode = true;
-    core::detail::RunJointGroupPotentialFitting(model, options);
+    core::detail::RunGroupingStage(model, options);
     const auto keys = model.GetAnalysisView().CollectAtomGroupKeys();
     ASSERT_EQ(keys.size(), 1);
     auto summary = *model.GetAnalysisView().GetGroupParameterSummary(keys[0]);
@@ -1330,7 +1328,7 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInforma
     EXPECT_FALSE(first.GetGroupMemberResult());
     EXPECT_FALSE(model.GetAnalysisView().GetGroupParameterSummary(keys[0]));
     editor.ApplyPostJointLocalResultsBatch(local_results);
-    core::detail::RunJointGroupPotentialFitting(model, options);
+    core::detail::RunGroupingStage(model, options);
     EXPECT_EQ(first.GetGroupMemberResult()->posterior.GetModel().ToVector(), posterior);
 
     // Grid persistence is exercised by the complete-source workflow fixture;
@@ -1340,7 +1338,7 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInforma
     EXPECT_TRUE(first.GetPostJointLocalResult());
     EXPECT_EQ(core::BuildJointTargetSpotSummary(model), stage_summary);
     EXPECT_TRUE(first.GetGroupMemberResult());
-    core::detail::RunJointGroupPotentialFitting(model, options);
+    core::detail::RunGroupingStage(model, options);
     EXPECT_EQ(model.GetAnalysisView().GetGroupParameterSummary(keys[0])->eligible_count, 4);
     EXPECT_EQ(first.GetFinalModel(FittingStage::Second).ToVector(), joint_point);
     EXPECT_TRUE(first.GetGroupMemberResult());
@@ -1457,7 +1455,7 @@ TEST(JointComponentPartialSelectionTest, JointFirstStageParallelWorkersPreserveS
     const auto run = [](int thread_count) {
         auto fixture = joint_partial_test::Make("all");
         const auto problem = core::BuildPureHaloSupportExclusionProblem(*fixture.map, *fixture.model);
-        const auto workset = core::detail::MakeJointFittingWorkset(*fixture.model, problem);
+        const auto workset = core::detail::BuildInitialStageWorkset(*fixture.model, problem);
         fixture.model->EditAnalysis().InitializeFromSelection();
         core::RunPotentialSamplingWorkflow(*fixture.map, *fixture.model,
             workset.contributors, 1, {}, true);
@@ -1465,7 +1463,7 @@ TEST(JointComponentPartialSelectionTest, JointFirstStageParallelWorkersPreserveS
         options.quiet_mode = true;
         options.thread_size = 1;
         options.joint_initialization_thread_size = thread_count;
-        auto initialization = core::detail::RunJointFirstStageInitializationFromPreparedSamples(
+        auto initialization = core::detail::FitInitialStageFromPreparedSamples(
             *fixture.model, workset, options);
         return std::pair{std::move(initialization), std::move(fixture)};
     };
@@ -1680,7 +1678,7 @@ TEST(JointComponentPartialSelectionTest, GroupInferenceUsesQualifiedLocalMeasure
     core::FitOptions options; options.quiet_mode=true;
     const auto publish=[&] {
         editor.ApplyPostFitPeelingsBatch(peelings); editor.ApplyPostJointLocalResultsBatch(locals);
-        core::detail::RunJointGroupPotentialFitting(model,options);
+        core::detail::RunGroupingStage(model,options);
         const auto keys=model.GetAnalysisView().CollectAtomGroupKeys();
         return *model.GetAnalysisView().GetGroupParameterSummary(keys.front());
     };

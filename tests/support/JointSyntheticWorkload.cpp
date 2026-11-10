@@ -1,5 +1,5 @@
 #include "JointSyntheticWorkload.hpp"
-#include "core/detail/joint_component/Numerics.hpp"
+#include "core/estimator/joint_component/Numerics.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>

@@ -13,9 +13,8 @@
 #include "support/CommandTestHelpers.hpp"
 #include <rhbm_gem/core/CommandSystem.hpp>
 #include <rhbm_gem/core/GaussianEstimator.hpp>
-#include "core/detail/joint_component/JointComponentEstimator.hpp"
-#include "core/detail/PotentialFittingWorkflow.hpp"
-#include "core/detail/FirstStageInitialization.hpp"
+#include "core/estimator/joint_component/JointComponentEstimator.hpp"
+#include "core/estimator/PotentialFittingWorkflow.hpp"
 #include <rhbm_gem/data/io/ModelMapFileIO.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include "data/io/detail/JointResultJson.hpp"

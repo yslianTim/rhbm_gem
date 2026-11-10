@@ -1,5 +1,5 @@
 #include "JointDenseReference.hpp"
-#include "core/detail/joint_component/TiledDerivative.hpp"
+#include "core/estimator/joint_component/TiledDerivative.hpp"
 #include <Eigen/SVD>
 
 namespace joint_component_test::matched::joint_component {

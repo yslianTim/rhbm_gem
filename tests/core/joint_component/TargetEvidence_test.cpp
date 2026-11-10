@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
-#include "core/detail/joint_component/Problem.hpp"
-#include "core/detail/joint_component/TargetEvidence.hpp"
+#include "core/estimator/joint_component/Problem.hpp"
+#include "core/estimator/joint_component/TargetEvidence.hpp"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
