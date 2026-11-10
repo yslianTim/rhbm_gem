@@ -45,7 +45,7 @@ public:
     std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateToAtomIdGraph(const std::map<std::string, GroupKey> & group_key_map, const std::vector<std::string> & atom_id_list, const int par_id=0);
     std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateScatterGraph(GroupKey group_key, int par1_id=0, int par2_id=1, bool select_outliers=false);
     std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateScatterGraph(const std::vector<GroupKey> & group_key_list, int par1_id=0, int par2_id=1);
-    std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateScatterGraph(Element element, FittingStage stage, int choice=0);
+    std::unique_ptr<::TGraphErrors> CreateJointStageParameterScatterGraph(Element element, int choice=0);
     std::unique_ptr<::TGraphErrors> CreateDistanceToMapValueGraph(bool apply_selection=true, bool use_peeling_sampling_entries=false);
     std::unique_ptr<::TGraphErrors> CreateBinnedDistanceToRawMapValueGraph(int bin_size=20, double x_min=0.0, double x_max=2.0);
     std::unique_ptr<::TGraphErrors> CreateBinnedDistanceToPeelingMapValueGraph(int bin_size=20, double x_min=0.0, double x_max=2.0);

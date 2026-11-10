@@ -117,7 +117,7 @@ void ExpectSelectedAtomsHaveFiniteNonNegativeAlphaR(const rg::ModelObject & mode
     for (const auto * atom : atom_list)
     {
         const auto alpha_r{
-            rg::AtomLocalPotentialView::For(*atom).GetFirstStageAlphaR()
+            rg::AtomLocalPotentialView::For(*atom).GetInitialStageAlphaR()
         };
         EXPECT_TRUE(std::isfinite(alpha_r));
         EXPECT_GE(alpha_r, 0.0);
@@ -170,13 +170,13 @@ TEST(CommandApiPipelineTest, FittingIgnoresSimulationTruthAndResolutionMetadata)
         for (const auto & atom : model->GetAtomList())
         {
             const auto view{rg::AtomLocalPotentialView::For(*atom)};
-            const auto fit{view.GetFirstStageGaussianResult()};
+            const auto fit{view.GetInitialStageGaussianResult()};
             for (const auto & gaussian : {fit.ols.GetModel(), fit.mdpde.GetModel()})
             {
                 values.push_back(gaussian.GetAmplitude()); values.push_back(gaussian.GetWidth());
                 values.push_back(gaussian.GetOffset());
             }
-            values.push_back(view.GetFirstStageAlphaR());
+            values.push_back(view.GetInitialStageAlphaR());
             for (const auto & sample : view.GetRawSamplingEntriesView())
             { values.push_back(sample.point.distance); values.push_back(sample.response); }
         }
@@ -556,7 +556,7 @@ TEST(CommandApiPipelineTest, JointFailureAndUnavailableOutcomesPersistThroughApi
             for(const auto * atom:loaded->GetSelectedAtoms())
             {
                 const auto view=rg::AtomLocalPotentialView::For(*atom);
-                EXPECT_EQ(view.GetJointEstimate().point.has_value(),qualified);
+                EXPECT_EQ(view.GetJointStageEstimate().point.has_value(),qualified);
                 EXPECT_FALSE(view.GetPostFitPeeling());
                 EXPECT_FALSE(view.GetPostJointLocalResult());
                 EXPECT_FALSE(view.GetGroupMemberResult());
@@ -660,7 +660,7 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
     EXPECT_EQ(halo_reconstruction.donor_policy,rg::GeometryLocalTargetMedianDonorPolicy);
     EXPECT_EQ(halo_reconstruction.joint_run_id,
         rg::AtomLocalPotentialView::For(*loaded->FindAtomPtr(1))
-            .GetJointEstimate().source.run_id);
+            .GetJointStageEstimate().source.run_id);
     ASSERT_EQ(halo_reconstruction.halos.size(),1u);
     EXPECT_EQ(halo_reconstruction.halos.front().source,rg::HaloMedianSource::GeometryLocalTargetMedian);
     EXPECT_EQ(halo_reconstruction.halos.front().donor_atom_ids.size(),halo_reconstruction.halos.front().donor_count);
@@ -691,11 +691,11 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
     });
     ASSERT_NE(calibration,stored.evidence.end());
     EXPECT_EQ(calibration->status,rg::JointCheckStatus::Passed);
-    EXPECT_NE(calibration->reason.find("global-first-stage-p95-k4"),std::string::npos);
+    EXPECT_NE(calibration->reason.find("global-initial-stage-p95-k4"),std::string::npos);
     ASSERT_TRUE(calibration->value && calibration->threshold);
     EXPECT_NEAR(*calibration->threshold,4.0*(*calibration->value),1e-12);
     const auto donor_coverage=std::find_if(stored.evidence.begin(),stored.evidence.end(),[](const auto & item) {
-        return item.name=="qualified-first-stage-donor-coverage";
+        return item.name=="qualified-initial-stage-donor-coverage";
     });
     ASSERT_NE(donor_coverage,stored.evidence.end());
     ASSERT_TRUE(donor_coverage->value && donor_coverage->threshold);
@@ -711,7 +711,7 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
     for(const auto * atom:loaded->GetSelectedAtoms())
     {
         const auto local=rg::AtomLocalPotentialView::For(*atom);
-        const auto & second=local.GetJointEstimate();
+        const auto & second=local.GetJointStageEstimate();
         if(second.source.method!=rg::EstimateMethod::JointComponents || second.source.role!=rg::FittingRole::Target)
             continue;
         ++target_count;
@@ -835,7 +835,7 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
     for(const auto * atom:small_loaded->GetSelectedAtoms())
     {
         const auto local=rg::AtomLocalPotentialView::For(*atom);
-        EXPECT_FALSE(local.GetJointEstimate().point);
+        EXPECT_FALSE(local.GetJointStageEstimate().point);
         EXPECT_FALSE(local.GetPostFitPeeling());
         EXPECT_FALSE(local.GetPostJointLocalResult());
         EXPECT_FALSE(local.GetGroupMemberResult());

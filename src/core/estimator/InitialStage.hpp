@@ -15,9 +15,9 @@ struct InitialStageWorkset
 
 InitialStageWorkset BuildInitialStageWorkset(ModelObject &, const JointProblem &);
 
-double EstimateFirstStageAlpha(const LocalPotentialSampleList &, const FitOptions &);
+double EstimateInitialStageAlpha(const LocalPotentialSampleList &, const FitOptions &);
 void ApplyJointSeedFallback(JointInitialization &);
-LocalGaussianResult FitFirstStageAtom(const AtomObject &, const FitOptions &);
+LocalGaussianResult FitInitialStageAtom(const AtomObject &, const FitOptions &);
 JointInitialization FitInitialStageFromPreparedSamples(
     ModelObject &, const InitialStageWorkset &, const FitOptions &);
 JointInitialization RunInitialStage(

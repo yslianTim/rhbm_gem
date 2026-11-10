@@ -27,7 +27,7 @@ struct InitialTauProjection
 {
     std::size_t joint_index{};
     std::string atom_id;
-    std::optional<double> original_first_stage_tau;
+    std::optional<double> original_initial_stage_tau;
     double original_initial_tau{}, bounded_initial_tau{};
     bool projection_applied{};
 };
@@ -43,11 +43,11 @@ struct BoundedInitialization
     double maximum_projection_magnitude{};
 };
 
-// Calibration consumes only the captured FirstStage/initialization record. It
+// Calibration consumes only the captured InitialStage/initialization record. It
 // deliberately has no simulation-truth input.
 WidthBoundCalibration CalibrateGlobalWidth(const JointInitialization &, std::string dataset_identity);
 
-// Builds a feasible working vector without changing the captured FirstStage
+// Builds a feasible working vector without changing the captured InitialStage
 // estimates or the caller's JointInitialization.
 BoundedInitialization MakeBoundedInitialization(
     const JointInitialization &, const WidthBoundCalibration &);

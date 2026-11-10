@@ -15,26 +15,31 @@ execution stages.
    training, group MDPDE, WEB posterior inference and publication. It runs only
    after JointStage completes downstream processing.
 
-These stages describe execution. FirstStage and Joint estimate records retain
-their existing data and persistence contracts.
+The analysis API exposes separate atom-local records for InitialStage and JointStage.
 
 ## InitialStage
 
 The initialization workset resolves contributor identities and Target roles
-in Fitting Domain order. FirstStage uses 20 deterministic shells at 0.05, 0.15, …, 1.95 Å,
-with ten points per shell. The internal `FitOptions::first_stage_sampling_method`
+in Fitting Domain order. InitialStage uses 20 deterministic shells at 0.05, 0.15, …, 1.95 Å,
+with ten points per shell. The internal `FitOptions::initial_stage_sampling_method`
 can select `SphereSamplingMethod::SpiralDeterministic`. The default is
 `SphereSamplingMethod::FibonacciDeterministic`. Both methods apply the
 strict Ownership and 30° cone exclusions for non-hydrogen neighbors.
 Tricubic samples feed alpha training and OLS/MDPDE on selected positive
 responses within 1 Å.
-The internal `RunFirstStageLocalAlphaTraining` and
-`RunFirstStageLocalFitting` support the current selection or an explicit atom list.
-FirstStage can sample outside the Joint voxel domain. Raw FirstStage records
+The internal `RunInitialStageLocalAlphaTraining` and
+`RunInitialStageLocalFitting` support the current selection or an explicit atom list.
+InitialStage can sample outside the Joint voxel domain. Raw InitialStage records
 retain their sample coordinates and selection independently of grid results.
 
-Joint uses finite positive FirstStage MDPDE widths as seeds and the Target
-median to fill missing or invalid seeds when donors exist. FirstStage uses
+Use `GetInitialStageEstimate()` for the atom's published estimate record and
+`HasInitialStageModel()` before reading its point with `GetInitialStageModel()`.
+`GetInitialStageOLS()`, `GetInitialStageMDPDE()` and
+`GetInitialStageGaussianResult()` expose native fit evidence. Native MDPDE
+can retain a seed or an unqualified model while the published point is absent.
+
+Joint uses finite positive InitialStage MDPDE widths as seeds and the Target
+median to fill missing or invalid seeds when donors exist. InitialStage uses
 the native local fit and records its qualification. The
 [width calibration](joint-component-runtime.md#initialization-and-global-width-bound)
 uses a stricter donor gate than seed fallback. See
@@ -50,11 +55,12 @@ snapshots can be saved with diagnostics and reasons. The workflow skips
 publication and downstream fitting for them.
 
 The analysis editor publishes qualified Target A/tau/C and convergence with
-`ApplyJointResult`. Read the endpoint with `GetJointEstimate()`. Stage JSON
-continues to store it in the `second` record. Source identity includes method,
-atom, component, run and role. Missing or unqualified points remain
-unavailable. Halo records and reconstructed values have separate provenance.
-Local and Group results live alongside Joint state and never rewrite it.
+`ApplyJointResult`. Read the estimate and its evidence with
+`GetJointStageEstimate()`. Use `HasJointStageModel()` before reading the point
+with `GetJointStageModel()`. Source identity includes method, atom, component,
+run and role. Missing or unqualified points remain unavailable. Halo
+reconstruction has separate provenance. Local and Group results are stored
+alongside the JointStage estimate and consume evidence from the same run.
 
 ## Target Point Quality
 
@@ -152,7 +158,7 @@ are conditional working quantities.
 Changing a Joint stage endpoint invalidates its run's peeling, Local and
 Group results and snapshot. Replacing or clearing the snapshot invalidates
 dependent grid evidence. Peeling changes invalidate Local and Group
-results, and Local changes invalidate affected Groups. Independent FirstStage
+results, and Local changes invalidate affected Groups. Independent InitialStage
 raw sample edits leave grid evidence intact. Atom position edits clear
 analysis and spatial caches.
 
@@ -167,12 +173,14 @@ postprocessing contexts borrow their immutable inputs.
 ## Persistence
 
 [DataObject I/O](architecture/dataobject-io-architecture.md) owns version
-acceptance and the database lifecycle. SQLite v22 stores Joint Result
-JSON schema 24 and Stage Result JSON version 6. Joint JSON requires
+acceptance and the database lifecycle. SQLite v23 stores Joint Result
+JSON schema 25 and Stage Result JSON version 7. Joint JSON requires
 `target-only-pure-halo-support-exclusion-v1`, the current point validation
 contract, and `strict-v2` or `practical-v2` convergence criteria. Its state
 keys are `ac`, `tau`, `log_tau`, `eta_gradient` and `objective`.
-Initialization uses `tau`, `original_tau` and `used_tau`. Candidate
+Initialization uses `tau`, `original_tau` and `used_tau`. Its atom records
+store `initial_stage_fit_qualified`, `initial_stage_qualification` and
+`initial_stage_recovery`. Candidate
 diagnostics use `candidate_eta_gradient_inf_norm` and
 `global_eta_gradient_threshold` (the projected threshold). Units use
 `joint-kernel-map-units-v2` with tau in Å. Joint CSV orders parameters
@@ -195,9 +203,11 @@ solver fields.
 }
 ```
 
-Stage JSON stores FirstStage estimates and diagnostics in `first` and
-`first_native`, and keeps their samples and coordinates in `raw` and
-`geometry`. `second` stores Joint points, convergence, and source identity.
+Stage JSON stores InitialStage estimates in `initial`, native OLS/MDPDE
+diagnostics in `initial_native`, and samples and coordinates in `raw` and
+`geometry`. The `joint` record stores JointStage points, convergence and
+source identity. The optional source flag is `fixed_from_initial_stage`.
+The readers require the current versions and field names.
 `peeling` stores the paired observations and neighbor count.
 `post_joint_local` stores charge-corrected fit evidence, and `posterior` stores
 Group member inference. Grid peeling requires

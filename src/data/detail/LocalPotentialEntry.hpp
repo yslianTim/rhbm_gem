@@ -12,7 +12,7 @@ namespace rhbm_gem {
 
 class LocalPotentialEntry
 {
-    struct FirstStageRecord
+    struct InitialStageRecord
     {
         LocalStageEstimate estimate;
         double alpha_r{};
@@ -25,21 +25,21 @@ class LocalPotentialEntry
         std::optional<RHBMBetaEstimateResult> fit_result;
     };
     LocalPotentialSampleList m_raw_sampling_entries;
-    FirstStageRecord m_first_stage;
-    LocalStageEstimate m_joint_estimate;
+    InitialStageRecord m_initial_stage;
+    LocalStageEstimate m_joint_stage_estimate;
     std::optional<PostFitPeelingResult> m_post_fit_peeling;
     std::optional<PostJointLocalResult> m_post_joint_local_result;
     bool m_sample_geometry_available{ true };
     std::optional<GroupGaussianMemberResult> m_group_member_result{};
 
 public:
-    void SetFirstStageAlphaR(double value) { m_first_stage.alpha_r = value; }
-    double FirstStageAlphaR() const { return m_first_stage.alpha_r; }
+    void SetInitialStageAlphaR(double value) { m_initial_stage.alpha_r = value; }
+    double InitialStageAlphaR() const { return m_initial_stage.alpha_r; }
     void SetRawSamplingEntries(LocalPotentialSampleList value) { m_raw_sampling_entries = std::move(value); }
-    void SetFirstStageGaussianResult(LocalGaussianResult value)
+    void SetInitialStageGaussianResult(LocalGaussianResult value)
     {
-        auto & record = m_first_stage;
-        record = FirstStageRecord{};
+        auto & record = m_initial_stage;
+        record = InitialStageRecord{};
         const auto & model = value.mdpde.GetModel();
         if (std::isfinite(model.GetAmplitude()) && std::isfinite(model.GetOffset()) &&
             std::isfinite(model.GetWidth()) && model.GetWidth() > 0)
@@ -59,12 +59,12 @@ public:
                 value.fit_result->diagnostics, value.fit_result->refinement, value.fit_result->failed_only_recovery};
         record.fit_result = std::move(value.fit_result);
     }
-    const LocalStageEstimate & FirstStageEstimate() const { return m_first_stage.estimate; }
-    const LocalStageEstimate & JointEstimate() const { return m_joint_estimate; }
-    void SetJointEstimate(LocalStageEstimate value) { m_joint_estimate = std::move(value); }
-    void SetFirstStageEstimate(LocalStageEstimate value)
+    const LocalStageEstimate & InitialStageEstimate() const { return m_initial_stage.estimate; }
+    const LocalStageEstimate & JointStageEstimate() const { return m_joint_stage_estimate; }
+    void SetJointStageEstimate(LocalStageEstimate value) { m_joint_stage_estimate = std::move(value); }
+    void SetInitialStageEstimate(LocalStageEstimate value)
     {
-        auto & record = m_first_stage;
+        auto & record = m_initial_stage;
         if (!value.point && record.estimate.point) record.unfitted_model = record.estimate.point;
         if (record.estimate.point && value.point && record.estimate.point->ToVector() != value.point->ToVector())
         {
@@ -73,20 +73,20 @@ public:
         if (value.point) record.unfitted_model.reset();
         record.estimate = std::move(value);
     }
-    LocalGaussianResult FirstStageGaussianResult(bool include_transient = true) const
+    LocalGaussianResult InitialStageGaussianResult(bool include_transient = true) const
     {
-        const auto & r = m_first_stage;
-        return {r.alpha_r, r.ols, {FirstStageMDPDEModel(), r.mdpde_uncertainty}, include_transient ? r.fit_result : std::nullopt, r.diagnostics, r.uncertainty_recorded};
+        const auto & r = m_initial_stage;
+        return {r.alpha_r, r.ols, {InitialStageMDPDEModel(), r.mdpde_uncertainty}, include_transient ? r.fit_result : std::nullopt, r.diagnostics, r.uncertainty_recorded};
     }
-    const GaussianModel3D & FirstStageMDPDEModel() const
+    const GaussianModel3D & InitialStageMDPDEModel() const
     {
-        const auto & r = m_first_stage;
+        const auto & r = m_initial_stage;
         if (r.estimate.point) return *r.estimate.point;
         if (r.unfitted_model) return *r.unfitted_model;
         static const GaussianModel3D missing{0, 0};
         return missing;
     }
-    const GaussianModel3D & FirstStageOLSModel() const { return m_first_stage.ols.GetModel(); }
+    const GaussianModel3D & InitialStageOLSModel() const { return m_initial_stage.ols.GetModel(); }
     const std::optional<PostFitPeelingResult> & PostFitPeeling() const { return m_post_fit_peeling; }
     void SetPostFitPeeling(PostFitPeelingResult value)
     {
@@ -105,7 +105,7 @@ public:
         m_post_joint_local_result.reset();
     }
     void ClearGroupMemberResult() { m_group_member_result.reset(); }
-    void ClearFirstStageTransientFitState() { m_first_stage.fit_result.reset(); }
+    void ClearInitialStageTransientFitState() { m_initial_stage.fit_result.reset(); }
     void ClearPostJointTransientFitState()
     {
         if (m_post_joint_local_result) m_post_joint_local_result->fit.fit_result.reset();

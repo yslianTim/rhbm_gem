@@ -7,7 +7,7 @@ manifests nor truth parameters.
 
 1. Prepare the selected non-hydrogen Targets, check the model and map
    fingerprints, and build the Joint observation domains.
-2. **InitialStage** samples FirstStage responses on deterministic spheres and
+2. **InitialStage** samples map responses on deterministic spheres and
    fits native OLS/MDPDE estimates that supply initial widths.
 3. **JointStage** calibrates the global width bound using qualified Target donors
    and partitions the problem by structural component. Gauss–Seidel block
@@ -29,10 +29,13 @@ The workflow and standalone Gaussian fitting routines live in the private
 `src/core/sampling/`.
 
 `JointAnalysisResult`, the analysis views and editor, and the Gaussian and Joint
-result types remain part of the installed data API.
+result types are part of the installed data API. Atom-local views expose
+published points through `GetInitialStageModel()` and `GetJointStageModel()`.
+Native InitialStage diagnostics are available through
+`GetInitialStageGaussianResult()`.
 
 The [command contract](commands/potential_analysis.md) defines input, selection,
 and outcome semantics. [Runtime](joint-component-runtime.md) and
 [Numerics](joint-component-numerics.md) specify the solver and qualification.
-[Stage Integration](joint-stage-integration.md) specifies FirstStage and
+[Stage Integration](joint-stage-integration.md) specifies InitialStage and
 downstream data ownership.

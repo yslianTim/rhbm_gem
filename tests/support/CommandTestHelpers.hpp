@@ -78,7 +78,7 @@ inline void SeedSavedModel(
     auto analysis{ model->EditAnalysis() };
     for (auto & atom : model->GetAtomList())
     {
-        analysis.SetAtomFirstStageAlphaR(
+        analysis.SetAtomInitialStageAlphaR(
             *atom, 0.0);
     }
     repository.SaveModel(*model, saved_key);

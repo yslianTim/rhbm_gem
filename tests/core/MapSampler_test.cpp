@@ -112,7 +112,7 @@ TEST(MapSamplerTest, GridSamplerProducesMapSamples)
     EXPECT_DOUBLE_EQ(0.5, sampling_data.front().point.position.at(2));
 }
 
-TEST(MapSamplerTest, SpiralAtomSamplesUseFirstStageMaskAndTricubicResponses)
+TEST(MapSamplerTest, SpiralAtomSamplesUseInitialStageMaskAndTricubicResponses)
 {
     auto map{ MakeMapObject() };
     auto model{ MakeLinearNeighborModel() };

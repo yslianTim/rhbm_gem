@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <stdexcept>
 #include <string>
 
@@ -21,11 +23,15 @@ void ExpectCurrentSchemaValidationFailure(
     const command_test::ScopedTempDir temp_dir{temp_dir_name};
     const auto path{temp_dir.path() / database_name};
     { rg::DataRepository repository{path}; }
-    ASSERT_EQ(data_test::GetUserVersion(path), 22);
+    ASSERT_EQ(data_test::GetUserVersion(path), 23);
 
     mutate_database(path);
+    std::ifstream before_file(path,std::ios::binary);
+    const std::string before((std::istreambuf_iterator<char>(before_file)),{});
     EXPECT_THROW((void)rg::DataRepository(path), std::runtime_error);
-    EXPECT_EQ(data_test::GetUserVersion(path), 22);
+    std::ifstream after_file(path,std::ios::binary);
+    EXPECT_EQ(std::string((std::istreambuf_iterator<char>(after_file)),{}),before);
+    EXPECT_EQ(data_test::GetUserVersion(path), 23);
 }
 
 void RecreateChainMapTable(

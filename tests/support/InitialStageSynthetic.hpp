@@ -9,7 +9,7 @@
 
 namespace joint_component_test {
 // Known normalized Gaussian truth for isolated/crowded production regressions.
-inline std::unique_ptr<rhbm_gem::ModelObject> FirstStageSyntheticModel(double separation)
+inline std::unique_ptr<rhbm_gem::ModelObject> InitialStageSyntheticModel(double separation)
 {
     using namespace rhbm_gem;
     std::vector<std::unique_ptr<AtomObject>> atoms;
@@ -24,7 +24,7 @@ inline std::unique_ptr<rhbm_gem::ModelObject> FirstStageSyntheticModel(double se
     auto model=std::make_unique<ModelObject>(std::move(atoms));
     model->SelectAllAtoms(); return model;
 }
-inline std::unique_ptr<rhbm_gem::MapObject> FirstStageSyntheticMap(const rhbm_gem::ModelObject & model,double spacing)
+inline std::unique_ptr<rhbm_gem::MapObject> InitialStageSyntheticMap(const rhbm_gem::ModelObject & model,double spacing)
 {
     using namespace rhbm_gem;
     namespace n = rhbm_gem::core::joint_component;

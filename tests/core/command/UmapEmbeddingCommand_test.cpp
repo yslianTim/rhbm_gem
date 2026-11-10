@@ -142,8 +142,8 @@ JointInitialization MakeFeatureInitialization(const JointProblemInput & input, s
         atom.used_tau = 0.5;
         atom.seed_source = donor ? "fitted" : "median-fallback";
         atom.donor_count = donor ? 0 : donor_count;
-        atom.first_stage_fit_qualified = donor;
-        atom.first_stage_qualification = donor ? rg::RHBMSolveQualification::NativeSuccess :
+        atom.initial_stage_fit_qualified = donor;
+        atom.initial_stage_qualification = donor ? rg::RHBMSolveQualification::NativeSuccess :
             rg::RHBMSolveQualification::Unqualified;
         atom.native_status = static_cast<int>(donor ? rg::RHBMEstimationStatus::SUCCESS :
             rg::RHBMEstimationStatus::MAX_ITERATIONS_REACHED);
@@ -251,7 +251,7 @@ std::unique_ptr<rg::ModelObject> BuildFeatureModel(
             });
         }
         rg::PostFitPeelingResult peeling;
-        peeling.source = rg::AtomLocalPotentialView::For(*atom).GetJointEstimate().source;
+        peeling.source = rg::AtomLocalPotentialView::For(*atom).GetJointStageEstimate().source;
         using joint_component_test::postprocessing::MakeGridObservation;
         peeling.samples = {
             {raw_signal * (1.0 - signal_ratio), {}, MakeGridObservation(row, row, .5, raw_signal, atom->GetPosition())},
@@ -262,7 +262,7 @@ std::unique_ptr<rg::ModelObject> BuildFeatureModel(
             peeling.samples.back().reason = "outside-joint-domain";
         }
         analysis.SetAtomPostFitPeeling(*atom, std::move(peeling));
-        analysis.SetAtomFirstStageGaussianResult(
+        analysis.SetAtomInitialStageGaussianResult(
             *atom, MakeGaussianResult(serial_id, 0, options));
         row += 12;
     }
@@ -435,7 +435,7 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
     rg::DataRepository repository{ database_path };
     const auto saved_model = repository.LoadModel(model_key);
     const auto expected_amplitude = rg::AtomLocalPotentialView::For(*saved_model->FindAtomPtr(1))
-        .GetFinalModel(rg::FittingStage::Second).GetAmplitude();
+        .GetJointStageModel().GetAmplitude();
     EXPECT_DOUBLE_EQ(std::stod(first_fields[7]), expected_amplitude);
     EXPECT_GT(first_fields[7].size(), 6u);
 
@@ -939,14 +939,14 @@ TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNo
     const rg::MapObject grid_geometry(snapshot.metadata.grid_size,
         snapshot.metadata.grid_spacing,snapshot.metadata.origin);
     model->EditAnalysis().InitializeFromSelection();
-    model->EditAnalysis().ApplyJointEstimates(
+    model->EditAnalysis().ApplyJointStageEstimates(
         rg::data_internal::BuildJointStageEstimates(snapshot, "saved-joint-umap"));
     model->EditAnalysis().SetJointResult(snapshot);
     for(const auto & atom:model->GetAtomList())
     {
         const auto view=rg::AtomLocalPotentialView::For(*atom);
-        if(view.GetJointEstimate().source.role!=rg::FittingRole::Target) continue;
-        rg::PostFitPeelingResult peeling; peeling.source=view.GetJointEstimate().source;
+        if(view.GetJointStageEstimate().source.role!=rg::FittingRole::Target) continue;
+        rg::PostFitPeelingResult peeling; peeling.source=view.GetJointStageEstimate().source;
         const auto contributor=static_cast<std::size_t>(std::find(snapshot.atom_ids.begin(),snapshot.atom_ids.end(),
             std::to_string(atom->GetSerialID()))-snapshot.atom_ids.begin());
         const auto & input=problem.OriginalInput();

@@ -168,7 +168,7 @@ void AtomPainter::PaintDemoPlot(const std::string & name)
     map_value_hist->Draw("CANDLE2 SAME");
 
     const auto & estimate{
-        atom_entry.GetFinalModel(FittingStage::Second)
+        atom_entry.GetJointStageModel()
     };
     auto amplitude{ estimate.GetAmplitude() };
     auto width{ estimate.GetWidth() };
@@ -202,7 +202,7 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
     {
         const auto entry_view{ AtomLocalPotentialView::For(*atom_object) };
         if (!entry_view.IsAvailable()) continue;
-        const auto & stage = entry_view.GetJointEstimate();
+        const auto & stage = entry_view.GetJointStageEstimate();
         if (stage.source.method != EstimateMethod::JointComponents || stage.source.role != FittingRole::Target) continue;
         canvas->Clear(); canvas->cd();
         auto builder=std::make_unique<PotentialPlotBuilder>(atom_object);
@@ -219,7 +219,7 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
         if (raw->GetN()>0) legend->AddEntry(raw.get(),"Raw samples","p");
         if(entry_view.GetPostFitPeeling()) legend->AddEntry(peeled.get(),"Joint peeling (includes target-own charge)","p");
         if(curve) {root_helper::SetLineAttribute(curve.get(),1,2,kRed); curve->Draw("SAME"); legend->AddEntry(curve.get(),"Joint Second: Gaussian + charge C","l");}
-        else legend->AddEntry(static_cast<TObject *>(nullptr),("Second unavailable: " + entry_view.GetJointEstimate().reason).c_str(), "");
+        else legend->AddEntry(static_cast<TObject *>(nullptr),("Second unavailable: " + entry_view.GetJointStageEstimate().reason).c_str(), "");
         legend->Draw();
         root_helper::PrintCanvasPad(canvas.get(),file_path);
         canvas->Clear();

@@ -148,9 +148,9 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateAtomGausEstimateHistogram(
     for (auto atom : atom_list)
     {
         const auto local_entry{ AtomLocalPotentialView::For(*atom) };
-        if (!local_entry.IsAvailable() || !local_entry.HasFinalModel(FittingStage::Second) || local_entry.GetJointEstimate().source.role == FittingRole::Halo) continue;
+        if (!local_entry.IsAvailable() || !local_entry.HasJointStageModel() || local_entry.GetJointStageEstimate().source.role == FittingRole::Halo) continue;
         gaus_estimate_list.emplace_back(
-            local_entry.GetFinalModel(FittingStage::Second)
+            local_entry.GetJointStageModel()
                 .GetDisplayParameter(par_id));
     }
 
@@ -237,9 +237,9 @@ std::vector<std::unique_ptr<TH1D>> PotentialPlotBuilder::CreateMainChainAtomGaus
         auto sequence_id{ atom->GetSequenceID() };
         auto chain_id{ atom->GetChainID() };
         const auto entry{ AtomLocalPotentialView::For(*atom) };
-        if (!entry.IsAvailable() || !entry.HasFinalModel(FittingStage::Second) || entry.GetJointEstimate().source.role == FittingRole::Halo) continue;
+        if (!entry.IsAvailable() || !entry.HasJointStageModel() || entry.GetJointStageEstimate().source.role == FittingRole::Halo) continue;
         auto gaus_value{
-            entry.GetFinalModel(FittingStage::Second)
+            entry.GetJointStageModel()
                 .GetDisplayParameter(par_id)
         };
         auto & sequence_values=values_map[chain_id];
@@ -343,14 +343,14 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateScatte
     for (auto atom : atom_list)
     {
         const auto entry{ AtomLocalPotentialView::For(*atom) };
-        if (!entry.IsAvailable() || !entry.HasFinalModel(FittingStage::Second) || entry.GetJointEstimate().source.role == FittingRole::Halo) continue;
+        if (!entry.IsAvailable() || !entry.HasJointStageModel() || entry.GetJointStageEstimate().source.role == FittingRole::Halo) continue;
         const auto & result{ entry.GetGroupMemberResult() };
         auto is_outlier{ result.has_value() && result->is_outlier };
         if (select_outliers == true && is_outlier == false) continue;
         graph->SetPoint(
             count,
-            entry.GetFinalModel(FittingStage::Second).GetDisplayParameter(par1_id),
-            entry.GetFinalModel(FittingStage::Second).GetDisplayParameter(par2_id));
+            entry.GetJointStageModel().GetDisplayParameter(par1_id),
+            entry.GetJointStageModel().GetDisplayParameter(par2_id));
         count++;
     }
     return graph;
@@ -381,8 +381,8 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateScatte
     return graph;
 }
 
-std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateScatterGraph(
-    Element element, FittingStage stage, int choice)
+std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateJointStageParameterScatterGraph(
+    Element element, int choice)
 {
     if (IsModelObjectAvailable() == false) return nullptr;
 
@@ -393,9 +393,8 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateScatte
     {
         if (atom->GetElement() != element) continue;
         const auto entry{ AtomLocalPotentialView::For(*atom) };
-        if (!entry.IsAvailable() || !entry.HasFinalModel(FittingStage::Second) || entry.GetJointEstimate().source.role == FittingRole::Halo) continue;
-        if (!entry.HasFinalModel(stage)) continue;
-        const auto & result{ entry.GetFinalModel(stage) };
+        if (!entry.IsAvailable() || !entry.HasJointStageModel() || entry.GetJointStageEstimate().source.role == FittingRole::Halo) continue;
+        const auto & result{ entry.GetJointStageModel() };
         switch (choice)
         {
             case 0:
@@ -410,7 +409,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateScatte
             default:
                 throw std::runtime_error("Choice is invalid.");
         }
-        const auto & uncertainty=entry.GetStageEstimate(stage).uncertainty;
+        const auto & uncertainty=entry.GetJointStageEstimate().uncertainty;
         if (uncertainty.status==EvidenceStatus::Available && uncertainty.covariance)
         {
             const auto & covariance=*uncertainty.covariance;
@@ -518,11 +517,11 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateInRangeAtomsToGausEsti
         auto in_range_atom_list{
             ModelDerivedState::Of(*model_object).FindAtomsInRange(*model_object, *atom, range) };
         const auto atom_entry{ AtomLocalPotentialView::For(*atom) };
-        if (!atom_entry.IsAvailable() || !atom_entry.HasFinalModel(FittingStage::Second) || atom_entry.GetJointEstimate().source.role == FittingRole::Halo) continue;
+        if (!atom_entry.IsAvailable() || !atom_entry.HasJointStageModel() || atom_entry.GetJointStageEstimate().source.role == FittingRole::Halo) continue;
         graph->SetPoint(
             count,
             static_cast<double>(in_range_atom_list.size()),
-            atom_entry.GetFinalModel(FittingStage::Second)
+            atom_entry.GetJointStageModel()
                 .GetDisplayParameter(par_id));
         count++;
     }
@@ -546,11 +545,11 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateCOMDistanceToGausEstim
         const auto & atom_pos{ atom->GetPositionRef() };
         auto distance{ array_helper::ComputeNorm(atom_pos, center_of_mass_pos) };
         const auto atom_entry{ AtomLocalPotentialView::For(*atom) };
-        if (!atom_entry.IsAvailable() || !atom_entry.HasFinalModel(FittingStage::Second) || atom_entry.GetJointEstimate().source.role == FittingRole::Halo) continue;
+        if (!atom_entry.IsAvailable() || !atom_entry.HasJointStageModel() || atom_entry.GetJointStageEstimate().source.role == FittingRole::Halo) continue;
         graph->SetPoint(
             count,
             distance,
-            atom_entry.GetFinalModel(FittingStage::Second)
+            atom_entry.GetJointStageModel()
                 .GetDisplayParameter(par_id));
         count++;
     }
@@ -704,9 +703,9 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalGausFunctionFinal() co
 {
     if (IsAtomLocalEntryAvailable() == false) return nullptr;
     const auto atom_local_entry{ AtomLocalPotentialView::For(*m_atom_object) };
-    if (!atom_local_entry.HasFinalModel(FittingStage::Second)) return nullptr;
+    if (!atom_local_entry.HasJointStageModel()) return nullptr;
     const auto & model{
-        atom_local_entry.GetFinalModel(FittingStage::Second)
+        atom_local_entry.GetJointStageModel()
     };
     auto amplitude{ model.GetAmplitude() };
     auto width{ model.GetWidth() };
@@ -774,7 +773,7 @@ PotentialPlotBuilder::CreateAtomMapValueToSequenceIDGraphMap(
         if (atom->GetSpot() != data_internal::GetMainChainSpot(main_chain_element_id)) continue;
         if (residue != Residue::UNK && atom->GetResidue() != residue) continue;
         const auto entry{ AtomLocalPotentialView::For(*atom) };
-        if (!entry.IsAvailable() || !entry.HasFinalModel(FittingStage::Second) || entry.GetJointEstimate().source.role == FittingRole::Halo) continue;
+        if (!entry.IsAvailable() || !entry.HasJointStageModel() || entry.GetJointStageEstimate().source.role == FittingRole::Halo) continue;
         auto sequence_id{ atom->GetSequenceID() };
         auto chain_id{ atom->GetChainID() };
         if (sequence_id < 0) continue;
@@ -820,15 +819,15 @@ PotentialPlotBuilder::CreateAverageQScoreToSequenceIDGraphMap(
         {
             if (atom->GetChainID() != chain_id) continue;
             const auto entry{ AtomLocalPotentialView::For(*atom) };
-        if (!entry.IsAvailable() || !entry.HasFinalModel(FittingStage::Second) || entry.GetJointEstimate().source.role == FittingRole::Halo) continue;
+        if (!entry.IsAvailable() || !entry.HasJointStageModel() || entry.GetJointStageEstimate().source.role == FittingRole::Halo) continue;
             if (!entry.IsAvailable()) continue;
             auto sequence_id{ atom->GetSequenceID() };
             if (sequence_id < 0) continue;
             if (use_peeling_sampling_entries)
             {
-                reference_height = entry.GetFinalModel(FittingStage::Second).GetHeight();
-                reference_offset = entry.GetFinalModel(FittingStage::Second).GetOffset();
-                reference_width = entry.GetFinalModel(FittingStage::Second).GetWidth();
+                reference_height = entry.GetJointStageModel().GetHeight();
+                reference_offset = entry.GetJointStageModel().GetOffset();
+                reference_width = entry.GetJointStageModel().GetWidth();
             }
             if (!use_peeling_sampling_entries) apply_selection = true;
             auto q_score{ use_standard ?
@@ -878,7 +877,7 @@ PotentialPlotBuilder::CreateAtomGausEstimateToSequenceIDGraphMap(
         if (atom->GetSpot() != data_internal::GetMainChainSpot(main_chain_element_id)) continue;
         if (residue != Residue::UNK && atom->GetResidue() != residue) continue;
         const auto entry{ AtomLocalPotentialView::For(*atom) };
-        if (!entry.IsAvailable() || !entry.HasFinalModel(FittingStage::Second) || entry.GetJointEstimate().source.role == FittingRole::Halo) continue;
+        if (!entry.IsAvailable() || !entry.HasJointStageModel() || entry.GetJointStageEstimate().source.role == FittingRole::Halo) continue;
         auto sequence_id{ atom->GetSequenceID() };
         auto chain_id{ atom->GetChainID() };
         if (sequence_id < 0) continue;
@@ -891,7 +890,7 @@ PotentialPlotBuilder::CreateAtomGausEstimateToSequenceIDGraphMap(
         graph_map[chain_id]->SetPoint(
             count_map[chain_id],
             x_value,
-            entry.GetFinalModel(FittingStage::Second)
+            entry.GetJointStageModel()
                 .GetDisplayParameter(par_id));
         count_map[chain_id]++;
     }

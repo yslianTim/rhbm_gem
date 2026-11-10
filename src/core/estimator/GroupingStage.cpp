@@ -65,7 +65,7 @@ void RunGroupingStage(
         for (const auto * atom : atoms)
         {
             const auto local = AtomLocalPotentialView::For(*atom);
-            const auto & joint = local.GetJointEstimate();
+            const auto & joint = local.GetJointStageEstimate();
             if (HasCurrentPostJointLocal(local, joint, atom->GetSerialID()))
             {
                 if (training_run_id.empty()) training_run_id = joint.source.run_id;
@@ -95,7 +95,7 @@ void RunGroupingStage(
         for (const auto * atom : view.GetAtomObjectList(key))
         {
             const auto local = AtomLocalPotentialView::For(*atom);
-            const auto & joint = local.GetJointEstimate();
+            const auto & joint = local.GetJointStageEstimate();
             if (joint.source.method != EstimateMethod::JointComponents || joint.source.role != FittingRole::Target) continue;
             ++target_count;
             if (summary.source_id.empty()) summary.source_id = joint.source.run_id;

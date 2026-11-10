@@ -66,7 +66,7 @@ GroupTestBias RunGroupEstimationTest(
     const GroupTestOptions & options
 );
 
-BiasStatistics RunAtomicModelFirstStageEstimationTest(
+BiasStatistics RunAtomicModelInitialStageEstimationTest(
     const AtomicModelTestData & input,
     const FitOptions & options
 );
@@ -77,7 +77,7 @@ LocalGaussianEstimateBias RunAtomicModelLocalEstimationTest(
     const FitOptions & options
 );
 
-GaussianModel3D EstimateAtomicModelFirstStageMean(
+GaussianModel3D EstimateAtomicModelInitialStageMean(
     const AtomicModelTestData & input,
     const FitOptions & options
 );

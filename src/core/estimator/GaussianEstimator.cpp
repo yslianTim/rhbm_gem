@@ -137,13 +137,13 @@ double EvaluateGroupMemberResponseAtDistance(const GroupGaussianMemberResult & m
     return gaussian.SignalAtDistance(distance) + member.fixed_charge->coefficient * charge;
 }
 
-void RunFirstStageLocalFitting(ModelObject & model_object, const FitOptions & options)
+void RunInitialStageLocalFitting(ModelObject & model_object, const FitOptions & options)
 {
     model_object.EditAnalysis().EnsureSelectedAtomLocalPotentials();
-    RunFirstStageLocalFitting(model_object, options, model_object.GetSelectedAtoms());
+    RunInitialStageLocalFitting(model_object, options, model_object.GetSelectedAtoms());
 }
 
-void RunFirstStageLocalFitting(
+void RunInitialStageLocalFitting(
     ModelObject & model_object,
     const FitOptions & options,
     const std::vector<AtomObject *> & atom_list)
@@ -155,7 +155,7 @@ void RunFirstStageLocalFitting(
     if (!options.quiet_mode)
     {
         Logger::Log(LogLevel::Info,
-            "Run local atom fitting for " + std::to_string(selected_atom_size) + " atoms.");
+            "[InitialStage] Run local atom fitting for " + std::to_string(selected_atom_size) + " atoms.");
     }
 
 #ifdef USE_OPENMP
@@ -164,7 +164,7 @@ void RunFirstStageLocalFitting(
     for (size_t i = 0; i < selected_atom_size; i++)
     {
         auto & atom{ *atom_list[i] };
-        local_results[i] = detail::FitFirstStageAtom(atom, options);
+        local_results[i] = detail::FitInitialStageAtom(atom, options);
 
         if (!options.quiet_mode)
         {
@@ -180,7 +180,7 @@ void RunFirstStageLocalFitting(
 
     for (size_t i = 0; i < selected_atom_size; i++)
     {
-        analysis.SetAtomFirstStageGaussianResult(*atom_list[i], std::move(local_results[i]));
+        analysis.SetAtomInitialStageGaussianResult(*atom_list[i], std::move(local_results[i]));
     }
 }
 
@@ -279,13 +279,13 @@ GroupGaussianResult EstimateGroupGaussian(
     return DecodeGroupGaussianResult(alpha_g, raw_result, member_offset_list);
 }
 
-void RunFirstStageLocalAlphaTraining(ModelObject & model_object, const FitOptions & options)
+void RunInitialStageLocalAlphaTraining(ModelObject & model_object, const FitOptions & options)
 {
     model_object.EditAnalysis().EnsureSelectedAtomLocalPotentials();
-    RunFirstStageLocalAlphaTraining(model_object, options, model_object.GetSelectedAtoms());
+    RunInitialStageLocalAlphaTraining(model_object, options, model_object.GetSelectedAtoms());
 }
 
-double detail::EstimateFirstStageAlpha(
+double detail::EstimateInitialStageAlpha(
     const LocalPotentialSampleList & samples, const FitOptions & options)
 {
     std::size_t count{ 0 };
@@ -297,7 +297,7 @@ double detail::EstimateFirstStageAlpha(
     return MakeTrainingOptions(options).alpha_min;
 }
 
-void RunFirstStageLocalAlphaTraining(
+void RunInitialStageLocalAlphaTraining(
     ModelObject & model_object,
     const FitOptions & options,
     const std::vector<AtomObject *> & atom_list)
@@ -308,13 +308,13 @@ void RunFirstStageLocalAlphaTraining(
     if (!options.quiet_mode)
     {
         Logger::Log(LogLevel::Info,
-            "Run local alpha training for " +
+            "[InitialStage] Run local alpha training for " +
             std::to_string(atom_list.size()) + " atoms.");
     }
     for (auto * atom : atom_list)
     {
         const auto samples = AtomLocalPotentialView::For(*atom).GetRawSamplingEntries();
-        analysis.SetAtomFirstStageAlphaR(*atom, detail::EstimateFirstStageAlpha(samples, options));
+        analysis.SetAtomInitialStageAlphaR(*atom, detail::EstimateInitialStageAlpha(samples, options));
         count++;
         if (!options.quiet_mode)
         {

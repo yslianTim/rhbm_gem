@@ -89,15 +89,15 @@ struct JointInitializationAtom
     double alpha{};
     std::size_t sample_count{};
     std::optional<int> native_status;
-    bool target{},first_stage_fit_qualified{};
+    bool target{},initial_stage_fit_qualified{};
     std::string reason;
     std::optional<double> original_tau,used_tau;
     std::string seed_source{"not-recorded"};
     std::size_t donor_count{};
-    std::optional<RHBMSolveQualification> first_stage_qualification{};
-    std::optional<RHBMFailedOnlyRecoveryDiagnostics> first_stage_recovery{};
+    std::optional<RHBMSolveQualification> initial_stage_qualification{};
+    std::optional<RHBMFailedOnlyRecoveryDiagnostics> initial_stage_recovery{};
 };
-inline RHBMSolveQualification FirstStageQualification(
+inline RHBMSolveQualification InitialStageQualification(
     std::optional<int> native_status, bool fit_qualified,
     const std::optional<RHBMSolveQualification> & qualification,
     const std::optional<RHBMFailedOnlyRecoveryDiagnostics> & recovery)
@@ -108,13 +108,13 @@ inline RHBMSolveQualification FirstStageQualification(
     return fit_qualified && native_status && *native_status == static_cast<int>(RHBMEstimationStatus::SUCCESS) ?
         RHBMSolveQualification::NativeSuccess : RHBMSolveQualification::Unqualified;
 }
-inline bool IsQualifiedFirstStageEstimate(
+inline bool IsQualifiedInitialStageEstimate(
     std::optional<int> native_status, bool fit_qualified,
     const std::optional<RHBMSolveQualification> & qualification,
     const std::optional<RHBMFailedOnlyRecoveryDiagnostics> & recovery)
 {
     if (!fit_qualified || !native_status) return false;
-    const auto effective = FirstStageQualification(native_status, fit_qualified, qualification, recovery);
+    const auto effective = InitialStageQualification(native_status, fit_qualified, qualification, recovery);
     if (effective == RHBMSolveQualification::NativeSuccess)
         return *native_status == static_cast<int>(RHBMEstimationStatus::SUCCESS);
     return effective == RHBMSolveQualification::RefinedSuccess &&

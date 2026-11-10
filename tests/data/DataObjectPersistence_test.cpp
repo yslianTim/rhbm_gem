@@ -214,7 +214,7 @@ TEST(DataObjectPersistenceTest, GaussianOffsetRoundTripPreservesAnalysisResults)
     group_result.member_results.resize(
         view.GetAtomObjectList(group_key).size());
     group_result.member_results.front() = member_result;
-    editor.SetAtomFirstStageGaussianResult(
+    editor.SetAtomInitialStageGaussianResult(
         *atom, local_result);
     editor.ApplyAtomGroupGaussianResult(group_key, group_result);
 
@@ -225,7 +225,7 @@ TEST(DataObjectPersistenceTest, GaussianOffsetRoundTripPreservesAnalysisResults)
     const auto loaded_local{
         rg::AtomLocalPotentialView::For(*loaded_model->FindAtomPtr(atom->GetSerialID())) };
     const auto loaded_local_result{
-        loaded_local.GetFirstStageGaussianResult() };
+        loaded_local.GetInitialStageGaussianResult() };
     EXPECT_DOUBLE_EQ(loaded_local_result.alpha_r, 0.5);
     EXPECT_DOUBLE_EQ(loaded_local_result.ols.GetModel().GetOffset(), 0.11);
     EXPECT_DOUBLE_EQ(loaded_local_result.mdpde.GetModel().GetOffset(), -0.22);
@@ -339,7 +339,7 @@ TEST(DataObjectPersistenceTest, LoadModelRestoresSelectionFromPersistedColumns)
     model->SelectAllBonds(false);
     model->SetBondSelected(
         atoms.at(0)->GetSerialID(), atoms.at(1)->GetSerialID(), true);
-    model->EditAnalysis().SetAtomFirstStageAlphaR(
+    model->EditAnalysis().SetAtomInitialStageAlphaR(
         *atoms.at(1), 0.9);
 
     rg::DataRepository repository{ database_path };
@@ -474,21 +474,21 @@ rg::JointAnalysisResult CurrentJointExample(bool with_halo=true)
     result.assembled_state=component.state;
     result.evidence.push_back({"global-width-calibration",rg::JointCheckStatus::Passed,
         rg::JointEvidenceScope::AssembledGlobal,0.6,2.4,
-        "global-first-stage-p95-k4; qualified-donors=1/1"});
-    result.evidence.push_back({"qualified-first-stage-donor-coverage",rg::JointCheckStatus::Passed,
-        rg::JointEvidenceScope::AssembledGlobal,1.0,0.95,"target-only-qualified-first-stage-widths"});
+        "global-initial-stage-p95-k4; qualified-donors=1/1"});
+    result.evidence.push_back({"qualified-initial-stage-donor-coverage",rg::JointCheckStatus::Passed,
+        rg::JointEvidenceScope::AssembledGlobal,1.0,0.95,"target-only-qualified-initial-stage-widths"});
     return result;
 }
 rg::JointAnalysisResult SavedJointExample() { return CurrentJointExample(); }
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV24RoundTripsUnqualifiedResult)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV25RoundTripsUnqualifiedResult)
 {
     namespace io=rg::joint_result_io;
     const auto result=CurrentJointExample();
     const auto encoded=io::Encode(result);
     const auto object=boost::json::parse(encoded).as_object();
-    EXPECT_EQ(boost::json::value_to<int>(object.at("schema_version")),24);
+    EXPECT_EQ(boost::json::value_to<int>(object.at("schema_version")),25);
     for(const auto key:{"fixed_halos","layout","legacy_global_rank_evidence","ranks"})
         EXPECT_FALSE(object.contains(key));
     EXPECT_FALSE(object.at("costs").as_object().contains("search_reference_seconds"));
@@ -512,12 +512,12 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV24RoundTripsUnqualifiedResult
     EXPECT_EQ(decoded.metadata.solver->bcd_local_search,rg::BcdBoundedLocalSearchName);
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV24RejectsOtherVersionsAndRetiredFields)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV25RejectsOtherVersionsAndRetiredFields)
 {
     namespace io=rg::joint_result_io;
     const auto encoded=io::Encode(CurrentJointExample());
     const auto current=boost::json::parse(encoded).as_object();
-    for(const int version:{2,3,18,19,20,21,22,23,25,99})
+    for(const int version:{2,3,18,19,20,21,22,23,24,99})
     {
         auto unsupported=current;
         unsupported["schema_version"]=version;
@@ -540,12 +540,15 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV24RejectsOtherVersionsAndReti
     EXPECT_THROW(io::Decode(boost::json::serialize(retired)),std::invalid_argument);
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV24UsesTauAndRejectsLegacyOrMixedParameterKeys)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV25UsesTauAndInitialStageKeys)
 {
     namespace io=rg::joint_result_io;
     auto result=CurrentJointExample();
     rg::JointInitializationAtom atom;
     atom.id="1"; atom.target=true; atom.original_tau=.5; atom.used_tau=.5;
+    atom.initial_stage_qualification=rg::RHBMSolveQualification::Unqualified;
+    atom.initial_stage_recovery=rg::RHBMFailedOnlyRecoveryDiagnostics{};
+    atom.initial_stage_recovery->reason="native-retry-failed";
     result.initialization.atoms.push_back(atom);
     const auto current=boost::json::parse(io::Encode(result)).as_object();
     const auto & units=current.at("metadata").as_object().at("units").as_object();
@@ -556,6 +559,9 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV24UsesTauAndRejectsLegacyOrMi
     EXPECT_EQ(decoded.initialization.tau,result.initialization.tau);
     EXPECT_EQ(decoded.initialization.atoms.front().original_tau,atom.original_tau);
     EXPECT_EQ(decoded.initialization.atoms.front().used_tau,atom.used_tau);
+    EXPECT_EQ(decoded.initialization.atoms.front().initial_stage_fit_qualified,atom.initial_stage_fit_qualified);
+    EXPECT_EQ(decoded.initialization.atoms.front().initial_stage_qualification,atom.initial_stage_qualification);
+    EXPECT_EQ(decoded.initialization.atoms.front().initial_stage_recovery,atom.initial_stage_recovery);
     EXPECT_EQ(decoded.assembled_state->tau,result.assembled_state->tau);
     EXPECT_EQ(decoded.assembled_state->log_tau,result.assembled_state->log_tau);
     EXPECT_EQ(decoded.assembled_state->eta_gradient,result.assembled_state->eta_gradient);
@@ -575,7 +581,10 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV24UsesTauAndRejectsLegacyOrMi
             EXPECT_THROW(io::Decode(boost::json::serialize(invalid)),std::invalid_argument);
         }
     for(const auto & keys:{std::array{"tau","b"},std::array{"original_tau","original_b"},
-        std::array{"used_tau","used_b"}})
+        std::array{"used_tau","used_b"},
+        std::array{"initial_stage_fit_qualified","first_stage_fit_qualified"},
+        std::array{"initial_stage_qualification","first_stage_qualification"},
+        std::array{"initial_stage_recovery","first_stage_recovery"}})
         for(bool replace:{false,true})
         {
             SCOPED_TRACE(keys[1]);
@@ -584,7 +593,7 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV24UsesTauAndRejectsLegacyOrMi
             auto & object=std::string_view(keys[0])=="tau" ? initialization :
                 initialization.at("atoms").as_array().front().as_object();
             EXPECT_FALSE(object.contains(keys[1]));
-            object[keys[1]]=object.at(keys[0]);
+            object.emplace(keys[1],boost::json::value(object.at(keys[0])));
             if(replace) object.erase(keys[0]);
             EXPECT_THROW(io::Decode(boost::json::serialize(invalid)),std::invalid_argument);
         }
@@ -601,7 +610,7 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV24UsesTauAndRejectsLegacyOrMi
     EXPECT_THROW(io::Decode(boost::json::serialize(old_units)),std::invalid_argument);
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV24RoundTripsQualifiedTargetWithoutHalo)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV25RoundTripsQualifiedTargetWithoutHalo)
 {
     namespace io=rg::joint_result_io;
     auto result=CurrentJointExample(false);
@@ -627,7 +636,7 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV24RoundTripsQualifiedTargetWi
     EXPECT_FALSE(decoded.halo_median_reconstruction);
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV24RoundTripsGeometryLocalHaloMedian)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV25RoundTripsGeometryLocalHaloMedian)
 {
     namespace io=rg::joint_result_io;
     auto result=CurrentJointExample();
@@ -672,7 +681,7 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV24RoundTripsGeometryLocalHalo
         std::vector<std::string>{"1"});
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV24PreservesUnavailableAndNullableDiagnostics)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV25PreservesUnavailableAndNullableDiagnostics)
 {
     namespace io=rg::joint_result_io;
     auto unavailable=CurrentJointExample();
@@ -699,6 +708,9 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV24PreservesUnavailableAndNull
     EXPECT_TRUE(rg::HasUnavailableJointHaloMedianReconstruction(halo_round_trip));
 
     auto nullable=CurrentJointExample();
+    rg::JointInitializationAtom nullable_atom;
+    nullable_atom.id="1";
+    nullable.initialization.atoms.push_back(nullable_atom);
     nullable.components.front().state.reset();
     nullable.components.front().candidate_diagnostic=rg::JointCandidateDiagnostic{};
     nullable.assembled_state.reset();
@@ -711,9 +723,11 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV24PreservesUnavailableAndNull
     const auto round_trip=io::Decode(encoded);
     EXPECT_TRUE(round_trip.components.front().candidate_diagnostic);
     EXPECT_FALSE(round_trip.components.front().candidate_diagnostic->candidate_objective);
+    EXPECT_FALSE(round_trip.initialization.atoms.front().initial_stage_qualification);
+    EXPECT_FALSE(round_trip.initialization.atoms.front().initial_stage_recovery);
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV24RejectsRetiredDiagnosticsAndOldTargetContract)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV25RejectsRetiredDiagnosticsAndOldTargetContract)
 {
     namespace io=rg::joint_result_io;
     const auto current=boost::json::parse(io::Encode(CurrentJointExample())).as_object();
@@ -1047,7 +1061,7 @@ TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutE
     component.candidate_diagnostic=candidate;
 
     const auto json=boost::json::parse(io::Encode(record));
-    EXPECT_EQ(json.at("schema_version").as_int64(),24);
+    EXPECT_EQ(json.at("schema_version").as_int64(),25);
     const auto & saved_candidate=json.at("components").as_array()[0].at("candidate_diagnostic");
     EXPECT_EQ(saved_candidate.at("candidate_status").as_string(),"uncertified");
     EXPECT_EQ(saved_candidate.at("convergence_criteria_id").as_string(),"practical-v2");
@@ -1194,7 +1208,7 @@ TEST(DataObjectPersistenceTest, JointMetadataRejectsInvalidValuesAndOldDocuments
     malformed=boost::json::parse(io::Encode(record)).as_object();
     malformed.at("metadata").as_object().erase("map_sha256");
     EXPECT_THROW(io::Decode(boost::json::serialize(malformed)),std::exception);
-    auto old=boost::json::parse(io::Encode(record)).as_object(); old["schema_version"]=23;
+    auto old=boost::json::parse(io::Encode(record)).as_object(); old["schema_version"]=24;
     const auto old_text=boost::json::serialize(old);
     EXPECT_THROW(io::Decode(old_text),std::invalid_argument);
     data_test::ExecuteSql(path,"UPDATE model_joint_result SET result_json='"+old_text+"' WHERE key_tag='model';");
@@ -1272,21 +1286,27 @@ TEST(DataObjectPersistenceTest, JointNeutralRoundTripPreservesCurrentJointAndSta
     EXPECT_FALSE(data_test::HasTable(dir.path()/"result.sqlite","model_atom_local_potential"));
 }
 
-TEST(DataObjectPersistenceTest, StageResultJsonV6OnlyAcceptsCurrentRoundTrip)
+TEST(DataObjectPersistenceTest, StageResultJsonV7OnlyAcceptsCurrentRoundTrip)
 {
     auto model=data_test::MakeModelWithBond();
     model->SelectAllAtoms();
-    model->EditAnalysis().InitializeFromSelection();
+    auto editor=model->EditAnalysis();
+    editor.InitializeFromSelection();
+    rg::LocalStageEstimate initial;
+    initial.source.fixed_from_initial_stage=true;
+    editor.SetAtomInitialStageEstimate(*model->FindAtomPtr(1),initial);
     const auto encoded=rg::stage_result_io::Encode(*model);
-    EXPECT_EQ(boost::json::parse(encoded).at("version").as_int64(),6);
+    EXPECT_EQ(boost::json::parse(encoded).at("version").as_int64(),7);
 
     auto restored=data_test::MakeModelWithBond();
     restored->SelectAllAtoms();
     restored->EditAnalysis().InitializeFromSelection();
     EXPECT_NO_THROW(rg::stage_result_io::Decode(*restored,encoded));
     EXPECT_EQ(rg::stage_result_io::Encode(*restored),encoded);
+    EXPECT_TRUE(rg::AtomLocalPotentialView::For(*restored->FindAtomPtr(1))
+        .GetInitialStageEstimate().source.fixed_from_initial_stage);
 
-    for(const int version:{1,2,3,4,5,7})
+    for(const int version:{1,2,3,4,5,6,8})
     {
         auto old=boost::json::parse(encoded).as_object();
         old["version"]=version;
@@ -1300,8 +1320,23 @@ TEST(DataObjectPersistenceTest, StageResultJsonV6OnlyAcceptsCurrentRoundTrip)
     old_fields.at("atoms").as_array().front().as_object()["second_native"] = nullptr;
     EXPECT_THROW(rg::stage_result_io::Decode(*restored, boost::json::serialize(old_fields)), std::invalid_argument);
 
+    for(const auto & keys:{std::array{"initial","first"},std::array{"joint","second"},
+        std::array{"initial_native","first_native"},
+        std::array{"fixed_from_initial_stage","fixed_from_first_stage"}})
+        for(bool replace:{false,true})
+        {
+            SCOPED_TRACE(keys[1]);
+            auto invalid=boost::json::parse(encoded).as_object();
+            auto & atom=invalid.at("atoms").as_array().front().as_object();
+            auto & fields=std::string_view(keys[0])=="fixed_from_initial_stage" ?
+                atom.at("initial").at("source").as_object() : atom;
+            fields.emplace(keys[1],boost::json::value(fields.at(keys[0])));
+            if(replace) fields.erase(keys[0]);
+            EXPECT_THROW(rg::stage_result_io::Decode(*restored,boost::json::serialize(invalid)),std::invalid_argument);
+        }
+
     auto old_method = boost::json::parse(encoded).as_object();
-    old_method.at("atoms").as_array().front().at("second").at("source").as_object()["method"] = 2;
+    old_method.at("atoms").as_array().front().at("joint").at("source").as_object()["method"] = 2;
     EXPECT_THROW(rg::stage_result_io::Decode(*restored, boost::json::serialize(old_method)), std::invalid_argument);
 }
 
@@ -1317,11 +1352,17 @@ TEST(DataObjectPersistenceTest, CanonicalNativeDiagnosticsAndMissingStatesRoundT
     auto & fit=*result.fit_result; fit.status=rg::RHBMEstimationStatus::MAX_ITERATIONS_REACHED;
     fit.sigma_square=.123456789012345; fit.diagnostics={17,.0001,.0002};
     fit.refinement=rg::RHBMEndpointRefinementDiagnostics{false,"rejected",12,25,"converged",.3,.2,.1,std::array<double,3>{.01,.02,.03},std::numeric_limits<double>::infinity(),false};
-    editor.SetAtomFirstStageGaussianResult(*model->FindAtomPtr(1),result);
+    editor.SetAtomInitialStageGaussianResult(*model->FindAtomPtr(1),result);
+    const auto & unavailable_atom=*model->FindAtomPtr(2);
+    editor.SetAtomInitialStageGaussianResult(unavailable_atom,result);
+    auto unavailable=rg::AtomLocalPotentialView::For(unavailable_atom).GetInitialStageEstimate();
+    unavailable.point.reset();
+    unavailable.reason="native-unqualified";
+    editor.SetAtomInitialStageEstimate(unavailable_atom,unavailable);
     editor.ClearTransientFitStates();
     rg::LocalStageEstimate missing; missing.source.method=rg::EstimateMethod::JointComponents;
     missing.source.run_id="no-snapshot"; missing.reason="initialization-failed"; missing.source.role=rg::FittingRole::Halo;
-    editor.SetAtomJointEstimate(*model->FindAtomPtr(2),missing);
+    editor.SetAtomJointStageEstimate(unavailable_atom,missing);
     model->SelectAllAtoms(); editor.RebuildAtomGroupsFromSelection();
     const auto group=model->GetAnalysisView().CollectAtomGroupKeys().front();
     editor.SetAtomGroupAlphaG(group,.87);
@@ -1332,10 +1373,20 @@ TEST(DataObjectPersistenceTest, CanonicalNativeDiagnosticsAndMissingStatesRoundT
     const auto expected=rg::stage_result_io::Encode(*model);
     rg::DataRepository repo(path); repo.SaveModel(*model,"mixed"); const auto loaded=repo.LoadModel("mixed");
     EXPECT_EQ(rg::stage_result_io::Encode(*loaded),expected);
-    const auto actual=rg::AtomLocalPotentialView::For(*loaded->FindAtomPtr(1)).GetFirstStageGaussianResult();
+    const auto view=rg::AtomLocalPotentialView::For(*loaded->FindAtomPtr(1));
+    EXPECT_EQ(view.GetInitialStageModel().ToVector(),result.mdpde.GetModel().ToVector());
+    EXPECT_FALSE(view.HasJointStageModel());
+    const auto actual=view.GetInitialStageGaussianResult();
+    const auto unavailable_view=rg::AtomLocalPotentialView::For(*loaded->FindAtomPtr(2));
+    EXPECT_FALSE(unavailable_view.HasInitialStageModel());
+    EXPECT_THROW(unavailable_view.GetInitialStageModel(),std::runtime_error);
+    EXPECT_EQ(unavailable_view.GetInitialStageOLS().ToVector(),result.ols.GetModel().ToVector());
+    EXPECT_EQ(unavailable_view.GetInitialStageMDPDE().ToVector(),result.mdpde.GetModel().ToVector());
+    EXPECT_FALSE(unavailable_view.HasJointStageModel());
+    EXPECT_EQ(unavailable_view.GetJointStageEstimate().source.run_id,"no-snapshot");
     EXPECT_DOUBLE_EQ(loaded->GetAnalysisView().GetAtomAlphaG(group),.87);
     EXPECT_FALSE(actual.fit_result); ASSERT_TRUE(actual.diagnostics); EXPECT_EQ(actual.diagnostics->iterations.iterations,17);
     EXPECT_EQ(actual.diagnostics->refinement->relative_coordinate_difference,fit.refinement->relative_coordinate_difference);
-    const auto document=boost::json::parse(expected).as_object(); EXPECT_EQ(document.at("version").as_int64(),6);
+    const auto document=boost::json::parse(expected).as_object(); EXPECT_EQ(document.at("version").as_int64(),7);
     EXPECT_FALSE(loaded->GetAnalysisView().GetJointResult());
 }

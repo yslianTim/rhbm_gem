@@ -1,11 +1,12 @@
 #include <gtest/gtest.h>
-#include "support/FirstStageSynthetic.hpp"
+#include "support/InitialStageSynthetic.hpp"
 #include "support/CommandTestHelpers.hpp"
 #include "core/estimator/InitialStage.hpp"
 #include "core/estimator/PotentialFittingWorkflow.hpp"
 #include "core/estimator/joint_component/Problem.hpp"
 #include "core/estimator/joint_component/WidthCalibration.hpp"
 #include "data/io/detail/JointResultJson.hpp"
+#include "data/io/detail/StageResultJson.hpp"
 #include "core/sampling/MapSampler.hpp"
 #include <rhbm_gem/core/QScoreHelper.hpp>
 #include <rhbm_gem/data/io/DataRepository.hpp>
@@ -29,9 +30,9 @@ namespace j=boost::json;
 j::object Baseline()
 {
     const auto path=std::filesystem::path(__FILE__).parent_path().parent_path().parent_path()/
-        "fixtures/joint_component/first_stage.json";
+        "fixtures/joint_component/initial_stage.json";
     std::ifstream stream(path);
-    if(!stream.good()) throw std::runtime_error("Missing FirstStage regression fixture");
+    if(!stream.good()) throw std::runtime_error("Missing InitialStage regression fixture");
     j::parse_options options; options.numbers=j::number_precision::precise;
     return j::parse(std::string(std::istreambuf_iterator<char>(stream),{}),{},options).as_object();
 }
@@ -71,8 +72,8 @@ j::object SampleFingerprint(const LocalPotentialSampleList & samples)
 TEST(InitialStageTest, ExactProductionBaselineAndCertifiedEndpoint)
 {
     const auto baseline=Baseline();
-    auto model=joint_component_test::FirstStageSyntheticModel(5.5);
-    auto map=joint_component_test::FirstStageSyntheticMap(*model,.4);
+    auto model=joint_component_test::InitialStageSyntheticModel(5.5);
+    auto map=joint_component_test::InitialStageSyntheticMap(*model,.4);
     const auto problem=BuildPureHaloSupportExclusionProblem(*map,*model);
     const auto workset=d::BuildInitialStageWorkset(*model,problem);
     model->EditAnalysis().InitializeFromSelection();
@@ -91,8 +92,8 @@ TEST(InitialStageTest, ExactProductionBaselineAndCertifiedEndpoint)
             EXPECT_EQ(atom.ols[k],j::value_to<double>(expected.at("ols").as_array()[k]));
             EXPECT_EQ(atom.mdpde[k],j::value_to<double>(expected.at("mdpde").as_array()[k]));
         }
-        EXPECT_TRUE(atom.target); EXPECT_TRUE(atom.first_stage_fit_qualified);
-        EXPECT_EQ(atom.first_stage_qualification,RHBMSolveQualification::NativeSuccess);
+        EXPECT_TRUE(atom.target); EXPECT_TRUE(atom.initial_stage_fit_qualified);
+        EXPECT_EQ(atom.initial_stage_qualification,RHBMSolveQualification::NativeSuccess);
         EXPECT_EQ(atom.reason,"valid-width"); EXPECT_EQ(atom.seed_source,"fitted");
         EXPECT_EQ(atom.original_tau,atom.mdpde[1]); EXPECT_EQ(atom.used_tau,atom.mdpde[1]);
         EXPECT_EQ(init.tau[i],atom.mdpde[1]); EXPECT_EQ(atom.sample_count,200u);
@@ -169,8 +170,8 @@ TEST(InitialStageTest, ExactRawSamplingAcrossWorkersAndCrowdedSelection)
     j::array captured;
     for(double separation:{5.5,1.4})
     {
-        auto model=joint_component_test::FirstStageSyntheticModel(separation);
-        auto map=joint_component_test::FirstStageSyntheticMap(*model,.4);
+        auto model=joint_component_test::InitialStageSyntheticModel(separation);
+        auto map=joint_component_test::InitialStageSyntheticMap(*model,.4);
         model->EditAnalysis().InitializeFromSelection();
         const auto workset=d::BuildInitialStageWorkset(*model,BuildPureHaloSupportExclusionProblem(*map,*model));
         std::vector<LocalPotentialSampleList> serial;
@@ -219,12 +220,12 @@ TEST(InitialStageTest, MedianFallbackPreservesRawEvidenceAndExcludesCalibrationD
         atom.mdpde={1.,1.+.01*i,0.}; atom.ols={1.,.5,0.};
         atom.original_tau=atom.mdpde[1]; atom.reason="valid-width"; atom.seed_source="fitted";
         atom.native_status=static_cast<int>(RHBMEstimationStatus::SUCCESS);
-        atom.first_stage_fit_qualified=true; atom.first_stage_qualification=RHBMSolveQualification::NativeSuccess;
+        atom.initial_stage_fit_qualified=true; atom.initial_stage_qualification=RHBMSolveQualification::NativeSuccess;
         init.tau.push_back(atom.mdpde[1]); init.atoms.push_back(atom);
     }
     init.tau[0]=0.; init.atoms[0].original_tau=0.; init.atoms[0].mdpde[1]=0.; init.atoms[0].reason="invalid-width";
     // Seed fallback and calibration deliberately have different donor contracts.
-    init.atoms[1].first_stage_fit_qualified=false;
+    init.atoms[1].initial_stage_fit_qualified=false;
     const auto before=init.atoms;
     d::ApplyJointSeedFallback(init);
     EXPECT_TRUE(init.valid); EXPECT_EQ(init.tau[0],1.12); EXPECT_EQ(init.atoms[0].donor_count,23u);
@@ -233,7 +234,7 @@ TEST(InitialStageTest, MedianFallbackPreservesRawEvidenceAndExcludesCalibrationD
     EXPECT_EQ(init.atoms[0].ols,before[0].ols);
     const auto calibration=n::CalibrateGlobalWidth(init,"fallback");
     EXPECT_EQ(calibration.qualified_donor_count,22u); EXPECT_EQ(calibration.fallback_count,1u);
-    EXPECT_EQ(calibration.unavailable_reason,"qualified-first-stage-target-coverage-below-0.95");
+    EXPECT_EQ(calibration.unavailable_reason,"qualified-initial-stage-target-coverage-below-0.95");
     init.atoms.back().target=false; init.tau.back()=0.;
     d::ApplyJointSeedFallback(init);
     EXPECT_TRUE(init.valid); EXPECT_EQ(init.tau.back(),0.);
@@ -245,8 +246,8 @@ TEST(InitialStageTest, WidthTruthRecoveryAndQualificationAtTwoVoxelSpacings)
 {
     for(double spacing:{.2,.4})
     {
-        auto model=joint_component_test::FirstStageSyntheticModel(5.5);
-        auto map=joint_component_test::FirstStageSyntheticMap(*model,spacing);
+        auto model=joint_component_test::InitialStageSyntheticModel(5.5);
+        auto map=joint_component_test::InitialStageSyntheticMap(*model,spacing);
         const auto problem=BuildPureHaloSupportExclusionProblem(*map,*model);
         model->EditAnalysis().InitializeFromSelection();
         FitOptions options; options.quiet_mode=true;
@@ -268,8 +269,8 @@ TEST(InitialStageTest, WidthTruthRecoveryAndQualificationAtTwoVoxelSpacings)
 
 TEST(InitialStageTest, RawSamplingPersistenceAndGridInvalidationIndependence)
 {
-    auto model=joint_component_test::FirstStageSyntheticModel(5.5);
-    auto map=joint_component_test::FirstStageSyntheticMap(*model,.4);
+    auto model=joint_component_test::InitialStageSyntheticModel(5.5);
+    auto map=joint_component_test::InitialStageSyntheticMap(*model,.4);
     FitOptions options; options.quiet_mode=true;
     d::RunPotentialFittingWorkflowForSelection(*map,*model,options);
     ASSERT_TRUE(model->GetAnalysisView().GetJointResult());
@@ -277,11 +278,13 @@ TEST(InitialStageTest, RawSamplingPersistenceAndGridInvalidationIndependence)
     const auto raw=original.GetRawSamplingEntries(false);
     ASSERT_EQ(raw.size(),200u); ASSERT_TRUE(original.GetPostFitPeeling());
     ASSERT_TRUE(original.GetPostJointLocalResult());
+    ASSERT_TRUE(original.GetGroupMemberResult());
     const auto peeling_count=original.GetPostFitPeeling()->samples.size();
     const auto retained=original.GetPostJointLocalResult()->effective_sample_count;
-    command_test::ScopedTempDir directory("joint-first-stage");
+    command_test::ScopedTempDir directory("joint-initial-stage");
     DataRepository repository(directory.path()/"samples.sqlite");
     repository.SaveModel(*model,"F0"); auto restored=repository.LoadModel("F0");
+    EXPECT_EQ(stage_result_io::Encode(*restored),stage_result_io::Encode(*model));
     const auto view=AtomLocalPotentialView::For(*restored->FindAtomPtr(1));
     const auto saved=view.GetRawSamplingEntries(false);
     ASSERT_EQ(saved.size(),raw.size());

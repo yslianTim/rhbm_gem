@@ -135,7 +135,7 @@ RHBMMemberDataset PreparedLocalGaussianDesign::BuildDataset(
     const std::vector<double> & responses, const GaussianModel3D & offset_model) const
 {
     auto dataset=BuildSelectedDataset(responses,offset_model);
-    // Retain the FirstStage empty-response sentinel contract.
+    // Retain the InitialStage empty-response sentinel contract.
     if (dataset.y.size()==0)
     {
         dataset.X=RHBMDesignMatrix::Zero(1,2);

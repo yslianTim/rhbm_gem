@@ -30,7 +30,7 @@ Browse runnable examples and helper assets in [`resources/README.md`](/resources
 ## Joint component workflow
 
 Potential Analysis uses the Joint Component Estimator (JCE). Results use
-**SQLite v22**. The repository accepts only the current database schema.
+**SQLite v23**. The repository accepts only the current database schema.
 
 ```sh
 RHBM-GEM potential_analysis -a model.cif -m map.mrc -d joint.sqlite -k example
@@ -46,11 +46,11 @@ initialization failed after saving diagnostics, `3` when Joint fitting
 did not qualify after saving diagnostics, `4` when Joint qualified but Halo
 reconstruction was unavailable, and `0` for a qualified Joint fit. See the
 [joint workflow contract](docs/developer/commands/potential_analysis.md#joint-component-workflow)
-for options and JSON/CSV output. The Second stage stores Joint endpoints. Plots, comparisons, Gaussian/outlier dumps and UMAP use the
+for options and JSON/CSV output. JointStage stores the fitted endpoints. Plots, comparisons, Gaussian/outlier dumps and UMAP use the
 available saved data; missing uncertainty or peeling coverage is never replaced
 with zero. Qualified Target A/tau/C points provide geometry-local kNN-4 Halo
-medians for downstream peeling. The current formats are Joint JSON schema 24
-and Stage JSON version 6. See [Joint Stage Integration](docs/developer/joint-stage-integration.md).
+medians for downstream peeling. The current formats are Joint JSON schema 25
+and Stage JSON version 7. See [Joint Stage Integration](docs/developer/joint-stage-integration.md).
 
 ## License, Citation, and Third-Party Notices
 

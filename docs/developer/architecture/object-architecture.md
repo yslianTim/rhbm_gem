@@ -45,7 +45,10 @@ The internal `ModelAnalysisData` contains:
 - atom-local entries keyed by atom serial ID;
 - one concrete `AtomGroupPotentialEntry` for atom groups.
 
-Each atom-local entry stores FirstStage diagnostics, a Joint estimate, and optional Original-grid peeling and Post-Joint Local results. Group membership and statistics use a single group map. Each atom stores its optional `GroupGaussianMemberResult` separately.
+Each atom-local entry stores the InitialStage estimate and native diagnostics,
+the JointStage estimate, and optional Original-grid peeling and Post-Joint
+Local results. Group membership and statistics use a single group map. Each
+atom stores its optional `GroupGaussianMemberResult` separately.
 
 The public access flow is:
 
@@ -74,9 +77,13 @@ record belong to the private estimator.
 
 `AtomLocalPotentialView::For(atom)` is the only atom-local view factory. `IsAvailable()` supports optional probing. All data getters use one consistent missing-entry check and throw when the atom is detached or its entry does not exist.
 
-Group-result and membership queries take no fitting stage. `GetGroupMemberResult()` returns an optional containing the posterior, outlier flag, and statistical distance. The view provides native diagnostics through `GetFirstStageGaussianResult()`, `GetFirstStageOLS()`, `GetFirstStageMDPDE()`, and `GetFirstStageAlphaR()`.
+Group-result and membership queries take no fitting stage. `GetGroupMemberResult()` returns an optional containing the posterior, outlier flag, and statistical distance. The view provides native diagnostics through `GetInitialStageGaussianResult()`, `GetInitialStageOLS()`, `GetInitialStageMDPDE()`, and `GetInitialStageAlphaR()`.
 
-Use `GetFirstStageEstimate()` or `GetJointEstimate()` when the source is known. Comparative plots can still select either result with `GetStageEstimate(stage)`. Use `GetRawSamplingEntries()` for selected raw samples and `GetPostFitPeeling()` for paired Original-grid observations.
+Use `GetInitialStageEstimate()` or `GetJointStageEstimate()` to read the
+estimate record. Use `HasInitialStageModel()` or `HasJointStageModel()` to
+check for a published point and `GetInitialStageModel()` or
+`GetJointStageModel()` to read it. Use `GetRawSamplingEntries()` for selected
+raw samples and `GetPostFitPeeling()` for paired Original-grid observations.
 
 Views are lightweight value objects containing a non-owning model or atom reference. Consumers, including painters, store them by value rather than allocating them through `unique_ptr`.
 
@@ -85,15 +92,15 @@ Views are lightweight value objects containing a non-owning model or atom refere
 `ModelAnalysisEditor` owns all supported analysis mutation operations. Its direct atom-local setters are:
 
 - `SetAtomLocalRawSamplingEntries(...)`;
-- `SetAtomFirstStageGaussianResult(...)`;
-- `SetAtomFirstStageAlphaR(...)`;
-- `SetAtomFirstStageEstimate(...)`;
-- `SetAtomJointEstimate(...)`;
+- `SetAtomInitialStageGaussianResult(...)`;
+- `SetAtomInitialStageAlphaR(...)`;
+- `SetAtomInitialStageEstimate(...)`;
+- `SetAtomJointStageEstimate(...)`;
 - `SetAtomPostFitPeeling(...)`.
 
 Each setter creates the atom-local entry when it is missing. Composite operations remain where they enforce a real invariant, including Joint endpoint publication, paired peeling and Local updates, group-result application, and alpha-g updates.
 
-`InitializeFromSelection()` clears previous analysis, rebuilds atom groups from current selection, creates the selected atoms' local entries, and initializes FirstStage alpha and group alpha. `ApplyAtomGroupGaussianResult(group_key, result)` updates the group statistics and independent member results together after validating membership count.
+`InitializeFromSelection()` clears previous analysis, rebuilds atom groups from current selection, creates the selected atoms' local entries, and initializes InitialStage alpha and group alpha. `ApplyAtomGroupGaussianResult(group_key, result)` updates the group statistics and independent member results together after validating membership count.
 
 Transient fitting state is cleared through `ModelAnalysisEditor`; `ModelObject` does not provide a forwarding wrapper.
 

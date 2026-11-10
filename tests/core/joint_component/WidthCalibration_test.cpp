@@ -25,8 +25,8 @@ JointInitialization ExampleInitialization()
         atom.original_tau=initialization.tau[i];
         atom.seed_source="fitted";
         atom.native_status=static_cast<int>(RHBMEstimationStatus::SUCCESS);
-        atom.first_stage_fit_qualified=true;
-        atom.first_stage_qualification=RHBMSolveQualification::NativeSuccess;
+        atom.initial_stage_fit_qualified=true;
+        atom.initial_stage_qualification=RHBMSolveQualification::NativeSuccess;
         atom.reason="valid-width";
         initialization.atoms.push_back(std::move(atom));
     }
@@ -45,24 +45,24 @@ JointInitialization QualifiedInitialization(std::size_t count)
         atom.mdpde={1.0,static_cast<double>(i+1),0.0};
         atom.original_tau=initialization.tau.back(); atom.seed_source="fitted";
         atom.native_status=static_cast<int>(RHBMEstimationStatus::SUCCESS);
-        atom.first_stage_fit_qualified=true;
-        atom.first_stage_qualification=RHBMSolveQualification::NativeSuccess;
+        atom.initial_stage_fit_qualified=true;
+        atom.initial_stage_qualification=RHBMSolveQualification::NativeSuccess;
         atom.reason="valid-width";
         initialization.atoms.push_back(std::move(atom));
     }
     return initialization;
 }
 
-TEST(WidthCalibrationTest, SelectsOnlyQualifiedTargetFirstStageWidths)
+TEST(WidthCalibrationTest, SelectsOnlyQualifiedTargetInitialStageWidths)
 {
     auto input=ExampleInitialization();
     input.atoms[1].target=false;
-    input.atoms[2].first_stage_fit_qualified=false;
+    input.atoms[2].initial_stage_fit_qualified=false;
     input.atoms[3].seed_source="median-fallback";
     input.atoms[4].native_status=static_cast<int>(RHBMEstimationStatus::MAX_ITERATIONS_REACHED);
-    input.atoms[4].first_stage_qualification=RHBMSolveQualification::RefinedSuccess;
-    input.atoms[4].first_stage_recovery=RHBMFailedOnlyRecoveryDiagnostics{};
-    input.atoms[4].first_stage_recovery->accepted=true;
+    input.atoms[4].initial_stage_qualification=RHBMSolveQualification::RefinedSuccess;
+    input.atoms[4].initial_stage_recovery=RHBMFailedOnlyRecoveryDiagnostics{};
+    input.atoms[4].initial_stage_recovery->accepted=true;
     input.atoms[5].mdpde[1]=std::numeric_limits<double>::infinity();
     for(auto & atom:input.atoms) atom.mdpde[1]=1.0;
     input.atoms[4].mdpde[1]=5.0;
@@ -79,7 +79,7 @@ TEST(WidthCalibrationTest, SelectsOnlyQualifiedTargetFirstStageWidths)
     EXPECT_EQ(calibration.fallback_count,1u);
     EXPECT_NEAR(calibration.qualified_donor_coverage,96.0/99.0,1e-15);
     EXPECT_DOUBLE_EQ(*calibration.p95,1.0);
-    EXPECT_EQ(calibration.excluded_donor_reasons.at("unqualified-first-stage"),1u);
+    EXPECT_EQ(calibration.excluded_donor_reasons.at("unqualified-initial-stage"),1u);
     EXPECT_EQ(calibration.excluded_donor_reasons.at("median-fallback"),1u);
     EXPECT_EQ(calibration.excluded_donor_reasons.at("non-finite-width"),1u);
 }
@@ -111,7 +111,7 @@ TEST(WidthCalibrationTest, ReportsEmptyAndOverflowAsCalibrationUnavailable)
     input.tau.clear();
     const auto empty=joint::CalibrateGlobalWidth(input,"empty");
     EXPECT_EQ(empty.status,"CalibrationUnavailable");
-    EXPECT_EQ(empty.unavailable_reason,"no-qualified-first-stage-target-widths");
+    EXPECT_EQ(empty.unavailable_reason,"no-qualified-initial-stage-target-widths");
     EXPECT_FALSE(empty.p95);
 
     input=ExampleInitialization();
@@ -142,7 +142,7 @@ TEST(WidthCalibrationTest, ProducesOneGlobalBoundAndProjectsWithoutChangingStore
     EXPECT_DOUBLE_EQ(input.atoms[5].mdpde[1],original.atoms[5].mdpde[1]);
     EXPECT_DOUBLE_EQ(projected.tau_values[6],input.tau[6]);
     ASSERT_EQ(projected.projections.size(),100u);
-    EXPECT_DOUBLE_EQ(projected.projections[5].original_first_stage_tau.value(),6.0);
+    EXPECT_DOUBLE_EQ(projected.projections[5].original_initial_stage_tau.value(),6.0);
 }
 
 TEST(WidthCalibrationTest, RejectsMalformedInitializationAndUnavailableCalibration)
@@ -155,20 +155,20 @@ TEST(WidthCalibrationTest, RejectsMalformedInitializationAndUnavailableCalibrati
     auto unavailable=joint::CalibrateGlobalWidth(JointInitialization{},"none");
     const auto projected=joint::MakeBoundedInitialization(valid,unavailable);
     EXPECT_FALSE(projected.available);
-    EXPECT_EQ(projected.reason,"no-qualified-first-stage-target-widths");
+    EXPECT_EQ(projected.reason,"no-qualified-initial-stage-target-widths");
 }
 
 TEST(WidthCalibrationTest, RejectsSmallOrPoorlyCoveredDonorPopulationsAndInvalidTargetStarts)
 {
     auto too_small=QualifiedInitialization(19);
     EXPECT_EQ(joint::CalibrateGlobalWidth(too_small,"small").unavailable_reason,
-        "too-few-qualified-first-stage-target-widths");
+        "too-few-qualified-initial-stage-target-widths");
 
     auto low_coverage=QualifiedInitialization(22);
-    low_coverage.atoms[0].first_stage_fit_qualified=false;
+    low_coverage.atoms[0].initial_stage_fit_qualified=false;
     low_coverage.atoms[1].seed_source="median-fallback";
     EXPECT_EQ(joint::CalibrateGlobalWidth(low_coverage,"coverage").unavailable_reason,
-        "qualified-first-stage-target-coverage-below-0.95");
+        "qualified-initial-stage-target-coverage-below-0.95");
 
     auto invalid_start=QualifiedInitialization(20);
     invalid_start.tau[0]=std::numeric_limits<double>::quiet_NaN();

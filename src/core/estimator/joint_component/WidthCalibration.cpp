@@ -41,17 +41,17 @@ WidthBoundCalibration CalibrateQualifiedWidthDonors(
         static_cast<double>(result.qualified_donor_count)/static_cast<double>(result.target_count) : 0.0;
     if(donors.empty())
     {
-        result.unavailable_reason="no-qualified-first-stage-target-widths";
+        result.unavailable_reason="no-qualified-initial-stage-target-widths";
         return result;
     }
     if(donors.size()<MinimumQualifiedWidthDonors)
     {
-        result.unavailable_reason="too-few-qualified-first-stage-target-widths";
+        result.unavailable_reason="too-few-qualified-initial-stage-target-widths";
         return result;
     }
     if(result.qualified_donor_coverage<MinimumQualifiedDonorCoverage)
     {
-        result.unavailable_reason="qualified-first-stage-target-coverage-below-0.95";
+        result.unavailable_reason="qualified-initial-stage-target-coverage-below-0.95";
         return result;
     }
 
@@ -106,10 +106,10 @@ WidthBoundCalibration CalibrateGlobalWidth(
     {
         if(!atom.target) continue;
         ++result.target_count;
-        const auto qualification=FirstStageQualification(atom.native_status,
-            atom.first_stage_fit_qualified,atom.first_stage_qualification,atom.first_stage_recovery);
-        const bool qualified=IsQualifiedFirstStageEstimate(atom.native_status,
-            atom.first_stage_fit_qualified,atom.first_stage_qualification,atom.first_stage_recovery);
+        const auto qualification=InitialStageQualification(atom.native_status,
+            atom.initial_stage_fit_qualified,atom.initial_stage_qualification,atom.initial_stage_recovery);
+        const bool qualified=IsQualifiedInitialStageEstimate(atom.native_status,
+            atom.initial_stage_fit_qualified,atom.initial_stage_qualification,atom.initial_stage_recovery);
         if(qualified && qualification==RHBMSolveQualification::NativeSuccess) ++result.native_success_count;
         else if(qualified && qualification==RHBMSolveQualification::RefinedSuccess) ++result.refined_success_count;
         else ++result.unqualified_count;
@@ -124,7 +124,7 @@ WidthBoundCalibration CalibrateGlobalWidth(
         std::string exclusion;
         if(fallback) exclusion="median-fallback";
         else if(initialization_failure) exclusion="initialization-failure";
-        else if(!qualified) exclusion="unqualified-first-stage";
+        else if(!qualified) exclusion="unqualified-initial-stage";
         else if(!std::isfinite(tau)) exclusion="non-finite-width";
         else if(!(tau>0.0)) exclusion="non-positive-width";
         if(exclusion.empty()) donors.push_back(tau);

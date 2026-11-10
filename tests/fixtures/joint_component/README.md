@@ -1,6 +1,6 @@
-# Production FirstStage regression
+# Production InitialStage regression
 
-`first_stage.json` keeps the 24-target coarse-phase-0 F0 + MDPDE baseline from
+`initial_stage.json` keeps the 24-target coarse-phase-0 F0 + MDPDE baseline from
 commit `503a6607674e068e4d3ef3db52aa770abcf3aea4`. Atom identity, alpha, OLS/MDPDE,
 calibration and complete final A/C/Width/gradient values are copied without
 numerical changes from the original committed study baseline. The identical
@@ -16,7 +16,7 @@ They protect ordering and rejected responses without retaining thousands of
 raw rows. Direct serial/parallel comparisons retain per-sample diagnostics.
 
 The shared normalized Gaussian generator lives in
-`tests/support/FirstStageSynthetic.hpp`; it is independent of retired study
+`tests/support/InitialStageSynthetic.hpp`; it is independent of retired study
 runners. `InitialStage_test.cpp` also covers truth at two spacings,
 median fallback, certified endpoints, persistence and grid invalidation.
 `WidthCalibration_test.cpp` owns donor gating, Type-7 quantiles, 20/95% limits

@@ -60,19 +60,19 @@ void ApplyJointSeedFallback(JointInitialization & initialization)
         initialization.reason=initialization.valid ? "valid-widths" : "invalid-widths";
 }
 
-LocalGaussianResult FitFirstStageAtom(const AtomObject & atom, const FitOptions & options)
+LocalGaussianResult FitInitialStageAtom(const AtomObject & atom, const FitOptions & options)
 {
     const auto view = AtomLocalPotentialView::For(atom);
     const auto samples = view.GetRawSamplingEntries();
-    return EstimateLocalGaussian(samples, view.GetFirstStageAlphaR(),
-        options, view.GetFirstStageMDPDE());
+    return EstimateLocalGaussian(samples, view.GetInitialStageAlphaR(),
+        options, view.GetInitialStageMDPDE());
 }
 
 JointInitialization FitInitialStageFromPreparedSamples(
     ModelObject & model, const InitialStageWorkset & workset, const FitOptions & options)
 {
     if (workset.target_mask.size() != workset.contributors.size())
-        throw std::invalid_argument("First-stage workset role count mismatch.");
+        throw std::invalid_argument("InitialStage workset role count mismatch.");
     JointInitialization initialization;
     initialization.data_scope = "contributor-local-sampling-may-read-outside-target-domain";
     auto editor = model.EditAnalysis();
@@ -95,8 +95,8 @@ JointInitialization FitInitialStageFromPreparedSamples(
         record.alpha = nan;
         LocalGaussianResult seed;
         seed.ols = seed.mdpde = GaussianModel3DWithUncertainty{GaussianModel3D{0, 1, 0}, {}};
-        editor.SetAtomFirstStageGaussianResult(*atom, seed);
-        editor.SetAtomFirstStageEstimate(*atom, LocalStageEstimate{});
+        editor.SetAtomInitialStageGaussianResult(*atom, seed);
+        editor.SetAtomInitialStageEstimate(*atom, LocalStageEstimate{});
     }
 
     const auto workspace_count = static_cast<std::size_t>(worker_count);
@@ -125,10 +125,10 @@ JointInitialization FitInitialStageFromPreparedSamples(
                 const auto view = AtomLocalPotentialView::For(*atom);
                 const auto samples = view.GetRawSamplingEntries();
                 sample_counts[slot] = samples.size();
-                alphas[slot] = EstimateFirstStageAlpha(samples, atom_options);
+                alphas[slot] = EstimateInitialStageAlpha(samples, atom_options);
                 alpha_ready[slot] = 1;
                 estimates[slot] = EstimateLocalGaussian(samples, alphas[slot], atom_options,
-                    view.GetFirstStageMDPDE());
+                    view.GetInitialStageMDPDE());
             }
             catch (...)
             {
@@ -146,16 +146,16 @@ JointInitialization FitInitialStageFromPreparedSamples(
             {
                 if (alpha_ready[slot])
                 {
-                    editor.SetAtomFirstStageAlphaR(*atom, alphas[slot]);
+                    editor.SetAtomInitialStageAlphaR(*atom, alphas[slot]);
                     record.alpha = alphas[slot];
                 }
                 if (failures[slot]) std::rethrow_exception(failures[slot]);
-                editor.SetAtomFirstStageGaussianResult(*atom, std::move(estimates[slot]));
+                editor.SetAtomInitialStageGaussianResult(*atom, std::move(estimates[slot]));
                 const auto view = AtomLocalPotentialView::For(*atom);
-                auto first = view.GetFirstStageEstimate();
-                first.source.role = record.target ? FittingRole::Target : FittingRole::Halo;
-                editor.SetAtomFirstStageEstimate(*atom, first);
-                const auto & local = view.GetFirstStageGaussianResult();
+                auto estimate = view.GetInitialStageEstimate();
+                estimate.source.role = record.target ? FittingRole::Target : FittingRole::Halo;
+                editor.SetAtomInitialStageEstimate(*atom, estimate);
+                const auto & local = view.GetInitialStageGaussianResult();
                 const auto ols = local.ols.GetModel().ToVector(), mdpde = local.mdpde.GetModel().ToVector();
                 for (std::size_t k = 0; k < 3; ++k)
                 {
@@ -165,20 +165,20 @@ JointInitialization FitInitialStageFromPreparedSamples(
                 if (local.fit_result)
                 {
                     record.native_status = static_cast<int>(local.fit_result->status);
-                    record.first_stage_qualification = local.fit_result->Qualification();
-                    record.first_stage_recovery = local.fit_result->failed_only_recovery;
-                    record.first_stage_fit_qualified = record.first_stage_qualification !=
+                    record.initial_stage_qualification = local.fit_result->Qualification();
+                    record.initial_stage_recovery = local.fit_result->failed_only_recovery;
+                    record.initial_stage_fit_qualified = record.initial_stage_qualification !=
                         RHBMSolveQualification::Unqualified;
                 }
                 tau = local.mdpde.GetModel().GetWidth();
-                if (!record.target && record.first_stage_qualification == RHBMSolveQualification::Unqualified)
+                if (!record.target && record.initial_stage_qualification == RHBMSolveQualification::Unqualified)
                 {
-                    if (record.first_stage_recovery)
-                        record.reason = "first-stage-recovery-unqualified:" + record.first_stage_recovery->reason;
+                    if (record.initial_stage_recovery)
+                        record.reason = "initial-stage-recovery-unqualified:" + record.initial_stage_recovery->reason;
                     else if (record.native_status)
-                        record.reason = "first-stage-native-unqualified:" + std::to_string(*record.native_status);
+                        record.reason = "initial-stage-native-unqualified:" + std::to_string(*record.native_status);
                     else
-                        record.reason = "first-stage-result-unavailable";
+                        record.reason = "initial-stage-result-unavailable";
                 }
                 else record.reason = std::isfinite(tau) && tau > 0 ? "valid-width" : "invalid-width";
             }
@@ -186,7 +186,7 @@ JointInitialization FitInitialStageFromPreparedSamples(
             {
                 LocalStageEstimate missing;
                 missing.reason = std::string("initialization-exception: ") + error.what();
-                editor.SetAtomFirstStageEstimate(*atom, missing);
+                editor.SetAtomInitialStageEstimate(*atom, missing);
                 record.reason = missing.reason;
             }
             if (std::isfinite(tau)) record.original_tau = tau;
@@ -208,7 +208,7 @@ JointInitialization RunInitialStage(
 {
     if (!options.quiet_mode)
     {
-        const auto sampling_name{ options.first_stage_sampling_method == SphereSamplingMethod::SpiralDeterministic
+        const auto sampling_name{ options.initial_stage_sampling_method == SphereSamplingMethod::SpiralDeterministic
             ? "SpiralShells" : "FibonacciShells" };
         Logger::FinishProgressLine();
         Logger::Log(LogLevel::Info, "[InitialStage] Sampling " +
@@ -216,7 +216,7 @@ JointInitialization RunInitialStage(
             " Joint contributors | sampling=" + sampling_name + " | interpolation=Tricubic");
     }
     RunPotentialSamplingWorkflow(map, model, workset.contributors, std::clamp(options.joint_initialization_thread_size, 1, 4),
-        " [InitialStage] sampling", options.quiet_mode, options.first_stage_sampling_method);
+        " [InitialStage] sampling", options.quiet_mode, options.initial_stage_sampling_method);
     if (!options.quiet_mode)
     {
         Logger::FinishProgressLine();

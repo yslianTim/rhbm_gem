@@ -55,7 +55,7 @@ int main()
     WriteJointAnalysisResult(result, "consumer-joint.json", "consumer-joint.csv");
     std::ifstream json("consumer-joint.json");
     const std::string payload((std::istreambuf_iterator<char>(json)), {});
-    if (payload.find("\"schema_version\":24") == std::string::npos ||
+    if (payload.find("\"schema_version\":25") == std::string::npos ||
         payload.find("\"search_method\":\"gauss-seidel-bcd\"") == std::string::npos ||
         payload.find("joint-solver-provenance-v6") == std::string::npos ||
         payload.find("target-only-pure-halo-support-exclusion-v1") == std::string::npos)
@@ -69,10 +69,10 @@ int main()
     ModelObject model(std::move(atoms));
     model.EditAnalysis().ApplyJointResult(result, "consumer-smoke");
     const auto local = AtomLocalPotentialView::For(*model.FindAtomPtr(1));
-    const auto & source = local.GetJointEstimate().source;
+    const auto & source = local.GetJointStageEstimate().source;
     if (source.method != EstimateMethod::JointComponents || source.atom_id != "1" ||
         source.run_id != "consumer-smoke" || source.role != FittingRole::Target ||
-        local.GetFirstStageEstimate().source.method != EstimateMethod::Unspecified)
+        local.GetInitialStageEstimate().source.method != EstimateMethod::Unspecified)
         return 5;
 
     DataRepository repository("consumer-analysis.sqlite");
@@ -80,7 +80,7 @@ int main()
     const auto loaded = repository.LoadModel("consumer");
     const auto & loaded_result = loaded->GetAnalysisView().GetJointResult();
     const auto & loaded_source =
-        AtomLocalPotentialView::For(*loaded->FindAtomPtr(1)).GetJointEstimate().source;
+        AtomLocalPotentialView::For(*loaded->FindAtomPtr(1)).GetJointStageEstimate().source;
     if (!loaded_result || loaded_result->atom_ids != result.atom_ids ||
         !loaded_result->metadata.solver ||
         loaded_result->metadata.solver->contract_version != JointSolverProvenanceContractVersion ||

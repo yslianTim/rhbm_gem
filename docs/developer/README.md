@@ -27,7 +27,7 @@ with project internals.
   domains, BCD updates and global qualification.
 - [Numerics](joint-component-numerics.md) explains constrained A/C, Variable
   Projection and the bounded LM solve.
-- [Stage Integration](joint-stage-integration.md) follows FirstStage
+- [Stage Integration](joint-stage-integration.md) follows InitialStage
   initialization through Target publication, Halo reconstruction, peeling,
   Local and Group fitting, and persistence.
 

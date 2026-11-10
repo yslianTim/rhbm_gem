@@ -253,7 +253,7 @@ def assert_joint_workflow() -> None:
         export.output_dir = root
         assert m.RunCommand(export).succeeded
         saved = json.loads((root / "joint_result_model.json").read_text())
-        assert saved["schema_version"] == 24
+        assert saved["schema_version"] == 25
         assert saved["selection_domain"]["target_indices"] == list(range(25))
         assert saved["atom_ids"] == [str(index) for index in range(1, 26)]
         assert saved["metadata"]["model_sha256"] == model_hash
@@ -278,7 +278,7 @@ def assert_joint_workflow() -> None:
         assert saved["metadata"]["solver"]["bcd_local_search"] == "active-set-lm"
         calibration = next(item for item in saved["evidence"] if item["name"] == "global-width-calibration")
         assert calibration["status"] == "passed"
-        assert "global-first-stage-p95-k4" in calibration["reason"]
+        assert "global-initial-stage-p95-k4" in calibration["reason"]
 
 
 def main() -> int:

@@ -53,7 +53,7 @@ PostJointLocalResult FitPostJointLocalTarget(
 {
     const auto atom = model.FindAtomPtr(atom_id);
     const auto local = AtomLocalPotentialView::For(*atom);
-    const auto & joint = local.GetJointEstimate();
+    const auto & joint = local.GetJointStageEstimate();
     PostJointLocalResult result;
     result.source = joint.source;
     result.sample_count = peeling.samples.size();
@@ -311,7 +311,7 @@ bool RunJointStagePostprocessing(
     for (const auto * atom : model.GetSelectedAtoms())
     {
         const auto local = AtomLocalPotentialView::For(*atom);
-        const auto & estimate = local.GetJointEstimate();
+        const auto & estimate = local.GetJointStageEstimate();
         if (estimate.source.method != EstimateMethod::JointComponents || estimate.source.role != FittingRole::Target)
             continue;
         joint_targets.push_back(atom);
@@ -357,7 +357,7 @@ bool RunJointStagePostprocessing(
     for (const auto * atom : joint_targets)
     {
         const auto local = AtomLocalPotentialView::For(*atom);
-        const auto & estimate = local.GetJointEstimate();
+        const auto & estimate = local.GetJointStageEstimate();
         if (estimate.source.method != EstimateMethod::JointComponents || estimate.source.role != FittingRole::Target ||
             estimate.source.component_id.empty()) continue;
         const auto & peeling = local.GetPostFitPeeling();
@@ -475,7 +475,7 @@ std::string BuildJointTargetSpotSummary(const ModelObject & model_object)
         if (std::find(kLocalMDPDESummarySpotList.begin(), kLocalMDPDESummarySpotList.end(), spot) ==
             kLocalMDPDESummarySpotList.end()) continue;
         const auto view = AtomLocalPotentialView::For(*atom);
-        const auto * estimate = view.IsAvailable() ? &view.GetJointEstimate() : nullptr;
+        const auto * estimate = view.IsAvailable() ? &view.GetJointStageEstimate() : nullptr;
         const bool joint = estimate && estimate->source.method == EstimateMethod::JointComponents;
         if (joint && estimate->source.role != FittingRole::Target) continue;
         auto & samples = spots[spot];

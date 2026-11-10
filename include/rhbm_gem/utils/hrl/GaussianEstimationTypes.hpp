@@ -12,12 +12,6 @@
 
 namespace rhbm_gem {
 
-enum class FittingStage
-{
-    First,
-    Second
-};
-
 enum class EstimateMethod { Unspecified = 0, LocalMDPDE = 1, JointComponents = 3 };
 enum class FittingRole { NotRecorded, Target, Halo };
 
@@ -26,7 +20,7 @@ struct EstimateSource
     EstimateMethod method{ EstimateMethod::Unspecified };
     std::string atom_id, component_id, run_id;
     FittingRole role{ FittingRole::NotRecorded };
-    bool fixed_from_first_stage{};
+    bool fixed_from_initial_stage{};
 };
 
 struct StageUncertainty
@@ -49,7 +43,7 @@ struct LocalStageEstimate
     StageUncertainty uncertainty;
 };
 
-// An observation of the original map, independent of FirstStage sampling.
+// An observation of the original map, independent of InitialStage sampling.
 struct PostJointGridObservation
 {
     std::size_t original_row_index{};

@@ -48,18 +48,20 @@ V Pack(const EstimateSource & s)
 {
     O out{{"method",static_cast<int>(s.method)},{"atom",s.atom_id},{"component",s.component_id},
         {"run",s.run_id},{"role",static_cast<int>(s.role)}};
-    if(s.fixed_from_first_stage) out.emplace("fixed_from_first_stage",true);
+    if(s.fixed_from_initial_stage) out.emplace("fixed_from_initial_stage",true);
     return out;
 }
 EstimateSource Source(const V & v)
 {
     const auto & o=v.as_object();
+    const bool has_fixed_source=o.contains("fixed_from_initial_stage");
+    if(o.size()!=(has_fixed_source ? 6u : 5u)) throw std::invalid_argument("Invalid stage estimate source fields.");
     const auto method=Enum<EstimateMethod>(o.at("method"),static_cast<int>(EstimateMethod::JointComponents));
     if (method!=EstimateMethod::Unspecified && method!=EstimateMethod::LocalMDPDE &&
         method!=EstimateMethod::JointComponents)
         throw std::invalid_argument("Unknown estimate method.");
     return {method,Read<std::string>(o,"atom"),Read<std::string>(o,"component"),Read<std::string>(o,"run"),
-        Enum<FittingRole>(o.at("role"),2),o.contains("fixed_from_first_stage") && Read<bool>(o,"fixed_from_first_stage")};
+        Enum<FittingRole>(o.at("role"),2),has_fixed_source && Read<bool>(o,"fixed_from_initial_stage")};
 }
 V Pack(const LocalStageEstimate & s)
 {
@@ -247,15 +249,15 @@ PostJointLocalResult PostJointLocal(const V & value)
     }
     return result;
 }
-V FirstNative(const LocalPotentialEntry & e)
+V InitialNative(const LocalPotentialEntry & e)
 {
-    const auto r=e.FirstStageGaussianResult(false); const auto & sd=r.mdpde.GetStandardDeviationModel();
+    const auto r=e.InitialStageGaussianResult(false); const auto & sd=r.mdpde.GetStandardDeviationModel();
     return O{{"alpha",r.alpha_r},{"ols",Pack(r.ols.GetModel())},{"ols_sd",r.uncertainty_recorded ? Pack(r.ols).as_object().at("sd"):V{}},
         {"mdpde_sd",r.uncertainty_recorded ? V(A{NativeNumber(sd.GetAmplitude()),NativeNumber(sd.GetWidth()),NativeNumber(sd.GetOffset())}):V{}},
-        {"unfitted",e.FirstStageEstimate().point ? V{} : Pack(r.mdpde.GetModel())},
+        {"unfitted",e.InitialStageEstimate().point ? V{} : Pack(r.mdpde.GetModel())},
         {"diagnostics",r.diagnostics ? Pack(*r.diagnostics):V{}}};
 }
-void RestoreFirstNative(LocalPotentialEntry & e, const V & native, LocalStageEstimate estimate)
+void RestoreInitialNative(LocalPotentialEntry & e, const V & native, LocalStageEstimate estimate)
 {
     const auto & o=native.as_object(); LocalGaussianResult r; r.alpha_r=Number(o.at("alpha"));
     r.uncertainty_recorded=!o.at("mdpde_sd").is_null();
@@ -268,8 +270,8 @@ void RestoreFirstNative(LocalPotentialEntry & e, const V & native, LocalStageEst
         r.mdpde=Uncertain(O{{"point",Pack(r.mdpde.GetModel())},{"sd",o.at("mdpde_sd")}});
     }
     if(!o.at("diagnostics").is_null()) r.diagnostics=Diagnostics(o.at("diagnostics"));
-    e.SetFirstStageGaussianResult(std::move(r));
-    e.SetFirstStageEstimate(std::move(estimate));
+    e.SetInitialStageGaussianResult(std::move(r));
+    e.SetInitialStageEstimate(std::move(estimate));
 }
 V Pack(const GroupGaussianMemberResult & m) { return O{{"posterior",Pack(m.posterior)},{"outlier",m.is_outlier},{"distance",m.statistical_distance},{"source",m.evidence_source_id},{"charge_inferred",m.charge_inferred},{"covariance",m.parameter_covariance ? Matrix(*m.parameter_covariance):V{}},{"fixed_charge",m.fixed_charge ? Pack(*m.fixed_charge):V{}}}; }
 GroupGaussianMemberResult Member(const V & v)
@@ -341,8 +343,8 @@ std::string Encode(const ModelObject & model)
             }
             peeling=O{{"source",Pack(p.source)},{"mode",p.mode},{"neighbors",p.neighbor_count},{"samples",samples}};
         }
-        atoms.push_back(O{{"id",atom->GetSerialID()},{"first",Pack(e->FirstStageEstimate())},{"second",Pack(e->JointEstimate())},
-            {"first_native",FirstNative(*e)},
+        atoms.push_back(O{{"id",atom->GetSerialID()},{"initial",Pack(e->InitialStageEstimate())},{"joint",Pack(e->JointStageEstimate())},
+            {"initial_native",InitialNative(*e)},
             {"geometry",e->SampleGeometryAvailable()},{"raw",Samples(e->RawSamplingEntries(),e->SampleGeometryAvailable())},
             {"peeling",peeling},{"post_joint_local",e->PostJointLocalResult() ? Pack(*e->PostJointLocalResult()):V{}},
             {"posterior",e->GroupMemberResult() ? Pack(*e->GroupMemberResult()):V{}}});
@@ -362,10 +364,11 @@ void Decode(ModelObject & model, const std::string & text)
     {
         const auto & o=value.as_object(); const int id=Read<int>(o,"id"); auto * atom=model.FindAtomPtr(id);
         if(!atom || !seen.insert(id).second) throw std::invalid_argument("Invalid stage atom identity.");
+        if(o.size()!=9 || !o.contains("initial") || !o.contains("joint") || !o.contains("initial_native"))
+            throw std::invalid_argument("Invalid Stage atom fields.");
         auto & entry=data.EnsureAtomLocalEntry(*atom);
-        if(o.size()!=9) throw std::invalid_argument("Invalid Stage atom fields.");
-        RestoreFirstNative(entry,o.at("first_native"),Stage(o.at("first")));
-        entry.SetJointEstimate(Stage(o.at("second")));
+        RestoreInitialNative(entry,o.at("initial_native"),Stage(o.at("initial")));
+        entry.SetJointStageEstimate(Stage(o.at("joint")));
         const bool geometry=Read<bool>(o,"geometry"); entry.SetSampleGeometryAvailable(geometry);
         entry.SetRawSamplingEntries(Samples(o.at("raw"),geometry));
         if(!o.at("peeling").is_null())
@@ -432,9 +435,9 @@ void Validate(const ModelObject & model)
     std::optional<std::string> joint_run_id;
     for(const auto & [id,e]:data.AtomLocalEntries())
     {
-        const auto & first=e->FirstStageEstimate();
-        const auto & s=e->JointEstimate();
-        if ((first.source.method!=EstimateMethod::Unspecified && first.source.method!=EstimateMethod::LocalMDPDE) ||
+        const auto & initial=e->InitialStageEstimate();
+        const auto & s=e->JointStageEstimate();
+        if ((initial.source.method!=EstimateMethod::Unspecified && initial.source.method!=EstimateMethod::LocalMDPDE) ||
             (s.source.method!=EstimateMethod::JointComponents &&
                 (s.source.method!=EstimateMethod::Unspecified || s.point)))
             throw std::invalid_argument("Estimate method does not match the fitting stage.");
@@ -487,7 +490,7 @@ void Validate(const ModelObject & model)
                 [&](const int id) {
                     const auto * atom=model.FindAtomPtr(id);
                     const auto * entry=atom ? data.FindAtomLocalEntry(*atom) : nullptr;
-                    return entry && entry->JointEstimate().source.method == EstimateMethod::JointComponents;
+                    return entry && entry->JointStageEstimate().source.method == EstimateMethod::JointComponents;
                 });
             if (has_joint_member)
                 throw std::invalid_argument("Unqualified Joint snapshot conflicts with current group inference.");
@@ -502,7 +505,7 @@ void Validate(const ModelObject & model)
             if(!entry || !entry->GroupMemberResult() || members[i].evidence_source_id!=summary->source_id ||
                 entry->GroupMemberResult()->posterior.GetModel().ToVector()!=members[i].posterior.GetModel().ToVector())
                 throw std::invalid_argument("Group/member posterior source mismatch.");
-            const auto & stage=entry->JointEstimate();
+            const auto & stage=entry->JointStageEstimate();
             if(stage.source.method==EstimateMethod::JointComponents)
             {
                 const auto & local=entry->PostJointLocalResult();
@@ -527,7 +530,7 @@ void Validate(const ModelObject & model)
         {
             const auto * atom = model.FindAtomPtr(id);
             const auto * entry = atom ? data.FindAtomLocalEntry(*atom) : nullptr;
-            joint_group |= entry && entry->JointEstimate().source.method == EstimateMethod::JointComponents;
+            joint_group |= entry && entry->JointStageEstimate().source.method == EstimateMethod::JointComponents;
         }
         if (joint_group && (!summary->descriptive_charge_median ||
             !std::isfinite(*summary->descriptive_charge_median) ||
@@ -542,11 +545,11 @@ void Validate(const ModelObject & model)
     for(const auto & [id,expected]:mapped)
     {
         const auto * e=data.FindAtomLocalEntry(*model.FindAtomPtr(id));
-        if(!e || e->JointEstimate().source.method!=EstimateMethod::JointComponents) throw std::invalid_argument("Joint snapshot lacks a matching Second record.");
-        const auto & actual=e->JointEstimate();
+        if(!e || e->JointStageEstimate().source.method!=EstimateMethod::JointComponents) throw std::invalid_argument("Joint snapshot lacks a matching JointStage record.");
+        const auto & actual=e->JointStageEstimate();
         if(actual.convergence!=expected.convergence || actual.source.component_id!=expected.source.component_id || actual.source.role!=expected.source.role ||
-            actual.source.fixed_from_first_stage!=expected.source.fixed_from_first_stage || actual.point.has_value()!=expected.point.has_value() ||
-            (actual.point && actual.point->ToVector()!=expected.point->ToVector())) throw std::invalid_argument("Joint snapshot/Second mismatch.");
+            actual.source.fixed_from_initial_stage!=expected.source.fixed_from_initial_stage || actual.point.has_value()!=expected.point.has_value() ||
+            (actual.point && actual.point->ToVector()!=expected.point->ToVector())) throw std::invalid_argument("Joint snapshot and JointStage record mismatch.");
     }
 }
 }

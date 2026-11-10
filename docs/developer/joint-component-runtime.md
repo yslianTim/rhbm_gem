@@ -69,6 +69,9 @@ remain unavailable. There is no assembly-wide A/C reprofile.
 
 The workflow obtains Target width seeds through
 [InitialStage](joint-stage-integration.md#initialstage).
+Native InitialStage OLS/MDPDE diagnostics supply initialization evidence.
+The published InitialStage point and the JointStage endpoint have independent
+records. Per-atom qualification and recovery accompany the Joint snapshot.
 Calibration uses finite positive native-qualified or recovered-qualified
 Target MDPDE widths, excluding median fallbacks and initialization exceptions.
 It requires at least 20 qualified donors and at least 95% Target coverage.

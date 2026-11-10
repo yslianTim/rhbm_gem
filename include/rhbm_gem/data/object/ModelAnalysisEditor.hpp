@@ -26,9 +26,9 @@ public:
     void ApplyJointResult(JointAnalysisResult result, const std::string & run_id);
     void ClearJointResult();
     void UpdateJointMetadata(JointAnalysisMetadata metadata);
-    void ApplyJointEstimates(std::map<int, LocalStageEstimate> estimates);
-    void SetAtomFirstStageEstimate(const AtomObject & atom, LocalStageEstimate value);
-    void SetAtomJointEstimate(const AtomObject & atom, LocalStageEstimate value);
+    void ApplyJointStageEstimates(std::map<int, LocalStageEstimate> estimates);
+    void SetAtomInitialStageEstimate(const AtomObject & atom, LocalStageEstimate value);
+    void SetAtomJointStageEstimate(const AtomObject & atom, LocalStageEstimate value);
     void SetAtomPostFitPeeling(const AtomObject & atom, PostFitPeelingResult value);
     void ApplyPostFitPeelingsBatch(std::vector<std::pair<int, PostFitPeelingResult>> peelings);
     void SetAtomPostJointLocalResult(const AtomObject & atom, PostJointLocalResult value);
@@ -41,14 +41,14 @@ public:
     void SetAtomLocalRawSamplingEntries(
         const AtomObject & atom_object,
         LocalPotentialSampleList value);
-    void SetAtomFirstStageGaussianResult(
+    void SetAtomInitialStageGaussianResult(
         const AtomObject & atom_object,
         LocalGaussianResult result);
-    void SetAtomFirstStageAlphaR(
+    void SetAtomInitialStageAlphaR(
         const AtomObject & atom_object,
         double alpha_r);
     void RebuildAtomGroupsFromSelection();
-    void InitializeFirstStageAlpha(double alpha_r);
+    void SetSelectedAtomsInitialStageAlphaR(double alpha_r);
     void InitializeGroupAlpha(double alpha_g);
     void ApplyAtomGroupGaussianResult(
         GroupKey group_key,

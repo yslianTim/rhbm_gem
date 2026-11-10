@@ -244,11 +244,11 @@ TEST(JointComponentPartialSelectionTest, InitializationPreservesTargetHistoryAnd
     sentinel.mdpde=rhbm_gem::GaussianModel3DWithUncertainty{rhbm_gem::GaussianModel3D{7.,.91,.23},{}};
     for(const auto & atom:f.model->GetAtomList())
     {
-        f.model->EditAnalysis().SetAtomFirstStageGaussianResult(*atom,sentinel);
+        f.model->EditAnalysis().SetAtomInitialStageGaussianResult(*atom,sentinel);
         rhbm_gem::LocalStageEstimate endpoint;
         endpoint.source.method = rhbm_gem::EstimateMethod::JointComponents;
         endpoint.point = sentinel.mdpde.GetModel();
-        f.model->EditAnalysis().SetAtomJointEstimate(*atom,endpoint);
+        f.model->EditAnalysis().SetAtomJointStageEstimate(*atom,endpoint);
     }
     const auto fit=core::EstimateJointComponents(*f.map,*f.model);
     ASSERT_EQ(fit.initialization.atoms.size(),1); ASSERT_TRUE(fit.initialization.valid) << fit.initialization.reason;
@@ -258,9 +258,9 @@ TEST(JointComponentPartialSelectionTest, InitializationPreservesTargetHistoryAnd
     EXPECT_EQ(f.model->GetAnalysisView().CollectAtomGroupKeys(),groups);
     for(auto group:groups) EXPECT_EQ(f.model->GetAnalysisView().GetAtomAlphaG(group),.432);
     const auto halo=rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(2));
-    EXPECT_EQ(halo.GetFirstStageMDPDE().GetWidth(),.91);
+    EXPECT_EQ(halo.GetInitialStageMDPDE().GetWidth(),.91);
     for(const auto & atom:f.model->GetAtomList())
-        EXPECT_EQ(rhbm_gem::AtomLocalPotentialView::For(*atom).GetFinalModel(rhbm_gem::FittingStage::Second).GetWidth(),.91);
+        EXPECT_EQ(rhbm_gem::AtomLocalPotentialView::For(*atom).GetJointStageModel().GetWidth(),.91);
     const auto prediction_before=fit.prediction;
     const auto saved=core::CaptureJointAnalysisResult(fit);
     auto movable_fit=fit;
@@ -272,7 +272,7 @@ TEST(JointComponentPartialSelectionTest, InitializationPreservesTargetHistoryAnd
         EXPECT_EQ(*fit.prediction,*prediction_before);
     EXPECT_EQ(saved.fitting_to_original_contributors,fit.problem->FittingToOriginalContributors());
     EXPECT_EQ(saved.fitting_to_original_rows,fit.problem->FittingToOriginalRows());
-    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),24);
+    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),25);
     const auto decoded=rhbm_gem::joint_result_io::Decode(encoded);
     ASSERT_TRUE(decoded.selection_domain); EXPECT_EQ(decoded.selection_domain->target_indices,(std::vector<std::size_t>{0}));
     ASSERT_TRUE(decoded.selection_domain->pure_halo_support_exclusion);
@@ -323,7 +323,7 @@ TEST(JointComponentPartialSelectionTest, CopyAndMoveCapturePreserveComponentPers
         atom.mdpde[1]=.5;
         atom.native_status=static_cast<int>(rhbm_gem::RHBMEstimationStatus::SUCCESS);
         atom.target=true;
-        atom.first_stage_fit_qualified=true;
+        atom.initial_stage_fit_qualified=true;
         atom.reason="valid-width";
         atom.used_tau=.5;
         initialization.atoms.push_back(std::move(atom));
@@ -516,10 +516,10 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsSelectedTargetsWithou
             const auto initialized=std::find_if(result.initialization.atoms.begin(),result.initialization.atoms.end(),
                 [&](const auto & atom){return atom.id==std::to_string(id);});
             ASSERT_NE(initialized,result.initialization.atoms.end());
-            EXPECT_DOUBLE_EQ(view.GetFinalModel(rhbm_gem::FittingStage::First).GetWidth(),initialized->mdpde[1]);
+            EXPECT_DOUBLE_EQ(view.GetInitialStageModel().GetWidth(),initialized->mdpde[1]);
             EXPECT_FALSE(view.GetRawSamplingEntries(false).empty());
         }
-        const auto & stage = view.GetJointEstimate();
+        const auto & stage = view.GetJointStageEstimate();
         const auto & expected = expected_stages.at(id);
         EXPECT_EQ(stage.point.has_value(), expected.point.has_value());
         if (stage.point && expected.point) EXPECT_EQ(stage.point->ToVector(), expected.point->ToVector());
@@ -603,14 +603,14 @@ TEST(JointComponentPartialSelectionTest, StageAdapterUsesIdentityAndClearsMissin
     ASSERT_TRUE(component.state);
     component.atoms = {1, 0};
     result.selection_domain->target_indices = {1};
-    f.model->EditAnalysis().ApplyJointEstimates(
+    f.model->EditAnalysis().ApplyJointStageEstimates(
         rhbm_gem::data_internal::BuildJointStageEstimates(result, "test-run"));
     const auto target = rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(1));
     const auto halo = rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(2));
-    EXPECT_DOUBLE_EQ(target.GetFinalModel(rhbm_gem::FittingStage::Second).GetAmplitude(), component.state->ac[0]);
-    EXPECT_DOUBLE_EQ(target.GetFinalModel(rhbm_gem::FittingStage::Second).GetOffset(), component.state->ac[1]);
-    EXPECT_DOUBLE_EQ(target.GetFinalModel(rhbm_gem::FittingStage::Second).GetWidth(), component.state->tau[0]);
-    EXPECT_EQ(halo.GetJointEstimate().source.role, rhbm_gem::FittingRole::Halo);
+    EXPECT_DOUBLE_EQ(target.GetJointStageModel().GetAmplitude(), component.state->ac[0]);
+    EXPECT_DOUBLE_EQ(target.GetJointStageModel().GetOffset(), component.state->ac[1]);
+    EXPECT_DOUBLE_EQ(target.GetJointStageModel().GetWidth(), component.state->tau[0]);
+    EXPECT_EQ(halo.GetJointStageEstimate().source.role, rhbm_gem::FittingRole::Halo);
     auto summary = core::BuildJointTargetSpotSummary(*f.model);
     EXPECT_NE(summary.find("joint-components"), std::string::npos);
     EXPECT_NE(summary.find("Joint Target estimate summary by Spot:"), std::string::npos);
@@ -647,12 +647,12 @@ TEST(JointComponentPartialSelectionTest, StageAdapterUsesIdentityAndClearsMissin
     expectSummaryRowWidths(summary, false);
     f.model->EditAnalysis().SetJointResult(result);
     f.model->EditAnalysis().ClearJointResult();
-    EXPECT_TRUE(target.HasFinalModel(rhbm_gem::FittingStage::Second));
+    EXPECT_TRUE(target.HasJointStageModel());
     component.state.reset(); component.stop_reason = "invalid-initial-widths";
-    f.model->EditAnalysis().ApplyJointEstimates(
+    f.model->EditAnalysis().ApplyJointStageEstimates(
         rhbm_gem::data_internal::BuildJointStageEstimates(result, "next-run"));
-    EXPECT_FALSE(target.HasFinalModel(rhbm_gem::FittingStage::Second));
-    EXPECT_EQ(target.GetJointEstimate().reason, "invalid-initial-widths");
+    EXPECT_FALSE(target.HasJointStageModel());
+    EXPECT_EQ(target.GetJointStageEstimate().reason, "invalid-initial-widths");
     summary = core::BuildJointTargetSpotSummary(*f.model);
     EXPECT_NE(summary.find("\n| CA   |     0 |             0 |           1 |"), std::string::npos);
     expectSummaryRowWidths(summary, true);
@@ -670,7 +670,7 @@ TEST(JointComponentPartialSelectionTest, SummaryIncludesOnlyConvergedJointTarget
     stage.source = {EstimateMethod::JointComponents, {}, "component", "summary-test", FittingRole::Target};
     stage.point = GaussianModel3D{2.0, 0.5, -1.0};
     stage.convergence = JointCheckStatus::Passed;
-    editor.SetAtomJointEstimate(*first, stage);
+    editor.SetAtomJointStageEstimate(*first, stage);
 
     struct SummaryCase
     {
@@ -696,13 +696,13 @@ TEST(JointComponentPartialSelectionTest, SummaryIncludesOnlyConvergedJointTarget
             << ", has_point=" << test.has_point);
         stage.convergence = test.convergence;
         stage.point = test.has_point ? std::optional{GaussianModel3D{6.0, 1.5, 1.0}} : std::nullopt;
-        editor.SetAtomJointEstimate(*second, stage);
+        editor.SetAtomJointStageEstimate(*second, stage);
         const auto summary = core::BuildJointTargetSpotSummary(*f.model);
         EXPECT_NE(summary.find(std::string{"\n| CA   |"} + test.counts + test.values), std::string::npos) << summary;
     }
 }
 
-TEST(JointComponentPartialSelectionTest, PostFitPeelingUsesOriginalGridAndPreservesFirstStageSamples)
+TEST(JointComponentPartialSelectionTest, PostFitPeelingUsesOriginalGridAndPreservesInitialStageSamples)
 {
     auto f = joint_partial_test::Make("partial");
     SetExactMapForFixture(f);
@@ -715,7 +715,7 @@ TEST(JointComponentPartialSelectionTest, PostFitPeelingUsesOriginalGridAndPreser
     snapshot.halo_median_reconstruction=core::detail::BuildHaloMedianReconstruction(
         *f.model,problem,snapshot,"peeling-test").TakeSnapshot();
     ASSERT_TRUE(snapshot.components.front().state);
-    f.model->EditAnalysis().ApplyJointEstimates(
+    f.model->EditAnalysis().ApplyJointStageEstimates(
         rhbm_gem::data_internal::BuildJointStageEstimates(snapshot, "peeling-test"));
     auto * atom = f.model->FindAtomPtr(1);
     auto editor = f.model->EditAnalysis();
@@ -726,7 +726,7 @@ TEST(JointComponentPartialSelectionTest, PostFitPeelingUsesOriginalGridAndPreser
     const auto raw = core::detail::BuildLocalPotentialSampleList(*f.map, points);
     editor.SetAtomLocalRawSamplingEntries(*atom, raw);
     const auto view = rhbm_gem::AtomLocalPotentialView::For(*atom);
-    const auto before = view.GetFinalModel(rhbm_gem::FittingStage::Second).ToVector();
+    const auto before = view.GetJointStageModel().ToVector();
     const auto outputs = postprocessing_test::BuildPostFitPeelingSamples(*f.map, *f.model, problem,std::nullopt,&snapshot);
     const auto & output = outputs.at(1);
     ASSERT_FALSE(output.samples.empty());
@@ -748,7 +748,7 @@ TEST(JointComponentPartialSelectionTest, PostFitPeelingUsesOriginalGridAndPreser
     ASSERT_TRUE(view.GetLocalFittingPeelingRatio(0, 1));
     EXPECT_GT(*view.GetLocalFittingPeelingRatio(0, 1), 0);
     EXPECT_TRUE(view.GetLocalFittingPeelingRatio(0, 3));
-    EXPECT_EQ(view.GetFinalModel(rhbm_gem::FittingStage::Second).ToVector(), before);
+    EXPECT_EQ(view.GetJointStageModel().ToVector(), before);
     const auto after = view.GetRawSamplingEntries(false);
     for (std::size_t i = 0; i < raw.size(); ++i)
     {
@@ -798,7 +798,7 @@ TEST(JointComponentPartialSelectionTest, PeelingIgnoresContributorsOutsideActual
     auto snapshot=core::CaptureJointAnalysisResult(fit);
     snapshot.halo_median_reconstruction=core::detail::BuildHaloMedianReconstruction(
         *f.model,problem,snapshot,"distant-halo-peeling").TakeSnapshot();
-    f.model->EditAnalysis().ApplyJointEstimates(
+    f.model->EditAnalysis().ApplyJointStageEstimates(
         rhbm_gem::data_internal::BuildJointStageEstimates(snapshot, "distant-halo-peeling"));
     auto editor = f.model->EditAnalysis();
     auto * target = f.model->FindAtomPtr(1);
@@ -912,12 +912,12 @@ TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextPreservesGri
         EXPECT_EQ(shared.source.component_id,standalone.source.component_id);
         EXPECT_EQ(shared.source.run_id,standalone.source.run_id);
         EXPECT_EQ(shared.source.role,standalone.source.role);
-        EXPECT_EQ(shared.source.fixed_from_first_stage,standalone.source.fixed_from_first_stage);
+        EXPECT_EQ(shared.source.fixed_from_initial_stage,standalone.source.fixed_from_initial_stage);
         EXPECT_EQ(shared.samples.size(), shared_peeling.samples.size());
         ASSERT_EQ(shared.samples.size(), standalone.samples.size());
         EXPECT_DOUBLE_EQ(shared.fixed_charge.coefficient, standalone.fixed_charge.coefficient);
         EXPECT_DOUBLE_EQ(shared.fixed_charge.width, standalone.fixed_charge.width);
-        const auto stage=local.GetJointEstimate();
+        const auto stage=local.GetJointStageEstimate();
         ASSERT_TRUE(stage.point);
         EXPECT_DOUBLE_EQ(shared.fixed_charge.coefficient,stage.point->GetOffset());
         EXPECT_DOUBLE_EQ(shared.fixed_charge.width,stage.point->GetWidth());
@@ -1191,7 +1191,7 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInforma
         stage.convergence = JointCheckStatus::Passed;
         stages[i] = std::move(stage);
     }
-    editor.ApplyJointEstimates(stages);
+    editor.ApplyJointStageEstimates(stages);
     const auto stage_summary = core::BuildJointTargetSpotSummary(model);
     EXPECT_NE(stage_summary.find(
         "\n| CA   |     5 |             0 |           0 |   2.60 / 0.32 |   0.55 / 0.03 |  -0.30 / 0.16 |"),
@@ -1203,7 +1203,7 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInforma
     {
         (void)unused;
         const auto & stage = AtomLocalPotentialView::For(*model.FindAtomPtr(id))
-            .GetJointEstimate();
+            .GetJointStageEstimate();
         PostFitPeelingResult peeling;
         peeling.source = stage.source;
         for (int sample_index = 0; sample_index < 6; ++sample_index)
@@ -1266,7 +1266,7 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInforma
 
     const auto first = AtomLocalPotentialView::For(*model.FindAtomPtr(1));
     ASSERT_TRUE(first.GetPostJointLocalResult());
-    const auto joint_point = first.GetFinalModel(FittingStage::Second).ToVector();
+    const auto joint_point = first.GetJointStageModel().ToVector();
     const auto local_point = first.GetPostJointLocalResult()->fit.mdpde.GetModel().ToVector();
     EXPECT_FALSE(joint_point.isApprox(local_point, 1.0e-10));
     const auto posterior = first.GetGroupMemberResult()->posterior.GetModel().ToVector();
@@ -1340,7 +1340,7 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInforma
     EXPECT_TRUE(first.GetGroupMemberResult());
     core::detail::RunGroupingStage(model, options);
     EXPECT_EQ(model.GetAnalysisView().GetGroupParameterSummary(keys[0])->eligible_count, 4);
-    EXPECT_EQ(first.GetFinalModel(FittingStage::Second).ToVector(), joint_point);
+    EXPECT_EQ(first.GetJointStageModel().ToVector(), joint_point);
     EXPECT_TRUE(first.GetGroupMemberResult());
 }
 
@@ -1356,10 +1356,10 @@ TEST(JointComponentPartialSelectionTest, TargetOnlyPostprocessingRetainsFullCont
     auto snapshot = core::CaptureJointAnalysisResult(fit);
     snapshot.halo_median_reconstruction=core::detail::BuildHaloMedianReconstruction(
         *f.model,problem,snapshot,"output-scope").TakeSnapshot();
-    f.model->EditAnalysis().ApplyJointEstimates(
+    f.model->EditAnalysis().ApplyJointStageEstimates(
         rhbm_gem::data_internal::BuildJointStageEstimates(snapshot, "output-scope"));
     const auto target_stage=rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(1))
-        .GetJointEstimate();
+        .GetJointStageEstimate();
     ASSERT_TRUE(target_stage.point) << target_stage.reason;
     for (const auto & atom : f.model->GetAtomList())
         f.model->EditAnalysis().SetAtomLocalRawSamplingEntries(*atom,
@@ -1379,7 +1379,7 @@ TEST(JointComponentPartialSelectionTest, TargetOnlyPostprocessingRetainsFullCont
     f.model->EditAnalysis().UpdateJointMetadata(metadata);
     EXPECT_EQ(f.model->GetAnalysisView().GetJointResult()->objective, snapshot.objective);
     EXPECT_EQ(f.model->GetAnalysisView().GetJointResult()->metadata.model_path, "metadata-only");
-    EXPECT_TRUE(rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(1)).HasFinalModel(rhbm_gem::FittingStage::Second));
+    EXPECT_TRUE(rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(1)).HasJointStageModel());
 }
 
 TEST(JointComponentPartialSelectionTest, FixedChargePosteriorEvaluatorUsesJointWidthAndKernelSupport)
@@ -1433,24 +1433,24 @@ TEST(JointComponentPartialSelectionTest, ExistingSampleFirstExecutorUsesOnlyTheE
     editor.InitializeFromSelection();
     rhbm_gem::LocalGaussianResult seed;
     seed.mdpde = {rhbm_gem::GaussianModel3D{7, .73, 0}, {}};
-    editor.SetAtomFirstStageGaussianResult(*f.model->FindAtomPtr(1), seed);
+    editor.SetAtomInitialStageGaussianResult(*f.model->FindAtomPtr(1), seed);
     seed.mdpde = {rhbm_gem::GaussianModel3D{0, 1, 0}, {}};
     const auto & halo = *f.model->FindAtomPtr(2);
-    editor.SetAtomFirstStageGaussianResult(halo, seed);
+    editor.SetAtomInitialStageGaussianResult(halo, seed);
     editor.SetAtomLocalRawSamplingEntries(halo, core::SampleAtomMapValues(*f.map, halo, SphereSamplingMethod::FibonacciDeterministic));
     const auto selected = f.model->GetSelectedAtoms();
     const std::vector<rhbm_gem::AtomObject *> atoms{f.model->FindAtomPtr(2)};
     core::FitOptions options; options.quiet_mode = true; options.thread_size = 1;
-    core::RunFirstStageLocalAlphaTraining(*f.model, options, atoms);
-    core::RunFirstStageLocalFitting(*f.model, options, atoms);
+    core::RunInitialStageLocalAlphaTraining(*f.model, options, atoms);
+    core::RunInitialStageLocalFitting(*f.model, options, atoms);
     EXPECT_EQ(f.model->GetSelectedAtoms(), selected);
-    EXPECT_DOUBLE_EQ(rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(1)).GetFinalModel(rhbm_gem::FittingStage::First).GetWidth(), .73);
+    EXPECT_DOUBLE_EQ(rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(1)).GetInitialStageModel().GetWidth(), .73);
     const auto halo_view = rhbm_gem::AtomLocalPotentialView::For(halo);
-    ASSERT_TRUE(halo_view.HasFinalModel(rhbm_gem::FittingStage::First));
-    EXPECT_GT(halo_view.GetFinalModel(rhbm_gem::FittingStage::First).GetAmplitude(), 0.0);
+    ASSERT_TRUE(halo_view.HasInitialStageModel());
+    EXPECT_GT(halo_view.GetInitialStageModel().GetAmplitude(), 0.0);
 }
 
-TEST(JointComponentPartialSelectionTest, JointFirstStageParallelWorkersPreserveSerialResults)
+TEST(JointComponentPartialSelectionTest, JointInitialStageParallelWorkersPreserveSerialResults)
 {
     const auto run = [](int thread_count) {
         auto fixture = joint_partial_test::Make("all");
@@ -1488,14 +1488,14 @@ TEST(JointComponentPartialSelectionTest, JointFirstStageParallelWorkersPreserveS
             EXPECT_EQ(actual.sample_count, expected.sample_count);
             EXPECT_EQ(actual.native_status, expected.native_status);
             EXPECT_EQ(actual.target, expected.target);
-            EXPECT_EQ(actual.first_stage_fit_qualified, expected.first_stage_fit_qualified);
+            EXPECT_EQ(actual.initial_stage_fit_qualified, expected.initial_stage_fit_qualified);
             EXPECT_EQ(actual.reason, expected.reason);
             EXPECT_EQ(actual.original_tau, expected.original_tau);
             EXPECT_EQ(actual.used_tau, expected.used_tau);
             EXPECT_EQ(actual.seed_source, expected.seed_source);
             EXPECT_EQ(actual.donor_count, expected.donor_count);
-            EXPECT_EQ(actual.first_stage_qualification, expected.first_stage_qualification);
-            EXPECT_EQ(actual.first_stage_recovery, expected.first_stage_recovery);
+            EXPECT_EQ(actual.initial_stage_qualification, expected.initial_stage_qualification);
+            EXPECT_EQ(actual.initial_stage_recovery, expected.initial_stage_recovery);
         }
         for (const auto atom_id : {1, 2})
         {
@@ -1503,14 +1503,14 @@ TEST(JointComponentPartialSelectionTest, JointFirstStageParallelWorkersPreserveS
                 *serial_fixture.model->FindAtomPtr(atom_id));
             const auto parallel_view = rhbm_gem::AtomLocalPotentialView::For(
                 *parallel_fixture.model->FindAtomPtr(atom_id));
-            EXPECT_DOUBLE_EQ(serial_view.GetFirstStageAlphaR(),
-                parallel_view.GetFirstStageAlphaR());
-            EXPECT_EQ(serial_view.GetFirstStageEstimate().source.role,
-                parallel_view.GetFirstStageEstimate().source.role);
-            const auto serial_ols = serial_view.GetFirstStageGaussianResult().ols.GetModel().ToVector();
-            const auto parallel_ols = parallel_view.GetFirstStageGaussianResult().ols.GetModel().ToVector();
-            const auto serial_mdpde = serial_view.GetFirstStageGaussianResult().mdpde.GetModel().ToVector();
-            const auto parallel_mdpde = parallel_view.GetFirstStageGaussianResult().mdpde.GetModel().ToVector();
+            EXPECT_DOUBLE_EQ(serial_view.GetInitialStageAlphaR(),
+                parallel_view.GetInitialStageAlphaR());
+            EXPECT_EQ(serial_view.GetInitialStageEstimate().source.role,
+                parallel_view.GetInitialStageEstimate().source.role);
+            const auto serial_ols = serial_view.GetInitialStageGaussianResult().ols.GetModel().ToVector();
+            const auto parallel_ols = parallel_view.GetInitialStageGaussianResult().ols.GetModel().ToVector();
+            const auto serial_mdpde = serial_view.GetInitialStageGaussianResult().mdpde.GetModel().ToVector();
+            const auto parallel_mdpde = parallel_view.GetInitialStageGaussianResult().mdpde.GetModel().ToVector();
             for (Eigen::Index k = 0; k < 3; ++k)
             {
                 EXPECT_DOUBLE_EQ(serial_ols(k), parallel_ols(k));
@@ -1644,7 +1644,7 @@ TEST(JointComponentPartialSelectionTest, GroupInferenceUsesQualifiedLocalMeasure
         stage.point=GaussianModel3D{id==1 ? 0. : 2.,id==1 ? .015 : .5,0.};
         stage.convergence=JointCheckStatus::Passed; stages[id]=stage;
     }
-    editor.ApplyJointEstimates(stages);
+    editor.ApplyJointStageEstimates(stages);
     std::vector<std::pair<int,PostFitPeelingResult>> peelings;
     std::vector<std::pair<int,PostJointLocalResult>> locals;
     const std::array<double,5> widths{.4,.5,.7,.6,.8};
@@ -1691,7 +1691,7 @@ TEST(JointComponentPartialSelectionTest, GroupInferenceUsesQualifiedLocalMeasure
     // supplied qualified Local Gaussian measurement, covariance or outlier flags.
     stages[1].point=GaussianModel3D{0.,1.2,0.};
     locals[0].second.fixed_charge.width=1.2;
-    editor.ApplyJointEstimates(stages);
+    editor.ApplyJointStageEstimates(stages);
     const auto changed_joint=publish();
     ASSERT_TRUE(changed_joint.inference);
     EXPECT_EQ(changed_joint.member_ids,original.member_ids);

@@ -127,10 +127,10 @@ void PdbFormat::WriteModel(const ModelObject& model_object, std::ostream& stream
         const auto position{atom->GetPosition()};
         const auto occupancy{atom->GetOccupancy()};
         double b_factor{atom->GetTemperature()};
-        if (AtomLocalPotentialView::For(*atom).IsAvailable() && AtomLocalPotentialView::For(*atom).HasFinalModel(FittingStage::Second))
+        if (AtomLocalPotentialView::For(*atom).IsAvailable() && AtomLocalPotentialView::For(*atom).HasJointStageModel())
         {
             b_factor = AtomLocalPotentialView::For(*atom)
-                .GetFinalModel(FittingStage::Second)
+                .GetJointStageModel()
                 .GetDisplayParameter(par);
         }
 

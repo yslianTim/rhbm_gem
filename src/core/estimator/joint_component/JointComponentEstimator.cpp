@@ -677,11 +677,11 @@ JointFitResult detail::FitJointComponentsInitializedWithProgress(
     out.initialization=initialization;
     out.evidence.push_back({"global-width-calibration",JointCheckStatus::Passed,
         JointEvidenceScope::AssembledGlobal,calibration.p95,bounded.tau_max,
-        "global-first-stage-p95-k4; qualified-donors="+
+        "global-initial-stage-p95-k4; qualified-donors="+
             std::to_string(calibration.qualified_donor_count)+"/"+std::to_string(calibration.target_count)});
-    out.evidence.push_back({"qualified-first-stage-donor-coverage",JointCheckStatus::Passed,
+    out.evidence.push_back({"qualified-initial-stage-donor-coverage",JointCheckStatus::Passed,
         JointEvidenceScope::AssembledGlobal,calibration.qualified_donor_coverage,0.95,
-        "target-only-qualified-first-stage-widths"});
+        "target-only-qualified-initial-stage-widths"});
     out.evidence.push_back({"bounded-initialization-projection",JointCheckStatus::Passed,
         JointEvidenceScope::AssembledGlobal,static_cast<double>(bounded.projection_count),{},
         "projected-target-widths="+std::to_string(bounded.projection_count)+
@@ -876,8 +876,8 @@ JointInitialization joint_component::InitializeContributors(MapObject & map,Mode
         const auto * target = model.FindAtomPtr(source->GetSerialID());
         const auto view = AtomLocalPotentialView::For(*source);
         model.EditAnalysis().SetAtomLocalRawSamplingEntries(*target, view.GetRawSamplingEntries(false));
-        model.EditAnalysis().SetAtomFirstStageGaussianResult(*target,
-            view.GetFirstStageGaussianResult());
+        model.EditAnalysis().SetAtomInitialStageGaussianResult(*target,
+            view.GetInitialStageGaussianResult());
     }
     return initialization;
 }

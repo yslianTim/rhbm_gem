@@ -55,12 +55,12 @@ void SameInitialization(const JointInitialization & a,const JointInitialization 
         EXPECT_EQ(a.atoms[i].ols,b.atoms[i].ols); EXPECT_EQ(a.atoms[i].mdpde,b.atoms[i].mdpde);
         EXPECT_EQ(a.atoms[i].alpha,b.atoms[i].alpha);
         EXPECT_EQ(a.atoms[i].sample_count,b.atoms[i].sample_count);
-        EXPECT_EQ(a.atoms[i].first_stage_qualification,b.atoms[i].first_stage_qualification);
+        EXPECT_EQ(a.atoms[i].initial_stage_qualification,b.atoms[i].initial_stage_qualification);
     }
 }
 }
 
-TEST(JointFirstStageSamplingTest, DefaultExactlyMatchesExplicitFirstStageSampling)
+TEST(InitialStageSamplingTest, DefaultExactlyMatchesExplicitInitialStageSampling)
 {
     auto map=Map(); auto explicit_sampling=Model(); auto current=Model();
     FitOptions options; options.quiet_mode=true;
@@ -75,13 +75,13 @@ TEST(JointFirstStageSamplingTest, DefaultExactlyMatchesExplicitFirstStageSamplin
             AtomLocalPotentialView::For(*new_workset.contributors[i]).GetRawSamplingEntriesView());
 }
 
-TEST(JointFirstStageSamplingTest, DeterministicAcrossWorkersAndRepeatedRuns)
+TEST(InitialStageSamplingTest, DeterministicAcrossWorkersAndRepeatedRuns)
 {
     auto map=Map();
     for (const auto method : { SphereSamplingMethod::FibonacciDeterministic,
              SphereSamplingMethod::SpiralDeterministic })
     {
-        FitOptions options; options.quiet_mode=true; options.first_stage_sampling_method=method;
+        FitOptions options; options.quiet_mode=true; options.initial_stage_sampling_method=method;
         auto serial=Model(); auto parallel=Model();
         const auto problem=BuildPureHaloSupportExclusionProblem(map,*serial);
         const auto sw=d::BuildInitialStageWorkset(*serial,problem);
@@ -101,7 +101,7 @@ TEST(JointFirstStageSamplingTest, DeterministicAcrossWorkersAndRepeatedRuns)
     }
 }
 
-TEST(JointFirstStageSamplingTest, ParallelSamplingFailurePreservesEveryPreviousRawEntry)
+TEST(InitialStageSamplingTest, ParallelSamplingFailurePreservesEveryPreviousRawEntry)
 {
     auto model=Model(); auto map=Map(); const auto atoms=model->GetSelectedAtoms();
     RunPotentialSamplingWorkflow(map,*model,atoms,1,{},true);
@@ -121,20 +121,20 @@ TEST(JointFirstStageSamplingTest, ParallelSamplingFailurePreservesEveryPreviousR
     }
 }
 
-TEST(JointFirstStageSamplingTest, SpiralInitializesWidthsAndLeavesQScoreUnchanged)
+TEST(InitialStageSamplingTest, SpiralInitializesWidthsAndLeavesQScoreUnchanged)
 {
     auto map=Map(); auto model=Model(); const auto atoms=model->GetSelectedAtoms();
     const auto score=CalculateQScoreForAtom(*atoms[0],map,*model,1.,0.);
     const auto default_samples=SampleAtomMapValues(map,*atoms[0]);
     FitOptions options; options.quiet_mode=true;
-    options.first_stage_sampling_method=SphereSamplingMethod::SpiralDeterministic;
+    options.initial_stage_sampling_method=SphereSamplingMethod::SpiralDeterministic;
     const auto workset=d::BuildInitialStageWorkset(*model,BuildPureHaloSupportExclusionProblem(map,*model));
     const auto initialization=d::RunInitialStage(map,*model,workset,options);
     ASSERT_TRUE(initialization.valid);
     ASSERT_EQ(initialization.atoms.size(),atoms.size());
     EXPECT_EQ(initialization.atoms.front().seed_source,"fitted");
     for (const auto * atom : workset.contributors)
-        SameSamples(SampleAtomMapValues(map,*atom,options.first_stage_sampling_method),
+        SameSamples(SampleAtomMapValues(map,*atom,options.initial_stage_sampling_method),
             AtomLocalPotentialView::For(*atom).GetRawSamplingEntriesView());
     const auto & spiral=AtomLocalPotentialView::For(*atoms[0]).GetRawSamplingEntriesView();
     ASSERT_FALSE(spiral.empty());

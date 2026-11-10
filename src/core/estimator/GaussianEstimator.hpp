@@ -24,7 +24,7 @@ struct FitOptions
     int thread_size{ 1 };
     bool quiet_mode{ false };
     int joint_initialization_thread_size{ 1 };
-    SphereSamplingMethod first_stage_sampling_method{ SphereSamplingMethod::FibonacciDeterministic };
+    SphereSamplingMethod initial_stage_sampling_method{ SphereSamplingMethod::FibonacciDeterministic };
 };
 
 double TrainAlphaR(
@@ -49,12 +49,12 @@ GroupGaussianResult EstimateGroupGaussian(
 // Reconstructs a Joint group member's posterior signal with its fixed Joint charge profile.
 double EvaluateGroupMemberResponseAtDistance(const GroupGaussianMemberResult &, double distance);
 
-void RunFirstStageLocalAlphaTraining(ModelObject &, const FitOptions &);
-void RunFirstStageLocalFitting(ModelObject &, const FitOptions &);
+void RunInitialStageLocalAlphaTraining(ModelObject &, const FitOptions &);
+void RunInitialStageLocalFitting(ModelObject &, const FitOptions &);
 
-void RunFirstStageLocalAlphaTraining(ModelObject &, const FitOptions &,
+void RunInitialStageLocalAlphaTraining(ModelObject &, const FitOptions &,
     const std::vector<AtomObject *> & atoms);
-void RunFirstStageLocalFitting(ModelObject &, const FitOptions &,
+void RunInitialStageLocalFitting(ModelObject &, const FitOptions &,
     const std::vector<AtomObject *> & atoms);
 
 } // namespace core

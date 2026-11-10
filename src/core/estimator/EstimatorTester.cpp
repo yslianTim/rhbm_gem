@@ -84,7 +84,7 @@ BiasStatistics FinalizeBiasStatistics(const Eigen::MatrixXd & bias_matrix)
     return result;
 }
 
-Eigen::MatrixXd EstimateAtomicModelFirstStageModels(
+Eigen::MatrixXd EstimateAtomicModelInitialStageModels(
     const AtomicModelTestData & input,
     const FitOptions & options)
 {
@@ -101,14 +101,14 @@ Eigen::MatrixXd EstimateAtomicModelFirstStageModels(
     for (int i = 0; i < replica_size; i++)
     {
         ModelObject model_object{ *input.replica_model_objects.at(static_cast<size_t>(i)) };
-        RunFirstStageLocalAlphaTraining(model_object, options);
-        RunFirstStageLocalFitting(model_object, options);
+        RunInitialStageLocalAlphaTraining(model_object, options);
+        RunInitialStageLocalFitting(model_object, options);
 
         const auto local_view{
             AtomLocalPotentialView::For(*model_object.GetSelectedAtoms().front())
         };
         const auto & gaussian_result{
-            local_view.GetFirstStageGaussianResult()
+            local_view.GetInitialStageGaussianResult()
         };
         estimation_matrix.col(i) = gaussian_result.mdpde.GetModel().ToVector();
     }
@@ -298,12 +298,12 @@ GroupTestBias RunGroupEstimationTest(
     return result;
 }
 
-BiasStatistics RunAtomicModelFirstStageEstimationTest(
+BiasStatistics RunAtomicModelInitialStageEstimationTest(
     const AtomicModelTestData & input,
     const FitOptions & options)
 {
     GaussianModel3D::RequireFiniteModel(input.gaus_true, "input.gaus_true");
-    const auto estimation_matrix{ EstimateAtomicModelFirstStageModels(input, options) };
+    const auto estimation_matrix{ EstimateAtomicModelInitialStageModels(input, options) };
     const auto replica_size{ static_cast<int>(estimation_matrix.cols()) };
     Eigen::MatrixXd bias_matrix{
         Eigen::MatrixXd::Zero(GaussianModel3D::ParameterSize(), replica_size)
@@ -359,11 +359,11 @@ LocalGaussianEstimateBias RunAtomicModelLocalEstimationTest(
     };
 }
 
-GaussianModel3D EstimateAtomicModelFirstStageMean(
+GaussianModel3D EstimateAtomicModelInitialStageMean(
     const AtomicModelTestData & input,
     const FitOptions & options)
 {
-    const auto estimation_matrix{ EstimateAtomicModelFirstStageModels(input, options) };
+    const auto estimation_matrix{ EstimateAtomicModelInitialStageModels(input, options) };
     return GaussianModel3D::FromVector(estimation_matrix.rowwise().mean());
 }
 

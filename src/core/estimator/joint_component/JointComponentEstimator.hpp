@@ -78,15 +78,15 @@ JointAnalysisResult CaptureJointAnalysisResult(JointFitResult &&, JointAnalysisM
 // Production target-only problem. Halo support is used only to exclude fitting
 // rows; reconstruction keeps the original-domain input in OriginalInput().
 JointProblem BuildPureHaloSupportExclusionProblem(const MapObject &,const ModelObject &);
-// Validates target FirstStage initialization, calibrates the global width bound,
+// Validates target InitialStage initialization, calibrates the global width bound,
 // and runs the bounded production fit.
 JointFitResult FitJointComponentsInitialized(const JointProblem &,const JointInitialization &);
-// Builds the Production Pure Exclusion problem, performs FirstStage
+// Builds the Production Pure Exclusion problem, performs InitialStage
 // initialization, and then fits targets only. Inspect initialization validity
 // separately from target convergence.
-// Updates successful targets' first-stage analysis only. Joint estimates are returned, not written
-// into the existing second-stage or group-fitting result fields. Replacing raw samples
-// invalidates sample-derived peeling, while fixed Second and group results are retained.
+// Updates successful Targets' InitialStage analysis only. Joint estimates are returned, not written
+// into the existing JointStage or group-fitting result fields. Replacing raw samples
+// invalidates sample-derived peeling, while published JointStage and group results are retained.
 JointFitResult EstimateJointComponents(MapObject &,ModelObject &);
 
 namespace detail {

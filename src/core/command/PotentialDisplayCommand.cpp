@@ -100,8 +100,8 @@ void ApplyModelSelection(rhbm_gem::ModelObject & model_object, AtomSelector & se
                        atom.GetResidue(),
                        atom.GetElement())
                 && rhbm_gem::AtomLocalPotentialView::For(atom).IsAvailable()
-                && (rhbm_gem::AtomLocalPotentialView::For(atom).GetJointEstimate().source.method != EstimateMethod::JointComponents
-                    || rhbm_gem::AtomLocalPotentialView::For(atom).GetJointEstimate().source.role == FittingRole::Target);
+                && (rhbm_gem::AtomLocalPotentialView::For(atom).GetJointStageEstimate().source.method != EstimateMethod::JointComponents
+                    || rhbm_gem::AtomLocalPotentialView::For(atom).GetJointStageEstimate().source.role == FittingRole::Target);
         });
 }
 

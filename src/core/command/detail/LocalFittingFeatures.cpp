@@ -77,7 +77,7 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(const ModelObje
             LocalFittingFeatureRow row; row.serial_id=atom->GetSerialID(); row.residue=ChemicalDataHelper::GetLabel(atom->GetResidue()); row.spot=atom->GetAtomID();
             row.features.fill(std::numeric_limits<double>::quiet_NaN()); rows.push_back(std::move(row)); continue;
         }
-        const auto & joint = local_view.GetJointEstimate();
+        const auto & joint = local_view.GetJointStageEstimate();
         if (joint.source.method == EstimateMethod::JointComponents && joint.source.role != FittingRole::Target) continue;
         const auto & point = joint.point;
         const double missing=std::numeric_limits<double>::quiet_NaN();

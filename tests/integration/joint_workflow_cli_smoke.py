@@ -61,26 +61,28 @@ def main() -> int:
         assert not list(collision.glob("joint_*")), "Collision must fail before writing any result"
         saved = json.loads((root / "joint_result_example.json").read_text())
         with sqlite3.connect(database) as connection:
-            assert connection.execute("PRAGMA user_version").fetchone()[0] == 22
+            assert connection.execute("PRAGMA user_version").fetchone()[0] == 23
             payload = connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='example'").fetchone()[0]
             changed = json.loads(connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='changed'").fetchone()[0])
             stages = json.loads(connection.execute("SELECT result_json FROM model_stage_result WHERE key_tag='example'").fetchone()[0])
-            assert stages["version"] == 6
+            assert stages["version"] == 7
             assert len(stages["atoms"]) == 25
-            assert all({"peeled", "second_native", "neighbors"}.isdisjoint(atom) for atom in stages["atoms"])
+            assert all(set(atom) == {"id", "initial", "joint", "initial_native", "raw",
+                                     "geometry", "peeling", "post_joint_local", "posterior"}
+                       for atom in stages["atoms"])
             for group in stages["groups"]:
                 if group["summary"] and group["summary"]["inference"]:
                     assert "members" not in group["summary"]["inference"]
-            assert all(atom["second"]["source"]["method"] == 3 for atom in stages["atoms"])
+            assert all(atom["joint"]["source"]["method"] == 3 for atom in stages["atoms"])
             for atom in stages["atoms"]:
-                if atom["second"]["source"]["role"] == 1:  # target
+                if atom["joint"]["source"]["role"] == 1:  # target
                     assert atom["peeling"]["mode"] == "original-grid-v1"
                 else:
                     assert atom["peeling"] is None
                     assert atom["post_joint_local"] is None
             assert connection.execute("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('model_atom_local_potential','model_atom_posterior','model_atom_group_potential')").fetchone()[0] == 0
         assert saved == json.loads(payload)
-        assert saved["schema_version"] == 24
+        assert saved["schema_version"] == 25
         assert saved["metadata"]["units"]["contract"] == "joint-kernel-map-units-v2"
         assert saved["metadata"]["units"]["tau"] == "angstrom"
         assert "B" not in saved["metadata"]["units"]
@@ -121,7 +123,7 @@ def main() -> int:
         assert csv_rows["target"]["TargetRuntimeConvergence"] == "passed"
         calibration = next(item for item in saved["evidence"] if item["name"] == "global-width-calibration")
         assert calibration["status"] == "passed"
-        assert "global-first-stage-p95-k4" in calibration["reason"]
+        assert "global-initial-stage-p95-k4" in calibration["reason"]
         assert abs(calibration["threshold"] - 4.0 * calibration["value"]) <= 1e-12
         assert 'target_runtime_convergence' in saved
         metadata = saved["metadata"]

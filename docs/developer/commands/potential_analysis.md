@@ -38,7 +38,7 @@ Concrete implementation:
 | `simulated_map_resolution` | `-r, --sim-resolution` |
 | `saved_key_tag` | `-k, --save-key` |
 
-The CLI, C++, and Python use Joint Components. The job count controls FirstStage
+The CLI, C++, and Python use Joint Components. The job count controls InitialStage
 initialization and is capped at four workers.
 
 ## Execution Contract
@@ -164,7 +164,7 @@ RHBM-GEM potential_analysis \
 ## Fixed fitting policies
 
 [Production Fitting](../production-fitting.md) describes the workflow from
-FirstStage initialization through downstream fitting.
+InitialStage initialization through downstream fitting.
 
 ## Tests to Update When Behavior Changes
 
@@ -186,7 +186,7 @@ rhbm_gem::core::PotentialAnalysisRequest request;
 request.model_file_path = "model.cif";
 request.map_file_path = "map.mrc";
 request.selected_chain_ids = {"A"};
-request.database_path = "joint.sqlite"; // SQLite schema v22
+request.database_path = "joint.sqlite"; // SQLite schema v23
 request.saved_key_tag = "example";
 auto completed = rhbm_gem::core::RunCommand(request);
 ```

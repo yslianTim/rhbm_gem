@@ -80,7 +80,7 @@ const char * QualificationText(RHBMSolveQualification qualification)
     case RHBMSolveQualification::RefinedSuccess: return "RefinedSuccess";
     case RHBMSolveQualification::Unqualified: return "Unqualified";
     }
-    throw std::invalid_argument("Invalid FirstStage solve qualification.");
+    throw std::invalid_argument("Invalid InitialStage solve qualification.");
 }
 RHBMSolveQualification Qualification(const j::value & value)
 {
@@ -88,7 +88,7 @@ RHBMSolveQualification Qualification(const j::value & value)
     if(text=="NativeSuccess") return RHBMSolveQualification::NativeSuccess;
     if(text=="RefinedSuccess") return RHBMSolveQualification::RefinedSuccess;
     if(text=="Unqualified") return RHBMSolveQualification::Unqualified;
-    throw std::invalid_argument("Invalid saved FirstStage solve qualification.");
+    throw std::invalid_argument("Invalid saved InitialStage solve qualification.");
 }
 j::value EndpointRefinement(const RHBMEndpointRefinementDiagnostics & r)
 {
@@ -263,11 +263,11 @@ Object Initialization(const JointInitialization & x)
         {"alpha",std::isfinite(a.alpha) ? j::value(a.alpha) : j::value(nullptr)},{"sample_count",a.sample_count},
         { "native_status",a.native_status ? j::value(*a.native_status) : j::value(nullptr)},{"reason",a.reason},
         {"original_tau",Number(a.original_tau)},{"used_tau",Number(a.used_tau)},{"seed_source",a.seed_source},{"donor_count",a.donor_count},
-        {"first_stage_fit_qualified",a.first_stage_fit_qualified},
-        {"first_stage_qualification",a.first_stage_qualification ?
-            j::value(QualificationText(*a.first_stage_qualification)) : j::value(nullptr)},
-        {"first_stage_recovery",a.first_stage_recovery ?
-            FailedOnlyRecovery(*a.first_stage_recovery) : j::value(nullptr)}});
+        {"initial_stage_fit_qualified",a.initial_stage_fit_qualified},
+        {"initial_stage_qualification",a.initial_stage_qualification ?
+            j::value(QualificationText(*a.initial_stage_qualification)) : j::value(nullptr)},
+        {"initial_stage_recovery",a.initial_stage_recovery ?
+            FailedOnlyRecovery(*a.initial_stage_recovery) : j::value(nullptr)}});
     return {{"valid",x.valid},{"reason",x.reason},{"tau",Diagnostics(x.tau)},{"atoms",std::move(atoms)},{"data_scope",x.data_scope}};
 }
 JointInitialization ReadInitialization(const j::value & v)
@@ -280,19 +280,19 @@ JointInitialization ReadInitialization(const j::value & v)
     {
         const auto & a=item.as_object(); JointInitializationAtom atom;
         RequireOnlyKeys(a,{"id","ols","mdpde","alpha","sample_count","native_status","reason","original_tau",
-            "used_tau","seed_source","donor_count","first_stage_fit_qualified","first_stage_qualification",
-            "first_stage_recovery"},"unknown current FirstStage initialization field");
+            "used_tau","seed_source","donor_count","initial_stage_fit_qualified","initial_stage_qualification",
+            "initial_stage_recovery"},"unknown current InitialStage initialization field");
         atom.id=Read<std::string>(a,"id"); atom.reason=Read<std::string>(a,"reason");
         const auto ols=DiagnosticValues(a.at("ols")),mdpde=DiagnosticValues(a.at("mdpde"));
         if(ols.size()!=3 || mdpde.size()!=3) throw std::invalid_argument("Invalid joint initialization dimensions.");
         std::copy(ols.begin(),ols.end(),atom.ols.begin()); std::copy(mdpde.begin(),mdpde.end(),atom.mdpde.begin());
         atom.alpha=OptionalNumber(a.at("alpha")).value_or(std::numeric_limits<double>::quiet_NaN());
         atom.sample_count=Read<std::size_t>(a,"sample_count");
-        atom.first_stage_fit_qualified=Read<bool>(a,"first_stage_fit_qualified");
-        if(!a.at("first_stage_qualification").is_null())
-            atom.first_stage_qualification=Qualification(a.at("first_stage_qualification"));
-        if(!a.at("first_stage_recovery").is_null())
-            atom.first_stage_recovery=ReadFailedOnlyRecovery(a.at("first_stage_recovery"));
+        atom.initial_stage_fit_qualified=Read<bool>(a,"initial_stage_fit_qualified");
+        if(!a.at("initial_stage_qualification").is_null())
+            atom.initial_stage_qualification=Qualification(a.at("initial_stage_qualification"));
+        if(!a.at("initial_stage_recovery").is_null())
+            atom.initial_stage_recovery=ReadFailedOnlyRecovery(a.at("initial_stage_recovery"));
         atom.original_tau=OptionalNumber(a.at("original_tau")); atom.used_tau=OptionalNumber(a.at("used_tau"));
         atom.seed_source=Read<std::string>(a,"seed_source"); atom.donor_count=Read<std::size_t>(a,"donor_count");
         if(!a.at("native_status").is_null()) atom.native_status=Read<int>(a,"native_status");
@@ -812,16 +812,16 @@ void Validate(const JointAnalysisResult & x)
     const auto * calibration=evidence(x.evidence,"global-width-calibration");
     if(calibration && calibration->status==JointCheckStatus::Passed)
     {
-        const auto * coverage=evidence(x.evidence,"qualified-first-stage-donor-coverage");
+        const auto * coverage=evidence(x.evidence,"qualified-initial-stage-donor-coverage");
         Require(calibration && calibration->status==JointCheckStatus::Passed && calibration->value &&
             calibration->threshold && *calibration->value>0 &&
             *calibration->threshold==4.0*(*calibration->value) &&
-            calibration->reason.find("global-first-stage-p95-k4")!=std::string::npos,
+            calibration->reason.find("global-initial-stage-p95-k4")!=std::string::npos,
             "missing global width bound provenance");
         Require(coverage && coverage->status==JointCheckStatus::Passed && coverage->value &&
             coverage->threshold && *coverage->threshold==0.95 &&
             std::isfinite(*coverage->value) && *coverage->value>=0.95 && *coverage->value<=1.0,
-            "missing qualified FirstStage donor coverage");
+            "missing qualified InitialStage donor coverage");
         width_bound=calibration->threshold;
     }
     else

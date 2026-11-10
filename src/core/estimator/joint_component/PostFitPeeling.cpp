@@ -22,7 +22,7 @@ std::vector<bool> JointOutputMask(const JointProblemInput & input,
 bool SameSource(const EstimateSource & a, const EstimateSource & b)
 {
     return a.method == b.method && a.atom_id == b.atom_id && a.component_id == b.component_id &&
-        a.run_id == b.run_id && a.role == b.role && a.fixed_from_first_stage==b.fixed_from_first_stage;
+        a.run_id == b.run_id && a.role == b.role && a.fixed_from_initial_stage==b.fixed_from_initial_stage;
 }
 
 double SquaredDistance(const std::array<double, 3> & left, const std::array<double, 3> & right)
@@ -109,7 +109,7 @@ JointPeelingContributorUniverse BuildJointPeelingContributorUniverse(
         if (universe.joint_run_id.empty() && contributor.target)
         {
             const auto local=AtomLocalPotentialView::For(*object);
-            if (local.IsAvailable()) universe.joint_run_id=local.GetJointEstimate().source.run_id;
+            if (local.IsAvailable()) universe.joint_run_id=local.GetJointStageEstimate().source.run_id;
         }
         universe.contributors.push_back(std::move(contributor));
     }
@@ -272,7 +272,7 @@ std::vector<std::pair<int, PostFitPeelingResult>> JointPostprocessingContext::Bu
     {
         const auto target_index=result.selection_domain->target_indices.front();
         const auto * target=m_model.FindAtomPtr(std::stoi(result.atom_ids[target_index]));
-        const auto stage=AtomLocalPotentialView::For(*target).GetJointEstimate();
+        const auto stage=AtomLocalPotentialView::For(*target).GetJointStageEstimate();
         if (stage.source.method!=EstimateMethod::JointComponents || stage.source.role!=FittingRole::Target ||
             stage.source.run_id.empty())
             throw std::invalid_argument("Invalid Pure Exclusion Joint run provenance.");
@@ -347,7 +347,7 @@ std::vector<std::pair<int, PostFitPeelingResult>> JointPostprocessingContext::Bu
         const auto id=std::stoi(input.atom_ids[atom]);
         const auto * object=m_model.FindAtomPtr(id);
         const auto view=AtomLocalPotentialView::For(*object);
-        const auto & estimate=view.GetJointEstimate();
+        const auto & estimate=view.GetJointStageEstimate();
         auto & output=results.emplace_back(id,PostFitPeelingResult{}).second;
         output.source=estimate.source;
         std::set<std::size_t> neighbors;
@@ -421,7 +421,7 @@ PostJointLocalSamples JointPostprocessingContext::BuildPostJointLocalSamples(
 
     const auto atom = m_model.FindAtomPtr(atom_id);
     const auto local = AtomLocalPotentialView::For(*atom);
-    const auto & stage = local.GetJointEstimate();
+    const auto & stage = local.GetJointStageEstimate();
     if (stage.source.role != FittingRole::Target || !stage.point ||
         !SameSource(stage.source, peeling.source))
         throw std::invalid_argument("Post-Joint sample endpoint source mismatch.");
