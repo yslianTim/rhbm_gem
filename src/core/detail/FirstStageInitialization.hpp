@@ -12,8 +12,6 @@ double EstimateLocalAlphaForAtom(const AtomObject &, const FitOptions &, Fitting
 void TrainLocalAlphaForAtom(ModelAnalysisEditor &, const FitOptions &, FittingStage, AtomObject &);
 void ApplyJointSeedFallback(JointInitialization &);
 LocalGaussianResult FitFirstStageAtom(const AtomObject &, const FitOptions &);
-void RunBatchFirstStageFromPreparedSamples(
-    ModelObject &, const std::vector<AtomObject *> &, const FitOptions &);
 JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
     ModelObject &, const FittingWorkset &, const FitOptions &);
 JointInitialization PrepareJointWidthInitialization(

@@ -2,7 +2,7 @@
 #include "core/detail/joint_component/StructuralPartition.hpp"
 #include "core/detail/joint_component/Numerics.hpp"
 
-namespace second_stage_test::joint_block {
+namespace joint_component_test::joint_block {
 namespace n=rhbm_gem::core::joint_component;
 struct ConditionalReplayState
 {

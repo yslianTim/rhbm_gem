@@ -215,7 +215,7 @@ TEST(HaloMedianReconstructionTest, ChemicalLabelsDoNotChangeGeometryLocalHaloEst
 TEST(HaloMedianReconstructionTest, FullModelConditioningGuardsZeroContributionWidthMedians)
 {
     namespace n=rhbm_gem::core::joint_component;
-    namespace tc=second_stage_test::matched::joint_component;
+    namespace tc=joint_component_test::matched::joint_component;
     for(double charge:{0.0,.2})
     {
         JointProblemInput input; input.atom_ids={"1"}; input.support.resize(1);

@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <numbers>
-namespace second_stage_test::matched {
+namespace joint_component_test::matched {
 namespace {
 std::array<double, 4> Coefficients(double t)
 {
@@ -110,4 +110,4 @@ double Direct(const Position & p,const std::vector<Atom> & atoms,double cutoff)
     return value;
 }
 }
-} // namespace second_stage_test::matched
+} // namespace joint_component_test::matched

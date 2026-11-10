@@ -12,7 +12,7 @@
 namespace {
 namespace c=rhbm_gem::core;
 namespace n=c::joint_component;
-namespace tc=second_stage_test::matched::joint_component;
+namespace tc=joint_component_test::matched::joint_component;
 
 n::LocalConditioningAssessment Assess(const n::Domain & domain,n::VectorRef y,const n::Vector & eta,
     const n::Vector & beta,const n::EvaluationContext & context)
@@ -236,7 +236,7 @@ TEST(JointLocalConditioningTest, ZeroSupportAndNonfiniteInputAreUnavailable)
 
 TEST(JointLocalConditioningTest, MultiBlockDiagnosticsLeaveTheAcceptedFitUnchanged)
 {
-    const c::JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
+    const c::JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",2));
     const auto & data=c::JointProblemAccess::Get(problem);
     const auto run=[&](bool diagnostics) {
         n::BcdSearchPolicy policy; policy.core_atoms=1;

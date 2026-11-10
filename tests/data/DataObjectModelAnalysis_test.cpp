@@ -775,7 +775,7 @@ TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewComputesPeelingRatioInIn
     joint.source = {rg::EstimateMethod::JointComponents, {}, "component", "ratio-run", rg::FittingRole::Target};
     editor.SetAtomStageEstimate(rg::FittingStage::Second, atom, joint);
     const auto view = rg::AtomLocalPotentialView::For(atom);
-    using second_stage_test::postprocessing::MakeGridObservation;
+    using joint_component_test::postprocessing::MakeGridObservation;
     rg::PostFitPeelingResult peeling;
     peeling.source = view.GetStageEstimate(rg::FittingStage::Second).source;
     peeling.samples = {
@@ -1363,8 +1363,8 @@ TEST(DataObjectModelAnalysisTest, JointUpdatesInvalidateDependentResultsAcrossTh
         rg::PostFitPeelingResult peeling;
         peeling.source = stage.source;
         peeling.samples = {
-            {1, {}, second_stage_test::postprocessing::MakeGridObservation(0,0,.1,2,atom->GetPosition())},
-            {2, {}, second_stage_test::postprocessing::MakeGridObservation(1,1,.2,3,atom->GetPosition())}};
+            {1, {}, joint_component_test::postprocessing::MakeGridObservation(0,0,.1,2,atom->GetPosition())},
+            {2, {}, joint_component_test::postprocessing::MakeGridObservation(1,1,.2,3,atom->GetPosition())}};
         editor.SetAtomPostFitPeeling(*atom, peeling);
         rg::PostJointLocalResult local;
         local.source = stage.source;
@@ -1433,10 +1433,10 @@ TEST(DataObjectModelAnalysisTest, PostJointLocalResultHasIndependentJointEndpoin
     rg::PostFitPeelingResult peeling;
     peeling.source = rg::AtomLocalPotentialView::For(atom).GetStageEstimate(rg::FittingStage::Second).source;
     peeling.samples = {
-        {1.5, {}, second_stage_test::postprocessing::MakeGridObservation(0,0,.1,2,atom.GetPosition())},
-        {1.4, {}, second_stage_test::postprocessing::MakeGridObservation(1,1,.2,3,atom.GetPosition())},
-        {1.3, {}, second_stage_test::postprocessing::MakeGridObservation(2,2,.3,4,atom.GetPosition())},
-        {1.2, {}, second_stage_test::postprocessing::MakeGridObservation(3,3,.4,5,atom.GetPosition())}};
+        {1.5, {}, joint_component_test::postprocessing::MakeGridObservation(0,0,.1,2,atom.GetPosition())},
+        {1.4, {}, joint_component_test::postprocessing::MakeGridObservation(1,1,.2,3,atom.GetPosition())},
+        {1.3, {}, joint_component_test::postprocessing::MakeGridObservation(2,2,.3,4,atom.GetPosition())},
+        {1.2, {}, joint_component_test::postprocessing::MakeGridObservation(3,3,.4,5,atom.GetPosition())}};
     editor.SetAtomPostFitPeeling(atom, peeling);
 
     rg::PostJointLocalResult local;
@@ -1528,8 +1528,8 @@ TEST(DataObjectModelAnalysisTest, NativeDiagnosticsAndJointSamplesAreIndependent
     rg::PostFitPeelingResult peeling;
     peeling.source = view.GetStageEstimate(rg::FittingStage::Second).source;
     peeling.samples = {
-        {1, {}, second_stage_test::postprocessing::MakeGridObservation(0,0,.1,2,atom.GetPosition())},
-        {2, {}, second_stage_test::postprocessing::MakeGridObservation(1,1,.2,4,atom.GetPosition())}};
+        {1, {}, joint_component_test::postprocessing::MakeGridObservation(0,0,.1,2,atom.GetPosition())},
+        {2, {}, joint_component_test::postprocessing::MakeGridObservation(1,1,.2,4,atom.GetPosition())}};
     peeling.neighbor_count = 3;
     editor.SetAtomPostFitPeeling(atom, peeling);
     EXPECT_DOUBLE_EQ(*view.GetLocalFittingPeelingRatio(0, 1), .5);

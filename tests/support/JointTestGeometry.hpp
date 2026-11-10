@@ -7,7 +7,7 @@
 #include <vector>
 
 namespace rhbm_gem { class MapObject; }
-namespace second_stage_test::matched {
+namespace joint_component_test::matched {
 
 using Position = std::array<double, 3>;
 struct Atom { Position position; double amplitude, width, charge; };
@@ -31,4 +31,4 @@ struct Voxel {std::size_t index{}; Position position{};};
 struct Grid {std::vector<Voxel> voxels;};
 double Direct(const Position &,const std::vector<Atom> &,double cutoff);
 }
-} // namespace second_stage_test::matched
+} // namespace joint_component_test::matched

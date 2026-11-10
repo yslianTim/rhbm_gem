@@ -4,7 +4,7 @@
 #include <cmath>
 #include <chrono>
 
-namespace second_stage_test::matched::joint_component {
+namespace joint_component_test::matched::joint_component {
 namespace {
 namespace j=boost::json;
 using Matrix=Eigen::MatrixXd;
@@ -87,4 +87,4 @@ j::object Fit(const Domain & domain,const Vector & y,const Vector & initial_tau,
     out["seconds"]=Seconds(start); return out;
 }
 
-} // namespace second_stage_test::matched::joint_component
+} // namespace joint_component_test::matched::joint_component

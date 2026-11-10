@@ -4,7 +4,7 @@
 #include <array>
 #include <cmath>
 
-namespace second_stage_test {
+namespace joint_component_test {
 rhbm_gem::core::JointProblemInput SyntheticJointWorkload(const std::string & topology,int count)
 {
     if((topology!="chain" && topology!="cube") || count<=0 || count>10000)

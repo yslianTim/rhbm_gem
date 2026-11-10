@@ -21,7 +21,7 @@
 namespace {
 namespace core=rhbm_gem::core;
 namespace n=core::joint_component;
-namespace p=second_stage_test::matched::joint_component;
+namespace p=joint_component_test::matched::joint_component;
 core::JointProblemInput Snapshot()
 {
     core::JointProblemInput input; input.atom_ids={"a","b"}; input.support.resize(2);
@@ -316,7 +316,7 @@ RecoveryAssemblyRun RunRecoveryAssembly(bool inject,bool persistent=false,std::s
     bool corrupt_candidate=false)
 {
     RecoveryAssemblyRun out;
-    auto input=second_stage_test::SyntheticJointWorkload("chain",2);
+    auto input=joint_component_test::SyntheticJointWorkload("chain",2);
     input.selection_domain.emplace(); input.selection_domain->target_indices={0,1};
     input.selection_domain->contributor_policy=std::string(rhbm_gem::PureHaloSupportExclusionContributorPolicy);
     input.selection_domain->pure_halo_support_exclusion=rhbm_gem::JointPureHaloSupportExclusionProvenance{
@@ -485,7 +485,7 @@ TEST(JointComponentRuntimeTest, WidthRecoveryExhaustionAndUnqualifiedTerminalSta
 
 TEST(JointComponentRuntimeTest, ComponentValidationProvidesReasonWithoutEnteringSearch)
 {
-    const core::JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    const core::JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",3));
     const auto & data=core::JointProblemAccess::Get(problem);
     EXPECT_TRUE(n::BcdComponentResult{}.search.reason.empty());
     for(int variant=0;variant<8;++variant)
@@ -521,7 +521,7 @@ TEST(JointComponentRuntimeTest, ComponentValidationProvidesReasonWithoutEntering
 
 TEST(JointComponentRuntimeTest, ComponentViewPreflightPreservesReasonAndMemoryDiagnostics)
 {
-    const core::JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    const core::JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",3));
     const auto & data=core::JointProblemAccess::Get(problem);
     for(int variant=0;variant<3;++variant)
     {
@@ -560,7 +560,7 @@ TEST(JointComponentRuntimeTest, ComponentViewPreflightPreservesReasonAndMemoryDi
 
 TEST(JointComponentRuntimeTest, ComponentSearchPreflightKeepsValidationOrderAndCertificationEvent)
 {
-    const core::JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    const core::JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",3));
     const auto & data=core::JointProblemAccess::Get(problem);
     for(int variant=0;variant<5;++variant)
     {
@@ -592,7 +592,7 @@ TEST(JointComponentRuntimeTest, ComponentSearchPreflightKeepsValidationOrderAndC
 
 TEST(JointComponentRuntimeTest, CanonicalReasonReachesComponentProgressAndCapturedResult)
 {
-    const core::JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    const core::JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",3));
     const auto & data=core::JointProblemAccess::Get(problem);
     const auto prepared=n::MakeComponentProblemView(data.layout,data.partition.components.front());
     const std::vector<std::string> reasons{"block-stationary","block-sweep-budget",

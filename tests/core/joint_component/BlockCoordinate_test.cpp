@@ -12,7 +12,7 @@
 namespace {
 namespace n=rhbm_gem::core::joint_component;
 namespace c=rhbm_gem::core;
-namespace b=second_stage_test::joint_block;
+namespace b=joint_component_test::joint_block;
 n::Vector ObservationVector(const c::JointProblemInput & input)
 {return Eigen::Map<const n::Vector>(input.observations.data(),static_cast<Eigen::Index>(input.observations.size()));}
 n::Vector InitialEta(const c::JointProblemInput & input)
@@ -133,7 +133,7 @@ TEST(JointBlockCoordinateTest, ConditionalResidualAndObjectiveMatchOnChainAndCub
     for(const auto & [topology,atoms,seed]:{std::tuple<std::string,int,unsigned>{"chain",8,8},
         {"chain",32,32},{"cube",8,108},{"cube",32,132}})
     {
-        auto input=second_stage_test::SyntheticJointWorkload(topology,atoms); const auto layout=n::BuildParameterLayout(input);
+        auto input=joint_component_test::SyntheticJointWorkload(topology,atoms); const auto layout=n::BuildParameterLayout(input);
         const auto partition=BuildCores(input,layout,4);
         ExerciseConditionalResponses(input,layout,partition,seed);
     }

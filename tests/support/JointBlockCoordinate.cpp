@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace second_stage_test::joint_block {
+namespace joint_component_test::joint_block {
 namespace {
 n::Vector PredictRows(const rhbm_gem::core::JointProblemInput & input,const n::Indices & atoms,const n::Indices & rows,
     n::VectorRef eta,n::VectorRef beta)

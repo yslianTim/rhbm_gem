@@ -11,7 +11,7 @@
 namespace {
 namespace c=rhbm_gem::core;
 namespace n=c::joint_component;
-namespace tc=second_stage_test::matched::joint_component;
+namespace tc=joint_component_test::matched::joint_component;
 
 n::IndependentReplayEvidence PassingReplay()
 {
@@ -125,7 +125,7 @@ TEST(JointCompactAssessmentTest, ProjectedWidthRouteMatchesFullProfileDerivative
     for(const std::string topology:{"chain","cube"}) for(const int atoms:{8,32})
     {
         SCOPED_TRACE(topology+"-"+std::to_string(atoms));
-        const c::JointProblem problem(second_stage_test::SyntheticJointWorkload(topology,atoms));
+        const c::JointProblem problem(joint_component_test::SyntheticJointWorkload(topology,atoms));
         const auto & data=c::JointProblemAccess::Get(problem);
         const auto eta=n::Vector::Constant(atoms,std::log(.55));
         const auto endpoint=n::EvaluateProfile(data.domain,data.y,eta,&data.context);
@@ -133,7 +133,7 @@ TEST(JointCompactAssessmentTest, ProjectedWidthRouteMatchesFullProfileDerivative
         const auto full=n::PrepareDerivative(endpoint,data.context.scale,&data.context);
         const auto projected=n::PrepareProjectedWidthDerivative(endpoint,data.context.scale,&data.context);
         ASSERT_TRUE(full.valid); ASSERT_TRUE(projected.valid);
-        const auto dense=second_stage_test::matched::joint_component::DenseDifferentiate(
+        const auto dense=joint_component_test::matched::joint_component::DenseDifferentiate(
             endpoint,data.context.scale,&data.context);
         ASSERT_TRUE(dense.valid);
         const auto a=n::ReduceDerivative(full,endpoint.residual);

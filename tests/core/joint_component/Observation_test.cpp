@@ -6,7 +6,7 @@
 #include <cmath>
 #include <set>
 
-namespace { namespace m=second_stage_test::matched; }
+namespace { namespace m=joint_component_test::matched; }
 TEST(JointComponentObservationTest, CompactStencilMatchesSamplerWithAnisotropicGridAndClampedEdges)
 {
     rhbm_gem::MapObject grid({8,9,10},{0.1,0.13,0.17},{-0.713,-0.827,-0.919});

@@ -2,7 +2,7 @@
 
 #include "core/detail/joint_component/SnapshotViews.hpp"
 
-namespace second_stage_test::joint_domain {
+namespace joint_component_test::joint_domain {
 
 inline std::vector<std::vector<rhbm_gem::core::joint_component::Support>> CopySupport(
     const rhbm_gem::core::joint_component::Domain & domain)

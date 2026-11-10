@@ -5,7 +5,7 @@
 #include <stdexcept>
 #include <utility>
 
-namespace second_stage_test::postprocessing {
+namespace joint_component_test::postprocessing {
 using rhbm_gem::core::detail::JointPostprocessingContext;
 using rhbm_gem::core::detail::JointPostprocessingMetrics;
 using rhbm_gem::core::JointProblem;

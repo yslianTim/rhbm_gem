@@ -19,7 +19,6 @@ struct FittingWorkset
 };
 
 FittingWorkset MakeJointFittingWorkset(ModelObject &, const JointProblem &);
-std::vector<AtomObject *> CollectFirstStageAtoms(const FittingWorkset &);
 
 } // namespace detail
 } // namespace rhbm_gem::core

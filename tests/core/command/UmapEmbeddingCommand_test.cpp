@@ -252,7 +252,7 @@ std::unique_ptr<rg::ModelObject> BuildFeatureModel(
         }
         rg::PostFitPeelingResult peeling;
         peeling.source = rg::AtomLocalPotentialView::For(*atom).GetStageEstimate(rg::FittingStage::Second).source;
-        using second_stage_test::postprocessing::MakeGridObservation;
+        using joint_component_test::postprocessing::MakeGridObservation;
         peeling.samples = {
             {raw_signal * (1.0 - signal_ratio), {}, MakeGridObservation(row, row, .5, raw_signal, atom->GetPosition())},
             {raw_tail * (1.0 - tail_ratio), {}, MakeGridObservation(row + 1, row + 1, 1.5, raw_tail, atom->GetPosition())}};

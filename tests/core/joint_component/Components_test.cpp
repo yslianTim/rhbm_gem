@@ -7,8 +7,8 @@
 #include <fstream>
 
 namespace {
-namespace p=second_stage_test::matched::joint_component;
-namespace jd=second_stage_test::joint_domain;
+namespace p=joint_component_test::matched::joint_component;
+namespace jd=joint_component_test::joint_domain;
 using Vector=Eigen::VectorXd;
 }
 namespace {
@@ -24,7 +24,7 @@ struct TwoBlocks
         {
             const auto row=block*40+k; const double square=.003*k*k;
             support[static_cast<std::size_t>(block)].push_back({row,square});
-            const auto b=second_stage_test::matched::EvaluateBasis(square,.5,2.5);
+            const auto b=joint_component_test::matched::EvaluateBasis(square,.5,2.5);
             y(row)=beta(2*block)*b.gaussian+beta(2*block+1)*b.charge+noise*std::sin(k);
         }
         domain=p::Domain(81,std::move(support));

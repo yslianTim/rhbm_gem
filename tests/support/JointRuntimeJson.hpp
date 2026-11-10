@@ -3,7 +3,7 @@
 #include <boost/json.hpp>
 #include <cmath>
 
-namespace second_stage_test::matched::runtime_json {
+namespace joint_component_test::matched::runtime_json {
 namespace r=rhbm_gem::core::joint_component;
 namespace j=boost::json;
 inline j::value Number(double x) {return std::isfinite(x) ? j::value(x) : j::value(nullptr);}

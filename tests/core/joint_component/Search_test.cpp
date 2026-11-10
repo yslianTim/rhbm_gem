@@ -10,7 +10,7 @@
 #include <rhbm_gem/utils/math/ElectricPotential.hpp>
 
 namespace {
-namespace m=second_stage_test::matched;
+namespace m=joint_component_test::matched;
 namespace p=m::joint_component;
 namespace joint=rhbm_gem::core::joint_component;
 using Vector=Eigen::VectorXd;
@@ -146,7 +146,7 @@ TEST(JointComponentSearchTest, FailedEvaluationsDoNotReplaceAcceptedState)
 
 TEST(JointComponentSearchTest, ProfileSearchPreservesAcceptedTrajectory)
 {
-    const rhbm_gem::core::JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    const rhbm_gem::core::JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",3));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     auto context=data.context;
     context.eta_upper_bound=std::log(.53);

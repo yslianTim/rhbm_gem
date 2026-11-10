@@ -49,13 +49,6 @@ LocalGaussianResult FitFirstStageAtom(const AtomObject & atom, const FitOptions 
         options, view.GetEstimateMDPDE(FittingStage::First));
 }
 
-void RunBatchFirstStageFromPreparedSamples(
-    ModelObject & model, const std::vector<AtomObject *> & atoms, const FitOptions & options)
-{
-    RunLocalAlphaTraining(model, options, FittingStage::First, atoms);
-    RunFixedOffsetLocalFitting(model, options, FittingStage::First, atoms);
-}
-
 JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
     ModelObject & model, const FittingWorkset & workset, const FitOptions & options)
 {
@@ -203,8 +196,7 @@ JointInitialization PrepareJointWidthInitialization(
             std::to_string(workset.contributors.size()) +
             " Joint contributors | sampling=" + sampling_name + " | interpolation=Tricubic");
     }
-    const auto atoms = CollectFirstStageAtoms(workset);
-    RunPotentialSamplingWorkflow(map, model, atoms, std::clamp(options.joint_initialization_thread_size, 1, 4),
+    RunPotentialSamplingWorkflow(map, model, workset.contributors, std::clamp(options.joint_initialization_thread_size, 1, 4),
         " Joint sampling", options.quiet_mode, options.first_stage_sampling_method);
     if (!options.quiet_mode)
     {

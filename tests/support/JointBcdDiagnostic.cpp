@@ -1,7 +1,7 @@
 #include "support/JointBcdDiagnostic.hpp"
 #include "core/detail/joint_component/Problem.hpp"
 
-namespace second_stage_test {
+namespace joint_component_test {
 namespace n=rhbm_gem::core::joint_component;
 
 n::BcdSearchResult SearchBcdFixture(const rhbm_gem::core::JointProblem & problem,n::VectorRef initial_eta,

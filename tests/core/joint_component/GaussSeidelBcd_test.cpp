@@ -22,18 +22,18 @@
 
 namespace {
 namespace n=rhbm_gem::core::joint_component;
-namespace b=second_stage_test::joint_block;
+namespace b=joint_component_test::joint_block;
 using rhbm_gem::core::JointProblem;
 void CheckSingleBlock(const std::string & topology,int atoms)
 {
-    JointProblem problem(second_stage_test::SyntheticJointWorkload(topology,atoms));
+    JointProblem problem(joint_component_test::SyntheticJointWorkload(topology,atoms));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector eta=n::Vector::Constant(atoms,std::log(.55));
     n::BcdSearchPolicy policy; policy.maximum_sweeps=30;
     policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
     policy.eta_upper_bound=std::log(2.2);
     std::vector<n::BcdSweepRecord> sweeps;
-    const auto result=second_stage_test::SearchBcdFixture(problem,eta,policy,&sweeps);
+    const auto result=joint_component_test::SearchBcdFixture(problem,eta,policy,&sweeps);
     ASSERT_TRUE(result.search_converged)<<result.reason;
     ASSERT_TRUE(result.certification)<<result.reason;
     ASSERT_TRUE(result.certification->verified())<<result.certification->trust.reason;
@@ -50,7 +50,7 @@ void CheckSingleBlock(const std::string & topology,int atoms)
     EXPECT_TRUE(result.certification->assessment.independent_replay.passed);
     EXPECT_TRUE(result.certification->qualified());
     EXPECT_TRUE(result.accepted_state_integrity);
-    const auto bounded=second_stage_test::matched::joint_component::FitBoundedJointComponentsForTesting(
+    const auto bounded=joint_component_test::matched::joint_component::FitBoundedJointComponentsForTesting(
         problem,std::vector<double>(static_cast<std::size_t>(atoms),.55),2.2);
     ASSERT_EQ(bounded.components.size(),1u);
     ASSERT_TRUE(bounded.components.front().candidate_diagnostic);
@@ -90,7 +90,7 @@ void CheckSingleBlock(const std::string & topology,int atoms)
 
 JointProblem PureExclusionChain(std::size_t atoms)
 {
-    auto input=second_stage_test::SyntheticJointWorkload("chain",static_cast<int>(atoms));
+    auto input=joint_component_test::SyntheticJointWorkload("chain",static_cast<int>(atoms));
     input.selection_domain.emplace();
     input.selection_domain->contributor_policy=std::string(rhbm_gem::PureHaloSupportExclusionContributorPolicy);
     input.selection_domain->target_indices.resize(atoms);
@@ -169,7 +169,7 @@ void AuditIncrementalCandidate(const rhbm_gem::core::JointProblemInput & input,
 
 TEST(JointBcdSearchTest, ProfileEndpointMatchesFixedStateEvaluation)
 {
-    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",3));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector eta=n::Vector::Constant(3,std::log(.55));
     const auto profile=n::EvaluateProfile(data.domain,data.y,eta,&data.context);
@@ -194,14 +194,14 @@ TEST(JointBcdSearchTest, ProfileEndpointMatchesFixedStateEvaluation)
 
 TEST(JointBcdSearchTest, ReplayWorkspacePreservesExactSearchResultsAcrossRuns)
 {
-    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",3));
     const n::Vector eta=n::Vector::Constant(3,std::log(.55));
     n::BcdSearchPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=4;
     policy.eta_upper_bound=std::log(2.2);
     std::vector<n::BcdSweepRecord> first_sweeps;
-    const auto first=second_stage_test::SearchBcdFixture(problem,eta,policy,&first_sweeps);
+    const auto first=joint_component_test::SearchBcdFixture(problem,eta,policy,&first_sweeps);
     std::vector<n::BcdSweepRecord> second_sweeps;
-    const auto second=second_stage_test::SearchBcdFixture(problem,eta,policy,&second_sweeps);
+    const auto second=joint_component_test::SearchBcdFixture(problem,eta,policy,&second_sweeps);
 
     EXPECT_EQ(first.reason,second.reason);
     EXPECT_EQ(first.total_block_solves,second.total_block_solves);
@@ -237,12 +237,12 @@ TEST(JointBcdSearchTest, ReplayWorkspacePreservesExactSearchResultsAcrossRuns)
 
 TEST(JointBcdSearchTest, CandidateObserverDoesNotChangeSearch)
 {
-    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",3));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector eta=n::Vector::Constant(3,std::log(.55));
     n::BcdSearchPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=4;
     policy.eta_upper_bound=std::log(2.2);
-    const auto baseline=second_stage_test::SearchBcdFixture(problem,eta,policy);
+    const auto baseline=joint_component_test::SearchBcdFixture(problem,eta,policy);
     std::size_t candidate_count{},accepted_count{};
     policy.candidate_observer=[&](const n::BcdCandidateEvent & event) {
         ++candidate_count; accepted_count+=event.accepted;
@@ -255,7 +255,7 @@ TEST(JointBcdSearchTest, CandidateObserverDoesNotChangeSearch)
         EXPECT_LE(std::abs(event.candidate_objective-replay.objective),
             n::BlockObjectiveReplayEnclosure(replay.objective));
     };
-    const auto observed=second_stage_test::SearchBcdFixture(problem,eta,policy);
+    const auto observed=joint_component_test::SearchBcdFixture(problem,eta,policy);
 
     EXPECT_GT(candidate_count,0u);
     EXPECT_GT(accepted_count,0u);
@@ -275,7 +275,7 @@ TEST(JointBcdSearchTest, CandidateObserverDoesNotChangeSearch)
 
 TEST(JointBcdSearchTest, IncrementalObjectiveMatchesIndependentFullReplay)
 {
-    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",3));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector eta=n::Vector::Constant(3,std::log(.55));
     n::BcdSearchPolicy policy; policy.core_atoms=2; policy.maximum_sweeps=40;
@@ -286,7 +286,7 @@ TEST(JointBcdSearchTest, IncrementalObjectiveMatchesIndependentFullReplay)
         AuditIncrementalCandidate(*data.input,data.layout,data.y,data.context.scale,event,e1_audit);
     };
     std::vector<n::BcdSweepRecord> sweeps;
-    const auto e1=second_stage_test::SearchBcdFixture(problem,eta,policy,&sweeps);
+    const auto e1=joint_component_test::SearchBcdFixture(problem,eta,policy,&sweeps);
 
     ASSERT_TRUE(e1.search_converged)<<e1.reason;
     ASSERT_TRUE(e1.certification)<<e1.reason;
@@ -303,13 +303,13 @@ TEST(JointBcdSearchTest, IncrementalObjectiveMatchesIndependentFullReplay)
 
 TEST(JointBcdSearchTest, IncrementalObjectiveQualifiesAtActiveWidthUpperBound)
 {
-    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",3));
     const n::Vector initial_eta=n::Vector::Constant(3,std::log(.5));
     n::BcdSearchPolicy policy; policy.core_atoms=2; policy.maximum_sweeps=40;
     policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
     policy.eta_upper_bound=std::log(.5);
     std::vector<n::BcdSweepRecord> sweeps;
-    const auto e1=second_stage_test::SearchBcdFixture(problem,initial_eta,policy,&sweeps);
+    const auto e1=joint_component_test::SearchBcdFixture(problem,initial_eta,policy,&sweeps);
     ASSERT_TRUE(e1.search_converged)<<e1.reason;
     ASSERT_TRUE(e1.certification)<<e1.reason;
     ASSERT_TRUE(e1.certification->verified())<<e1.certification->trust.reason;
@@ -328,7 +328,7 @@ TEST(JointBcdSearchTest, IncrementalObjectiveQualifiesAtActiveWidthUpperBound)
 
 TEST(JointBcdSearchTest, EverySweepReconcilesObjectiveAfterReplayAudit)
 {
-    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",300));
+    JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",300));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector initial_eta=n::Vector::Constant(300,std::log(.55));
     n::BcdSearchPolicy policy; policy.core_atoms=12; policy.maximum_sweeps=30;
@@ -339,7 +339,7 @@ TEST(JointBcdSearchTest, EverySweepReconcilesObjectiveAfterReplayAudit)
         AuditIncrementalCandidate(*data.input,data.layout,data.y,data.context.scale,event,audit);
     };
     std::vector<n::BcdSweepRecord> sweeps;
-    const auto result=second_stage_test::SearchBcdFixture(problem,initial_eta,policy,&sweeps);
+    const auto result=joint_component_test::SearchBcdFixture(problem,initial_eta,policy,&sweeps);
 
     ASSERT_TRUE(result.search_converged)<<result.reason;
     ASSERT_TRUE(result.certification)<<result.reason;
@@ -361,14 +361,14 @@ TEST(JointBcdSearchTest, EverySweepReconcilesObjectiveAfterReplayAudit)
 
 TEST(JointBcdSearchTest, SweepReplayMismatchFailsBeforeObjectiveReconciliation)
 {
-    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",3));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector eta=n::Vector::Constant(3,std::log(.55));
     n::BcdSearchPolicy policy; policy.core_atoms=2; policy.maximum_sweeps=1;
     policy.eta_upper_bound=std::log(2.2);
     policy.perturb_sweep_replay_objective_for_testing=true;
     std::vector<n::BcdSweepRecord> sweeps;
-    const auto result=second_stage_test::SearchBcdFixture(problem,eta,policy,&sweeps);
+    const auto result=joint_component_test::SearchBcdFixture(problem,eta,policy,&sweeps);
 
     ASSERT_TRUE(result.final_sweep.has_value());
     ASSERT_EQ(result.sweep_count,1u);
@@ -385,7 +385,7 @@ TEST(JointBcdSearchTest, SweepReplayMismatchFailsBeforeObjectiveReconciliation)
 
 TEST(JointBcdSearchTest, IncrementalObjectiveRemainsQualifiedAcrossInitialWidths)
 {
-    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",3));
     for(const double width:std::array<double,3>{.35,.55,.9})
     {
         const n::Vector initial_eta=n::Vector::Constant(3,std::log(width));
@@ -393,7 +393,7 @@ TEST(JointBcdSearchTest, IncrementalObjectiveRemainsQualifiedAcrossInitialWidths
         policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
         policy.eta_upper_bound=std::log(2.2);
         std::vector<n::BcdSweepRecord> sweeps;
-        const auto result=second_stage_test::SearchBcdFixture(problem,initial_eta,policy,&sweeps);
+        const auto result=joint_component_test::SearchBcdFixture(problem,initial_eta,policy,&sweeps);
         ASSERT_TRUE(result.search_converged)<<result.reason;
         ASSERT_TRUE(result.certification)<<result.reason;
         ASSERT_TRUE(result.certification->verified())<<result.certification->trust.reason;
@@ -409,7 +409,7 @@ TEST(JointBcdSearchTest, IncrementalObjectiveRemainsQualifiedAcrossInitialWidths
 
 TEST(JointBcdSearchTest, SignedCancellationQualifiesWhenOnlyKktGateIsSatisfied)
 {
-    auto input=second_stage_test::SyntheticJointWorkload("chain",3);
+    auto input=joint_component_test::SyntheticJointWorkload("chain",3);
     for(std::size_t atom=0;atom<3;++atom)
         for(const auto & support:input.support[atom])
         {
@@ -427,7 +427,7 @@ TEST(JointBcdSearchTest, SignedCancellationQualifiesWhenOnlyKktGateIsSatisfied)
     policy.candidate_observer=[&](const n::BcdCandidateEvent & event) {
         AuditIncrementalCandidate(*data.input,data.layout,data.y,data.context.scale,event,audit);
     };
-    const auto result=second_stage_test::SearchBcdFixture(problem,initial_eta,policy);
+    const auto result=joint_component_test::SearchBcdFixture(problem,initial_eta,policy);
 
     EXPECT_GT(audit.candidates,0u);
     EXPECT_EQ(audit.decision_disagreements,0u);
@@ -454,8 +454,8 @@ TEST(JointBcdSearchTest, HardCaseIncrementalObjectiveAndReplayQualification)
     struct Fixture {std::string name; Input input; std::size_t core_atoms;};
     std::vector<Fixture> fixtures;
     fixtures.push_back({"high-overlap-cube-8",
-        second_stage_test::SyntheticJointWorkload("cube",8),4});
-    auto rank_deficient=second_stage_test::SyntheticJointWorkload("chain",3);
+        joint_component_test::SyntheticJointWorkload("cube",8),4});
+    auto rank_deficient=joint_component_test::SyntheticJointWorkload("chain",3);
     for(auto & support:rank_deficient.support)
         for(auto & entry:support) entry.squared_distance=0.0;
     fixtures.push_back({"rank-deficient-constant-support",
@@ -476,7 +476,7 @@ TEST(JointBcdSearchTest, HardCaseIncrementalObjectiveAndReplayQualification)
     }
     fixtures.push_back({"near-singular-overlapping-support",
         std::move(near_singular),2});
-    auto low_signal=second_stage_test::SyntheticJointWorkload("chain",3);
+    auto low_signal=joint_component_test::SyntheticJointWorkload("chain",3);
     for(std::size_t row=0;row<low_signal.observations.size();++row)
         low_signal.observations[row]=1e-5*std::sin(.17*static_cast<double>(row));
     fixtures.push_back({"low-signal-noise-only",
@@ -523,7 +523,7 @@ TEST(JointBcdSearchTest, HardCaseIncrementalObjectiveAndReplayQualification)
         policy.candidate_observer=[&](const n::BcdCandidateEvent & event) {
             AuditIncrementalCandidate(*data.input,data.layout,data.y,data.context.scale,event,audit);
         };
-        const auto result=second_stage_test::SearchBcdFixture(problem,initial_eta,policy);
+        const auto result=joint_component_test::SearchBcdFixture(problem,initial_eta,policy);
         ASSERT_EQ(result.state.eta.size(),initial_eta.size())<<fixture.name<<':'<<result.reason;
         const auto replay=b::Replay(*data.input,data.layout,data.y,
             result.state.eta,result.state.beta,data.context.scale);
@@ -573,7 +573,7 @@ TEST(JointBcdSearchTest, HardCaseIncrementalObjectiveAndReplayQualification)
 
 TEST(JointBcdSearchTest, AffectedReplayFallsBackBeforeScratchExceedsMemoryBudget)
 {
-    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",3));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector eta=n::Vector::Constant(3,std::log(.55));
     n::BcdSearchPolicy policy; policy.core_atoms=2; policy.maximum_sweeps=5;
@@ -641,7 +641,7 @@ TEST(JointBcdSearchTest, AffectedReplayFallsBackBeforeScratchExceedsMemoryBudget
 
 TEST(JointBcdSearchTest, E1MemoryPreflightRejectsBeforeCreatingAcceptedState)
 {
-    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",3));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector eta=n::Vector::Constant(3,std::log(.55));
     n::BcdSearchPolicy policy; policy.core_atoms=2; policy.maximum_sweeps=2;
@@ -661,7 +661,7 @@ TEST(JointBcdSearchTest, E1MemoryPreflightRejectsBeforeCreatingAcceptedState)
 
 TEST(JointBcdSearchTest, E1NonfiniteObservationsFailBeforeAcceptedStateCreation)
 {
-    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",3));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     n::Vector observations=data.y;
     observations(0)=std::numeric_limits<double>::quiet_NaN();
@@ -681,7 +681,7 @@ TEST(JointBcdSearchTest, E1NonfiniteObservationsFailBeforeAcceptedStateCreation)
 
 TEST(JointBcdSearchTest, E1NonfiniteObjectiveDoesNotAcceptOrPartiallyCommitCandidate)
 {
-    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",3));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector observations=n::Vector::Constant(data.y.size(),1e200);
     const n::Vector eta=n::Vector::Constant(3,std::log(.55));
@@ -707,7 +707,7 @@ TEST(JointBcdSearchTest, E1NonfiniteObjectiveDoesNotAcceptOrPartiallyCommitCandi
 
 TEST(JointBcdSearchTest, CandidateLocalObjectiveIncreasePreservesAcceptedBeforeState)
 {
-    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",1));
+    JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",1));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector eta=n::Vector::Constant(1,std::log(.5));
     n::BcdSearchPolicy policy; policy.maximum_sweeps=1;
@@ -735,7 +735,7 @@ TEST(JointBcdSearchTest, CandidateLocalObjectiveIncreasePreservesAcceptedBeforeS
 
 TEST(JointBcdSearchTest, CandidateConsistencyAndNonfiniteFaultsPreserveAcceptedBeforeState)
 {
-    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",3));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector eta=n::Vector::Constant(3,std::log(.55));
     constexpr std::array faults{
@@ -822,14 +822,14 @@ TEST(JointBcdSearchTest, PositiveObjectiveDeltaConsistencyConditionBoundsTheAcce
 
 TEST(JointBcdSearchTest, UnchangedCandidateSkipsOnlyCandidateReplay)
 {
-    auto input=second_stage_test::SyntheticJointWorkload("chain",3);
+    auto input=joint_component_test::SyntheticJointWorkload("chain",3);
     std::fill(input.observations.begin(),input.observations.end(),0.0);
     JointProblem problem(std::move(input));
     const n::Vector eta=n::Vector::Constant(3,std::log(.5));
     n::BcdSearchPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=30;
     policy.eta_upper_bound=std::log(2.2);
     std::vector<n::BcdSweepRecord> sweeps;
-    const auto result=second_stage_test::SearchBcdFixture(problem,eta,policy,&sweeps);
+    const auto result=joint_component_test::SearchBcdFixture(problem,eta,policy,&sweeps);
 
     EXPECT_GT(result.work.candidate_replay_skipped_unchanged,0u);
     EXPECT_LT(result.work.full_candidate_replays+result.work.affected_candidate_replays,result.total_block_solves);
@@ -853,7 +853,7 @@ TEST(JointBcdSearchTest, UnchangedCandidateSkipsOnlyCandidateReplay)
 
 TEST(JointBcdSearchTest, PreparedConditioningUsesValidatedContextWidthBound)
 {
-    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",3));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     auto context=data.context; context.eta_upper_bound=std::log(.5);
     n::BcdSearchPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=40;
@@ -894,14 +894,14 @@ TEST(JointBcdSearchTest, PreparedConditioningUsesValidatedContextWidthBound)
 
 TEST(JointBcdSearchTest, ProductionBoundedSearchReleasesTheStartingUpperFace)
 {
-    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",3));
     const double eta_max=std::log(.55);
     const n::Vector initial=n::Vector::Constant(3,eta_max);
     n::BcdSearchPolicy policy;
     policy.core_atoms=4;
     policy.maximum_sweeps=1;
     policy.eta_upper_bound=eta_max;
-    const auto result=second_stage_test::SearchBcdFixture(problem,initial,policy);
+    const auto result=joint_component_test::SearchBcdFixture(problem,initial,policy);
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const auto & bounded_lm=result.work.bounded_lm;
     EXPECT_GT(bounded_lm.subproblem_solves,0u);
@@ -970,7 +970,7 @@ TEST(JointBcdSearchTest, AssembledBoundedWidthStationarityUsesIndependentProject
 
 void CheckMultiBlockBudgetFailure(const std::string & topology)
 {
-    JointProblem problem(second_stage_test::SyntheticJointWorkload(topology,32));
+    JointProblem problem(joint_component_test::SyntheticJointWorkload(topology,32));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     n::StructuralTopology structural_topology(data.domain,data.context.atom_ids,data.layout);
     const auto partition=structural_topology.BuildCores(16);
@@ -978,7 +978,7 @@ void CheckMultiBlockBudgetFailure(const std::string & topology)
     const n::Vector eta=n::Vector::Constant(32,std::log(.55));
     n::BcdSearchPolicy policy; policy.core_atoms=16; policy.maximum_sweeps=0;
     policy.eta_upper_bound=std::log(2.2);
-    const auto result=second_stage_test::SearchBcdFixture(problem,eta,policy);
+    const auto result=joint_component_test::SearchBcdFixture(problem,eta,policy);
     EXPECT_FALSE(result.search_converged);
     EXPECT_EQ(result.reason,"block-sweep-budget");
     EXPECT_FALSE(result.certification);
@@ -996,12 +996,12 @@ TEST(JointBcdSearchTest, MultiBlockZeroSweepBudgetCannotCertify)
 }
 TEST(JointBcdSearchTest, CheapStationarityNeedsCompleteSweepConfirmation)
 {
-    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",8));
+    JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",8));
     const n::Vector eta=n::Vector::Constant(8,std::log(.55));
     n::BcdSearchPolicy policy; policy.maximum_sweeps=1;
     policy.eta_upper_bound=std::log(2.2);
     std::vector<n::BcdSweepRecord> candidate_sweeps;
-    const auto candidate=second_stage_test::SearchBcdFixture(problem,eta,policy,&candidate_sweeps);
+    const auto candidate=joint_component_test::SearchBcdFixture(problem,eta,policy,&candidate_sweeps);
     EXPECT_FALSE(candidate.search_converged);
     EXPECT_EQ(candidate.reason,"block-sweep-budget");
     EXPECT_EQ(candidate_sweeps.size(),1u);
@@ -1010,7 +1010,7 @@ TEST(JointBcdSearchTest, CheapStationarityNeedsCompleteSweepConfirmation)
 
     policy.maximum_sweeps=30;
     std::vector<n::BcdSweepRecord> confirmed_sweeps;
-    const auto confirmed=second_stage_test::SearchBcdFixture(problem,eta,policy,&confirmed_sweeps);
+    const auto confirmed=joint_component_test::SearchBcdFixture(problem,eta,policy,&confirmed_sweeps);
     ASSERT_TRUE(confirmed.search_converged)<<confirmed.reason;
     EXPECT_GT(confirmed.first_order_stationarity_sweep,0u);
     EXPECT_GE(confirmed.confirmed_stationarity_sweep,confirmed.first_order_stationarity_sweep);
@@ -1034,7 +1034,7 @@ TEST(JointBcdSearchTest, EndpointCertificationRetryScheduleIsPreserved)
 
 TEST(JointBcdSearchTest, FailedBlockRetriesAfterLaterBlocksUpdateTheNeighborState)
 {
-    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
+    JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",2));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector initial_eta=n::Vector::Constant(2,std::log(.55));
     n::BcdSearchPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=1;
@@ -1076,7 +1076,7 @@ TEST(JointBcdSearchTest, FailedBlockRetriesAfterLaterBlocksUpdateTheNeighborStat
 
 TEST(JointBcdSearchTest, ExhaustedBlockRecoveryLeavesTheLastAcceptedComponentStateUntouched)
 {
-    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
+    JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",2));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector initial_eta=n::Vector::Constant(2,std::log(.55));
     n::BcdSearchPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=1;
@@ -1117,7 +1117,7 @@ TEST(JointBcdSearchTest, ExhaustedBlockRecoveryLeavesTheLastAcceptedComponentSta
 
 TEST(JointBcdSearchTest, SearchResultAndIndependentCertificationStaySeparate)
 {
-    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",32));
+    JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",32));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector initial_eta=n::Vector::Constant(32,std::log(.55));
     const n::Domain domain=data.domain;
@@ -1191,7 +1191,7 @@ TEST(JointBcdSearchTest, ReplayStructureFollowsComponentLocalRows)
     EXPECT_EQ(data.partition.components[1].rows,(n::Indices{1,3,5,7,9}));
     EXPECT_EQ(data.partition.constant_rows,(n::Indices{10}));
 
-    const auto fit=second_stage_test::matched::joint_component::FitBoundedJointComponentsForTesting(
+    const auto fit=joint_component_test::matched::joint_component::FitBoundedJointComponentsForTesting(
         problem,{.55,.55},2.2);
     ASSERT_EQ(fit.components.size(),2u);
     for(const auto & component:fit.components)
@@ -1205,7 +1205,7 @@ TEST(JointBcdSearchTest, ReplayStructureFollowsComponentLocalRows)
 
 TEST(JointBcdSearchTest, EmptyOrInvalidReplayRowMappingCannotAcceptState)
 {
-    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
+    JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",2));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector eta=n::Vector::Constant(2,std::log(.55));
     auto check_invalid=[&](const rhbm_gem::JointParameterLayout & layout) {
@@ -1225,11 +1225,11 @@ TEST(JointBcdSearchTest, EmptyOrInvalidReplayRowMappingCannotAcceptState)
 
 TEST(JointBcdSearchTest, BcdAcceptsAtMostOneTrustedLocalUpdatePerBlockVisit)
 {
-    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",32));
+    JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",32));
     const n::Vector eta=n::Vector::Constant(32,std::log(.55));
     n::BcdSearchPolicy policy; policy.core_atoms=16; policy.maximum_sweeps=2;
     policy.eta_upper_bound=std::log(2.2);
-    const auto result=second_stage_test::SearchBcdFixture(problem,eta,policy);
+    const auto result=joint_component_test::SearchBcdFixture(problem,eta,policy);
     ASSERT_FALSE(result.blocks.empty());
     for(const auto & block:result.blocks)
     {
@@ -1291,7 +1291,7 @@ TEST(JointBcdSearchTest, KktStationarityCriteriaHaveInclusiveFiniteBoundaries)
 }
 TEST(JointBcdSearchTest, PracticalCriteriaDoNotQualifySweepsWithFailedBlocks)
 {
-    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
+    JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",2));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector initial_eta=n::Vector::Constant(2,std::log(.55));
     n::BcdSearchPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=6;
@@ -1327,7 +1327,7 @@ TEST(JointBcdSearchTest, ProductionSearchDefaultsToValidatedPracticalCriteria)
 
 TEST(JointBcdSearchTest, KktOnlyConvergenceConfirmsAcrossCompleteSweepsAndCertifies)
 {
-    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",3));
+    JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",3));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector eta=n::Vector::Constant(3,std::log(.55));
     n::BcdSearchPolicy policy;
@@ -1357,7 +1357,7 @@ TEST(JointBcdSearchTest, KktOnlyConvergenceConfirmsAcrossCompleteSweepsAndCertif
 
 TEST(JointBcdSearchTest, BudgetExhaustionPreservesCandidateWithoutInventingTrustedState)
 {
-    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",8));
+    JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",8));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector eta=n::Vector::Constant(8,std::log(.55));
     n::BcdSearchPolicy policy; policy.maximum_sweeps=1;
@@ -1384,7 +1384,7 @@ TEST(JointBcdSearchTest, BudgetExhaustionPreservesCandidateWithoutInventingTrust
 
 TEST(JointBcdSearchTest, TrustedInitialProfileCannotCompleteFailedWidthRecovery)
 {
-    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
+    JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",2));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     auto context=data.context; context.force_width_subproblem_failure_for_testing=true;
     n::BcdSearchPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=6;
@@ -1405,7 +1405,7 @@ TEST(JointBcdSearchTest, TrustedInitialProfileCannotCompleteFailedWidthRecovery)
 
 TEST(JointBcdSearchTest, WidthFailureIsScopedToOneBlockVisit)
 {
-    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
+    JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",2));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     const n::Vector initial_eta=n::Vector::Constant(2,std::log(.55));
     n::BcdSearchPolicy policy; policy.core_atoms=1; policy.maximum_sweeps=2;

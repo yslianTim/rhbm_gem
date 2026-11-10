@@ -7,7 +7,7 @@
 #include <memory>
 #include <vector>
 
-namespace second_stage_test {
+namespace joint_component_test {
 // Known normalized Gaussian truth for isolated/crowded production regressions.
 inline std::unique_ptr<rhbm_gem::ModelObject> FirstStageSyntheticModel(double separation)
 {
@@ -49,4 +49,4 @@ inline std::unique_ptr<rhbm_gem::MapObject> FirstStageSyntheticMap(const rhbm_ge
     }
     return std::make_unique<MapObject>(dims,std::array<double,3>{spacing,spacing,spacing},origin,std::move(values));
 }
-} // namespace second_stage_test
+} // namespace joint_component_test

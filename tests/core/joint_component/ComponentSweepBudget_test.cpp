@@ -139,14 +139,14 @@ TEST(JointComponentSweepBudgetTest, FixedAndZeroBudgetsDoNotExtend)
 
 TEST(JointComponentSweepBudgetTest, EasyQualifiedSearchStopsWithoutExtraWorkOrParameterChanges)
 {
-    const rhbm_gem::core::JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",2));
+    const rhbm_gem::core::JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",2));
     const n::Vector eta=n::Vector::Constant(2,std::log(.55));
     n::BcdSearchPolicy policy;
     policy.maximum_sweeps=30; policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
     policy.eta_upper_bound=std::log(2.2);
-    const auto fixed=second_stage_test::SearchBcdFixture(problem,eta,policy);
+    const auto fixed=joint_component_test::SearchBcdFixture(problem,eta,policy);
     policy.nominal_sweeps=20;
-    const auto adaptive=second_stage_test::SearchBcdFixture(problem,eta,policy);
+    const auto adaptive=joint_component_test::SearchBcdFixture(problem,eta,policy);
     ASSERT_TRUE(adaptive.search_converged);
     EXPECT_LT(adaptive.sweep_count,20u);
     EXPECT_EQ(adaptive.sweep_count,fixed.sweep_count);
@@ -226,7 +226,7 @@ TEST(JointComponentSweepBudgetTest, UnqualifiedHardLimitAndMemoryRejectionCannot
 TEST(JointComponentSweepBudgetTest, MultipleComponentsExtendAndStopIndependently)
 {
     auto input=CoupledPair().Input();
-    const auto single=second_stage_test::SyntheticJointWorkload("chain",1);
+    const auto single=joint_component_test::SyntheticJointWorkload("chain",1);
     const auto offset=input.observations.size();
     input.atom_ids.push_back("3"); input.support.emplace_back();
     for(const auto & support:single.support[0])

@@ -45,7 +45,7 @@ namespace {
 using namespace rhbm_gem;
 using namespace rhbm_gem::core;
 namespace core=rhbm_gem::core;
-namespace postprocessing_test=second_stage_test::postprocessing;
+namespace postprocessing_test=joint_component_test::postprocessing;
 
 JointProblemInput PureInput()
 {

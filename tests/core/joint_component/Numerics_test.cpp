@@ -18,7 +18,7 @@
 #include <tuple>
 
 namespace {
-namespace m=second_stage_test::matched;
+namespace m=joint_component_test::matched;
 namespace p=m::joint_component;
 namespace n=p::runtime;
 using Vector=Eigen::VectorXd;
@@ -950,7 +950,7 @@ TEST(JointComponentNumericsTest, StreamingStateMatchesSparseGlobalEvaluation)
 {
     using rhbm_gem::core::JointProblem;
     using rhbm_gem::core::JointProblemAccess;
-    JointProblem problem(second_stage_test::SyntheticJointWorkload("chain",8));
+    JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",8));
     const auto & data=JointProblemAccess::Get(problem);
     const Vector eta=Vector::Constant(8,std::log(.55));
     Vector beta(16);
@@ -986,7 +986,7 @@ TEST(JointComponentNumericsTest, IndependentStreamingReplayMatchesLegacyMatrixRe
         SCOPED_TRACE(topology);
         using rhbm_gem::core::JointProblem;
         using rhbm_gem::core::JointProblemAccess;
-        JointProblem problem(second_stage_test::SyntheticJointWorkload(topology,8));
+        JointProblem problem(joint_component_test::SyntheticJointWorkload(topology,8));
         const auto & data=JointProblemAccess::Get(problem);
         const Vector eta=Vector::Constant(8,std::log(.55));
         const auto primary=n::EvaluateProfile(data.domain,data.y,eta,&data.context);

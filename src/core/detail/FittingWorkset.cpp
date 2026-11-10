@@ -27,9 +27,4 @@ FittingWorkset MakeJointFittingWorkset(ModelObject & model, const JointProblem &
     return workset;
 }
 
-std::vector<AtomObject *> CollectFirstStageAtoms(const FittingWorkset & workset)
-{
-    return workset.contributors;
-}
-
 } // namespace rhbm_gem::core::detail
