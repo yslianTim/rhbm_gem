@@ -18,6 +18,8 @@ class AtomLocalPotentialView
 public:
     static AtomLocalPotentialView For(const AtomObject & atom_object);
     bool IsAvailable() const;
+    const LocalStageEstimate & GetFirstStageEstimate() const;
+    const LocalStageEstimate & GetJointEstimate() const;
     const LocalStageEstimate & GetStageEstimate(FittingStage stage) const;
     bool HasFinalModel(FittingStage stage) const;
     const GaussianModel3D & GetFinalModel(FittingStage stage) const;
@@ -31,7 +33,6 @@ public:
     LocalPotentialSampleList GetRawSamplingEntries(bool apply_selection = true) const;
     const LocalPotentialSampleList & GetRawSamplingEntriesView() const;
     LocalPotentialSampleList GetPeelingSamplingEntries(bool apply_selection = false) const;
-    LocalPotentialSampleList GetSamplingEntries(FittingStage stage) const;
     PeelingRatioAssessment AssessLocalFittingPeelingRatio(
         double distance_min, double distance_max) const;
     std::optional<double> GetLocalFittingPeelingRatio(

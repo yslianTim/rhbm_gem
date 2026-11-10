@@ -11,7 +11,6 @@
 #include "core/detail/joint_component/ResourceWork.hpp"
 #include "data/detail/PostJointLocalValidation.hpp"
 #include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
-#include "data/detail/JointStageAdapter.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
@@ -49,7 +48,7 @@ PostJointLocalResult FitPostJointLocalTarget(
 {
     const auto atom = model.FindAtomPtr(atom_id);
     const auto local = AtomLocalPotentialView::For(*atom);
-    const auto & joint = local.GetStageEstimate(FittingStage::Second);
+    const auto & joint = local.GetJointEstimate();
     PostJointLocalResult result;
     result.source = joint.source;
     result.sample_count = peeling.samples.size();
@@ -280,8 +279,7 @@ void RunJointPostprocessing(
             LogJointWarning("[Joint] Halo median reconstruction unavailable: " + std::string(error.what()));
         }
     }
-    data_internal::ApplyJointStageEstimates(model, snapshot, joint_run_id);
-    model.EditAnalysis().SetJointResult(std::move(snapshot));
+    model.EditAnalysis().ApplyJointResult(std::move(snapshot), joint_run_id);
     model.EditAnalysis().BindJointMapObservations(map);
     if (halo_reconstruction_unavailable)
     {
@@ -312,7 +310,7 @@ void RunJointPostprocessing(
     for (const auto * atom : model.GetSelectedAtoms())
     {
         const auto local = AtomLocalPotentialView::For(*atom);
-        const auto & stage = local.GetStageEstimate(FittingStage::Second);
+        const auto & stage = local.GetJointEstimate();
         if (stage.source.method != EstimateMethod::JointComponents || stage.source.role != FittingRole::Target)
             continue;
         joint_targets.push_back(atom);
@@ -358,7 +356,7 @@ void RunJointPostprocessing(
     for (const auto * atom : joint_targets)
     {
         const auto local = AtomLocalPotentialView::For(*atom);
-        const auto & stage = local.GetStageEstimate(FittingStage::Second);
+        const auto & stage = local.GetJointEstimate();
         if (stage.source.method != EstimateMethod::JointComponents || stage.source.role != FittingRole::Target ||
             stage.source.component_id.empty()) continue;
         const auto & peeling = local.GetPostFitPeeling();

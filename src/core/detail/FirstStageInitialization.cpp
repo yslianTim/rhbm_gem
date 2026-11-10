@@ -77,7 +77,7 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
         LocalGaussianResult seed;
         seed.ols = seed.mdpde = GaussianModel3DWithUncertainty{GaussianModel3D{0, 1, 0}, {}};
         editor.SetAtomFirstStageGaussianResult(*atom, seed);
-        editor.SetAtomStageEstimate(FittingStage::First, *atom, LocalStageEstimate{});
+        editor.SetAtomFirstStageEstimate(*atom, LocalStageEstimate{});
     }
 
     const auto workspace_count = static_cast<std::size_t>(worker_count);
@@ -133,9 +133,9 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
                 if (failures[slot]) std::rethrow_exception(failures[slot]);
                 editor.SetAtomFirstStageGaussianResult(*atom, std::move(estimates[slot]));
                 const auto view = AtomLocalPotentialView::For(*atom);
-                auto first = view.GetStageEstimate(FittingStage::First);
+                auto first = view.GetFirstStageEstimate();
                 first.source.role = record.target ? FittingRole::Target : FittingRole::Halo;
-                editor.SetAtomStageEstimate(FittingStage::First, *atom, first);
+                editor.SetAtomFirstStageEstimate(*atom, first);
                 const auto & local = view.GetFirstStageGaussianResult();
                 const auto ols = local.ols.GetModel().ToVector(), mdpde = local.mdpde.GetModel().ToVector();
                 for (std::size_t k = 0; k < 3; ++k)
@@ -167,7 +167,7 @@ JointInitialization RunJointFirstStageInitializationFromPreparedSamples(
             {
                 LocalStageEstimate missing;
                 missing.reason = std::string("initialization-exception: ") + error.what();
-                editor.SetAtomStageEstimate(FittingStage::First, *atom, missing);
+                editor.SetAtomFirstStageEstimate(*atom, missing);
                 record.reason = missing.reason;
             }
             if (std::isfinite(tau)) record.original_tau = tau;

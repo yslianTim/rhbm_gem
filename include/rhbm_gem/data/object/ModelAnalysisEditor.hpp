@@ -25,8 +25,9 @@ public:
     void ApplyJointResult(JointAnalysisResult result, const std::string & run_id);
     void ClearJointResult();
     void UpdateJointMetadata(JointAnalysisMetadata metadata);
-    void ApplySecondStageEstimates(std::map<int, LocalStageEstimate> estimates);
-    void SetAtomStageEstimate(FittingStage stage, const AtomObject & atom, LocalStageEstimate value);
+    void ApplyJointEstimates(std::map<int, LocalStageEstimate> estimates);
+    void SetAtomFirstStageEstimate(const AtomObject & atom, LocalStageEstimate value);
+    void SetAtomJointEstimate(const AtomObject & atom, LocalStageEstimate value);
     void SetAtomPostFitPeeling(const AtomObject & atom, PostFitPeelingResult value);
     void ApplyPostFitPeelingsBatch(std::vector<std::pair<int, PostFitPeelingResult>> peelings);
     void SetAtomPostJointLocalResult(const AtomObject & atom, PostJointLocalResult value);

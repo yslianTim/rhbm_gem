@@ -39,8 +39,9 @@ completed search and Passed runtime and Target convergence. Unqualified
 snapshots can be saved with diagnostics and reasons. The workflow skips
 publication and downstream fitting for them.
 
-The stage adapter exposes qualified Target A/tau/C and convergence in
-`FittingStage::Second` records. Source identity includes method,
+The analysis editor publishes qualified Target A/tau/C and convergence with
+`ApplyJointResult`. Read the endpoint with `GetJointEstimate()`. Stage JSON
+continues to store it in the `second` record. Source identity includes method,
 atom, component, run and role. Missing or unqualified points remain
 unavailable. Halo records and reconstructed values have separate provenance.
 Local and Group results live alongside Joint state and never rewrite it.

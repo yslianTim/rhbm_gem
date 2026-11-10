@@ -72,15 +72,14 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(const ModelObje
     for (auto * atom : atom_list)
     {
         const auto local_view{ AtomLocalPotentialView::For(*atom) };
-        if (local_view.IsAvailable() && local_view.GetStageEstimate(FittingStage::Second).source.method == EstimateMethod::JointComponents && local_view.GetStageEstimate(FittingStage::Second).source.role != FittingRole::Target) continue;
         if (!local_view.IsAvailable())
         {
             LocalFittingFeatureRow row; row.serial_id=atom->GetSerialID(); row.residue=ChemicalDataHelper::GetLabel(atom->GetResidue()); row.spot=atom->GetAtomID();
             row.features.fill(std::numeric_limits<double>::quiet_NaN()); rows.push_back(std::move(row)); continue;
         }
-        // JointComponents stores its fitted A/tau/C here.
-        // Post-Joint Local and group estimates are stored separately.
-        const auto & second = local_view.GetStageEstimate(FittingStage::Second).point;
+        const auto & joint = local_view.GetJointEstimate();
+        if (joint.source.method == EstimateMethod::JointComponents && joint.source.role != FittingRole::Target) continue;
+        const auto & point = joint.point;
         const double missing=std::numeric_limits<double>::quiet_NaN();
 
         const auto signal_peeling_ratio{
@@ -132,9 +131,9 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(const ModelObje
             distance_to_closest_neighbor,
             OptionalFeatureValue(signal_peeling_ratio),
             OptionalFeatureValue(tail_assessment.ratio),
-            second ? second->GetAmplitude() : missing,
-            second ? second->GetWidth() : missing,
-            second ? second->GetOffset() : missing,
+            point ? point->GetAmplitude() : missing,
+            point ? point->GetWidth() : missing,
+            point ? point->GetOffset() : missing,
         };
         row.tail_peeling_ratio_assessment = std::move(tail_assessment);
         rows.emplace_back(std::move(row));

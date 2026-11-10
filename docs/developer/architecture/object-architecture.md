@@ -69,6 +69,8 @@ flowchart LR
 
 Group-result and membership queries take no fitting stage. `GetGroupMemberResult()` returns an optional containing the posterior, outlier flag, and statistical distance. The view provides native diagnostics through `GetFirstStageGaussianResult()`, `GetFirstStageOLS()`, `GetFirstStageMDPDE()`, and `GetFirstStageAlphaR()`.
 
+Use `GetFirstStageEstimate()` or `GetJointEstimate()` when the source is known. Comparative plots can still select either result with `GetStageEstimate(stage)`. Use `GetRawSamplingEntries()` for selected raw samples and `GetPostFitPeeling()` for paired Original-grid observations.
+
 Views are lightweight value objects containing a non-owning model or atom reference. Consumers, including painters, store them by value rather than allocating them through `unique_ptr`.
 
 ### 4.2 Mutation access
@@ -78,6 +80,8 @@ Views are lightweight value objects containing a non-owning model or atom refere
 - `SetAtomLocalRawSamplingEntries(...)`;
 - `SetAtomFirstStageGaussianResult(...)`;
 - `SetAtomFirstStageAlphaR(...)`;
+- `SetAtomFirstStageEstimate(...)`;
+- `SetAtomJointEstimate(...)`;
 - `SetAtomPostFitPeeling(...)`.
 
 Each setter creates the atom-local entry when it is missing. Composite operations remain where they enforce a real invariant, including Joint endpoint publication, paired peeling and Local updates, group-result application, and alpha-g updates.

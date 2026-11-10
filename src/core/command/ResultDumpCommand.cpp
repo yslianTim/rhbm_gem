@@ -274,16 +274,16 @@ void RunGausEstimatesDumping(
         {
             const auto entry=AtomLocalPotentialView::For(*atom);
             if (!entry.IsAvailable()) continue;
-            const auto & stage=entry.GetStageEstimate(FittingStage::Second);
-            if (stage.source.method!=EstimateMethod::JointComponents || stage.source.role!=FittingRole::Target) continue;
-            const bool available = stage.point && stage.convergence == JointCheckStatus::Passed;
+            const auto & joint=entry.GetJointEstimate();
+            if (joint.source.method!=EstimateMethod::JointComponents || joint.source.role!=FittingRole::Target) continue;
+            const bool available = joint.point && joint.convergence == JointCheckStatus::Passed;
             outfile << atom->GetSerialID() << ',';
-            if(available) outfile << stage.point->GetAmplitude();
-            outfile << ','; if(available) outfile << stage.point->GetWidth();
+            if(available) outfile << joint.point->GetAmplitude();
+            outfile << ','; if(available) outfile << joint.point->GetWidth();
             outfile << ',' << atom->GetPosition().at(0) << ',' << atom->GetPosition().at(1) << ',' << atom->GetPosition().at(2) << ','
                 << ChemicalDataHelper::GetLabel(atom->GetResidue()) << ',' << ChemicalDataHelper::GetLabel(atom->GetElement()) << ',' << atom->GetAtomID() << ',';
-            if(available) outfile << stage.point->GetOffset();
-            outfile << ','; if(available) outfile << stage.point->Intensity();
+            if(available) outfile << joint.point->GetOffset();
+            outfile << ','; if(available) outfile << joint.point->Intensity();
             outfile << ",joint-components," << (available ? "available":"unavailable") << '\n';
         }
         outfile.close();

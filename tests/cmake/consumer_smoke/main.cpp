@@ -4,6 +4,7 @@
 #include <rhbm_gem/core/MapSampler.hpp>
 #include <rhbm_gem/data/io/DataRepository.hpp>
 #include <rhbm_gem/data/io/JointAnalysisFileIO.hpp>
+#include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/JointAnalysisResult.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
@@ -72,6 +73,10 @@ int main()
     atoms.push_back(std::move(atom));
     ModelObject model(std::move(atoms));
     model.EditAnalysis().ApplyJointResult(result, "consumer-smoke");
+    const auto local = AtomLocalPotentialView::For(*model.FindAtomPtr(1));
+    if (local.GetJointEstimate().source.method != EstimateMethod::JointComponents ||
+        local.GetFirstStageEstimate().source.method != EstimateMethod::Unspecified)
+        return 5;
 
     DataRepository repository("consumer-analysis.sqlite");
     repository.SaveModel(model, "consumer");

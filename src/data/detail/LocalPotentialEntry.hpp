@@ -3,7 +3,6 @@
 #include <cmath>
 #include <cstddef>
 #include <optional>
-#include <stdexcept>
 #include <utility>
 
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
@@ -60,20 +59,11 @@ public:
                 value.fit_result->diagnostics, value.fit_result->refinement, value.fit_result->failed_only_recovery};
         record.fit_result = std::move(value.fit_result);
     }
-    const LocalStageEstimate & StageEstimate(FittingStage stage) const
+    const LocalStageEstimate & FirstStageEstimate() const { return m_first_stage.estimate; }
+    const LocalStageEstimate & JointEstimate() const { return m_joint_estimate; }
+    void SetJointEstimate(LocalStageEstimate value) { m_joint_estimate = std::move(value); }
+    void SetFirstStageEstimate(LocalStageEstimate value)
     {
-        if (stage == FittingStage::Second) return m_joint_estimate;
-        RequireFirstStage(stage);
-        return m_first_stage.estimate;
-    }
-    void SetStageEstimate(FittingStage stage, LocalStageEstimate value)
-    {
-        if (stage == FittingStage::Second)
-        {
-            m_joint_estimate = std::move(value);
-            return;
-        }
-        RequireFirstStage(stage);
         auto & record = m_first_stage;
         if (!value.point && record.estimate.point) record.unfitted_model = record.estimate.point;
         if (record.estimate.point && value.point && record.estimate.point->ToVector() != value.point->ToVector())
@@ -138,13 +128,6 @@ public:
             samples.push_back(std::move(sample));
         }
         return samples;
-    }
-
-private:
-    static void RequireFirstStage(FittingStage stage)
-    {
-        if (stage != FittingStage::First)
-            throw std::invalid_argument("Native local fitting diagnostics require FirstStage.");
     }
 };
 

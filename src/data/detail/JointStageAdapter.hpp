@@ -5,10 +5,8 @@
 #include <string>
 
 namespace rhbm_gem {
-class ModelObject;
 namespace data_internal {
 std::map<int, LocalStageEstimate> BuildJointStageEstimates(
     const JointAnalysisResult &, const std::string & run_id);
-void ApplyJointStageEstimates(ModelObject &, const JointAnalysisResult &, const std::string & run_id);
 }
 }

@@ -89,10 +89,10 @@ std::set<int> InvalidateJointRuns(ModelAnalysisData & data, const std::set<std::
     std::set<int> affected;
     for (auto & [id, entry] : data.AtomLocalEntries())
     {
-        auto stage = entry->StageEstimate(FittingStage::Second);
+        auto stage = entry->JointEstimate();
         if (stage.source.method != EstimateMethod::JointComponents || !runs.contains(stage.source.run_id)) continue;
         stage.uncertainty = {};
-        entry->SetStageEstimate(FittingStage::Second, std::move(stage));
+        entry->SetJointEstimate(std::move(stage));
         entry->ClearGroupMemberResult();
         entry->ClearPeeling();
         affected.insert(id);
@@ -103,7 +103,7 @@ std::set<int> InvalidateJointRuns(ModelAnalysisData & data, const std::set<std::
     return affected;
 }
 
-void InvalidateStageChange(ModelAnalysisData & data, int id,
+void InvalidateJointEstimateChange(ModelAnalysisData & data, int id,
     const LocalStageEstimate & before, LocalStageEstimate & after)
 {
     if (!SameEndpoint(before, after))
@@ -137,7 +137,7 @@ ModelAnalysisEditor::ModelAnalysisEditor(ModelObject & model_object) :
 
 void ModelAnalysisEditor::ApplyJointResult(JointAnalysisResult result, const std::string & run_id)
 {
-    ApplySecondStageEstimates(data_internal::BuildJointStageEstimates(result,run_id));
+    ApplyJointEstimates(data_internal::BuildJointStageEstimates(result,run_id));
     SetJointResult(std::move(result));
 }
 
@@ -152,17 +152,22 @@ void ModelAnalysisEditor::SetJointResult(JointAnalysisResult result)
     ModelAnalysisData::Of(m_model_object).joint_result=std::move(result);
 }
 
-void ModelAnalysisEditor::SetAtomStageEstimate(FittingStage stage, const AtomObject & atom, LocalStageEstimate value)
+void ModelAnalysisEditor::SetAtomFirstStageEstimate(const AtomObject & atom, LocalStageEstimate value)
+{
+    value.source.atom_id = std::to_string(atom.GetSerialID());
+    EnsureAtomLocalPotential(m_model_object, atom).SetFirstStageEstimate(std::move(value));
+}
+
+void ModelAnalysisEditor::SetAtomJointEstimate(const AtomObject & atom, LocalStageEstimate value)
 {
     value.source.atom_id = std::to_string(atom.GetSerialID());
     auto & entry = EnsureAtomLocalPotential(m_model_object, atom);
-    const auto before = entry.StageEstimate(stage);
-    if (stage == FittingStage::Second)
-        InvalidateStageChange(ModelAnalysisData::Of(m_model_object), atom.GetSerialID(), before, value);
-    entry.SetStageEstimate(stage, std::move(value));
+    const auto before = entry.JointEstimate();
+    InvalidateJointEstimateChange(ModelAnalysisData::Of(m_model_object), atom.GetSerialID(), before, value);
+    entry.SetJointEstimate(std::move(value));
 }
 
-void ModelAnalysisEditor::ApplySecondStageEstimates(std::map<int, LocalStageEstimate> estimates)
+void ModelAnalysisEditor::ApplyJointEstimates(std::map<int, LocalStageEstimate> estimates)
 {
     // Validate the complete mapping before touching any published result.
     for (auto & [id, estimate] : estimates)
@@ -181,7 +186,7 @@ void ModelAnalysisEditor::ApplySecondStageEstimates(std::map<int, LocalStageEsti
     for (const auto & [id, estimate] : estimates)
     {
         auto & entry = EnsureAtomLocalPotential(m_model_object, *m_model_object.FindAtomPtr(id));
-        for (const auto * source : {&entry.StageEstimate(FittingStage::Second).source, &estimate.source})
+        for (const auto * source : {&entry.JointEstimate().source, &estimate.source})
             if (source->method == EstimateMethod::JointComponents) runs.insert(source->run_id);
         ids.insert(id);
     }
@@ -192,7 +197,7 @@ void ModelAnalysisEditor::ApplySecondStageEstimates(std::map<int, LocalStageEsti
     {
         auto & entry = *data.AtomLocalEntries().at(id);
         entry.ClearPeeling(); entry.ClearGroupMemberResult();
-        entry.SetStageEstimate(FittingStage::Second, std::move(estimate));
+        entry.SetJointEstimate(std::move(estimate));
     }
 }
 
@@ -201,10 +206,10 @@ void ModelAnalysisEditor::SetAtomPostFitPeeling(const AtomObject & atom, PostFit
     auto & entry = EnsureAtomLocalPotential(m_model_object, atom);
     const auto position=atom.GetPosition();
     const auto & data=ModelAnalysisData::Of(m_model_object);
-    const auto validation=data_internal::ValidatePostFitPeelingResult(value,entry.StageEstimate(FittingStage::Second),
+    const auto validation=data_internal::ValidatePostFitPeelingResult(value,entry.JointEstimate(),
         data.joint_result ? &*data.joint_result:nullptr,&position);
     if (!validation.empty()) throw std::invalid_argument(validation);
-    if (!SameSource(value.source, entry.StageEstimate(FittingStage::Second).source))
+    if (!SameSource(value.source, entry.JointEstimate().source))
         throw std::invalid_argument("Peeling source mismatch.");
     entry.ClearGroupMemberResult();
     InvalidateGroups(ModelAnalysisData::Of(m_model_object), {atom.GetSerialID()});
@@ -233,7 +238,7 @@ void ModelAnalysisEditor::ApplyPostJointLocalResultsBatch(
         catch (const std::out_of_range &) { throw std::invalid_argument("Post-Joint local target does not belong to model."); }
         auto * entry = atom ? data.FindAtomLocalEntry(*atom) : nullptr;
         if (!entry) throw std::invalid_argument("Post-Joint local target has no Joint stage.");
-        const auto & joint = entry->StageEstimate(FittingStage::Second);
+        const auto & joint = entry->JointEstimate();
         if (run_id.empty()) run_id = joint.source.run_id;
         else if (run_id != joint.source.run_id)
             throw std::invalid_argument("Post-Joint local results mix Joint runs.");
@@ -270,7 +275,7 @@ void ModelAnalysisEditor::ApplyPostFitPeelingsBatch(
         auto * entry = atom ? data.FindAtomLocalEntry(*atom) : nullptr;
         if (!entry)
             throw std::invalid_argument("Post-fit peeling atom has no Joint stage.");
-        const auto & stage = entry->StageEstimate(FittingStage::Second);
+        const auto & stage = entry->JointEstimate();
         if (stage.source.method != EstimateMethod::JointComponents || stage.source.role != FittingRole::Target ||
             stage.source.atom_id != std::to_string(id) || stage.source.component_id.empty() || stage.source.run_id.empty())
             throw std::invalid_argument("Post-fit peeling source is not a Joint target: atom=" +
@@ -337,7 +342,7 @@ void ModelAnalysisEditor::ClearJointResult()
     auto & data=ModelAnalysisData::Of(m_model_object);
     std::set<int> affected;
     for (auto & [id,entry]:data.AtomLocalEntries())
-        if (entry->StageEstimate(FittingStage::Second).source.method==EstimateMethod::JointComponents)
+        if (entry->JointEstimate().source.method==EstimateMethod::JointComponents)
         {
             entry->ClearPeeling();
             entry->ClearGroupMemberResult();
@@ -386,7 +391,7 @@ void ModelAnalysisEditor::SetAtomLocalRawSamplingEntries(
     LocalPotentialSampleList value)
 {
     auto & entry = EnsureAtomLocalPotential(m_model_object, atom_object);
-    if (entry.StageEstimate(FittingStage::Second).source.method!=EstimateMethod::JointComponents)
+    if (entry.JointEstimate().source.method!=EstimateMethod::JointComponents)
     {
         entry.ClearGroupMemberResult();
         InvalidateGroups(ModelAnalysisData::Of(m_model_object), {atom_object.GetSerialID()});
@@ -400,9 +405,9 @@ void ModelAnalysisEditor::SetAtomFirstStageGaussianResult(
 {
     auto & entry = EnsureAtomLocalPotential(m_model_object, atom_object);
     entry.SetFirstStageGaussianResult(std::move(result));
-    auto estimate = entry.StageEstimate(FittingStage::First);
+    auto estimate = entry.FirstStageEstimate();
     estimate.source.atom_id = std::to_string(atom_object.GetSerialID());
-    entry.SetStageEstimate(FittingStage::First, std::move(estimate));
+    entry.SetFirstStageEstimate(std::move(estimate));
 }
 
 void ModelAnalysisEditor::SetAtomFirstStageAlphaR(

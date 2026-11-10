@@ -1,13 +1,9 @@
 #include "JointStageAdapter.hpp"
-#include "ModelAnalysisData.hpp"
-#include "LocalPotentialEntry.hpp"
-#include <rhbm_gem/data/object/AtomObject.hpp>
-#include <rhbm_gem/data/object/ModelObject.hpp>
-#include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <algorithm>
 #include <cmath>
 #include <set>
 #include <stdexcept>
+#include <vector>
 
 namespace rhbm_gem::data_internal {
 std::map<int, LocalStageEstimate> BuildJointStageEstimates(
@@ -79,11 +75,5 @@ std::map<int, LocalStageEstimate> BuildJointStageEstimates(
         }
     }
     return estimates;
-}
-
-void ApplyJointStageEstimates(ModelObject & model, const JointAnalysisResult & result, const std::string & run_id)
-{
-    const auto estimates = BuildJointStageEstimates(result, run_id);
-    model.EditAnalysis().ApplySecondStageEstimates(estimates);
 }
 }

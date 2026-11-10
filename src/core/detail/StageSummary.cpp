@@ -40,7 +40,7 @@ std::string BuildJointTargetSpotSummary(const ModelObject & model_object)
         if (std::find(kLocalMDPDESummarySpotList.begin(), kLocalMDPDESummarySpotList.end(), spot) ==
             kLocalMDPDESummarySpotList.end()) continue;
         const auto view = AtomLocalPotentialView::For(*atom);
-        const auto * estimate = view.IsAvailable() ? &view.GetStageEstimate(FittingStage::Second) : nullptr;
+        const auto * estimate = view.IsAvailable() ? &view.GetJointEstimate() : nullptr;
         const bool joint = estimate && estimate->source.method == EstimateMethod::JointComponents;
         if (joint && estimate->source.role != FittingRole::Target) continue;
         auto & samples = spots[spot];

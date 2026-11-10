@@ -251,7 +251,7 @@ std::unique_ptr<rg::ModelObject> BuildFeatureModel(
             });
         }
         rg::PostFitPeelingResult peeling;
-        peeling.source = rg::AtomLocalPotentialView::For(*atom).GetStageEstimate(rg::FittingStage::Second).source;
+        peeling.source = rg::AtomLocalPotentialView::For(*atom).GetJointEstimate().source;
         using joint_component_test::postprocessing::MakeGridObservation;
         peeling.samples = {
             {raw_signal * (1.0 - signal_ratio), {}, MakeGridObservation(row, row, .5, raw_signal, atom->GetPosition())},
@@ -939,13 +939,14 @@ TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNo
     const rg::MapObject grid_geometry(snapshot.metadata.grid_size,
         snapshot.metadata.grid_spacing,snapshot.metadata.origin);
     model->EditAnalysis().InitializeFromSelection();
-    rg::data_internal::ApplyJointStageEstimates(*model,snapshot,"saved-joint-umap");
+    model->EditAnalysis().ApplyJointEstimates(
+        rg::data_internal::BuildJointStageEstimates(snapshot, "saved-joint-umap"));
     model->EditAnalysis().SetJointResult(snapshot);
     for(const auto & atom:model->GetAtomList())
     {
         const auto view=rg::AtomLocalPotentialView::For(*atom);
-        if(view.GetStageEstimate(rg::FittingStage::Second).source.role!=rg::FittingRole::Target) continue;
-        rg::PostFitPeelingResult peeling; peeling.source=view.GetStageEstimate(rg::FittingStage::Second).source;
+        if(view.GetJointEstimate().source.role!=rg::FittingRole::Target) continue;
+        rg::PostFitPeelingResult peeling; peeling.source=view.GetJointEstimate().source;
         const auto contributor=static_cast<std::size_t>(std::find(snapshot.atom_ids.begin(),snapshot.atom_ids.end(),
             std::to_string(atom->GetSerialID()))-snapshot.atom_ids.begin());
         const auto & input=problem.OriginalInput();

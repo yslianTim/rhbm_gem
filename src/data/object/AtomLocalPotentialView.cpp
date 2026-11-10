@@ -91,9 +91,25 @@ const LocalPotentialEntry & AtomLocalPotentialView::RequireEntry(const char * co
     return RequireLocalEntry(FindEntry(), context);
 }
 
+const LocalStageEstimate & AtomLocalPotentialView::GetFirstStageEstimate() const
+{
+    return RequireEntry("Stage estimate").FirstStageEstimate();
+}
+
+const LocalStageEstimate & AtomLocalPotentialView::GetJointEstimate() const
+{
+    return RequireEntry("Stage estimate").JointEstimate();
+}
+
 const LocalStageEstimate & AtomLocalPotentialView::GetStageEstimate(FittingStage stage) const
 {
-    return RequireEntry("Stage estimate").StageEstimate(stage);
+    const auto & entry = RequireEntry("Stage estimate");
+    switch (stage)
+    {
+        case FittingStage::First: return entry.FirstStageEstimate();
+        case FittingStage::Second: return entry.JointEstimate();
+    }
+    throw std::invalid_argument("Unknown local fitting stage.");
 }
 
 bool AtomLocalPotentialView::HasFinalModel(FittingStage stage) const
@@ -127,7 +143,7 @@ bool AtomLocalPotentialView::HasSampleGeometry() const
 const LocalPotentialEntry & AtomLocalPotentialView::RequireFirstStageEntry(const char * diagnostic_error) const
 {
     const auto & entry = RequireEntry("Stage estimate");
-    if (entry.StageEstimate(FittingStage::First).source.method == EstimateMethod::JointComponents)
+    if (entry.FirstStageEstimate().source.method == EstimateMethod::JointComponents)
         throw std::runtime_error(diagnostic_error);
     return entry;
 }
@@ -167,18 +183,6 @@ LocalPotentialSampleList AtomLocalPotentialView::GetPeelingSamplingEntries(bool 
 {
     const auto & entry{ RequireEntry("Local peeling sampling entries") };
     return ApplySamplingEntrySelection(entry.PeelingSamplingEntries(), apply_selection);
-}
-
-LocalPotentialSampleList AtomLocalPotentialView::GetSamplingEntries(FittingStage stage) const
-{
-    switch (stage)
-    {
-        case FittingStage::First:
-            return GetRawSamplingEntries(true);
-        case FittingStage::Second:
-            return GetPeelingSamplingEntries(false);
-    }
-    throw std::invalid_argument("Unknown local fitting stage.");
 }
 
 PeelingRatioAssessment AtomLocalPotentialView::AssessLocalFittingPeelingRatio(
@@ -252,7 +256,7 @@ PeelingRatioAssessment AtomLocalPotentialView::AssessLocalFittingPeelingRatio(
         return assessment;
     }
 
-    const auto & stage = GetStageEstimate(FittingStage::Second);
+    const auto & stage = GetJointEstimate();
     assessment.reason = stage.source.method == EstimateMethod::JointComponents &&
         (!stage.point || stage.convergence != JointCheckStatus::Passed) ?
         "joint-qualification-failed" : "missing-peeling-result";

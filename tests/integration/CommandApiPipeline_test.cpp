@@ -558,7 +558,7 @@ TEST(CommandApiPipelineTest, JointFailureAndUnavailableOutcomesPersistThroughApi
             for(const auto * atom:loaded->GetSelectedAtoms())
             {
                 const auto view=rg::AtomLocalPotentialView::For(*atom);
-                EXPECT_EQ(view.GetStageEstimate(rg::FittingStage::Second).point.has_value(),qualified);
+                EXPECT_EQ(view.GetJointEstimate().point.has_value(),qualified);
                 EXPECT_FALSE(view.GetPostFitPeeling());
                 EXPECT_FALSE(view.GetPostJointLocalResult());
                 EXPECT_FALSE(view.GetGroupMemberResult());
@@ -662,7 +662,7 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
     EXPECT_EQ(halo_reconstruction.donor_policy,rg::GeometryLocalTargetMedianDonorPolicy);
     EXPECT_EQ(halo_reconstruction.joint_run_id,
         rg::AtomLocalPotentialView::For(*loaded->FindAtomPtr(1))
-            .GetStageEstimate(rg::FittingStage::Second).source.run_id);
+            .GetJointEstimate().source.run_id);
     ASSERT_EQ(halo_reconstruction.halos.size(),1u);
     EXPECT_EQ(halo_reconstruction.halos.front().source,rg::HaloMedianSource::GeometryLocalTargetMedian);
     EXPECT_EQ(halo_reconstruction.halos.front().donor_atom_ids.size(),halo_reconstruction.halos.front().donor_count);
@@ -713,7 +713,7 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
     for(const auto * atom:loaded->GetSelectedAtoms())
     {
         const auto local=rg::AtomLocalPotentialView::For(*atom);
-        const auto & second=local.GetStageEstimate(rg::FittingStage::Second);
+        const auto & second=local.GetJointEstimate();
         if(second.source.method!=rg::EstimateMethod::JointComponents || second.source.role!=rg::FittingRole::Target)
             continue;
         ++target_count;
@@ -837,7 +837,7 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
     for(const auto * atom:small_loaded->GetSelectedAtoms())
     {
         const auto local=rg::AtomLocalPotentialView::For(*atom);
-        EXPECT_FALSE(local.GetStageEstimate(rg::FittingStage::Second).point);
+        EXPECT_FALSE(local.GetJointEstimate().point);
         EXPECT_FALSE(local.GetPostFitPeeling());
         EXPECT_FALSE(local.GetPostJointLocalResult());
         EXPECT_FALSE(local.GetGroupMemberResult());

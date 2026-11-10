@@ -1322,7 +1322,7 @@ TEST(DataObjectPersistenceTest, CanonicalNativeDiagnosticsAndMissingStatesRoundT
     editor.ClearTransientFitStates();
     rg::LocalStageEstimate missing; missing.source.method=rg::EstimateMethod::JointComponents;
     missing.source.run_id="no-snapshot"; missing.reason="initialization-failed"; missing.source.role=rg::FittingRole::Halo;
-    editor.SetAtomStageEstimate(rg::FittingStage::Second,*model->FindAtomPtr(2),missing);
+    editor.SetAtomJointEstimate(*model->FindAtomPtr(2),missing);
     model->SelectAllAtoms(); editor.RebuildAtomGroupsFromSelection();
     const auto group=model->GetAnalysisView().CollectAtomGroupKeys().front();
     editor.SetAtomGroupAlphaG(group,.87);
