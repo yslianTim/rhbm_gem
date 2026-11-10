@@ -26,12 +26,11 @@ fallback downloads.
 ## SQLite Model Contract
 
 The database must already exist, be a regular file, and use a supported SQLite
-schema (v21 only). `--model-key` must identify exactly one
+schema (v22 only). `--model-key` must identify exactly one
 model saved by `potential_analysis`; the command neither enumerates nor combines
 models.
 
-Both estimators are supported. Joint analysis uses only the original fitted
-targets, excluding halo contributors. At least three rows must have all three
+UMAP uses the original fitted Joint Targets and excludes Halo contributors. At least three rows must have all three
 required features: neighbor distance sum, closest-neighbor distance and tail
 peeling ratio. Missing required values exclude the row with a reported reason;
 fewer than three remaining rows fails the command. Missing ancillary values are
@@ -40,12 +39,11 @@ original-grid coverage makes a peeling ratio unavailable, not zero.
 
 The adjacent `.csv.metadata.json` records estimator, feature names, peeling mode,
 map normalization (null when unknown), standardization, included/excluded row
-counts and exclusions by reason. For Joint estimates, its `column_semantics`
+counts and exclusions by reason. Its `column_semantics`
 field identifies `amplitude 2nd` as Gaussian amplitude A, `width 2nd` as the
 shared Gaussian/charge-kernel width tau, and `offset 2nd` as the charge-kernel
-coefficient C. For Two Stage estimates, these retain their existing Gaussian
-amplitude, width, and constant-offset semantics. The existing
-standardization uses only retained rows; constant columns remain zero.
+coefficient C. Standardization uses the retained rows and assigns zero to
+constant columns.
 
 For each selected atom, the command reconstructs these 7 local-fitting features:
 
@@ -69,10 +67,8 @@ candidates; no eligible neighbor makes the feature unavailable.
 
 Each peeling ratio uses the same valid sample population in its raw and peeled
 sums. Samples must have finite distances in the inclusive range, finite raw and
-peeled responses, and a provable raw/peeled identity. Joint peeling is paired
-one-to-one by the saved PostFit contract. Two Stage peeling is paired by exact
-distance, three-dimensional position, and selection state; sample counts alone
-do not establish identity. A missing or mismatched sample makes the strict
+peeled responses, and a provable raw/peeled identity. The saved PostFit result pairs raw and peeled
+responses by original grid identity. A missing or mismatched sample makes the strict
 ratio unavailable, with the reason recorded in the metadata exclusions. The
 ratio is `1 - peeled sum / raw sum`; a zero raw denominator remains unavailable.
 For Joint rows, the saved Tail Peeling Ratio is derived from paired raw and
@@ -81,10 +77,8 @@ selected by geometry; residue, element, atom name, and group labels do not
 enter that ratio. Those labels remain available for CSV and plot annotations.
 
 `amplitude 2nd`, `width 2nd`, and `offset 2nd` read the saved `Second.point`.
-For Joint analysis, these are the Joint estimation A/tau/C values; tau is the
-physical width in angstrom and needs no conversion. Post-Joint Local and Group Fitting
-results are stored separately and do not replace these values. Two Stage
-analysis continues to use its second-stage estimates.
+These are Joint A/tau/C values with tau in angstroms. Post-Joint Local and
+Group Fitting results occupy separate records.
 
 Rows are ordered by atom serial ID. The current build passes these three features
 to UMAP:

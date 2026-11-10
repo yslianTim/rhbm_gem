@@ -1,5 +1,5 @@
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
-#include "utils/hrl/MDPDEEndpointRefinement.hpp"
+#include "utils/hrl/MDPDEEquations.hpp"
 
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
@@ -438,22 +438,6 @@ MDPDEEquationEvidence EvaluateMDPDEEquations(const RHBMMemberDataset & data,
     result.valid = result.raw.allFinite() && result.scaled.allFinite();
     result.reason = result.valid ? "valid" : "nonfinite-residual";
     return result;
-}
-
-Eigen::VectorXd CalculateMDPDEBeta(const RHBMMemberDataset & data, const Eigen::VectorXd & weights)
-{
-    return CalculateBetaByMDPDE(data.X, data.y, weights.asDiagonal());
-}
-
-double CalculateMDPDEVariance(const RHBMMemberDataset & data, double alpha,
-    const Eigen::VectorXd & weights, const Eigen::VectorXd & beta)
-{
-    return CalculateDataVarianceSquare(alpha, data.X, data.y, weights.asDiagonal(), beta);
-}
-
-RHBMDiagonalMatrix CalculateMDPDECovariance(double variance, const Eigen::VectorXd & weights)
-{
-    return CalculateDataCovariance(variance, weights.asDiagonal());
 }
 } // namespace rhbm_gem::mdpde_detail
 

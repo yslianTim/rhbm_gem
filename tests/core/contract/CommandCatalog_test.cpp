@@ -90,16 +90,6 @@ struct EnumMappingTraits<PrinterType>
 };
 
 template <>
-struct EnumMappingTraits<PotentialEstimator>
-{
-    static constexpr std::string_view kFirstBindingToken{ "TWO_STAGE" };
-    static constexpr std::array<EnumMappingExpectation<PotentialEstimator>, 2> kExpectations{{
-        { "two-stage", PotentialEstimator::TWO_STAGE },
-        { "joint-components", PotentialEstimator::JOINT_COMPONENTS },
-    }};
-};
-
-template <>
 struct EnumMappingTraits<PotentialModel>
 {
     static constexpr std::string_view kFirstBindingToken{ "SINGLE_GAUS" };
@@ -123,11 +113,9 @@ template <>
 struct EnumMappingTraits<TesterType>
 {
     static constexpr std::string_view kFirstBindingToken{ "BENCHMARK" };
-    static constexpr std::array<EnumMappingExpectation<TesterType>, 4> kExpectations{{
+    static constexpr std::array<EnumMappingExpectation<TesterType>, 2> kExpectations{{
         { "benchmark", TesterType::BENCHMARK },
         { "0", TesterType::BENCHMARK },
-        { "atomic_model", TesterType::ATOMIC_MODEL },
-        { "5", TesterType::ATOMIC_MODEL },
     }};
 };
 
@@ -165,7 +153,6 @@ using CommandEnumTypes = testing::Types<
     PainterType,
     PrinterType,
     PotentialModel,
-    PotentialEstimator,
     PartialCharge,
     TesterType,
     SphereSamplingMethod>;
@@ -223,7 +210,7 @@ TEST(CommandCatalogTest, PotentialAnalysisCatalogExposesOnlyCurrentSelectionAndP
     command_internal::RequestFieldCatalog<PotentialAnalysisRequest>::Visit(
         [&](const auto & field) { analysis_options.insert(field.cli_flags); });
     for (const auto * removed_option : {
-        "--map-normalization", "--exclude-hydrogen", "--only-backbone", "--asymmetry",
+        "--estimator", "--map-normalization", "--exclude-hydrogen", "--only-backbone", "--asymmetry",
         "--sampling-method", "--second-stage-failed-only-refinement" })
     {
         EXPECT_EQ(analysis_options.count(removed_option), 0u) << removed_option;

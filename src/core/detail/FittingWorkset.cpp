@@ -10,14 +10,6 @@
 
 namespace rhbm_gem::core::detail {
 
-FittingWorkset MakeTwoStageFittingWorkset(ModelObject & model)
-{
-    FittingWorkset workset;
-    workset.contributors = model.GetSelectedAtoms();
-    workset.target_mask.assign(workset.contributors.size(), true);
-    return workset;
-}
-
 FittingWorkset MakeJointFittingWorkset(ModelObject & model, const JointProblem & problem)
 {
     const auto & input = problem.Input();

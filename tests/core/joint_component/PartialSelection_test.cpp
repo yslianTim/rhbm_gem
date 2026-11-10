@@ -1,3 +1,4 @@
+#include "core/detail/GroupPotentialFitting.hpp"
 #include <gtest/gtest.h>
 #include <boost/json.hpp>
 #include <rhbm_gem/core/GaussianEstimator.hpp>
@@ -244,8 +245,13 @@ TEST(JointComponentPartialSelectionTest, InitializationPreservesTargetHistoryAnd
     rhbm_gem::LocalGaussianResult sentinel; sentinel.alpha_r=.789;
     sentinel.mdpde=rhbm_gem::GaussianModel3DWithUncertainty{rhbm_gem::GaussianModel3D{7.,.91,.23},{}};
     for(const auto & atom:f.model->GetAtomList())
-        for(auto stage:{rhbm_gem::FittingStage::First,rhbm_gem::FittingStage::Second})
-            f.model->EditAnalysis().SetAtomLocalGaussianResult(stage,*atom,sentinel);
+    {
+        f.model->EditAnalysis().SetAtomLocalGaussianResult(rhbm_gem::FittingStage::First,*atom,sentinel);
+        rhbm_gem::LocalStageEstimate endpoint;
+        endpoint.source.method = rhbm_gem::EstimateMethod::JointComponents;
+        endpoint.point = sentinel.mdpde.GetModel();
+        f.model->EditAnalysis().SetAtomStageEstimate(rhbm_gem::FittingStage::Second,*atom,endpoint);
+    }
     const auto fit=core::EstimateJointComponents(*f.map,*f.model);
     ASSERT_EQ(fit.initialization.atoms.size(),1); ASSERT_TRUE(fit.initialization.valid) << fit.initialization.reason;
     EXPECT_TRUE(fit.initialization.atoms.front().target);
@@ -256,7 +262,7 @@ TEST(JointComponentPartialSelectionTest, InitializationPreservesTargetHistoryAnd
     const auto halo=rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(2));
     EXPECT_EQ(halo.GetEstimateMDPDE(rhbm_gem::FittingStage::First).GetWidth(),.91);
     for(const auto & atom:f.model->GetAtomList())
-        EXPECT_EQ(rhbm_gem::AtomLocalPotentialView::For(*atom).GetEstimateMDPDE(rhbm_gem::FittingStage::Second).GetWidth(),.91);
+        EXPECT_EQ(rhbm_gem::AtomLocalPotentialView::For(*atom).GetFinalModel(rhbm_gem::FittingStage::Second).GetWidth(),.91);
     const auto prediction_before=fit.prediction;
     const auto saved=core::CaptureJointAnalysisResult(fit);
     auto movable_fit=fit;
@@ -488,7 +494,6 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsSelectedTargetsWithou
     const auto bonds = f.model->GetSelectedBonds();
     const auto problem = core::BuildPureHaloSupportExclusionProblem(*f.map, *f.model);
     core::FitOptions options;
-    options.estimator = core::PotentialEstimator::JOINT_COMPONENTS;
     options.quiet_mode = true;
     core::detail::RunJointComponentWorkflow(*f.map, *f.model, options);
     ASSERT_TRUE(f.model->GetAnalysisView().GetJointResult());
@@ -607,10 +612,10 @@ TEST(JointComponentPartialSelectionTest, StageAdapterUsesIdentityAndClearsMissin
     EXPECT_DOUBLE_EQ(target.GetFinalModel(rhbm_gem::FittingStage::Second).GetOffset(), component.state->ac[1]);
     EXPECT_DOUBLE_EQ(target.GetFinalModel(rhbm_gem::FittingStage::Second).GetWidth(), component.state->tau[0]);
     EXPECT_EQ(halo.GetStageEstimate(rhbm_gem::FittingStage::Second).source.role, rhbm_gem::FittingRole::Halo);
-    auto summary = core::BuildSecondStageSpotSummary(*f.model);
+    auto summary = core::BuildJointTargetSpotSummary(*f.model);
     EXPECT_NE(summary.find("joint-components"), std::string::npos);
-    EXPECT_NE(summary.find("Second-stage estimate summary by Spot:"), std::string::npos);
-    EXPECT_NE(summary.find("A/tau/C: Joint second-stage estimates"), std::string::npos);
+    EXPECT_NE(summary.find("Joint Target estimate summary by Spot:"), std::string::npos);
+    EXPECT_NE(summary.find("A/tau/C: Joint Target estimates"), std::string::npos);
     EXPECT_NE(summary.find("\n| Spot | valid | not-converged | unavailable | A mean / s.d. | tau mean / s.d. | C(J) mean / s.d. |"), std::string::npos);
     EXPECT_NE(summary.find("\n| CA   |     1 |             0 |           0 |"), std::string::npos);
     EXPECT_EQ(summary.find("\n| CB   |"), std::string::npos);
@@ -648,7 +653,7 @@ TEST(JointComponentPartialSelectionTest, StageAdapterUsesIdentityAndClearsMissin
     rhbm_gem::data_internal::ApplyJointStageEstimates(*f.model, result, "next-run");
     EXPECT_FALSE(target.HasFinalModel(rhbm_gem::FittingStage::Second));
     EXPECT_EQ(target.GetStageEstimate(rhbm_gem::FittingStage::Second).reason, "invalid-initial-widths");
-    summary = core::BuildSecondStageSpotSummary(*f.model);
+    summary = core::BuildJointTargetSpotSummary(*f.model);
     EXPECT_NE(summary.find("\n| CA   |     0 |             0 |           1 |"), std::string::npos);
     expectSummaryRowWidths(summary, true);
 }
@@ -692,7 +697,7 @@ TEST(JointComponentPartialSelectionTest, SummaryIncludesOnlyConvergedSecondStage
         stage.convergence = test.convergence;
         stage.point = test.has_point ? std::optional{GaussianModel3D{6.0, 1.5, 1.0}} : std::nullopt;
         editor.SetAtomStageEstimate(FittingStage::Second, *second, stage);
-        const auto summary = core::BuildSecondStageSpotSummary(*f.model);
+        const auto summary = core::BuildJointTargetSpotSummary(*f.model);
         EXPECT_NE(summary.find(std::string{"\n| CA   |"} + test.counts + test.values), std::string::npos) << summary;
     }
 }
@@ -1185,7 +1190,7 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInforma
         stages[i] = std::move(stage);
     }
     editor.ApplySecondStageEstimates(stages);
-    const auto stage_summary = core::BuildSecondStageSpotSummary(model);
+    const auto stage_summary = core::BuildJointTargetSpotSummary(model);
     EXPECT_NE(stage_summary.find(
         "\n| CA   |     5 |             0 |           0 |   2.60 / 0.32 |   0.55 / 0.03 |  -0.30 / 0.16 |"),
         std::string::npos) << stage_summary;
@@ -1239,10 +1244,10 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInforma
 
     editor.ApplyPostFitPeelingsBatch(std::move(peelings));
     editor.ApplyPostJointLocalResultsBatch(local_results);
-    EXPECT_EQ(core::BuildSecondStageSpotSummary(model), stage_summary);
+    EXPECT_EQ(core::BuildJointTargetSpotSummary(model), stage_summary);
 
-    core::FitOptions options; options.estimator = core::PotentialEstimator::JOINT_COMPONENTS; options.quiet_mode = true;
-    core::RunGroupPotentialFitting(model, options);
+    core::FitOptions options; options.quiet_mode = true;
+    core::detail::RunJointGroupPotentialFitting(model, options);
     const auto keys = model.GetAnalysisView().CollectAtomGroupKeys();
     ASSERT_EQ(keys.size(), 1);
     auto summary = *model.GetAnalysisView().GetGroupParameterSummary(keys[0]);
@@ -1317,11 +1322,11 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInforma
         republished_peelings.emplace_back(id, *AtomLocalPotentialView::For(*model.FindAtomPtr(id)).GetPostFitPeeling());
     editor.ApplyPostFitPeelingsBatch(std::move(republished_peelings));
     EXPECT_FALSE(first.GetPostJointLocalResult());
-    EXPECT_EQ(core::BuildSecondStageSpotSummary(model), stage_summary);
+    EXPECT_EQ(core::BuildJointTargetSpotSummary(model), stage_summary);
     EXPECT_FALSE(first.GetGroupMemberResult());
     EXPECT_FALSE(model.GetAnalysisView().GetGroupParameterSummary(keys[0]));
     editor.ApplyPostJointLocalResultsBatch(local_results);
-    core::RunGroupPotentialFitting(model, options);
+    core::detail::RunJointGroupPotentialFitting(model, options);
     EXPECT_EQ(first.GetGroupMemberResult()->posterior.GetModel().ToVector(), posterior);
 
     // Grid persistence is exercised by the complete-source workflow fixture;
@@ -1329,9 +1334,9 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInforma
     editor.SetAtomLocalRawSamplingEntries(*model.FindAtomPtr(1), {{-12345, {0.3, {0,0,0}, true}}});
     EXPECT_TRUE(first.GetPostFitPeeling());
     EXPECT_TRUE(first.GetPostJointLocalResult());
-    EXPECT_EQ(core::BuildSecondStageSpotSummary(model), stage_summary);
+    EXPECT_EQ(core::BuildJointTargetSpotSummary(model), stage_summary);
     EXPECT_TRUE(first.GetGroupMemberResult());
-    core::RunGroupPotentialFitting(model, options);
+    core::detail::RunJointGroupPotentialFitting(model, options);
     EXPECT_EQ(model.GetAnalysisView().GetGroupParameterSummary(keys[0])->eligible_count, 4);
     EXPECT_EQ(first.GetFinalModel(FittingStage::Second).ToVector(), joint_point);
     EXPECT_TRUE(first.GetGroupMemberResult());
@@ -1669,7 +1674,7 @@ TEST(JointComponentPartialSelectionTest, GroupInferenceUsesQualifiedLocalMeasure
     core::FitOptions options; options.quiet_mode=true;
     const auto publish=[&] {
         editor.ApplyPostFitPeelingsBatch(peelings); editor.ApplyPostJointLocalResultsBatch(locals);
-        core::RunGroupPotentialFitting(model,options);
+        core::detail::RunJointGroupPotentialFitting(model,options);
         const auto keys=model.GetAnalysisView().CollectAtomGroupKeys();
         return *model.GetAnalysisView().GetGroupParameterSummary(keys.front());
     };

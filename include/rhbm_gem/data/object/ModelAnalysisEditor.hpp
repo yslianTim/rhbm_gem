@@ -35,13 +35,8 @@ public:
     void Clear();
     void ClearTransientFitStates();
     void InitializeFromSelection();
-    void InitializeLocalFittingSeedModels();
     void EnsureSelectedAtomLocalPotentials();
-    void EnsureAtomGroupLocalPotentials(GroupKey group_key);
     void SetAtomLocalRawSamplingEntries(
-        const AtomObject & atom_object,
-        LocalPotentialSampleList value);
-    void SetAtomLocalPeelingSamplingEntries(
         const AtomObject & atom_object,
         LocalPotentialSampleList value);
     void SetAtomLocalGaussianResult(
@@ -55,17 +50,9 @@ public:
     void RebuildAtomGroupsFromSelection();
     void InitializeLocalAlpha(FittingStage stage, double alpha_r);
     void InitializeGroupAlpha(double alpha_g);
-    void CopyLocalFittingStageResult(FittingStage source_stage, FittingStage destination_stage);
     void ApplyAtomGroupGaussianResult(
         GroupKey group_key,
         const GroupGaussianResult & group_result);
-    void SetAtomLocalNeighborCountForPeeling(
-        const AtomObject & atom_object,
-        int neighbor_count);
-    void ApplyAtomLocalSecondStageResult(
-        const AtomObject & atom_object,
-        LocalGaussianResult result,
-        LocalPotentialSampleList peeling_sampling_entries);
     void SetAtomGroupAlphaG(GroupKey group_key, double alpha_g);
 
 private:

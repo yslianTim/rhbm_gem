@@ -8,7 +8,6 @@
 #include <array>
 #include <iomanip>
 #include <map>
-#include <set>
 #include <sstream>
 
 namespace rhbm_gem::core {
@@ -24,26 +23,7 @@ struct GaussianModelParameterSamples
 };
 } // namespace
 
-StageProvenance CollectStageProvenance(const std::vector<const AtomObject *> & atoms)
-{
-    std::set<std::string> methods, modes;
-    for (const auto * atom : atoms)
-    {
-        const auto view = AtomLocalPotentialView::For(*atom);
-        if (!view.IsAvailable()) { methods.insert("unknown"); modes.insert("unknown"); continue; }
-        const auto method = view.GetStageEstimate(FittingStage::Second).source.method;
-        methods.insert(method == EstimateMethod::JointComponents ? "joint-components" :
-            method == EstimateMethod::Peeling ? "two-stage" : "unknown");
-        if (view.GetPostFitPeeling()) modes.insert(view.GetPostFitPeeling()->mode);
-        else modes.insert(method == EstimateMethod::Peeling && !view.GetPeelingSamplingEntries().empty() ? "iterative" : "unknown");
-    }
-    const auto label = [](const auto & values) -> std::string {
-        return values.empty() ? "unknown" : values.size() == 1 ? *values.begin() : "mixed";
-    };
-    return {label(methods), label(modes)};
-}
-
-std::string BuildSecondStageSpotSummary(const ModelObject & model_object)
+std::string BuildJointTargetSpotSummary(const ModelObject & model_object)
 {
     constexpr int kSpotColumnWidth = 4;
     constexpr int kValidColumnWidth = 5;
@@ -53,7 +33,6 @@ std::string BuildSecondStageSpotSummary(const ModelObject & model_object)
     constexpr int kStandardDeviationColumnWidth = 4;
     constexpr int kParameterColumnWidth = kMeanColumnWidth + 3 + kStandardDeviationColumnWidth;
     std::map<Spot, GaussianModelParameterSamples> spots;
-    std::vector<const AtomObject *> population;
     for (const auto * atom : model_object.GetSelectedAtoms())
     {
         if (atom->GetSpecialAtomFlag()) continue;
@@ -61,39 +40,33 @@ std::string BuildSecondStageSpotSummary(const ModelObject & model_object)
         if (std::find(kLocalMDPDESummarySpotList.begin(), kLocalMDPDESummarySpotList.end(), spot) ==
             kLocalMDPDESummarySpotList.end()) continue;
         const auto view = AtomLocalPotentialView::For(*atom);
-        const bool joint = view.IsAvailable() && view.GetStageEstimate(FittingStage::Second).source.method == EstimateMethod::JointComponents;
-        if (joint && view.GetStageEstimate(FittingStage::Second).source.role != FittingRole::Target) continue;
-        population.push_back(atom);
+        const auto * estimate = view.IsAvailable() ? &view.GetStageEstimate(FittingStage::Second) : nullptr;
+        const bool joint = estimate && estimate->source.method == EstimateMethod::JointComponents;
+        if (joint && estimate->source.role != FittingRole::Target) continue;
         auto & samples = spots[spot];
-        if (joint)
+        if (!joint) { ++samples.unavailable; continue; }
+        if (estimate->convergence != JointCheckStatus::Passed || !estimate->point)
         {
-            const auto convergence = view.GetStageEstimate(FittingStage::Second).convergence;
-            if (convergence != JointCheckStatus::Passed)
-            {
-                if (convergence == JointCheckStatus::Failed) ++samples.not_converged;
-                else ++samples.unavailable;
-                continue;
-            }
+            if (estimate->convergence == JointCheckStatus::Failed) ++samples.not_converged;
+            else ++samples.unavailable;
+            continue;
         }
-        if (!view.HasFinalModel(FittingStage::Second)) { ++samples.unavailable; continue; }
-        const auto & point = *view.GetStageEstimate(FittingStage::Second).point;
+        const auto & point = *estimate->point;
         samples.amplitude_list.push_back(point.GetAmplitude());
         samples.width_list.push_back(point.GetWidth());
         samples.offset_list.push_back(point.GetOffset());
     }
     std::ostringstream summary;
-    const auto joint = CollectStageProvenance(population).estimator == "joint-components";
-    summary << "Second-stage estimate summary by Spot:\nEstimator: "
-        << CollectStageProvenance(population).estimator
-        << (joint ? "\nPopulation: selected targets excluding special atoms; A/tau/C: Joint second-stage estimates; C(J): Joint charge coefficient; s.d.: between-atom dispersion" :
-            "\nPopulation: selected targets excluding special atoms; s.d.: between-atom dispersion")
+    summary << "Joint Target estimate summary by Spot:\nEstimator: joint-components"
+        "\nPopulation: selected targets excluding special atoms; A/tau/C: Joint Target estimates; "
+        "C(J): Joint charge coefficient; s.d.: between-atom dispersion"
         << "\n| " << std::left << std::setw(kSpotColumnWidth) << "Spot"
         << " | " << std::setw(kValidColumnWidth) << "valid"
         << " | " << std::setw(kNotConvergedColumnWidth) << "not-converged"
         << " | " << std::setw(kUnavailableColumnWidth) << "unavailable"
         << " | " << std::setw(kParameterColumnWidth) << "A mean / s.d."
-        << " | " << std::setw(kParameterColumnWidth) << (joint ? "tau mean / s.d." : "B mean / s.d.")
-        << " | " << std::setw(kParameterColumnWidth) << (joint ? "C(J) mean / s.d." : "C mean / s.d.")
+        << " | " << std::setw(kParameterColumnWidth) << "tau mean / s.d."
+        << " | " << std::setw(kParameterColumnWidth) << "C(J) mean / s.d."
         << " |";
     for (const auto & [spot, samples] : spots)
     {

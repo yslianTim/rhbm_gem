@@ -25,15 +25,13 @@ enum class BiasPlotFlavor
     DataOutlier,
     MemberOutlier,
     ModelAlphaData,
-    ModelAlphaMember,
-    NeighborType
+    ModelAlphaMember
 };
 
 enum class BiasXAxisMode
 {
     ContaminationRatio,
-    ErrorSigma,
-    NeighborType
+    ErrorSigma
 };
 
 struct BiasCurvePoint

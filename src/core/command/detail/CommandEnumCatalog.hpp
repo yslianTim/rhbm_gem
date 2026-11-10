@@ -43,15 +43,6 @@ struct CommandEnumTraits<PrinterType>
 };
 
 template <>
-struct CommandEnumTraits<PotentialEstimator>
-{
-    inline static constexpr std::array<CommandEnumDefinition<PotentialEstimator, 2>, 2> kOptions{{
-        { PotentialEstimator::TWO_STAGE, "TWO_STAGE", { "0", "two-stage" } },
-        { PotentialEstimator::JOINT_COMPONENTS, "JOINT_COMPONENTS", { "1", "joint-components" } }
-    }};
-};
-
-template <>
 struct CommandEnumTraits<PotentialModel>
 {
     inline static constexpr std::array<CommandEnumDefinition<PotentialModel, 2>, 3> kOptions{{
@@ -74,13 +65,12 @@ struct CommandEnumTraits<PartialCharge>
 template <>
 struct CommandEnumTraits<TesterType>
 {
-    inline static constexpr std::array<CommandEnumDefinition<TesterType, 2>, 6> kOptions{{
+    inline static constexpr std::array<CommandEnumDefinition<TesterType, 2>, 5> kOptions{{
         { TesterType::BENCHMARK, "BENCHMARK", { "0", "benchmark" } },
         { TesterType::DATA_OUTLIER, "DATA_OUTLIER", { "1", "data_outlier" } },
         { TesterType::MEMBER_OUTLIER, "MEMBER_OUTLIER", { "2", "member_outlier" } },
         { TesterType::MODEL_ALPHA_DATA, "MODEL_ALPHA_DATA", { "3", "alpha_data" } },
-        { TesterType::MODEL_ALPHA_MEMBER, "MODEL_ALPHA_MEMBER", { "4", "alpha_member" } },
-        { TesterType::ATOMIC_MODEL, "ATOMIC_MODEL", { "5", "atomic_model" } }
+        { TesterType::MODEL_ALPHA_MEMBER, "MODEL_ALPHA_MEMBER", { "4", "alpha_member" } }
     }};
 };
 

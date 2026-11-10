@@ -61,18 +61,18 @@ void SameInitialization(const JointInitialization & a,const JointInitialization 
 }
 }
 
-TEST(JointFirstStageSamplingTest, DefaultExactlyMatchesLegacySamplingAndEstimator)
+TEST(JointFirstStageSamplingTest, DefaultExactlyMatchesExplicitFirstStageSampling)
 {
-    auto map=Map(); auto legacy=Model(); auto current=Model();
+    auto map=Map(); auto explicit_sampling=Model(); auto current=Model();
     FitOptions options; options.quiet_mode=true;
-    const auto old_workset=d::MakeTwoStageFittingWorkset(*legacy);
-    RunPotentialSamplingWorkflow(map,*legacy,old_workset.contributors,1,{},true);
-    const auto old_init=d::RunJointFirstStageInitializationFromPreparedSamples(*legacy,old_workset,options);
-    const auto new_workset=d::MakeTwoStageFittingWorkset(*current);
+    const auto explicit_workset=d::MakeJointFittingWorkset(*explicit_sampling,BuildPureHaloSupportExclusionProblem(map,*explicit_sampling));
+    RunPotentialSamplingWorkflow(map,*explicit_sampling,explicit_workset.contributors,1,{},true);
+    const auto explicit_init=d::RunJointFirstStageInitializationFromPreparedSamples(*explicit_sampling,explicit_workset,options);
+    const auto new_workset=d::MakeJointFittingWorkset(*current,BuildPureHaloSupportExclusionProblem(map,*current));
     const auto new_init=d::PrepareJointWidthInitialization(map,*current,new_workset,options);
-    SameInitialization(old_init,new_init);
+    SameInitialization(explicit_init,new_init);
     for (std::size_t i=0;i<2;++i)
-        SameSamples(AtomLocalPotentialView::For(*old_workset.contributors[i]).GetRawSamplingEntriesView(),
+        SameSamples(AtomLocalPotentialView::For(*explicit_workset.contributors[i]).GetRawSamplingEntriesView(),
             AtomLocalPotentialView::For(*new_workset.contributors[i]).GetRawSamplingEntriesView());
 }
 
@@ -84,7 +84,9 @@ TEST(JointFirstStageSamplingTest, DeterministicAcrossWorkersAndRepeatedRuns)
     {
         FitOptions options; options.quiet_mode=true; options.first_stage_sampling_method=method;
         auto serial=Model(); auto parallel=Model();
-        auto sw=d::MakeTwoStageFittingWorkset(*serial),pw=d::MakeTwoStageFittingWorkset(*parallel);
+        const auto problem=BuildPureHaloSupportExclusionProblem(map,*serial);
+        const auto sw=d::MakeJointFittingWorkset(*serial,problem);
+        const auto pw=d::MakeJointFittingWorkset(*parallel,problem);
         const auto baseline=d::PrepareJointWidthInitialization(map,*serial,sw,options);
         ASSERT_TRUE(baseline.valid);
         for (const int workers : { 2, 4, 4 })
@@ -127,7 +129,7 @@ TEST(JointFirstStageSamplingTest, SpiralInitializesWidthsAndLeavesQScoreUnchange
     const auto default_samples=SampleAtomMapValues(map,*atoms[0]);
     FitOptions options; options.quiet_mode=true;
     options.first_stage_sampling_method=SphereSamplingMethod::SpiralDeterministic;
-    const auto workset=d::MakeTwoStageFittingWorkset(*model);
+    const auto workset=d::MakeJointFittingWorkset(*model,BuildPureHaloSupportExclusionProblem(map,*model));
     const auto initialization=d::PrepareJointWidthInitialization(map,*model,workset,options);
     ASSERT_TRUE(initialization.valid);
     ASSERT_EQ(initialization.atoms.size(),atoms.size());

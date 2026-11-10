@@ -37,14 +37,11 @@ def assert_module_surface() -> None:
     assert hasattr(m, "RunCommand")
     assert hasattr(m, "PainterType")
     assert not hasattr(m.PainterType, "QSCORE")
-    assert hasattr(m, "PotentialEstimator")
-    assert hasattr(m.PotentialEstimator, "JOINT_COMPONENTS")
     assert hasattr(m, "PrinterType")
     assert hasattr(m.PrinterType, "JOINT_ESTIMATES")
     assert hasattr(m.PrinterType, "ATOM_OUTLIER")
     assert hasattr(m, "TesterType")
     assert hasattr(m.TesterType, "BENCHMARK")
-    assert hasattr(m.TesterType, "ATOMIC_MODEL")
     assert hasattr(m, "SphereSamplingMethod")
     assert int(m.SphereSamplingMethod.FIBONACCI_DETERMINISTIC) == 2
     assert int(m.SphereSamplingMethod.SPIRAL_DETERMINISTIC) == 3
@@ -116,9 +113,8 @@ def assert_request_objects_are_usable() -> None:
     assert simulation.only_backbone is True
 
     analysis = m.PotentialAnalysisRequest()
-    assert analysis.estimator == m.PotentialEstimator.JOINT_COMPONENTS
-    assert int(m.PotentialEstimator.TWO_STAGE) == 0
-    assert int(m.PotentialEstimator.JOINT_COMPONENTS) == 1
+    assert not hasattr(analysis, "estimator")
+    assert not hasattr(m, "PotentialEstimator")
     assert analysis.selected_chain_ids == []
     analysis.selected_chain_ids = ["A", "B", "C"]
     assert analysis.selected_chain_ids == ["A", "B", "C"]
@@ -237,7 +233,6 @@ def assert_joint_workflow() -> None:
         assert simulation_result.succeeded
         assert simulation_result.outcome == m.CommandOutcome.COMPLETED
         analysis = m.PotentialAnalysisRequest()
-        analysis.estimator = m.PotentialEstimator.JOINT_COMPONENTS
         analysis.selected_chain_ids = ["A"]
         analysis.model_file_path = simulation.model_file_path
         analysis.map_file_path = next(root.glob("*.map"))

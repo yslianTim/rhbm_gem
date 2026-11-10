@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstddef>
-#include <rhbm_gem/core/CommandTypes.hpp>
 #include <vector>
 
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
@@ -16,7 +15,6 @@ namespace core {
 
 struct FitOptions
 {
-    PotentialEstimator estimator{ PotentialEstimator::JOINT_COMPONENTS };
     int thread_size{ 1 };
     bool quiet_mode{ false };
     int joint_initialization_thread_size{ 1 };
@@ -60,10 +58,6 @@ void RunLocalAlphaTraining(ModelObject &, const FitOptions &, FittingStage,
 void RunFixedOffsetLocalFitting(ModelObject &, const FitOptions &, FittingStage,
     const std::vector<AtomObject *> & atoms);
 void RunPotentialFittingWorkflow(MapObject &, ModelObject &, const FitOptions &);
-
-void RunGroupPotentialFitting(
-    ModelObject & model_object,
-    const FitOptions & options);
 
 } // namespace core
 

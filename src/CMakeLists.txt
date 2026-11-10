@@ -46,25 +46,7 @@ target_sources(rhbm_gem PRIVATE
     core/detail/GroupPotentialFitting.cpp
     core/detail/joint_component/HaloMedianReconstruction.cpp
     core/detail/joint_component/PostFitPeeling.cpp
-    core/detail/gaussian_fit/GaussianModelOperations.cpp
     core/detail/gaussian_fit/PreparedLocalGaussianFit.cpp
-    core/detail/second_stage/SecondStageState.cpp
-    core/detail/second_stage/CouplingGraph.cpp
-    core/detail/second_stage/JointFitting.cpp
-    core/detail/second_stage/CandidateEvaluation.cpp
-    core/detail/second_stage/ComponentAssembly.cpp
-    core/detail/second_stage/CandidateTransaction.cpp
-    core/detail/second_stage/CandidateTransactionLocal.cpp
-    core/detail/second_stage/ObjectiveEvaluation.cpp
-    core/detail/second_stage/SuspiciousUpdate.cpp
-    core/detail/second_stage/FixedPointRecovery.cpp
-    core/detail/second_stage/IterationProposal.cpp
-    core/detail/second_stage/Quarantine.cpp
-    core/detail/second_stage/CandidateTransactionBoundary.cpp
-    core/detail/second_stage/DependencyPolish.cpp
-    core/detail/second_stage/observation/SecondStageLogging.cpp
-    core/detail/second_stage/ConvergenceCertificate.cpp
-    core/detail/second_stage/IterationProcess.cpp
     core/MapSampler.cpp
     core/QScoreHelper.cpp
     core/TestDataFactory.cpp
@@ -124,7 +106,6 @@ target_sources(rhbm_gem PRIVATE
     utils/hrl/LocalPotentialSeries.cpp
     utils/hrl/RHBMTrainer.cpp
     utils/hrl/RHBMHelper.cpp
-    utils/hrl/MDPDEEndpointRefinement.cpp
     utils/hrl/LinearizationService.cpp
 )
 

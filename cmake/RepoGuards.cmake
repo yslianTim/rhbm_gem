@@ -464,13 +464,11 @@ function(rhbm_guard_run_install_smoke)
     endif()
 
     set(INSTALLED_CORE_INCLUDE_DIR "${INSTALL_PREFIX}/${CMAKE_INSTALL_INCLUDEDIR}/rhbm_gem/core")
-    foreach(private_header "PotentialEstimator.hpp" "JointComponentEstimator.hpp")
-        if(EXISTS "${INSTALLED_CORE_INCLUDE_DIR}/${private_header}")
-            message(FATAL_ERROR
-                "Install consumer smoke test found private header in install prefix: "
-                "${INSTALLED_CORE_INCLUDE_DIR}/${private_header}")
-        endif()
-    endforeach()
+    if(EXISTS "${INSTALLED_CORE_INCLUDE_DIR}/JointComponentEstimator.hpp")
+        message(FATAL_ERROR
+            "Install consumer smoke test found private header in install prefix: "
+            "${INSTALLED_CORE_INCLUDE_DIR}/JointComponentEstimator.hpp")
+    endif()
 
     set(CLI_EXAMPLE_INSTALL_DIR "${INSTALL_PREFIX}/share/RHBM_GEM/resources/examples/cli")
     foreach(required_cli_example

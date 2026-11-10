@@ -51,7 +51,16 @@ V Pack(const EstimateSource & s)
     if(s.fixed_from_first_stage) out.emplace("fixed_from_first_stage",true);
     return out;
 }
-EstimateSource Source(const V & v) { const auto & o=v.as_object(); return {Enum<EstimateMethod>(o.at("method"),3),Read<std::string>(o,"atom"),Read<std::string>(o,"component"),Read<std::string>(o,"run"),Enum<FittingRole>(o.at("role"),2),o.contains("fixed_from_first_stage") && Read<bool>(o,"fixed_from_first_stage")}; }
+EstimateSource Source(const V & v)
+{
+    const auto & o=v.as_object();
+    const auto method=Enum<EstimateMethod>(o.at("method"),static_cast<int>(EstimateMethod::JointComponents));
+    if (method!=EstimateMethod::Unspecified && method!=EstimateMethod::LocalMDPDE &&
+        method!=EstimateMethod::JointComponents)
+        throw std::invalid_argument("Unknown estimate method.");
+    return {method,Read<std::string>(o,"atom"),Read<std::string>(o,"component"),Read<std::string>(o,"run"),
+        Enum<FittingRole>(o.at("role"),2),o.contains("fixed_from_first_stage") && Read<bool>(o,"fixed_from_first_stage")};
+}
 V Pack(const LocalStageEstimate & s)
 {
     const auto & u=s.uncertainty;
@@ -238,33 +247,30 @@ PostJointLocalResult PostJointLocal(const V & value)
     }
     return result;
 }
-V Native(const LocalPotentialEntry & e, FittingStage stage)
+V FirstNative(const LocalPotentialEntry & e)
 {
-    if(e.StageEstimate(stage).source.method==EstimateMethod::JointComponents) return {};
+    constexpr auto stage=FittingStage::First;
     const auto r=e.GaussianResult(stage,false); const auto & sd=r.mdpde.GetStandardDeviationModel();
     return O{{"alpha",r.alpha_r},{"ols",Pack(r.ols.GetModel())},{"ols_sd",r.uncertainty_recorded ? Pack(r.ols).as_object().at("sd"):V{}},
         {"mdpde_sd",r.uncertainty_recorded ? V(A{NativeNumber(sd.GetAmplitude()),NativeNumber(sd.GetWidth()),NativeNumber(sd.GetOffset())}):V{}},
         {"unfitted",e.StageEstimate(stage).point ? V{} : Pack(r.mdpde.GetModel())},
         {"diagnostics",r.diagnostics ? Pack(*r.diagnostics):V{}}};
 }
-void RestoreNative(LocalPotentialEntry & e, FittingStage stage, const V & native, LocalStageEstimate estimate)
+void RestoreFirstNative(LocalPotentialEntry & e, const V & native, LocalStageEstimate estimate)
 {
-    if(!native.is_null())
+    constexpr auto stage=FittingStage::First;
+    const auto & o=native.as_object(); LocalGaussianResult r; r.alpha_r=Number(o.at("alpha"));
+    r.uncertainty_recorded=!o.at("mdpde_sd").is_null();
+    if(r.uncertainty_recorded!=!o.at("ols_sd").is_null()) throw std::invalid_argument("Incomplete native uncertainty.");
+    r.ols={Point(o.at("ols"),false),{}};
+    r.mdpde={estimate.point ? *estimate.point : Point(o.at("unfitted"),false),{}};
+    if(r.uncertainty_recorded)
     {
-        if(estimate.source.method==EstimateMethod::JointComponents) throw std::invalid_argument("Joint stage contains native diagnostics.");
-        const auto & o=native.as_object(); LocalGaussianResult r; r.alpha_r=Number(o.at("alpha"));
-        r.uncertainty_recorded=!o.at("mdpde_sd").is_null();
-        if(r.uncertainty_recorded!=!o.at("ols_sd").is_null()) throw std::invalid_argument("Incomplete native uncertainty.");
-        r.ols={Point(o.at("ols"),false),{}};
-        r.mdpde={estimate.point ? *estimate.point : Point(o.at("unfitted"),false),{}};
-        if(r.uncertainty_recorded)
-        {
-            r.ols=Uncertain(O{{"point",o.at("ols")},{"sd",o.at("ols_sd")}});
-            r.mdpde=Uncertain(O{{"point",Pack(r.mdpde.GetModel())},{"sd",o.at("mdpde_sd")}});
-        }
-        if(!o.at("diagnostics").is_null()) r.diagnostics=Diagnostics(o.at("diagnostics"));
-        e.SetGaussianResult(stage,std::move(r));
+        r.ols=Uncertain(O{{"point",o.at("ols")},{"sd",o.at("ols_sd")}});
+        r.mdpde=Uncertain(O{{"point",Pack(r.mdpde.GetModel())},{"sd",o.at("mdpde_sd")}});
     }
+    if(!o.at("diagnostics").is_null()) r.diagnostics=Diagnostics(o.at("diagnostics"));
+    e.SetGaussianResult(stage,std::move(r));
     e.SetStageEstimate(stage,std::move(estimate));
 }
 V Pack(const GroupGaussianMemberResult & m) { return O{{"posterior",Pack(m.posterior)},{"outlier",m.is_outlier},{"distance",m.statistical_distance},{"source",m.evidence_source_id},{"charge_inferred",m.charge_inferred},{"covariance",m.parameter_covariance ? Matrix(*m.parameter_covariance):V{}},{"fixed_charge",m.fixed_charge ? Pack(*m.fixed_charge):V{}}}; }
@@ -338,8 +344,8 @@ std::string Encode(const ModelObject & model)
             peeling=O{{"source",Pack(p.source)},{"mode",p.mode},{"neighbors",p.neighbor_count},{"samples",samples}};
         }
         atoms.push_back(O{{"id",atom->GetSerialID()},{"first",Pack(e->StageEstimate(FittingStage::First))},{"second",Pack(e->StageEstimate(FittingStage::Second))},
-            {"first_native",Native(*e,FittingStage::First)},{"second_native",Native(*e,FittingStage::Second)},{"neighbors",(e->PostFitPeeling() || e->StageEstimate(FittingStage::Second).source.method==EstimateMethod::JointComponents) ? V{}:V(e->NeighborCountForPeeling())},
-            {"geometry",e->SampleGeometryAvailable()},{"raw",Samples(e->RawSamplingEntries(),e->SampleGeometryAvailable())},{"peeled",(e->PostFitPeeling() || e->StageEstimate(FittingStage::Second).source.method==EstimateMethod::JointComponents) ? V{}:Samples(e->PeelingSamplingEntries(),e->SampleGeometryAvailable())},
+            {"first_native",FirstNative(*e)},
+            {"geometry",e->SampleGeometryAvailable()},{"raw",Samples(e->RawSamplingEntries(),e->SampleGeometryAvailable())},
             {"peeling",peeling},{"post_joint_local",e->PostJointLocalResult() ? Pack(*e->PostJointLocalResult()):V{}},
             {"posterior",e->GroupMemberResult() ? Pack(*e->GroupMemberResult()):V{}}});
     }
@@ -359,18 +365,11 @@ void Decode(ModelObject & model, const std::string & text)
         const auto & o=value.as_object(); const int id=Read<int>(o,"id"); auto * atom=model.FindAtomPtr(id);
         if(!atom || !seen.insert(id).second) throw std::invalid_argument("Invalid stage atom identity.");
         auto & entry=data.EnsureAtomLocalEntry(*atom);
-        RestoreNative(entry,FittingStage::First,o.at("first_native"),Stage(o.at("first")));
-        RestoreNative(entry,FittingStage::Second,o.at("second_native"),Stage(o.at("second")));
-        if((!o.at("peeling").is_null() ||
-                entry.StageEstimate(FittingStage::Second).source.method==EstimateMethod::JointComponents) &&
-            (!o.at("peeled").is_null() || !o.at("neighbors").is_null()))
-            throw std::invalid_argument("Canonical paired peeling contains a compact mirror.");
+        if(o.size()!=9) throw std::invalid_argument("Invalid Stage atom fields.");
+        RestoreFirstNative(entry,o.at("first_native"),Stage(o.at("first")));
+        entry.SetStageEstimate(FittingStage::Second,Stage(o.at("second")));
         const bool geometry=Read<bool>(o,"geometry"); entry.SetSampleGeometryAvailable(geometry);
         entry.SetRawSamplingEntries(Samples(o.at("raw"),geometry));
-        if(!o.at("peeled").is_null() &&
-            entry.StageEstimate(FittingStage::Second).source.method!=EstimateMethod::JointComponents)
-            entry.SetPeelingSamplingEntries(Samples(o.at("peeled"),geometry));
-        if(!o.at("neighbors").is_null()) entry.SetNeighborCountForPeeling(Read<int>(o,"neighbors"));
         if(!o.at("peeling").is_null())
         {
             const auto & p=o.at("peeling").as_object(); PostFitPeelingResult result;
@@ -435,7 +434,12 @@ void Validate(const ModelObject & model)
     std::optional<std::string> joint_run_id;
     for(const auto & [id,e]:data.AtomLocalEntries())
     {
+        const auto & first=e->StageEstimate(FittingStage::First);
         const auto & s=e->StageEstimate(FittingStage::Second);
+        if ((first.source.method!=EstimateMethod::Unspecified && first.source.method!=EstimateMethod::LocalMDPDE) ||
+            (s.source.method!=EstimateMethod::JointComponents &&
+                (s.source.method!=EstimateMethod::Unspecified || s.point)))
+            throw std::invalid_argument("Estimate method does not match the fitting stage.");
         if (s.source.method == EstimateMethod::JointComponents && !s.source.run_id.empty())
         {
             if (!joint_run_id) joint_run_id=s.source.run_id;

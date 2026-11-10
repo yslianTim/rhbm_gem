@@ -1,6 +1,5 @@
 #include "detail/CommandRunner.hpp"
 #include "core/command/detail/LocalFittingFeatures.hpp"
-#include "core/detail/StageSummary.hpp"
 #include <boost/json.hpp>
 #include <map>
 
@@ -166,7 +165,7 @@ struct PreparedUmapInput
     int effective_neighbors{ 0 };
     std::filesystem::path output_path;
     std::map<std::string, std::size_t> exclusions;
-    std::string estimator, peeling_mode, map_normalization;
+    std::string map_normalization;
     std::size_t excluded_rows{};
 };
 
@@ -355,11 +354,6 @@ std::optional<PreparedUmapInput> BuildAndStandardizeInput(
     prepared.exclusions = std::move(exclusions);
     prepared.excluded_rows=excluded_rows;
     const auto & joint=model_object.GetAnalysisView().GetJointResult();
-    std::vector<const AtomObject *> population;
-    for (const auto & row : prepared.feature_rows) population.push_back(model_object.FindAtomPtr(row.serial_id));
-    const auto provenance = CollectStageProvenance(population);
-    prepared.estimator = provenance.estimator;
-    prepared.peeling_mode = provenance.peeling_mode;
     prepared.map_normalization="unavailable";
     if(joint && joint->metadata.map_normalization)
     {
@@ -446,13 +440,12 @@ bool WriteEmbedding(
     boost::json::object exclusions;
     for(const auto & [reason,count]:prepared.exclusions) exclusions[reason]=count;
     std::ofstream metadata(prepared.output_path.string()+".metadata.json");
-    const bool joint_estimator{ prepared.estimator == "joint-components" };
-    metadata << boost::json::serialize(boost::json::object{{"estimator",prepared.estimator},{"features",features},
-        {"peeling_mode",prepared.peeling_mode},{"map_normalization",prepared.map_normalization=="unavailable" ? boost::json::value{}:boost::json::parse(prepared.map_normalization)},
+    metadata << boost::json::serialize(boost::json::object{{"estimator","joint-components"},{"features",features},
+        {"peeling_mode","original-grid-v1"},{"map_normalization",prepared.map_normalization=="unavailable" ? boost::json::value{}:boost::json::parse(prepared.map_normalization)},
         {"column_semantics",boost::json::object{
-            {"amplitude 2nd",joint_estimator ? "Joint Gaussian amplitude A" : "Gaussian amplitude"},
-            {"width 2nd",joint_estimator ? "Joint shared Gaussian/charge-kernel width tau" : "Gaussian width"},
-            {"offset 2nd",joint_estimator ? "Joint charge-kernel coefficient C (not a Gaussian constant offset)" : "Gaussian constant offset"}}},
+            {"amplitude 2nd","Joint Gaussian amplitude A"},
+            {"width 2nd","Joint shared Gaussian/charge-kernel width tau"},
+            {"offset 2nd","Joint charge-kernel coefficient C"}}},
         {"standardization","sample-z-score; constant columns zero"},{"included_rows",prepared.feature_rows.size()},{"excluded_rows",prepared.excluded_rows},{"exclusions",exclusions}});
     metadata.close();
     if(!metadata) { error_message="Failed to write UMAP metadata."; return false; }

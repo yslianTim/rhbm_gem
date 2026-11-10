@@ -42,17 +42,14 @@ def main() -> int:
         database = root / "joint.sqlite"
         run("potential_analysis", "--select-chain", "A", "-a", model,
             "-m", map_path, "-d", database, "-k", "example", "-v", "0", expected_exit=0)
-        run("potential_analysis", "--estimator", "joint-components",
-            "--select-chain", "A", "-a", model, "-m", map_path, "-d", database, "-k", "bcd", "-v", "0",
-            expected_exit=0)
         model_hash = hashlib.sha256(model.read_bytes()).hexdigest()
         map_hash = hashlib.sha256(map_path.read_bytes()).hexdigest()
         # The same path with different bytes must produce a different fingerprint.
         model.write_text(model.read_text() + "\n# provenance test\n")
-        run("potential_analysis", "--estimator", "joint-components", "--select-chain", "A", "-a", model,
+        run("potential_analysis", "--select-chain", "A", "-a", model,
             "-m", map_path, "-d", database, "-k", "changed", "-v", "0", expected_exit=0)
         changed_hash = hashlib.sha256(model.read_bytes()).hexdigest()
-        run("potential_analysis", "--estimator", "joint-components", "--select-chain", "A", "-a", model,
+        run("potential_analysis", "--select-chain", "A", "-a", model,
             "-m", map_path, "-d", database, "-k", "example.contributions", "-v", "0", expected_exit=0)
         map_path.unlink()
         model.unlink()
@@ -64,14 +61,13 @@ def main() -> int:
         assert not list(collision.glob("joint_*")), "Collision must fail before writing any result"
         saved = json.loads((root / "joint_result_example.json").read_text())
         with sqlite3.connect(database) as connection:
-            assert connection.execute("PRAGMA user_version").fetchone()[0] == 21
+            assert connection.execute("PRAGMA user_version").fetchone()[0] == 22
             payload = connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='example'").fetchone()[0]
-            bcd = json.loads(connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='bcd'").fetchone()[0])
             changed = json.loads(connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='changed'").fetchone()[0])
             stages = json.loads(connection.execute("SELECT result_json FROM model_stage_result WHERE key_tag='example'").fetchone()[0])
-            assert stages["version"] == 5
+            assert stages["version"] == 6
             assert len(stages["atoms"]) == 25
-            assert all(atom["peeled"] is None and atom["second_native"] is None for atom in stages["atoms"])
+            assert all({"peeled", "second_native", "neighbors"}.isdisjoint(atom) for atom in stages["atoms"])
             for group in stages["groups"]:
                 if group["summary"] and group["summary"]["inference"]:
                     assert "members" not in group["summary"]["inference"]
@@ -99,21 +95,6 @@ def main() -> int:
             "search_method", "contract_version", "sparse_backend", "bcd_core_atoms",
             "bcd_policy_version", "bcd_maximum_sweeps",
             "bcd_order", "bcd_local_search",
-        )} == {
-            "search_method": "gauss-seidel-bcd",
-            "contract_version": "joint-solver-provenance-v6",
-            "sparse_backend": "EIGEN",
-            "bcd_core_atoms": 12,
-            "bcd_policy_version": "gauss-seidel-bcd-production-v1",
-            "bcd_maximum_sweeps": 300,
-            "bcd_order": "forward",
-            "bcd_local_search": "active-set-lm",
-        }
-        bcd_solver = bcd["metadata"]["solver"]
-        assert {key: bcd_solver[key] for key in (
-            "search_method", "contract_version", "sparse_backend", "bcd_core_atoms",
-            "bcd_policy_version",
-            "bcd_maximum_sweeps", "bcd_order", "bcd_local_search",
         )} == {
             "search_method": "gauss-seidel-bcd",
             "contract_version": "joint-solver-provenance-v6",

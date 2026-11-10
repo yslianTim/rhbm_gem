@@ -1,7 +1,7 @@
 # Joint Stage Integration
 
-Joint Components is the default potential estimator. The
-[command contract](commands/potential_analysis.md) also exposes `two-stage`.
+The [Potential Analysis command](commands/potential_analysis.md) uses the Joint
+Component Estimator.
 Potential fitting excludes hydrogen from targets and eligible contributors.
 The Joint workflow builds the Original and Fitting Domains, initializes
 Target widths, runs the [Joint estimator](joint-component-runtime.md), and
@@ -26,8 +26,7 @@ median to fill missing or invalid seeds when donors exist. FirstStage uses
 the native local fit and records its qualification. The
 [width calibration](joint-component-runtime.md#initialization-and-global-width-bound)
 uses a stricter donor gate than seed fallback. See
-[Production Fitting](production-fitting.md) for the shared fitting and
-recovery contract.
+[Production Fitting](production-fitting.md) for the production fitting workflow.
 
 ## Joint result ownership
 
@@ -39,7 +38,7 @@ snapshots can be saved with diagnostics and reasons. The workflow skips
 publication and downstream fitting for them.
 
 The stage adapter exposes qualified Target A/tau/C and convergence in
-estimator-neutral Second-stage records. Source identity includes method,
+`FittingStage::Second` records. Source identity includes method,
 atom, component, run and role. Missing or unqualified points remain
 unavailable. Halo records and reconstructed values have separate provenance.
 Local and Group results live alongside Joint state and never rewrite it.
@@ -155,8 +154,8 @@ postprocessing contexts borrow their immutable inputs.
 ## Persistence
 
 [DataObject I/O](architecture/dataobject-io-architecture.md) owns version
-acceptance and the database lifecycle. SQLite v21 stores Joint Result
-JSON schema 24 and Stage Result JSON version 5. Joint JSON requires
+acceptance and the database lifecycle. SQLite v22 stores Joint Result
+JSON schema 24 and Stage Result JSON version 6. Joint JSON requires
 `target-only-pure-halo-support-exclusion-v1`, the current point validation
 contract, and `strict-v2` or `practical-v2` convergence criteria. Its state
 keys are `ac`, `tau`, `log_tau`, `eta_gradient` and `objective`.
@@ -183,8 +182,12 @@ solver fields.
 }
 ```
 
-Stage JSON retains FirstStage samples and estimates, Second-stage records,
-grid peeling, `post_joint_local` and Group results. Grid peeling requires
+Stage JSON stores FirstStage estimates and diagnostics in `first` and
+`first_native`, and keeps their samples and coordinates in `raw` and
+`geometry`. `second` stores Joint points, convergence, and source identity.
+`peeling` stores the paired observations and neighbor count.
+`post_joint_local` stores charge-corrected fit evidence, and `posterior` stores
+Group member inference. Grid peeling requires
 its snapshot. Available Halo-subtracted responses require reconstruction
 provenance. Validation checks ordered unique `original_row` and `grid`
 identities, snapshot row mapping and voxel geometry, response/reason pairs,

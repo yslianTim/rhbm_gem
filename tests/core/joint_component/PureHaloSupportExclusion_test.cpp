@@ -750,7 +750,6 @@ TEST(PureHaloSupportExclusionTest, RunsFullPureWorkflowWithGeometryLocalHaloSour
 {
     auto fixture=WorkflowFixture(true);
     FitOptions options;
-    options.estimator=PotentialEstimator::JOINT_COMPONENTS;
     options.quiet_mode=true;
     options.thread_size=1;
     core::detail::JointPostprocessingMetrics metrics;
@@ -866,7 +865,6 @@ TEST(PureHaloSupportExclusionTest, RunsPureWorkflowWithoutHalos)
     auto fixture=WorkflowFixture();
     fixture.model.SelectAllAtoms();
     FitOptions options;
-    options.estimator=PotentialEstimator::JOINT_COMPONENTS;
     options.quiet_mode=true;
     options.thread_size=1;
     core::detail::JointPostprocessingMetrics metrics;
@@ -884,7 +882,7 @@ TEST(PureHaloSupportExclusionTest, ExtendedSearchQualifiesAssemblyAndFeedsEveryD
 {
     auto fixture=WorkflowFixture(true,true);
     namespace n=core::joint_component;
-    FitOptions options; options.estimator=PotentialEstimator::JOINT_COMPONENTS;
+    FitOptions options;
     options.quiet_mode=true; options.thread_size=1;
     fixture.model.EditAnalysis().InitializeFromSelection();
     const auto fit=core::EstimateJointComponents(fixture.map,fixture.model);
@@ -940,7 +938,6 @@ TEST(PureHaloSupportExclusionTest, SkipsDownstreamWhenJointQualificationFails)
     auto fixture=WorkflowFixture();
     fixture.map.ClearMapValueArray();
     FitOptions options;
-    options.estimator=PotentialEstimator::JOINT_COMPONENTS;
     options.quiet_mode=true;
     options.thread_size=1;
     core::detail::JointPostprocessingMetrics metrics;
@@ -960,7 +957,6 @@ TEST(PureHaloSupportExclusionTest, ProductionWorkflowUsesBoundedPureExclusionAnd
 {
     auto fixture=WorkflowFixture();
     FitOptions options;
-    options.estimator=PotentialEstimator::JOINT_COMPONENTS;
     options.quiet_mode=true;
     options.thread_size=1;
     ASSERT_NO_THROW(core::RunPotentialFittingWorkflow(fixture.map,fixture.model,options));

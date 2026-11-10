@@ -9,9 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <map>
 #include <stdexcept>
-#include <tuple>
 
 namespace rhbm_gem {
 
@@ -49,31 +47,10 @@ LocalPotentialSampleList ApplySamplingEntrySelection(
     return selected_entries;
 }
 
-using SampleIdentity = std::tuple<double, double, double, double, bool>;
-
-struct ResponseAggregate
-{
-    std::size_t count{};
-    long double response_sum{};
-    bool responses_finite{ true };
-};
-
 bool IsWithinRange(const SamplingPoint & point, double distance_min, double distance_max)
 {
     return std::isfinite(point.distance) && point.distance >= distance_min &&
         point.distance <= distance_max;
-}
-
-bool HasFinitePosition(const SamplingPoint & point)
-{
-    return std::all_of(point.position.begin(), point.position.end(),
-        [](double coordinate) { return std::isfinite(coordinate); });
-}
-
-SampleIdentity MakeSampleIdentity(const SamplingPoint & point)
-{
-    return { point.distance, point.position[0], point.position[1], point.position[2],
-        point.is_selected };
 }
 
 bool StoreResponseSum(long double sum, double & value)
@@ -290,139 +267,18 @@ PeelingRatioAssessment AtomLocalPotentialView::AssessLocalFittingPeelingRatio(
     }
 
     const auto & stage = GetStageEstimate(FittingStage::Second);
-    if (stage.source.method == EstimateMethod::JointComponents)
-    {
-        assessment.reason = !stage.point || stage.convergence != JointCheckStatus::Passed ?
-            "joint-qualification-failed" : "missing-peeling-result";
-        long double raw_sum{};
-        for (const auto & sample : raw)
-        {
-            if (!IsWithinRange(sample.point, distance_min, distance_max)) continue;
-            ++assessment.total_samples;
-            if (std::isfinite(sample.response)) raw_sum += sample.response;
-        }
-        if (!StoreResponseSum(raw_sum, assessment.raw_response_sum))
-            assessment.reason = "nonfinite-response-sum";
-        return assessment;
-    }
-
-    std::map<SampleIdentity, ResponseAggregate> raw_by_identity;
-    std::map<SampleIdentity, ResponseAggregate> peeling_by_identity;
+    assessment.reason = stage.source.method == EstimateMethod::JointComponents &&
+        (!stage.point || stage.convergence != JointCheckStatus::Passed) ?
+        "joint-qualification-failed" : "missing-peeling-result";
     long double raw_sum{};
-    long double peeled_sum{};
-    std::size_t peeling_tail_count{};
-    bool invalid_sample_geometry{};
-    bool nonfinite_response{};
     for (const auto & sample : raw)
     {
         if (!IsWithinRange(sample.point, distance_min, distance_max)) continue;
         ++assessment.total_samples;
         if (std::isfinite(sample.response)) raw_sum += sample.response;
-        else nonfinite_response = true;
-        if (!HasFinitePosition(sample.point))
-        {
-            invalid_sample_geometry = true;
-            continue;
-        }
-        auto & aggregate = raw_by_identity[MakeSampleIdentity(sample.point)];
-        ++aggregate.count;
-        if (std::isfinite(sample.response)) aggregate.response_sum += sample.response;
-        else aggregate.responses_finite = false;
     }
-    const auto peeling = GetPeelingSamplingEntries(false);
-    for (const auto & sample : peeling)
-    {
-        if (!IsWithinRange(sample.point, distance_min, distance_max)) continue;
-        ++peeling_tail_count;
-        if (std::isfinite(sample.response)) peeled_sum += sample.response;
-        else nonfinite_response = true;
-        if (std::isfinite(sample.response)) ++assessment.peeling_samples;
-        if (!HasFinitePosition(sample.point))
-        {
-            invalid_sample_geometry = true;
-            continue;
-        }
-        auto & aggregate = peeling_by_identity[MakeSampleIdentity(sample.point)];
-        ++aggregate.count;
-        if (std::isfinite(sample.response)) aggregate.response_sum += sample.response;
-        else aggregate.responses_finite = false;
-    }
-    if (!StoreResponseSum(raw_sum, assessment.raw_response_sum) ||
-        !StoreResponseSum(peeled_sum, assessment.peeled_response_sum))
-    {
+    if (!StoreResponseSum(raw_sum, assessment.raw_response_sum))
         assessment.reason = "nonfinite-response-sum";
-        return assessment;
-    }
-    if (!assessment.total_samples)
-    {
-        assessment.reason = "no-tail-samples";
-        return assessment;
-    }
-    if (!peeling_tail_count)
-    {
-        assessment.reason = "no-peeling-samples";
-        return assessment;
-    }
-    if (!HasSampleGeometry())
-    {
-        assessment.reason = "sample-geometry-unavailable";
-        return assessment;
-    }
-    if (invalid_sample_geometry)
-    {
-        assessment.reason = "nonfinite-sample-geometry";
-        return assessment;
-    }
-
-    bool identity_mismatch = raw_by_identity.size() != peeling_by_identity.size();
-    long double valid_raw_sum{};
-    long double valid_peeled_sum{};
-    for (const auto & [identity, raw_aggregate] : raw_by_identity)
-    {
-        const auto peeled_aggregate = peeling_by_identity.find(identity);
-        if (peeled_aggregate == peeling_by_identity.end() ||
-            peeled_aggregate->second.count != raw_aggregate.count)
-        {
-            identity_mismatch = true;
-            continue;
-        }
-        if (!raw_aggregate.responses_finite || !peeled_aggregate->second.responses_finite)
-        {
-            nonfinite_response = true;
-            continue;
-        }
-        assessment.valid_samples += raw_aggregate.count;
-        valid_raw_sum += raw_aggregate.response_sum;
-        valid_peeled_sum += peeled_aggregate->second.response_sum;
-    }
-    if (!StoreResponseSum(valid_raw_sum, assessment.valid_raw_response_sum))
-    {
-        assessment.reason = "nonfinite-response-sum";
-        return assessment;
-    }
-    if (identity_mismatch)
-    {
-        assessment.reason = "peeling-sample-identity-mismatch";
-        return assessment;
-    }
-    if (nonfinite_response || assessment.valid_samples != assessment.total_samples)
-    {
-        assessment.reason = "nonfinite-response";
-        return assessment;
-    }
-    if (assessment.valid_raw_response_sum == 0.0)
-    {
-        assessment.reason = "invalid-zero-denominator";
-        return assessment;
-    }
-
-    const long double ratio{ 1.0L - valid_peeled_sum / valid_raw_sum };
-    if (!std::isfinite(ratio) || std::abs(ratio) > std::numeric_limits<double>::max())
-    {
-        assessment.reason = "nonfinite-ratio";
-        return assessment;
-    }
-    assessment.ratio = static_cast<double>(ratio);
     return assessment;
 }
 

@@ -47,8 +47,6 @@ struct RequestFieldCatalog<PotentialAnalysisRequest>
     {
         using Self = PotentialAnalysisRequest;
         VisitFieldList(visitor,
-            RequestField{ "estimator", "--estimator",
-                "Estimator: joint-components (default) or two-stage", &Self::estimator },
             RequestField{ "database_path", "-d,--database",
                 "Database file path",
                 &Self::database_path },

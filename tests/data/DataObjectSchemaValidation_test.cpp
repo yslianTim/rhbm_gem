@@ -21,11 +21,11 @@ void ExpectCurrentSchemaValidationFailure(
     const command_test::ScopedTempDir temp_dir{temp_dir_name};
     const auto path{temp_dir.path() / database_name};
     { rg::DataRepository repository{path}; }
-    ASSERT_EQ(data_test::GetUserVersion(path), 21);
+    ASSERT_EQ(data_test::GetUserVersion(path), 22);
 
     mutate_database(path);
     EXPECT_THROW((void)rg::DataRepository(path), std::runtime_error);
-    EXPECT_EQ(data_test::GetUserVersion(path), 21);
+    EXPECT_EQ(data_test::GetUserVersion(path), 22);
 }
 
 void RecreateChainMapTable(

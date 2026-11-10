@@ -25,12 +25,8 @@ namespace rhbm_gem::core::command_detail::rhbm_test_plotting {
 namespace {
 
 #ifdef HAVE_ROOT
-double ScaleBiasPlotX(double x, BiasXAxisMode x_axis_mode)
+double ScaleBiasPlotX(double x)
 {
-    if (x_axis_mode == BiasXAxisMode::NeighborType)
-    {
-        return x;
-    }
     return 100.0 * x;
 }
 
@@ -133,10 +129,6 @@ void ApplyBiasCurveStyle(
 
 std::vector<BiasCurveKind> GetBiasLegendOrder(BiasPlotFlavor flavor)
 {
-    if (flavor == BiasPlotFlavor::NeighborType)
-    {
-        return { BiasCurveKind::Ols, BiasCurveKind::Mdpde, BiasCurveKind::TrainedMdpde };
-    }
     if (flavor == BiasPlotFlavor::ModelAlphaData ||
         flavor == BiasPlotFlavor::ModelAlphaMember)
     {
@@ -151,18 +143,6 @@ std::vector<BiasCurveKind> GetBiasLegendOrder(BiasPlotFlavor flavor)
 
 std::string GetBiasLegendLabel(BiasPlotFlavor flavor, BiasCurveKind kind)
 {
-    if (flavor == BiasPlotFlavor::NeighborType)
-    {
-        if (kind == BiasCurveKind::Ols)
-        {
-            return "First-Stage Estimation";
-        }
-        if (kind == BiasCurveKind::Mdpde)
-        {
-            return "Full Estimation";
-        }
-        return "MDPDE (Sampling Scheme)";
-    }
     if (flavor == BiasPlotFlavor::ModelAlphaData)
     {
         return (kind == BiasCurveKind::RequestedAlpha) ?
@@ -211,19 +191,6 @@ TGraphErrors * FindBiasGraph(
         }
     }
     return nullptr;
-}
-
-void ApplyNeighborTypeAxisLabels(TAxis * axis)
-{
-    axis->SetNdivisions(6, false);
-    const auto label_color{ kCyan+3 };
-    axis->ChangeLabel(1, -1, 0, -1, -1, -1, "");
-    axis->ChangeLabel(2, -90.0, -1, -1, label_color, 103, "Free");
-    axis->ChangeLabel(3, -90.0, -1, -1, label_color, 103, "O");
-    axis->ChangeLabel(4, -90.0, -1, -1, label_color, 103, "N");
-    axis->ChangeLabel(5, -90.0, -1, -1, label_color, 103, "C");
-    axis->ChangeLabel(6, -90.0, -1, -1, label_color, 103, "C_{#alpha}");
-    axis->ChangeLabel(-1, -1, 0, -1, -1, -1, "");
 }
 
 #endif
@@ -288,8 +255,8 @@ void SaveDataOutlierBiasPlot(const RHBMTestRequest & request, const BiasPlotRequ
     root_helper::SetCanvasDefaultStyle(canvas.get());
     root_helper::SetCanvasPartition(
         canvas.get(), col_size, row_size,
-        (plot_request.flavor == BiasPlotFlavor::NeighborType) ? 0.25f : 0.17f,
-        (plot_request.flavor == BiasPlotFlavor::NeighborType) ? 0.15f : 0.08f,
+        0.17f,
+        0.08f,
         0.12f,
         0.14f,
         0.01f, 0.01f
@@ -315,7 +282,7 @@ void SaveDataOutlierBiasPlot(const RHBMTestRequest & request, const BiasPlotRequ
                 for (size_t p = 0; p < curve.points.size(); p++)
                 {
                     const auto & point{ curve.points.at(p) };
-                    const auto x_value{ ScaleBiasPlotX(point.x, plot_request.x_axis_mode) };
+                    const auto x_value{ ScaleBiasPlotX(point.x) };
                     const auto mean{ point.bias.mean(static_cast<int>(j)) };
                     const auto sigma{ point.bias.sigma(static_cast<int>(j)) };
                     graph->SetPoint(static_cast<int>(p), x_value, mean);
@@ -339,11 +306,6 @@ void SaveDataOutlierBiasPlot(const RHBMTestRequest & request, const BiasPlotRequ
         if (plot_request.x_axis_mode == BiasXAxisMode::ErrorSigma)
         {
             x_max.at(i) = 12.0;
-        }
-        if (plot_request.x_axis_mode == BiasXAxisMode::NeighborType)
-        {
-            x_min.at(i) = 0.0;
-            x_max.at(i) = static_cast<double>(plot_request.panels.at(i).curves.at(0).points.size()) + 1.0;
         }
     }
     for (size_t j = 0; j < row_size; j++)
@@ -381,10 +343,6 @@ void SaveDataOutlierBiasPlot(const RHBMTestRequest & request, const BiasPlotRequ
             root_helper::SetAxisTitleAttribute(frame_hist->GetYaxis(), 50.0f, 1.2f, 133);
             root_helper::SetAxisLabelAttribute(frame_hist->GetYaxis(), 45.0f, 0.02f, 133);
             root_helper::SetAxisTickAttribute(frame_hist->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 505);
-            if (plot_request.x_axis_mode == BiasXAxisMode::NeighborType)
-            {
-                ApplyNeighborTypeAxisLabels(frame_hist->GetXaxis());
-            }
             root_helper::SetLineAttribute(frame_hist.get(), 1, 0);
             frame_hist->GetXaxis()->SetTitle("");
             frame_hist->GetYaxis()->SetTitle("");
@@ -406,9 +364,7 @@ void SaveDataOutlierBiasPlot(const RHBMTestRequest & request, const BiasPlotRequ
             if (i == 0)
             {
                 auto & text{ title_y_text.at(static_cast<size_t>(j)) };
-                text = (plot_request.flavor == BiasPlotFlavor::NeighborType) ?
-                    root_helper::CreatePaveText(-0.41, 0.30, 0.00, 0.70, "nbNDC ARC", true) :
-                    root_helper::CreatePaveText(-0.68, 0.30, 0.00, 0.70, "nbNDC ARC", true);
+                text = root_helper::CreatePaveText(-0.68, 0.30, 0.00, 0.70, "nbNDC ARC", true);
                 root_helper::SetPaveTextDefaultStyle(text.get());
                 root_helper::SetPaveAttribute(text.get(), 0, 0.1);
                 root_helper::SetLineAttribute(text.get(), 1, 0);
@@ -427,7 +383,7 @@ void SaveDataOutlierBiasPlot(const RHBMTestRequest & request, const BiasPlotRequ
                 root_helper::SetTextAttribute(text.get(), 45.0f, 133, 22);
                 root_helper::SetFillAttribute(text.get(), 1001, kRed+1, 0.5f);
                 text->AddText(plot_request.panels.at(static_cast<size_t>(i)).label.data());
-                if (plot_request.flavor != BiasPlotFlavor::NeighborType) text->Draw();
+                text->Draw();
             }
         }
     }
@@ -464,11 +420,7 @@ void SaveDataOutlierBiasPlot(const RHBMTestRequest & request, const BiasPlotRequ
     root_helper::SetPaveTextDefaultStyle(bottom_title_text.get());
     root_helper::SetFillAttribute(bottom_title_text.get(), 4000);
     root_helper::SetTextAttribute(bottom_title_text.get(), 45.0f, 133, 22);
-    if (plot_request.x_axis_mode == BiasXAxisMode::NeighborType)
-    {
-        bottom_title_text->AddText("Atom Type");
-    }
-    else if (plot_request.x_axis_mode == BiasXAxisMode::ErrorSigma)
+    if (plot_request.x_axis_mode == BiasXAxisMode::ErrorSigma)
     {
         bottom_title_text->AddText("#sigma_{#epsilon} (% D_{max})");
     }
@@ -538,7 +490,7 @@ void SaveMemberOutlierBiasPlot(
                 for (size_t p = 0; p < curve.points.size(); p++)
                 {
                     const auto & point{ curve.points.at(p) };
-                    const auto x_value{ ScaleBiasPlotX(point.x, plot_request.x_axis_mode) };
+                    const auto x_value{ ScaleBiasPlotX(point.x) };
                     const auto mean{ point.bias.mean(static_cast<int>(j)) };
                     const auto sigma{ point.bias.sigma(static_cast<int>(j)) };
                     graph->SetPoint(static_cast<int>(p), x_value, mean);

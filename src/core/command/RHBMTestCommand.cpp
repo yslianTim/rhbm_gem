@@ -9,7 +9,6 @@
 #include <iomanip>
 #include <sstream>
 #include <string>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -68,13 +67,6 @@ GroupTestOptions MakeGroupTestOptions(const RHBMTestRequest & request)
     return options;
 }
 
-struct AtomicModelTestCase
-{
-    Spot spot;
-    Element element;
-    double charge{ 0.0 };
-};
-
 } // namespace
 
 void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
@@ -132,104 +124,6 @@ void RunSimulationTestOnBenchMark(const RHBMTestRequest & request)
 
         AppendBiasCurvePoint(panel.curves.at(0), error_sigma, bias.ols);
         AppendBiasCurvePoint(panel.curves.at(1), error_sigma, bias.mdpde);
-    }
-
-    plot_request.panels.emplace_back(std::move(panel));
-    rhbm_test_plotting::SaveDataOutlierBiasPlot(request, plot_request);
-}
-
-void RunSimulationTestOnAtomicModel(const RHBMTestRequest & request)
-{
-    const auto error_sigma{ 0.01 };
-    const auto width_prior{ 0.5 };
-    FitOptions options;
-    options.thread_size = request.job_count;
-    options.quiet_mode = true;
-
-    ElectricPotential potential_model;
-    potential_model.SetModelChoice(0);
-    potential_model.SetBlurringWidth(width_prior);
-
-    const std::array<AtomicModelTestCase, 3> benchmark_cases{{
-        { Spot::UNK, Element::CARBON, 0.3 },
-        { Spot::UNK, Element::NITROGEN, -0.1 },
-        { Spot::UNK, Element::OXYGEN, -0.4 }
-    }};
-
-    const std::array<AtomicModelTestCase, 5> test_cases{{
-        { Spot::UNK, Element::CARBON, 0.3 },
-        { Spot::O, Element::OXYGEN, -0.4 },
-        { Spot::N, Element::NITROGEN, -0.1 },
-        { Spot::C, Element::CARBON, 0.3 },
-        { Spot::CA, Element::CARBON, 0.3 }
-    }};
-
-    std::unordered_map<Element, GaussianModel3D> reference_gaus_by_element;
-    reference_gaus_by_element.reserve(benchmark_cases.size());
-    for (const auto & benchmark_case : benchmark_cases)
-    {
-        PotentialModelScenario scenario;
-        scenario.potential_model = potential_model;
-        scenario.data_error_sigma = 0.0;
-        scenario.spot = benchmark_case.spot;
-        scenario.element = benchmark_case.element;
-        scenario.charge = benchmark_case.charge;
-        scenario.replica_size = 1;
-
-        const auto input{ BuildPotentialModelTestData(scenario) };
-        const auto reference_gaus{ EstimateAtomicModelFullStageMean(input, options) };
-        reference_gaus_by_element.emplace(benchmark_case.element, reference_gaus);
-
-        std::ostringstream stream;
-        stream  << " Benchmark: " << static_cast<int>(benchmark_case.element)
-                << " one-gaussian reference: " << std::setprecision(2) << std::fixed
-                << reference_gaus.GetAmplitude() << " , "
-                << reference_gaus.GetWidth() << " , "
-                << reference_gaus.GetOffset();
-        Logger::Log(LogLevel::Info, stream.str());
-    }
-
-    BiasPlotRequest plot_request;
-    plot_request.output_name = "bias_from_neighbor_atom_atomic_model.pdf";
-    plot_request.flavor = BiasPlotFlavor::NeighborType;
-    plot_request.x_axis_mode = BiasXAxisMode::NeighborType;
-    plot_request.panels.reserve(1);
-
-    BiasPlotPanel panel;
-    panel.label = "Neighbor Atom Type";
-    panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::Ols, test_cases.size()));
-    panel.curves.emplace_back(MakeBiasCurve(BiasCurveKind::Mdpde, test_cases.size()));
-
-    for (size_t i = 0; i < test_cases.size(); i++)
-    {
-        const auto & test_case{ test_cases.at(i) };
-        PotentialModelScenario scenario;
-        scenario.gaus_true = reference_gaus_by_element.at(test_case.element);
-        scenario.potential_model = potential_model;
-        scenario.data_error_sigma = error_sigma;
-        scenario.spot = test_case.spot;
-        scenario.element = test_case.element;
-        scenario.charge = test_case.charge;
-        scenario.replica_size = 10;
-
-        const auto input{ BuildPotentialModelTestData(scenario) };
-        const auto result_1{ RunAtomicModelFirstStageEstimationTest(input, options) };
-        const auto result_2{ RunAtomicModelFullEstimationTest(input, options) };
-
-        std::ostringstream stream;
-        stream  << " Method 1: " << std::setprecision(2) << std::fixed
-                << result_1.mean(0) << " , "
-                << result_1.mean(1) << " , "
-                << result_1.mean(2)
-                << " , Method 2: "
-                << result_2.mean(0) << " , "
-                << result_2.mean(1) << " , "
-                << result_2.mean(2);
-        Logger::Log(LogLevel::Info, stream.str());
-
-        const auto spot_axis_value{ static_cast<double>(i + 1) };
-        AppendBiasCurvePoint(panel.curves.at(0), spot_axis_value, result_1);
-        AppendBiasCurvePoint(panel.curves.at(1), spot_axis_value, result_2);
     }
 
     plot_request.panels.emplace_back(std::move(panel));
@@ -475,9 +369,6 @@ bool ExecutePreparedRequest(const RHBMTestRequest & request)
     {
     case TesterType::BENCHMARK:
         RunSimulationTestOnBenchMark(request);
-        return true;
-    case TesterType::ATOMIC_MODEL:
-        RunSimulationTestOnAtomicModel(request);
         return true;
     case TesterType::DATA_OUTLIER:
         RunSimulationTestOnDataOutlier(request);

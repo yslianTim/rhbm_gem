@@ -26,15 +26,6 @@ int main()
     using namespace rhbm_gem::core;
 
     static_assert(kHeaderExposesCompleteType<FitOptions>);
-    static_assert(static_cast<int>(PotentialEstimator::TWO_STAGE) == 0);
-    static_assert(static_cast<int>(PotentialEstimator::JOINT_COMPONENTS) == 1);
-
-    FitOptions fit_options;
-    PotentialAnalysisRequest request;
-    if (fit_options.estimator != PotentialEstimator::JOINT_COMPONENTS ||
-        request.estimator != PotentialEstimator::JOINT_COMPONENTS)
-        return 1;
-
     using PotentialFittingWorkflow = void (*)(MapObject &, ModelObject &, const FitOptions &);
     PotentialFittingWorkflow volatile workflow_entry{&RunPotentialFittingWorkflow};
     if (workflow_entry == nullptr) return 2;

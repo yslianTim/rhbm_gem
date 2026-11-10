@@ -69,7 +69,7 @@ TEST(DataObjectPersistenceTest, StandardQScoresAndReferenceParametersRoundTripTh
     EXPECT_DOUBLE_EQ(loaded_model->GetAtomList().at(1)->GetStandardQScore(), 0.75);
 }
 
-TEST(DataObjectPersistenceTest, RawAndPeelingSamplingEntriesRoundTripPreservesSelection)
+TEST(DataObjectPersistenceTest, RawSamplingEntriesRoundTripPreservesSelection)
 {
     const command_test::ScopedTempDir temp_dir{ "data_schema_raw_peeling_sampling_roundtrip" };
     const auto database_path{ temp_dir.path() / "raw_peeling_sampling.sqlite" };
@@ -84,13 +84,6 @@ TEST(DataObjectPersistenceTest, RawAndPeelingSamplingEntriesRoundTripPreservesSe
         LocalPotentialSample{
             4.0, SamplingPoint{ 0.2, { 0.0, 0.0, 0.0 }, false } }
     });
-    editor.SetAtomLocalPeelingSamplingEntries(*atom, {
-        LocalPotentialSample{
-            3.0, SamplingPoint{ 0.1, { 0.0, 0.0, 0.0 }, true } },
-        LocalPotentialSample{
-            5.0, SamplingPoint{ 0.2, { 0.0, 0.0, 0.0 }, false } }
-    });
-    editor.SetAtomLocalNeighborCountForPeeling(*atom, 7);
     repository.SaveModel(*model, "model");
 
     auto loaded_model{ repository.LoadModel("model") };
@@ -98,21 +91,12 @@ TEST(DataObjectPersistenceTest, RawAndPeelingSamplingEntriesRoundTripPreservesSe
     const auto view{
         rg::AtomLocalPotentialView::For(*loaded_model->GetAtomList().at(0)) };
     const auto raw_entries{ view.GetRawSamplingEntries(false) };
-    const auto peeling_entries{ view.GetPeelingSamplingEntries() };
-    const auto selected_peeling_entries{ view.GetPeelingSamplingEntries(true) };
 
     ASSERT_EQ(raw_entries.size(), 2u);
     EXPECT_DOUBLE_EQ(raw_entries.at(0).response, 6.0);
     EXPECT_DOUBLE_EQ(raw_entries.at(1).response, 4.0);
     EXPECT_TRUE(raw_entries.at(0).point.is_selected);
     EXPECT_FALSE(raw_entries.at(1).point.is_selected);
-    ASSERT_EQ(peeling_entries.size(), 2u);
-    EXPECT_DOUBLE_EQ(peeling_entries.at(0).response, 3.0);
-    EXPECT_DOUBLE_EQ(peeling_entries.at(1).response, 5.0);
-    EXPECT_TRUE(peeling_entries.at(0).point.is_selected);
-    EXPECT_FALSE(peeling_entries.at(1).point.is_selected);
-    ASSERT_EQ(selected_peeling_entries.size(), 1u);
-    EXPECT_EQ(view.GetNeighborCountForPeeling(), 7);
 }
 
 TEST(DataObjectPersistenceTest, DoublePrecisionDomainValuesRoundTripWithoutNarrowing)
@@ -155,13 +139,8 @@ TEST(DataObjectPersistenceTest, DoublePrecisionDomainValuesRoundTripWithoutNarro
         { -0.123456789012345,
             SamplingPoint{ 0.3333333333333333, { 0.0, 0.0, 0.0 }, false } }
     };
-    const LocalPotentialSampleList peeling_samples{
-        { 3.141592653589793,
-            SamplingPoint{ 0.987654321098765, { 0.0, 0.0, 0.0 }, true } }
-    };
     auto editor{ model->EditAnalysis() };
     editor.SetAtomLocalRawSamplingEntries(*stored_atom, raw_samples);
-    editor.SetAtomLocalPeelingSamplingEntries(*stored_atom, peeling_samples);
 
     rg::DataRepository repository{ database_path };
     repository.SaveModel(*model, "model");
@@ -187,19 +166,13 @@ TEST(DataObjectPersistenceTest, DoublePrecisionDomainValuesRoundTripWithoutNarro
 
     const auto view{ rg::AtomLocalPotentialView::For(loaded_atom) };
     const auto loaded_raw{ view.GetRawSamplingEntries(false) };
-    const auto loaded_peeling{ view.GetPeelingSamplingEntries(false) };
     ASSERT_EQ(loaded_raw.size(), raw_samples.size());
-    ASSERT_EQ(loaded_peeling.size(), peeling_samples.size());
     EXPECT_DOUBLE_EQ(loaded_raw.at(0).point.distance, 1.0000000000000002);
     EXPECT_DOUBLE_EQ(loaded_raw.at(0).response, 16777217.125);
     EXPECT_TRUE(loaded_raw.at(0).point.is_selected);
     EXPECT_DOUBLE_EQ(loaded_raw.at(1).point.distance, 0.3333333333333333);
     EXPECT_DOUBLE_EQ(loaded_raw.at(1).response, -0.123456789012345);
     EXPECT_FALSE(loaded_raw.at(1).point.is_selected);
-    EXPECT_DOUBLE_EQ(
-        loaded_peeling.at(0).point.distance, 0.987654321098765);
-    EXPECT_DOUBLE_EQ(loaded_peeling.at(0).response, 3.141592653589793);
-
     EXPECT_FALSE(data_test::HasTable(database_path,"model_atom_local_potential"));
 }
 
@@ -243,27 +216,17 @@ TEST(DataObjectPersistenceTest, GaussianOffsetRoundTripPreservesAnalysisResults)
         view.GetAtomObjectList(group_key).size());
     group_result.member_results.front() = member_result;
     editor.SetAtomLocalGaussianResult(
-        rg::FittingStage::Second, *atom, local_result);
+        rg::FittingStage::First, *atom, local_result);
     editor.ApplyAtomGroupGaussianResult(group_key, group_result);
 
-    rg::LocalGaussianResult first_result{ local_result };
-    first_result.alpha_r = 0.1;
-    first_result.mdpde = rg::GaussianModel3DWithUncertainty{
-        rg::GaussianModel3D{ 4.0, 0.9, 0.4 }, rg::GaussianModel3DUncertainty{} };
-    editor.SetAtomLocalGaussianResult(rg::FittingStage::First, *atom, first_result);
-    editor.SetAtomLocalNeighborCountForPeeling(*atom, 7);
     repository.SaveModel(*model, "model");
     auto loaded_model{ repository.LoadModel("model") };
     ASSERT_NE(loaded_model, nullptr);
 
     const auto loaded_local{
         rg::AtomLocalPotentialView::For(*loaded_model->FindAtomPtr(atom->GetSerialID())) };
-    EXPECT_DOUBLE_EQ(loaded_local.GetAlphaR(rg::FittingStage::First), 0.1);
-    EXPECT_DOUBLE_EQ(loaded_local.GetAlphaR(rg::FittingStage::Second), 0.5);
-    EXPECT_EQ(loaded_local.GetNeighborCountForPeeling(), 7);
-    EXPECT_DOUBLE_EQ(loaded_local.GetEstimateMDPDE(rg::FittingStage::First).GetOffset(), 0.4);
     const auto loaded_local_result{
-        loaded_local.GetGaussianResult(rg::FittingStage::Second) };
+        loaded_local.GetGaussianResult(rg::FittingStage::First) };
     EXPECT_DOUBLE_EQ(loaded_local_result.alpha_r, 0.5);
     EXPECT_DOUBLE_EQ(loaded_local_result.ols.GetModel().GetOffset(), 0.11);
     EXPECT_DOUBLE_EQ(loaded_local_result.mdpde.GetModel().GetOffset(), -0.22);
@@ -299,7 +262,7 @@ TEST(DataObjectPersistenceTest, GaussianOffsetRoundTripPreservesAnalysisResults)
             .GetStandardDeviationModel().GetOffset(),
         0.6);
 
-    editor.InitializeLocalFittingSeedModels();
+    editor.InitializeFromSelection();
     repository.SaveModel(*model, "model");
     EXPECT_FALSE(data_test::HasTable(database_path, "model_atom_posterior"));
     auto reset_model{ repository.LoadModel("model") };
@@ -378,7 +341,7 @@ TEST(DataObjectPersistenceTest, LoadModelRestoresSelectionFromPersistedColumns)
     model->SetBondSelected(
         atoms.at(0)->GetSerialID(), atoms.at(1)->GetSerialID(), true);
     model->EditAnalysis().SetAtomLocalAlphaR(
-        rg::FittingStage::Second, *atoms.at(1), 0.9);
+        rg::FittingStage::First, *atoms.at(1), 0.9);
 
     rg::DataRepository repository{ database_path };
     repository.SaveModel(*model, "model");
@@ -1291,7 +1254,6 @@ TEST(DataObjectPersistenceTest, JointNeutralRoundTripPreservesCurrentJointAndSta
     const command_test::ScopedTempDir dir{"joint_neutral_roundtrip"};
     auto fixture=joint_partial_test::Make("partial");
     rg::core::FitOptions options;
-    options.estimator=rg::core::PotentialEstimator::JOINT_COMPONENTS;
     options.quiet_mode=true;
     rg::core::RunPotentialFittingWorkflow(*fixture.map,*fixture.model,options);
     rg::DataRepository repository(dir.path()/"result.sqlite");
@@ -1311,13 +1273,13 @@ TEST(DataObjectPersistenceTest, JointNeutralRoundTripPreservesCurrentJointAndSta
     EXPECT_FALSE(data_test::HasTable(dir.path()/"result.sqlite","model_atom_local_potential"));
 }
 
-TEST(DataObjectPersistenceTest, StageResultJsonV5OnlyAcceptsCurrentRoundTrip)
+TEST(DataObjectPersistenceTest, StageResultJsonV6OnlyAcceptsCurrentRoundTrip)
 {
     auto model=data_test::MakeModelWithBond();
     model->SelectAllAtoms();
     model->EditAnalysis().InitializeFromSelection();
     const auto encoded=rg::stage_result_io::Encode(*model);
-    EXPECT_EQ(boost::json::parse(encoded).at("version").as_int64(),5);
+    EXPECT_EQ(boost::json::parse(encoded).at("version").as_int64(),6);
 
     auto restored=data_test::MakeModelWithBond();
     restored->SelectAllAtoms();
@@ -1325,7 +1287,7 @@ TEST(DataObjectPersistenceTest, StageResultJsonV5OnlyAcceptsCurrentRoundTrip)
     EXPECT_NO_THROW(rg::stage_result_io::Decode(*restored,encoded));
     EXPECT_EQ(rg::stage_result_io::Encode(*restored),encoded);
 
-    for(const int version:{1,2,3,4,6})
+    for(const int version:{1,2,3,4,5,7})
     {
         auto old=boost::json::parse(encoded).as_object();
         old["version"]=version;
@@ -1335,6 +1297,13 @@ TEST(DataObjectPersistenceTest, StageResultJsonV5OnlyAcceptsCurrentRoundTrip)
         EXPECT_THROW(rg::stage_result_io::Decode(*rejected,boost::json::serialize(old)),
             std::invalid_argument);
     }
+    auto old_fields = boost::json::parse(encoded).as_object();
+    old_fields.at("atoms").as_array().front().as_object()["second_native"] = nullptr;
+    EXPECT_THROW(rg::stage_result_io::Decode(*restored, boost::json::serialize(old_fields)), std::invalid_argument);
+
+    auto old_method = boost::json::parse(encoded).as_object();
+    old_method.at("atoms").as_array().front().at("second").at("source").as_object()["method"] = 2;
+    EXPECT_THROW(rg::stage_result_io::Decode(*restored, boost::json::serialize(old_method)), std::invalid_argument);
 }
 
 TEST(DataObjectPersistenceTest, CanonicalNativeDiagnosticsAndMissingStatesRoundTripExactly)
@@ -1349,8 +1318,7 @@ TEST(DataObjectPersistenceTest, CanonicalNativeDiagnosticsAndMissingStatesRoundT
     auto & fit=*result.fit_result; fit.status=rg::RHBMEstimationStatus::MAX_ITERATIONS_REACHED;
     fit.sigma_square=.123456789012345; fit.diagnostics={17,.0001,.0002};
     fit.refinement=rg::RHBMEndpointRefinementDiagnostics{false,"rejected",12,25,"converged",.3,.2,.1,std::array<double,3>{.01,.02,.03},std::numeric_limits<double>::infinity(),false};
-    for(auto stage:{rg::FittingStage::First,rg::FittingStage::Second})
-        editor.SetAtomLocalGaussianResult(stage,*model->FindAtomPtr(1),result);
+    editor.SetAtomLocalGaussianResult(rg::FittingStage::First,*model->FindAtomPtr(1),result);
     editor.ClearTransientFitStates();
     rg::LocalStageEstimate missing; missing.source.method=rg::EstimateMethod::JointComponents;
     missing.source.run_id="no-snapshot"; missing.reason="initialization-failed"; missing.source.role=rg::FittingRole::Halo;
@@ -1365,10 +1333,10 @@ TEST(DataObjectPersistenceTest, CanonicalNativeDiagnosticsAndMissingStatesRoundT
     const auto expected=rg::stage_result_io::Encode(*model);
     rg::DataRepository repo(path); repo.SaveModel(*model,"mixed"); const auto loaded=repo.LoadModel("mixed");
     EXPECT_EQ(rg::stage_result_io::Encode(*loaded),expected);
-    const auto actual=rg::AtomLocalPotentialView::For(*loaded->FindAtomPtr(1)).GetGaussianResult(rg::FittingStage::Second);
+    const auto actual=rg::AtomLocalPotentialView::For(*loaded->FindAtomPtr(1)).GetGaussianResult(rg::FittingStage::First);
     EXPECT_DOUBLE_EQ(loaded->GetAnalysisView().GetAtomAlphaG(group),.87);
     EXPECT_FALSE(actual.fit_result); ASSERT_TRUE(actual.diagnostics); EXPECT_EQ(actual.diagnostics->iterations.iterations,17);
     EXPECT_EQ(actual.diagnostics->refinement->relative_coordinate_difference,fit.refinement->relative_coordinate_difference);
-    const auto document=boost::json::parse(expected).as_object(); EXPECT_EQ(document.at("version").as_int64(),5);
+    const auto document=boost::json::parse(expected).as_object(); EXPECT_EQ(document.at("version").as_int64(),6);
     EXPECT_FALSE(loaded->GetAnalysisView().GetJointResult());
 }

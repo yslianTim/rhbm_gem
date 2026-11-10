@@ -18,15 +18,10 @@ with project internals.
 - [Command developer notes](commands/README.md) indexes command-specific
   documentation.
 
-## Production fitting
-
-- [Production fitting](production-fitting.md) owns per-atom MDPDE solves,
-  failed-only refinement, covariance, numerical failure handling, and solver
-  replay.
-- [Two-Stage local fitting](second-stage-local-fitting.md) owns outer
-  iteration, candidate acceptance, recovery, convergence, and finalization.
-
 ## Joint Component Estimator
+
+- [Production fitting](production-fitting.md) traces the command, initialization,
+  qualification, and downstream fitting.
 
 - [Runtime](joint-component-runtime.md) defines the Target model, observation
   domains, BCD updates and global qualification.

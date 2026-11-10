@@ -405,7 +405,6 @@ TEST(JointProgressTest, QuietWorkflowSuppressesProgressButKeepsFailureWarning)
     core::simulation::PopulateMapValueArray(map, generator, request, .5);
 
     core::FitOptions options;
-    options.estimator = core::PotentialEstimator::JOINT_COMPONENTS;
     options.thread_size = 1;
     options.quiet_mode = true;
     const auto previous_level = Logger::GetLogLevel();

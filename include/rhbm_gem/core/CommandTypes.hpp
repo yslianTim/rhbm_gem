@@ -11,12 +11,6 @@
 
 namespace rhbm_gem::core {
 
-enum class PotentialEstimator : int
-{
-    TWO_STAGE = 0,
-    JOINT_COMPONENTS = 1
-};
-
 enum class PainterType : int
 {
     GAUS       = 0,
@@ -54,8 +48,7 @@ enum class TesterType : int
     DATA_OUTLIER       = 1,
     MEMBER_OUTLIER     = 2,
     MODEL_ALPHA_DATA   = 3,
-    MODEL_ALPHA_MEMBER = 4,
-    ATOMIC_MODEL       = 5
+    MODEL_ALPHA_MEMBER = 4
 };
 
 std::filesystem::path GetDefaultDataRootPath();
@@ -92,7 +85,6 @@ struct CommandRequestBase
 
 struct PotentialAnalysisRequest : public CommandRequestBase
 {
-    PotentialEstimator estimator{ PotentialEstimator::JOINT_COMPONENTS };
     std::filesystem::path database_path{ GetDefaultDatabasePath() };
     std::filesystem::path model_file_path{};
     std::filesystem::path map_file_path{};

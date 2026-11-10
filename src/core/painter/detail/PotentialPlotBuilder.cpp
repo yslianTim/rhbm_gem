@@ -8,7 +8,6 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/KeyPacker.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-#include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/LocalPotentialSeries.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 
@@ -17,7 +16,6 @@
 #include <TGraphErrors.h>
 #include <TF1.h>
 #include <TH1.h>
-#include <TH2.h>
 #endif
 
 #include <array>
@@ -39,30 +37,6 @@ LocalPotentialSampleList LoadSamplingEntries(
     return use_peeling_sampling_entries
         ? view.GetPeelingSamplingEntries(apply_selection)
         : view.GetRawSamplingEntries(apply_selection);
-}
-
-SeriesPointList BuildLocalDatasetSeries(
-    const AtomLocalPotentialView & view,
-    bool apply_selection,
-    bool use_peeling_sampling_entries)
-{
-    if (!view.HasFinalModel(FittingStage::Second) || view.GetStageEstimate(FittingStage::Second).source.method == EstimateMethod::JointComponents) return {};
-    auto model_prior{ view.GetFinalModel(FittingStage::Second) };
-    auto offset{ model_prior.GetOffset() };
-    double range_max{ 0.0 };
-    auto sampling_entries{
-        LoadSamplingEntries(view, apply_selection, use_peeling_sampling_entries)
-    };
-    for (auto & sample : sampling_entries)
-    {
-        auto distance{ sample.point.distance };
-        sample.response -= offset * model_prior.OffsetBasisAtDistance(distance);
-        if (std::isfinite(distance) && distance >= 0.0 && distance > range_max)
-        {
-            range_max = distance;
-        }
-    }
-    return linearization_service::BuildDatasetSeries(sampling_entries, 0.0, range_max);
 }
 
 std::vector<GroupKey> CollectComponentAtomGroupKeys(
@@ -218,70 +192,6 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateAtomGausEstimateHistogram(
     for (auto & value : gaus_estimate_list)
     {
         hist->Fill(value);
-    }
-    return hist;
-}
-
-std::unique_ptr<TH1D> PotentialPlotBuilder::CreateLinearModelDataHistogram(
-    int dimension_id,
-    bool apply_selection,
-    bool use_peeling_sampling_entries) const
-{
-    auto data_array{
-        BuildLocalDatasetSeries(GetLocalEntry(), apply_selection, use_peeling_sampling_entries)
-    };
-    std::vector<double> data_list;
-    data_list.reserve(data_array.size());
-    for (const auto & point : data_array)
-    {
-        switch (dimension_id)
-        {
-            case 0:
-                data_list.emplace_back(point.GetBasisValue(1));
-                break;
-            case 1:
-                data_list.emplace_back(point.response);
-                break;
-            default:
-                throw std::runtime_error("Dimension id is invalid.");
-        }
-    }
-
-    auto data_range{ array_helper::ComputeScalingRangeTuple(data_list, 0.1) };
-    double x_min{ std::get<0>(data_range) };
-    double x_max{ std::get<1>(data_range) };
-
-    auto hist_name{ "data_dim" + std::to_string(dimension_id) };
-    auto hist{ root_helper::CreateHist1D(hist_name.data(), "", 25, x_min, x_max) };
-    for (auto & value : data_list)
-    {
-        hist->Fill(value);
-    }
-    return hist;
-}
-
-std::unique_ptr<TH2D> PotentialPlotBuilder::CreateDistanceToMapValueHistogram(
-    int x_bin_size,
-    int y_bin_size,
-    bool apply_selection,
-    bool use_peeling_sampling_entries) const
-{
-    const auto local_entry{ GetLocalEntry() };
-    const auto sampling_entries{
-        LoadSamplingEntries(local_entry, apply_selection, use_peeling_sampling_entries)
-    };
-    auto map_value_range{
-        local_potential_series::ComputeResponseRange(sampling_entries, 0.1)
-    };
-    auto hist{
-        root_helper::CreateHist2D(
-            "hist_distance_mapvalue", "Distance vs Map Value",
-            x_bin_size, 0.0, 2.0,
-            y_bin_size, std::get<0>(map_value_range), std::get<1>(map_value_range))
-    };
-    for (const auto & sample : sampling_entries)
-    {
-        hist->Fill(sample.point.distance, sample.response);
     }
     return hist;
 }
@@ -529,20 +439,6 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateDistanceToMapValueGrap
     return graph;
 }
 
-std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateLinearModelDistanceToMapValueGraph(
-    bool apply_selection,
-    bool use_peeling_sampling_entries)
-{
-    auto graph{ root_helper::CreateGraphErrors() };
-    auto count{ 0 };
-    for (const auto & point : BuildLocalDatasetSeries(GetLocalEntry(), apply_selection, use_peeling_sampling_entries))
-    {
-        graph->SetPoint(count, point.GetBasisValue(1), point.response);
-        count++;
-    }
-    return graph;
-}
-
 std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToRawMapValueGraph(
     int bin_size, double x_min, double x_max)
 {
@@ -580,18 +476,18 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToPeelin
 std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToNeighborMapValueGraph(
     int bin_size, double x_min, double x_max)
 {
-    auto raw_sampling_entries{ GetLocalEntry().GetRawSamplingEntries(false) };
-    auto peeling_sampling_entries{ GetLocalEntry().GetPeelingSamplingEntries(false) };
     LocalPotentialSampleList neighbor_sampling_entries;
-    const auto & postfit=GetLocalEntry().GetPostFitPeeling();
-    for (size_t i = 0; i < raw_sampling_entries.size(); i++)
+    if (const auto & postfit = GetLocalEntry().GetPostFitPeeling(); postfit)
     {
-        std::optional<double> peeled;
-        if (postfit) peeled=postfit->samples.at(i).response;
-        else if(i<peeling_sampling_entries.size()) peeled=peeling_sampling_entries[i].response;
-        if(!peeled) continue;
-        auto sample=raw_sampling_entries[i]; sample.response-=*peeled;
-        neighbor_sampling_entries.push_back(sample);
+        for (const auto & sample : postfit->samples)
+        {
+            if (!sample.response) continue;
+            const auto & observation = sample.observation;
+            neighbor_sampling_entries.push_back({
+                observation.raw_response - *sample.response,
+                {std::sqrt(observation.squared_distance), observation.position, true}
+            });
+        }
     }
     auto data_array{
         local_potential_series::BuildBinnedDistanceResponseSeries(neighbor_sampling_entries, bin_size, x_min, x_max)
@@ -802,57 +698,6 @@ std::optional<GaussianModel3DWithUncertainty> PotentialPlotBuilder::ComputeCompo
         GaussianModel3D{ amplitude * scale, width * scale, offset * scale },
         GaussianModel3DUncertainty{ amplitude_sd * scale, width_sd * scale, offset_sd * scale }
     };
-}
-
-std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalLinearModelFunctionOLS() const
-{
-    if (IsAtomLocalEntryAvailable() == false)
-    {
-        return nullptr;
-    }
-    const auto atom_local_entry{ AtomLocalPotentialView::For(*m_atom_object) };
-    if (!atom_local_entry.HasFinalModel(FittingStage::Second) || atom_local_entry.GetStageEstimate(FittingStage::Second).source.method == EstimateMethod::JointComponents) return nullptr;
-    const auto beta{
-        linearization_service::EncodeGaussianToParameterVector(
-            atom_local_entry.GetEstimateOLS(FittingStage::Second))
-    };
-    auto beta_0{ beta(0) };
-    auto beta_1{ beta(1) };
-    return root_helper::CreateLinearModelFunction("linear", beta_0, beta_1);
-}
-
-std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalLinearModelFunctionMDPDE() const
-{
-    if (IsAtomLocalEntryAvailable() == false)
-    {
-        return nullptr;
-    }
-    const auto atom_local_entry{ AtomLocalPotentialView::For(*m_atom_object) };
-    if (!atom_local_entry.HasFinalModel(FittingStage::Second) || atom_local_entry.GetStageEstimate(FittingStage::Second).source.method == EstimateMethod::JointComponents) return nullptr;
-    const auto beta{
-        linearization_service::EncodeGaussianToParameterVector(
-            atom_local_entry.GetFinalModel(FittingStage::Second))
-    };
-    auto beta_0{ beta(0) };
-    auto beta_1{ beta(1) };
-    return root_helper::CreateLinearModelFunction("linear", beta_0, beta_1);
-}
-
-std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalGausFunctionOLS() const
-{
-    if (IsAtomLocalEntryAvailable() == false)
-    {
-        return nullptr;
-    }
-    const auto atom_local_entry{ AtomLocalPotentialView::For(*m_atom_object) };
-    if (!atom_local_entry.HasFinalModel(FittingStage::Second) || atom_local_entry.GetStageEstimate(FittingStage::Second).source.method == EstimateMethod::JointComponents) return nullptr;
-    const auto & model{
-        atom_local_entry.GetEstimateOLS(FittingStage::Second)
-    };
-    auto amplitude{ model.GetAmplitude() };
-    auto width{ model.GetWidth() };
-    auto offset{ model.GetOffset() };
-    return root_helper::CreateGaus3DFunctionIn1D("gaus", amplitude, width, offset);
 }
 
 std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalGausFunctionFinal() const

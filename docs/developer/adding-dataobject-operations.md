@@ -116,7 +116,7 @@ Add or update tests for:
 - database round-trip for model structure, selection, and analysis
 - renamed persisted key semantics
 - missing database key behavior
-- empty-database bootstrap to schema v21, valid v21 open, and unchanged rejection of unsupported schemas
+- empty-database bootstrap to schema v22, valid v22 open, and unchanged rejection of unsupported schemas
 - command-cache type mismatch behavior when command-local routing changes
 - command-level failure context when file or database loading fails
 

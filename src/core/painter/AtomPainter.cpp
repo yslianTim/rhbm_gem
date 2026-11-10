@@ -4,7 +4,6 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
-#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/hrl/LocalPotentialSeries.hpp>
 
@@ -19,10 +18,7 @@
 #include <TLine.h>
 #include <TGraphErrors.h>
 #include <TLegend.h>
-#include <TPaveText.h>
 #include <TColor.h>
-#include <TMarker.h>
-#include <TAxis.h>
 #include <TH2.h>
 #include <TF1.h>
 #endif
@@ -193,8 +189,6 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, "AtomPainter::PaintAtomSamplingDataSummary");
-    bool apply_selection{ false };
-    bool use_peeling_sampling_entries{ true };
 
     #ifdef HAVE_ROOT
 
@@ -204,239 +198,31 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
     auto canvas{ root_helper::CreateCanvas("test","", 1500, 750) };
     root_helper::SetCanvasDefaultStyle(canvas.get());
     root_helper::PrintCanvasOpen(canvas.get(), file_path);
-    const int pad_size{ 5 };
-
-    std::unique_ptr<TPad> pad[pad_size];
-    pad[0] = root_helper::CreatePad("pad0","", 0.00, 0.80, 1.00, 1.00); // The title pad
-    pad[1] = root_helper::CreatePad("pad1","", 0.00, 0.00, 0.55, 0.80); // The left pad
-    pad[2] = root_helper::CreatePad("pad2","", 0.55, 0.00, 0.90, 0.60); // The bottom-middle pad
-    pad[3] = root_helper::CreatePad("pad3","", 0.55, 0.60, 0.90, 0.80); // The top-middle pad
-    pad[4] = root_helper::CreatePad("pad4","", 0.90, 0.00, 1.00, 0.60); // The bottom-right pad
-    
     for (auto atom_object : m_atom_object_list)
     {
         const auto entry_view{ AtomLocalPotentialView::For(*atom_object) };
-        if (!entry_view.IsAvailable() || entry_view.GetStageEstimate(FittingStage::Second).source.role == FittingRole::Halo) continue;
-        if (entry_view.GetStageEstimate(FittingStage::Second).source.method == EstimateMethod::JointComponents)
-        {
-            canvas->Clear(); canvas->cd();
-            auto builder=std::make_unique<PotentialPlotBuilder>(atom_object);
-            auto raw=builder->CreateDistanceToMapValueGraph(false,false);
-            auto peeled=builder->CreateDistanceToMapValueGraph(false,true);
-            raw->SetTitle(("Joint components: atom " + std::to_string(atom_object->GetSerialID()) + ";Radial distance (Angstrom);Map response").c_str());
-            root_helper::SetMarkerAttribute(raw.get(),20,0.7f,kGray+1);
-            if (raw->GetN()>0) raw->Draw("AP");
-            else canvas->DrawFrame(0,-1,2,1,"Joint samples unavailable;Radial distance (Angstrom);Map response");
-            root_helper::SetMarkerAttribute(peeled.get(),20,0.7f,kBlue);
-            peeled->Draw("P SAME");
-            auto curve=builder->CreateAtomLocalGausFunctionFinal();
-            auto legend=root_helper::CreateLegend(0.55,0.68,0.95,0.94,false);
-            if (raw->GetN()>0) legend->AddEntry(raw.get(),"Raw samples","p");
-            if(entry_view.GetPostFitPeeling()) legend->AddEntry(peeled.get(),"Joint peeling (includes target-own charge)","p");
-            if(curve) {root_helper::SetLineAttribute(curve.get(),1,2,kRed); curve->Draw("SAME"); legend->AddEntry(curve.get(),"Joint Second: Gaussian + charge C","l");}
-            else legend->AddEntry(static_cast<TObject *>(nullptr),("Second unavailable: " + entry_view.GetStageEstimate(FittingStage::Second).reason).c_str(), "");
-            legend->Draw();
-            root_helper::PrintCanvasPad(canvas.get(),file_path);
-            canvas->Clear();
-            continue;
-        }
-        if (!entry_view.HasFinalModel(FittingStage::Second)) continue;
-        auto plot_builder{ std::make_unique<PotentialPlotBuilder>(atom_object) };
-        auto data_graph{ plot_builder->CreateDistanceToMapValueGraph(
-            apply_selection, use_peeling_sampling_entries) };
-        auto data_hist{ plot_builder->CreateDistanceToMapValueHistogram(
-            20, 1000, apply_selection, use_peeling_sampling_entries) };
-        auto gaus_function_mdpde{ plot_builder->CreateAtomLocalGausFunctionFinal() };
-        auto gaus_function_ols{ plot_builder->CreateAtomLocalGausFunctionOLS() };
-        auto linear_model_mdpde{ plot_builder->CreateAtomLocalLinearModelFunctionMDPDE() };
-        auto linear_model_ols{ plot_builder->CreateAtomLocalLinearModelFunctionOLS() };
-        auto scatter_graph{ plot_builder->CreateLinearModelDistanceToMapValueGraph(
-            apply_selection, use_peeling_sampling_entries) };
-        auto x_hist{ plot_builder->CreateLinearModelDataHistogram(
-            0, apply_selection, use_peeling_sampling_entries) };
-        auto y_hist{ plot_builder->CreateLinearModelDataHistogram(
-            1, apply_selection, use_peeling_sampling_entries) };
-
-        canvas->cd();
-        for (int i = 0; i < pad_size; i++)
-        {
-            root_helper::SetPadDefaultStyle(pad[i].get());
-            pad[i]->Draw();
-        }
-
-        pad[0]->cd();
-        root_helper::SetPadMarginInCanvas(gPad, 0.01, 0.01, 0.01, 0.01);
-
-        auto component_text{ root_helper::CreatePaveText(0.00, 0.00, 1.00, 1.00, "nbNDC ARC", false) };
-        auto component_id{ atom_object->GetComponentID() };
-        auto atom_id{ atom_object->GetAtomID() };
-        root_helper::SetPaveTextMarginInCanvas(gPad, component_text.get(), 0.01, 0.75, 0.02, 0.02);
-        root_helper::SetPaveTextDefaultStyle(component_text.get());
-        root_helper::SetPaveAttribute(component_text.get(), 0, 0.1);
-        root_helper::SetFillAttribute(component_text.get(), 1001, kAzure-7);
-        root_helper::SetTextAttribute(component_text.get(), 75.0f, 103, 22, 0.0, kYellow-10);
-        component_text->AddText((component_id + "/" + atom_id).data());
-        component_text->Draw();
-
-        auto atom_info_text{ root_helper::CreatePaveText(0.26, 0.10, 0.55, 0.90, "nbNDC", false) };
-        root_helper::SetPaveTextDefaultStyle(atom_info_text.get());
-        root_helper::SetPaveAttribute(atom_info_text.get(), 0);
-        root_helper::SetFillAttribute(atom_info_text.get(), 4000);
-        root_helper::SetTextAttribute(atom_info_text.get(), 50.0f, 133);
-        atom_info_text->AddText(("Serial ID: " + std::to_string(atom_object->GetSerialID())).data());
-        atom_info_text->AddText(("Sequence ID: " + std::to_string(atom_object->GetSequenceID())).data());
-        atom_info_text->Draw();
-
-        auto result_text{ root_helper::CreatePaveText(0.60, 0.10, 0.90, 0.90, "nbNDC", false) };
-        root_helper::SetPaveTextDefaultStyle(result_text.get());
-        root_helper::SetTextAttribute(result_text.get(), 50.0f, 133, 12, 0.0, kRed);
-        root_helper::SetFillAttribute(result_text.get(), 4000);
-        const auto & estimate_mdpde{
-            entry_view.GetFinalModel(FittingStage::Second)
-        };
-        auto amplitude_prior{ estimate_mdpde.GetAmplitude() };
-        auto width_prior{ estimate_mdpde.GetWidth() };
-        auto offset_prior{ estimate_mdpde.GetOffset() };
-        result_text->AddText(Form("#font[2]{A} = %.2f", amplitude_prior));
-        result_text->AddText(Form("#tau = %.2f", width_prior));
-        result_text->AddText(Form("#font[2]{C} = %.2f", offset_prior));
-        result_text->Draw();
-
-        pad[1]->cd();
-        root_helper::SetPadMarginInCanvas(gPad, 0.10, 0.00, 0.12, 0.10);
-        auto frame{ root_helper::CreateHist2D("hist_0","", 100, 0.0, 1.0, 100, 0.0, 1.0) };
-        root_helper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
-        root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-        root_helper::SetAxisTitleAttribute(frame->GetXaxis(), 50.0f, 0.75f);
-        root_helper::SetAxisLabelAttribute(frame->GetXaxis(), 50.0f, 0.005f, 133);
-        root_helper::SetAxisTickAttribute(frame->GetXaxis(), 0.06f, 505);
-        root_helper::SetAxisTitleAttribute(frame->GetYaxis(), 60.0f, 1.25f);
-        root_helper::SetAxisLabelAttribute(frame->GetYaxis(), 60.0f, 0.01f, 133);
-        root_helper::SetAxisTickAttribute(frame->GetYaxis(), 0.03f, 506);
-        root_helper::SetLineAttribute(frame.get(), 1, 0);
-        frame->SetStats(0);
-        frame->GetYaxis()->CenterTitle();
-        frame->GetXaxis()->SetTitle("Radial Distance #[]{#AA}");
-        frame->GetYaxis()->SetTitle("Map Value");
-        auto y_range{
-            local_potential_series::ComputeResponseRange(
-                use_peeling_sampling_entries
-                    ? entry_view.GetPeelingSamplingEntries(apply_selection)
-                    : entry_view.GetRawSamplingEntries(apply_selection),
-                0.1)
-        };
-        auto x_min{ 0.00 };
-        auto x_max{ 1.99 };
-        auto y_min{ std::get<0>(y_range) };
-        auto y_max{ std::get<1>(y_range) };
-        frame->GetXaxis()->SetLimits(x_min, x_max);
-        frame->GetYaxis()->SetLimits(y_min, y_max);
-        frame->SetStats(0);
-        frame->Draw();
-        root_helper::SetMarkerAttribute(data_graph.get(), 20, 0.8f, kAzure-7, 0.5f);
-        data_graph->Draw("P");
-
-        data_hist->SetStats(0);
-        data_hist->SetBarWidth(1.0);
-        root_helper::SetFillAttribute(data_hist.get(), 1001, kGray, 0.3f);
-        root_helper::SetLineAttribute(data_hist.get(), 1, 2, kGray+2);
-        data_hist->Draw("CANDLE2 SAME");
-        
-        root_helper::SetLineAttribute(gaus_function_mdpde.get(), 2, 3, kRed);
-        root_helper::SetLineAttribute(gaus_function_ols.get(), 3, 3, kBlue);
-        gaus_function_mdpde->Draw("SAME");
-        //gaus_function_ols->Draw("SAME");
-
-        auto legend{ root_helper::CreateLegend(0.02, 0.90, 1.00, 1.00, false) };
-        root_helper::SetLegendDefaultStyle(legend.get());
-        root_helper::SetFillAttribute(legend.get(), 4000);
-        root_helper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
-        legend->SetMargin(0.15f);
-        legend->SetNColumns(2);
-        legend->AddEntry(gaus_function_mdpde.get(),
-            "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})}", "l");
-        legend->AddEntry(data_graph.get(),
-            "Sampling Map Value", "p");
+        if (!entry_view.IsAvailable()) continue;
+        const auto & stage = entry_view.GetStageEstimate(FittingStage::Second);
+        if (stage.source.method != EstimateMethod::JointComponents || stage.source.role != FittingRole::Target) continue;
+        canvas->Clear(); canvas->cd();
+        auto builder=std::make_unique<PotentialPlotBuilder>(atom_object);
+        auto raw=builder->CreateDistanceToMapValueGraph(false,false);
+        auto peeled=builder->CreateDistanceToMapValueGraph(false,true);
+        raw->SetTitle(("Joint components: atom " + std::to_string(atom_object->GetSerialID()) + ";Radial distance (Angstrom);Map response").c_str());
+        root_helper::SetMarkerAttribute(raw.get(),20,0.7f,kGray+1);
+        if (raw->GetN()>0) raw->Draw("AP");
+        else canvas->DrawFrame(0,-1,2,1,"Joint samples unavailable;Radial distance (Angstrom);Map response");
+        root_helper::SetMarkerAttribute(peeled.get(),20,0.7f,kBlue);
+        peeled->Draw("P SAME");
+        auto curve=builder->CreateAtomLocalGausFunctionFinal();
+        auto legend=root_helper::CreateLegend(0.55,0.68,0.95,0.94,false);
+        if (raw->GetN()>0) legend->AddEntry(raw.get(),"Raw samples","p");
+        if(entry_view.GetPostFitPeeling()) legend->AddEntry(peeled.get(),"Joint peeling (includes target-own charge)","p");
+        if(curve) {root_helper::SetLineAttribute(curve.get(),1,2,kRed); curve->Draw("SAME"); legend->AddEntry(curve.get(),"Joint Second: Gaussian + charge C","l");}
+        else legend->AddEntry(static_cast<TObject *>(nullptr),("Second unavailable: " + entry_view.GetStageEstimate(FittingStage::Second).reason).c_str(), "");
         legend->Draw();
-
-        auto alpha_text{ root_helper::CreatePaveText(0.20, 0.10, 0.40, 0.40, "nbNDC", false) };
-        root_helper::SetPaveTextDefaultStyle(alpha_text.get());
-        root_helper::SetTextAttribute(alpha_text.get(), 50.0f, 133, 12, 0.0, kRed);
-        root_helper::SetFillAttribute(alpha_text.get(), 4000);
-        auto alpha_r{ entry_view.GetAlphaR(FittingStage::Second) };
-        alpha_text->AddText(Form("#alpha_{r} = %.1f", alpha_r));
-        alpha_text->Draw();
-
-        pad[2]->cd();
-        root_helper::SetPadMarginInCanvas(gPad, 0.09, 0.01, 0.12, 0.02);
-        root_helper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
-        root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-        auto frame_scatter{ root_helper::CreateHist2D("hist_scatter","", 100, 0.0, 1.0, 100, 0.0, 1.0) };
-        root_helper::SetAxisTitleAttribute(frame_scatter->GetXaxis(), 40.0f, 1.1f);
-        root_helper::SetAxisTitleAttribute(frame_scatter->GetYaxis(), 40.0f, 1.3f);
-        root_helper::SetAxisLabelAttribute(frame_scatter->GetXaxis(), 40.0f, 0.01f);
-        root_helper::SetAxisLabelAttribute(frame_scatter->GetYaxis(), 40.0f, 0.01f);
-        auto x_tick_length{ root_helper::ConvertGlobalTickLengthToPadTickLength(gPad, 0.03, 0) };
-        auto y_tick_length{ root_helper::ConvertGlobalTickLengthToPadTickLength(gPad, 0.015, 1) };
-        root_helper::SetAxisTickAttribute(frame_scatter->GetXaxis(), static_cast<float>(x_tick_length), 505);
-        root_helper::SetAxisTickAttribute(frame_scatter->GetYaxis(), static_cast<float>(y_tick_length), 505);
-        frame_scatter->GetXaxis()->SetTitle("x");
-        frame_scatter->GetYaxis()->SetTitle("y");
-        frame_scatter->GetXaxis()->SetLimits(
-            x_hist->GetXaxis()->GetXmin(),
-            x_hist->GetXaxis()->GetXmax()
-        );
-        frame_scatter->GetYaxis()->SetLimits(
-            y_hist->GetXaxis()->GetXmin(),
-            y_hist->GetXaxis()->GetXmax()
-        );
-        frame_scatter->GetXaxis()->CenterTitle();
-        frame_scatter->GetYaxis()->CenterTitle();
-        frame_scatter->SetStats(0);
-        frame_scatter->Draw();
-        root_helper::SetMarkerAttribute(scatter_graph.get(), 20, 0.8f, kAzure-7, 0.5f);
-        scatter_graph->Draw("P");
-
-        root_helper::SetLineAttribute(linear_model_mdpde.get(), 2, 3, kRed);
-        root_helper::SetLineAttribute(linear_model_ols.get(), 3, 3, kBlue);
-        linear_model_mdpde->Draw("SAME");
-        //linear_model_ols->Draw("SAME");
-
-        pad[3]->cd();
-        root_helper::SetPadMarginInCanvas(gPad, 0.09, 0.01, 0.02, 0.02);
-        root_helper::SetPadLayout(gPad, 1, 1, 0, 1, 0, 0);
-        root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-        root_helper::SetAxisTitleAttribute(x_hist->GetXaxis(), 0.0f);
-        root_helper::SetAxisTitleAttribute(x_hist->GetYaxis(), 40.0, 1.3f);
-        root_helper::SetAxisLabelAttribute(x_hist->GetXaxis(), 0.0f);
-        root_helper::SetAxisLabelAttribute(x_hist->GetYaxis(), 40.0, -0.01f);
-        root_helper::SetAxisTickAttribute(x_hist->GetXaxis(), 0.0f, 505);
-        root_helper::SetAxisTickAttribute(x_hist->GetYaxis(), static_cast<float>(y_tick_length), 504);
-        root_helper::SetFillAttribute(x_hist.get(), 1001, kAzure-7, 0.5f);
-        x_hist->GetYaxis()->SetTitle("Counts");
-        x_hist->GetYaxis()->CenterTitle();
-        x_hist->GetYaxis()->SetRangeUser(1.0, x_hist->GetMaximum() * 1.1);
-        x_hist->SetStats(0);
-        x_hist->Draw("BAR");
-
-        pad[4]->cd();
-        root_helper::SetPadMarginInCanvas(gPad, 0.01, 0.01, 0.12, 0.02);
-        root_helper::SetPadLayout(gPad, 1, 1, 1, 0, 0, 0);
-        root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
-        root_helper::SetAxisTitleAttribute(y_hist->GetXaxis(), 0.0f);
-        root_helper::SetAxisTitleAttribute(y_hist->GetYaxis(), 40.0, 1.0f);
-        root_helper::SetAxisLabelAttribute(y_hist->GetXaxis(), 0.0f);
-        root_helper::SetAxisLabelAttribute(y_hist->GetYaxis(), 40.0, -0.02f);
-        root_helper::SetAxisTickAttribute(y_hist->GetXaxis(), 0.0f, 505);
-        root_helper::SetAxisTickAttribute(y_hist->GetYaxis(), static_cast<float>(y_tick_length), 504);
-        root_helper::SetFillAttribute(y_hist.get(), 1001, kAzure-7, 0.5f);
-        y_hist->GetYaxis()->SetTitle("Counts");
-        y_hist->GetYaxis()->CenterTitle();
-        y_hist->GetYaxis()->SetRangeUser(1.0, y_hist->GetMaximum() * 1.1);
-        y_hist->SetStats(0);
-        y_hist->Draw("HBAR");
-
-        root_helper::PrintCanvasPad(canvas.get(), file_path);
+        root_helper::PrintCanvasPad(canvas.get(),file_path);
+        canvas->Clear();
     }
 
     root_helper::PrintCanvasClose(canvas.get(), file_path);

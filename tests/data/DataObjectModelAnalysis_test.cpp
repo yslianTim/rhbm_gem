@@ -402,7 +402,7 @@ TEST(DataObjectModelAnalysisTest, ModelObjectInitializesLocalPotentialAnalysis)
     model->SelectAllAtoms(false);
     model->SetAtomSelected(first_atom->GetSerialID(), true);
     analysis_data.EnsureAtomLocalEntry(*second_atom).SetAlphaR(
-        rg::FittingStage::Second,
+        rg::FittingStage::First,
         0.7);
     analysis_data.AtomGroupEntry().AddMember(999, *second_atom);
 
@@ -421,7 +421,7 @@ TEST(DataObjectModelAnalysisTest, ModelObjectInitializesLocalPotentialAnalysis)
     EXPECT_DOUBLE_EQ(
         0.0,
         rg::AtomLocalPotentialView::For(*first_atom).GetAlphaR(
-            rg::FittingStage::Second));
+            rg::FittingStage::First));
     EXPECT_EQ(analysis_data.FindAtomLocalEntry(*second_atom), nullptr);
 
     const auto analysis_view{ model->GetAnalysisView() };
@@ -445,7 +445,7 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorCanClearTransientFitStatesW
     rg::LocalGaussianResult atom_result;
     atom_result.alpha_r = 0.2;
     atom_result.fit_result = rg::RHBMBetaEstimateResult{};
-    atom_entry.SetGaussianResult(rg::FittingStage::Second, atom_result);
+    atom_entry.SetGaussianResult(rg::FittingStage::First, atom_result);
     atom_entry.SetGroupMemberResult(rg::GroupGaussianMemberResult{ atom_result.mdpde, true, 2.5 });
 
     ASSERT_NE(analysis_data.FindAtomLocalEntry(*atom), nullptr);
@@ -458,12 +458,12 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorCanClearTransientFitStatesW
     EXPECT_FALSE(analysis_data.AtomGroupEntry().CollectGroupKeys().empty());
     EXPECT_DOUBLE_EQ(
         0.2,
-        cleared_atom_entry->GaussianResult(rg::FittingStage::Second).alpha_r);
+        cleared_atom_entry->GaussianResult(rg::FittingStage::First).alpha_r);
     ASSERT_TRUE(cleared_atom_entry->GroupMemberResult().has_value());
     EXPECT_TRUE(cleared_atom_entry->GroupMemberResult()->is_outlier);
     EXPECT_DOUBLE_EQ(cleared_atom_entry->GroupMemberResult()->statistical_distance, 2.5);
     EXPECT_FALSE(cleared_atom_entry->GaussianResult(
-        rg::FittingStage::Second).fit_result.has_value());
+        rg::FittingStage::First).fit_result.has_value());
 }
 
 TEST(DataObjectModelAnalysisTest, ModelAnalysisDataClearDropsEntriesAndFitStates)
@@ -474,7 +474,7 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisDataClearDropsEntriesAndFitStates
 
     auto & atom_entry{ analysis_data.EnsureAtomLocalEntry(*atom) };
     analysis_data.AtomGroupEntry().AddMember(999, *atom);
-    atom_entry.SetAlphaR(rg::FittingStage::Second, 0.2);
+    atom_entry.SetAlphaR(rg::FittingStage::First, 0.2);
     atom_entry.SetGroupMemberResult(rg::GroupGaussianMemberResult{});
 
     analysis_data.Clear();
@@ -495,34 +495,28 @@ TEST(DataObjectModelAnalysisTest, LocalPotentialEntryClearTransientFitStateKeeps
         rg::GaussianModel3DUncertainty{}
     };
     result.fit_result = rg::RHBMBetaEstimateResult{};
-    entry.SetGaussianResult(rg::FittingStage::Second, result);
-    entry.SetPeelingSamplingEntries({
-        LocalPotentialSample{ 3.0, SamplingPoint{ 0.1 } }
-    });
+    entry.SetGaussianResult(rg::FittingStage::First, result);
     ASSERT_TRUE(entry.GaussianResult(
-        rg::FittingStage::Second).fit_result.has_value());
-    ASSERT_FALSE(entry.PeelingSamplingEntries().empty());
+        rg::FittingStage::First).fit_result.has_value());
 
-    entry.ClearTransientFitState(rg::FittingStage::Second);
+    entry.ClearTransientFitState(rg::FittingStage::First);
 
     EXPECT_DOUBLE_EQ(
         0.4,
-        entry.GaussianResult(rg::FittingStage::Second).alpha_r);
+        entry.GaussianResult(rg::FittingStage::First).alpha_r);
     EXPECT_DOUBLE_EQ(
         2.0,
-        entry.GaussianResult(rg::FittingStage::Second)
+        entry.GaussianResult(rg::FittingStage::First)
             .mdpde.GetModel().GetAmplitude());
     EXPECT_DOUBLE_EQ(
         0.7,
-        entry.GaussianResult(rg::FittingStage::Second)
+        entry.GaussianResult(rg::FittingStage::First)
             .mdpde.GetModel().GetWidth());
     EXPECT_FALSE(entry.GaussianResult(
-        rg::FittingStage::Second).fit_result.has_value());
-    ASSERT_EQ(entry.PeelingSamplingEntries().size(), 1u);
-    EXPECT_DOUBLE_EQ(entry.PeelingSamplingEntries().front().response, 3.0);
+        rg::FittingStage::First).fit_result.has_value());
 }
 
-TEST(DataObjectModelAnalysisTest, LocalPotentialEntryStoresRawAndPeelingSamplingEntries)
+TEST(DataObjectModelAnalysisTest, LocalPotentialEntryStoresRawSamplingEntries)
 {
     rg::LocalPotentialEntry entry;
     EXPECT_EQ(entry.NeighborCountForPeeling(), 0);
@@ -530,18 +524,9 @@ TEST(DataObjectModelAnalysisTest, LocalPotentialEntryStoresRawAndPeelingSampling
         LocalPotentialSample{ 6.0, SamplingPoint{ 0.1 } },
         LocalPotentialSample{ 4.0, SamplingPoint{ 0.2 } }
     });
-    entry.SetPeelingSamplingEntries({
-        LocalPotentialSample{ 3.0, SamplingPoint{ 0.1 } }
-    });
-    entry.SetNeighborCountForPeeling(7);
-
     EXPECT_EQ(entry.RawSamplingEntryCount(), 2);
-    EXPECT_EQ(entry.PeelingSamplingEntryCount(), 1);
     ASSERT_EQ(entry.RawSamplingEntries().size(), 2u);
-    ASSERT_EQ(entry.PeelingSamplingEntries().size(), 1u);
     EXPECT_DOUBLE_EQ(entry.RawSamplingEntries().front().response, 6.0);
-    EXPECT_DOUBLE_EQ(entry.PeelingSamplingEntries().front().response, 3.0);
-    EXPECT_EQ(entry.NeighborCountForPeeling(), 7);
 }
 
 TEST(DataObjectModelAnalysisTest, LocalPotentialEntryStoresGaussianResult)
@@ -558,52 +543,38 @@ TEST(DataObjectModelAnalysisTest, LocalPotentialEntryStoresGaussianResult)
         rg::GaussianModel3DUncertainty{}
     };
 
-    entry.SetGaussianResult(rg::FittingStage::Second, result);
+    entry.SetGaussianResult(rg::FittingStage::First, result);
 
     EXPECT_DOUBLE_EQ(
         0.5,
-        entry.GaussianResult(rg::FittingStage::Second).alpha_r);
+        entry.GaussianResult(rg::FittingStage::First).alpha_r);
     EXPECT_DOUBLE_EQ(
         1.0,
-        entry.GaussianResult(rg::FittingStage::Second)
+        entry.GaussianResult(rg::FittingStage::First)
             .ols.GetModel().GetAmplitude());
     EXPECT_DOUBLE_EQ(
         1.5,
-        entry.GaussianResult(rg::FittingStage::Second)
+        entry.GaussianResult(rg::FittingStage::First)
             .mdpde.GetModel().GetAmplitude());
 }
 
-TEST(DataObjectModelAnalysisTest, LocalPotentialEntryKeepsGaussianStagesIndependent)
+TEST(DataObjectModelAnalysisTest, LocalPotentialEntryKeepsFirstStageAndJointPointIndependent)
 {
     rg::LocalPotentialEntry entry;
-    for (const auto [stage, amplitude] : {
-             std::pair{ rg::FittingStage::First, 1.0 },
-             std::pair{ rg::FittingStage::Second, 2.0 } })
-    {
-        rg::LocalGaussianResult result;
-        result.alpha_r = amplitude / 10.0;
-        result.mdpde = rg::GaussianModel3DWithUncertainty{
-            rg::GaussianModel3D{ amplitude, 0.5, -amplitude },
-            rg::GaussianModel3DUncertainty{}
-        };
-        entry.SetGaussianResult(stage, result);
-    }
+    rg::LocalGaussianResult first;
+    first.alpha_r = 0.1;
+    first.mdpde = {rg::GaussianModel3D{1.0, 0.5, -1.0}, {}};
+    entry.SetGaussianResult(rg::FittingStage::First, first);
+    rg::LocalStageEstimate joint;
+    joint.source.method = rg::EstimateMethod::JointComponents;
+    joint.point = rg::GaussianModel3D{2.0, 0.5, -2.0};
+    entry.SetStageEstimate(rg::FittingStage::Second, joint);
 
-    EXPECT_DOUBLE_EQ(
-        entry.GaussianResult(rg::FittingStage::First)
-            .mdpde.GetModel().GetAmplitude(),
-        1.0);
-    EXPECT_DOUBLE_EQ(
-        entry.GaussianResult(rg::FittingStage::Second)
-            .mdpde.GetModel().GetAmplitude(),
-        2.0);
-    entry.SetAlphaR(rg::FittingStage::Second, 0.75);
-    EXPECT_DOUBLE_EQ(
-        entry.GaussianResult(rg::FittingStage::First).alpha_r,
-        0.1);
-    EXPECT_DOUBLE_EQ(
-        entry.GaussianResult(rg::FittingStage::Second).alpha_r,
-        0.75);
+    EXPECT_THROW(entry.SetGaussianResult(rg::FittingStage::Second, first), std::invalid_argument);
+    EXPECT_THROW(entry.SetAlphaR(rg::FittingStage::Second, 0.75), std::invalid_argument);
+    EXPECT_DOUBLE_EQ(entry.GaussianResult(rg::FittingStage::First).alpha_r, 0.1);
+    EXPECT_DOUBLE_EQ(entry.GaussianResult(rg::FittingStage::First).mdpde.GetModel().GetAmplitude(), 1.0);
+    EXPECT_DOUBLE_EQ(entry.StageEstimate(rg::FittingStage::Second).point->GetAmplitude(), 2.0);
 }
 
 TEST(DataObjectModelAnalysisTest, GroupPotentialEntryKeepsSingleResultPerGroup)
@@ -715,88 +686,12 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorCanSetAlphaRAndCreateEntry)
     auto * atom{ model->GetAtomList().at(0).get() };
     auto analysis{ model->EditAnalysis() };
 
-    analysis.SetAtomLocalAlphaR(rg::FittingStage::Second, *atom, 0.37);
+    analysis.SetAtomLocalAlphaR(rg::FittingStage::First, *atom, 0.37);
 
     EXPECT_DOUBLE_EQ(
         0.37,
         rg::AtomLocalPotentialView::For(*atom).GetAlphaR(
-            rg::FittingStage::Second));
-}
-
-TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorCanSetPeelingNeighborCount)
-{
-    auto model{ data_test::MakeModelWithBond() };
-    auto * atom{ model->GetAtomList().at(0).get() };
-
-    model->EditAnalysis().SetAtomLocalNeighborCountForPeeling(*atom, 5);
-
-    EXPECT_EQ(
-        rg::AtomLocalPotentialView::For(*atom)
-            .GetNeighborCountForPeeling(),
-        5);
-}
-
-TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorSetsPeelingNeighborCountAndCreatesEntry)
-{
-    auto model{ data_test::MakeModelWithBond() };
-    auto * atom{ model->GetAtomList().at(0).get() };
-    auto analysis{ model->EditAnalysis() };
-
-    EXPECT_FALSE(rg::AtomLocalPotentialView::For(*atom).IsAvailable());
-
-    analysis.SetAtomLocalNeighborCountForPeeling(*atom, 5);
-
-    const auto view{ rg::AtomLocalPotentialView::For(*atom) };
-    EXPECT_EQ(view.GetNeighborCountForPeeling(), 5);
-}
-
-TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomLocalSecondStageResult)
-{
-    auto model{ data_test::MakeModelWithBond() };
-    auto * atom{ model->GetAtomList().at(0).get() };
-    auto analysis{ model->EditAnalysis() };
-
-    const LocalPotentialSampleList raw_sampling_entries{
-        LocalPotentialSample{ 8.0, SamplingPoint{ 0.2 } }
-    };
-    const LocalPotentialSampleList peeling_sampling_entries{
-        LocalPotentialSample{ 3.0, SamplingPoint{ 0.4 } }
-    };
-    analysis.SetAtomLocalRawSamplingEntries(*atom, raw_sampling_entries);
-
-    rg::LocalGaussianResult first_result;
-    first_result.mdpde = rg::GaussianModel3DWithUncertainty{
-        rg::GaussianModel3D{ 1.0, 0.6 },
-        rg::GaussianModel3DUncertainty{}
-    };
-    analysis.SetAtomLocalGaussianResult(
-        rg::FittingStage::First, *atom, first_result);
-
-    rg::LocalGaussianResult second_result;
-    second_result.alpha_r = 0.42;
-    second_result.mdpde = rg::GaussianModel3DWithUncertainty{
-        rg::GaussianModel3D{ 2.0, 0.7, -0.1 },
-        rg::GaussianModel3DUncertainty{}
-    };
-    analysis.ApplyAtomLocalSecondStageResult(
-        *atom,
-        second_result,
-        peeling_sampling_entries);
-
-    const auto view{ rg::AtomLocalPotentialView::For(*atom) };
-    EXPECT_EQ(view.GetRawSamplingEntries(false).size(), 1u);
-    EXPECT_DOUBLE_EQ(view.GetRawSamplingEntries(false).front().response, 8.0);
-    EXPECT_EQ(view.GetPeelingSamplingEntries(false).size(), 1u);
-    EXPECT_DOUBLE_EQ(view.GetPeelingSamplingEntries(false).front().response, 3.0);
-    EXPECT_DOUBLE_EQ(
-        view.GetGaussianResult(rg::FittingStage::Second).alpha_r,
-        0.42);
-    EXPECT_DOUBLE_EQ(
-        view.GetEstimateMDPDE(rg::FittingStage::Second).GetAmplitude(),
-        2.0);
-    EXPECT_DOUBLE_EQ(
-        view.GetEstimateMDPDE(rg::FittingStage::First).GetAmplitude(),
-        1.0);
+            rg::FittingStage::First));
 }
 
 TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorSetGaussianResultUpdatesViewEstimates)
@@ -824,20 +719,20 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorSetGaussianResultUpdatesVie
     };
 
     analysis.SetAtomLocalGaussianResult(
-        rg::FittingStage::Second, *atom, gaussian_result);
+        rg::FittingStage::First, *atom, gaussian_result);
 
     EXPECT_DOUBLE_EQ(
         0.6,
         rg::AtomLocalPotentialView::For(*atom).GetGaussianResult(
-            rg::FittingStage::Second).alpha_r);
+            rg::FittingStage::First).alpha_r);
     EXPECT_DOUBLE_EQ(
         0.0,
         rg::AtomLocalPotentialView::For(*atom).GetEstimateOLS(
-            rg::FittingStage::Second).GetWidth());
+            rg::FittingStage::First).GetWidth());
     EXPECT_DOUBLE_EQ(
         0.0,
         rg::AtomLocalPotentialView::For(*atom).GetEstimateMDPDE(
-            rg::FittingStage::Second).GetWidth());
+            rg::FittingStage::First).GetWidth());
 }
 
 TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewCanApplyRawSamplingSelection)
@@ -871,150 +766,41 @@ TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewCanApplyRawSamplingSelec
     }
 }
 
-TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewCanApplyPeelingSamplingSelection)
+TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewComputesPeelingRatioInInclusiveDistanceRange)
 {
-    auto model{ data_test::MakeModelWithBond() };
-    auto * atom{ model->GetAtomList().at(0).get() };
-    auto analysis{ model->EditAnalysis() };
+    auto model = data_test::MakeModelWithBond();
+    const auto & atom = *model->GetAtomList().front();
+    auto editor = model->EditAnalysis();
+    rg::LocalStageEstimate joint;
+    joint.source = {rg::EstimateMethod::JointComponents, {}, "component", "ratio-run", rg::FittingRole::Target};
+    editor.SetAtomStageEstimate(rg::FittingStage::Second, atom, joint);
+    const auto view = rg::AtomLocalPotentialView::For(atom);
+    using second_stage_test::postprocessing::MakeGridObservation;
+    rg::PostFitPeelingResult peeling;
+    peeling.source = view.GetStageEstimate(rg::FittingStage::Second).source;
+    peeling.samples = {
+        {5, {}, MakeGridObservation(0, 0, .5, 10, atom.GetPosition())},
+        {2, {}, MakeGridObservation(1, 1, 1., 8, atom.GetPosition())},
+        {1, {}, MakeGridObservation(2, 2, 1.5, 4, atom.GetPosition())},
+        {3, {}, MakeGridObservation(3, 3, 2., 8, atom.GetPosition())}};
+    editor.SetAtomPostFitPeeling(atom, peeling);
 
-    analysis.SetAtomLocalRawSamplingEntries(*atom, {
-        LocalPotentialSample{ 6.0, SamplingPoint{ 0.0, { 0.0, 0.0, 0.0 }, true } },
-        LocalPotentialSample{ 4.0, SamplingPoint{ 0.5, { 0.0, 0.0, 0.0 }, false } },
-        LocalPotentialSample{ 2.0, SamplingPoint{ 0.9, { 0.0, 0.0, 0.0 }, true } }
-    });
-    analysis.SetAtomLocalPeelingSamplingEntries(*atom, {
-        LocalPotentialSample{ 3.0, SamplingPoint{ 0.0, { 0.0, 0.0, 0.0 }, true } },
-        LocalPotentialSample{ 5.0, SamplingPoint{ 0.5, { 0.0, 0.0, 0.0 }, false } },
-        LocalPotentialSample{ 7.0, SamplingPoint{ 0.9, { 0.0, 0.0, 0.0 }, true } }
-    });
-
-    const auto view{ rg::AtomLocalPotentialView::For(*atom) };
-    const auto raw_selected_entries{ view.GetRawSamplingEntries() };
-    const auto peeling_selected_entries{ view.GetPeelingSamplingEntries(true) };
-    const auto peeling_all_entries{ view.GetPeelingSamplingEntries() };
-
-    ASSERT_EQ(raw_selected_entries.size(), 2u);
-    EXPECT_DOUBLE_EQ(raw_selected_entries.at(0).response, 6.0);
-    EXPECT_DOUBLE_EQ(raw_selected_entries.at(1).response, 2.0);
-    ASSERT_EQ(peeling_selected_entries.size(), 2u);
-    EXPECT_DOUBLE_EQ(peeling_selected_entries.at(0).response, 3.0);
-    EXPECT_DOUBLE_EQ(peeling_selected_entries.at(1).response, 7.0);
-    ASSERT_EQ(peeling_all_entries.size(), 3u);
-    EXPECT_DOUBLE_EQ(peeling_all_entries.at(1).response, 5.0);
-    EXPECT_FALSE(peeling_all_entries.at(1).point.is_selected);
-}
-
-TEST(
-    DataObjectModelAnalysisTest,
-    AtomLocalPotentialViewComputesPeelingRatioInInclusiveDistanceRange)
-{
-    auto model{ data_test::MakeModelWithBond() };
-    auto * atom{ model->GetAtomList().at(0).get() };
-    auto analysis{ model->EditAnalysis() };
-    const auto non_finite_distance{ std::numeric_limits<double>::quiet_NaN() };
-
-    analysis.SetAtomLocalRawSamplingEntries(*atom, {
-        LocalPotentialSample{ 10.0, SamplingPoint{ 0.5 } },
-        LocalPotentialSample{ 8.0, SamplingPoint{ 1.0 } },
-        LocalPotentialSample{
-            4.0,
-            SamplingPoint{ 1.5, { 0.0, 0.0, 0.0 }, false } },
-        LocalPotentialSample{ 8.0, SamplingPoint{ 2.0 } },
-        LocalPotentialSample{ 100.0, SamplingPoint{ 2.5 } },
-        LocalPotentialSample{ 100.0, SamplingPoint{ non_finite_distance } }
-    });
-    analysis.SetAtomLocalPeelingSamplingEntries(*atom, {
-        LocalPotentialSample{ 3.0, SamplingPoint{ 2.0 } },
-        LocalPotentialSample{
-            1.0,
-            SamplingPoint{ 1.5, { 0.0, 0.0, 0.0 }, false } },
-        LocalPotentialSample{ 50.0, SamplingPoint{ 2.5 } },
-        LocalPotentialSample{ 2.0, SamplingPoint{ 1.0 } },
-        LocalPotentialSample{ 5.0, SamplingPoint{ 0.5 } },
-        LocalPotentialSample{ 50.0, SamplingPoint{ non_finite_distance } }
-    });
-
-    const auto view{ rg::AtomLocalPotentialView::For(*atom) };
-    const auto ratio{ view.GetLocalFittingPeelingRatio(1.0, 2.0) };
-    ASSERT_TRUE(ratio.has_value());
+    const auto ratio = view.GetLocalFittingPeelingRatio(1.0, 2.0);
+    ASSERT_TRUE(ratio);
     EXPECT_DOUBLE_EQ(*ratio, 0.7);
-
-    const auto boundary_ratio{
-        view.GetLocalFittingPeelingRatio(1.0, 1.0)
-    };
-    ASSERT_TRUE(boundary_ratio.has_value());
+    const auto boundary_ratio = view.GetLocalFittingPeelingRatio(1.0, 1.0);
+    ASSERT_TRUE(boundary_ratio);
     EXPECT_DOUBLE_EQ(*boundary_ratio, 0.75);
-}
+    EXPECT_FALSE(view.GetLocalFittingPeelingRatio(2.1, 2.2));
 
-TEST(
-    DataObjectModelAnalysisTest,
-    AtomLocalPotentialViewReturnsNulloptWhenPeelingRatioCannotBeComputed)
-{
-    auto model{ data_test::MakeModelWithBond() };
-    auto * atom{ model->GetAtomList().at(0).get() };
-    auto analysis{ model->EditAnalysis() };
-    const auto view{ rg::AtomLocalPotentialView::For(*atom) };
-
-    analysis.SetAtomLocalRawSamplingEntries(*atom, {
-        LocalPotentialSample{ 4.0, SamplingPoint{ 0.5 } }
-    });
-    analysis.SetAtomLocalPeelingSamplingEntries(*atom, {
-        LocalPotentialSample{ 2.0, SamplingPoint{ 0.5 } }
-    });
-    const auto ratio{ view.GetLocalFittingPeelingRatio(0.0, 1.0) };
-    ASSERT_TRUE(ratio.has_value());
-    EXPECT_DOUBLE_EQ(*ratio, 0.5);
-
-    analysis.SetAtomLocalRawSamplingEntries(*atom, {
-        LocalPotentialSample{ 4.0, SamplingPoint{ 1.5 } }
-    });
-    EXPECT_FALSE(view.GetLocalFittingPeelingRatio(0.0, 1.0).has_value());
-
-    analysis.SetAtomLocalRawSamplingEntries(*atom, {
-        LocalPotentialSample{ 4.0, SamplingPoint{ 0.5 } }
-    });
-    analysis.SetAtomLocalPeelingSamplingEntries(*atom, {
-        LocalPotentialSample{ 2.0, SamplingPoint{ 1.5 } }
-    });
-    EXPECT_FALSE(view.GetLocalFittingPeelingRatio(0.0, 1.0).has_value());
-
-    analysis.SetAtomLocalRawSamplingEntries(*atom, {
-        LocalPotentialSample{ 1.0, SamplingPoint{ 0.5 } },
-        LocalPotentialSample{ -1.0, SamplingPoint{ 0.75 } }
-    });
-    analysis.SetAtomLocalPeelingSamplingEntries(*atom, {
-        LocalPotentialSample{ 1.0, SamplingPoint{ 0.5 } }
-    });
-    EXPECT_FALSE(view.GetLocalFittingPeelingRatio(0.0, 1.0).has_value());
-
-    analysis.SetAtomLocalRawSamplingEntries(*atom, {
-        LocalPotentialSample{
-            std::numeric_limits<double>::infinity(),
-            SamplingPoint{ 0.5 } }
-    });
-    EXPECT_FALSE(view.GetLocalFittingPeelingRatio(0.0, 1.0).has_value());
-
-    analysis.SetAtomLocalRawSamplingEntries(*atom, {
-        LocalPotentialSample{ 1.0, SamplingPoint{ 0.5 } }
-    });
-    analysis.SetAtomLocalPeelingSamplingEntries(*atom, {
-        LocalPotentialSample{
-            std::numeric_limits<double>::infinity(),
-            SamplingPoint{ 0.5 } }
-    });
-    EXPECT_FALSE(view.GetLocalFittingPeelingRatio(0.0, 1.0).has_value());
-
-    analysis.SetAtomLocalRawSamplingEntries(*atom, {
-        LocalPotentialSample{
-            std::numeric_limits<double>::min(),
-            SamplingPoint{ 0.5 } }
-    });
-    analysis.SetAtomLocalPeelingSamplingEntries(*atom, {
-        LocalPotentialSample{
-            std::numeric_limits<double>::max(),
-            SamplingPoint{ 0.5 } }
-    });
-    EXPECT_FALSE(view.GetLocalFittingPeelingRatio(0.0, 1.0).has_value());
+    peeling.samples[1].observation.raw_response = 0;
+    editor.SetAtomPostFitPeeling(atom, peeling);
+    EXPECT_EQ(view.AssessLocalFittingPeelingRatio(1.0, 1.0).reason, "invalid-zero-denominator");
+    peeling.samples[1].response.reset();
+    peeling.samples[1].reason = "outside-joint-domain";
+    editor.SetAtomPostFitPeeling(atom, peeling);
+    EXPECT_EQ(view.AssessLocalFittingPeelingRatio(1.0, 2.0).reason,
+        "tail-coverage-incomplete:outside-joint-domain");
 }
 
 TEST(DataObjectModelAnalysisTest, PeelingRatioAssessmentReportsUnavailableCauses)
@@ -1029,25 +815,8 @@ TEST(DataObjectModelAnalysisTest, PeelingRatioAssessmentReportsUnavailableCauses
 
     auto assessment{ view.AssessLocalFittingPeelingRatio(1.0, 2.0) };
     EXPECT_EQ(assessment.total_samples, 1u);
-    EXPECT_EQ(assessment.reason, "no-peeling-samples");
+    EXPECT_EQ(assessment.reason, "missing-peeling-result");
     EXPECT_FALSE(assessment.ratio);
-
-    analysis.SetAtomLocalRawSamplingEntries(*atom, {
-        LocalPotentialSample{ 4.0, SamplingPoint{ 2.5 } }
-    });
-    assessment = view.AssessLocalFittingPeelingRatio(1.0, 2.0);
-    EXPECT_EQ(assessment.reason, "no-tail-samples");
-
-    analysis.SetAtomLocalRawSamplingEntries(*atom, {
-        LocalPotentialSample{ 1.0, SamplingPoint{ 1.5 } },
-        LocalPotentialSample{ -1.0, SamplingPoint{ 1.6 } }
-    });
-    analysis.SetAtomLocalPeelingSamplingEntries(*atom, {
-        LocalPotentialSample{ 0.5, SamplingPoint{ 1.5 } },
-        LocalPotentialSample{ -0.5, SamplingPoint{ 1.6 } }
-    });
-    assessment = view.AssessLocalFittingPeelingRatio(1.0, 2.0);
-    EXPECT_EQ(assessment.reason, "invalid-zero-denominator");
 
     rg::LocalStageEstimate failed_joint;
     failed_joint.source = { rg::EstimateMethod::JointComponents, "CA", "component", "failed-run", rg::FittingRole::Target };
@@ -1059,38 +828,6 @@ TEST(DataObjectModelAnalysisTest, PeelingRatioAssessmentReportsUnavailableCauses
     });
     assessment = view.AssessLocalFittingPeelingRatio(1.0, 2.0);
     EXPECT_EQ(assessment.reason, "joint-qualification-failed");
-}
-
-TEST(DataObjectModelAnalysisTest, PeelingRatioRequiresExactTwoStageSampleIdentity)
-{
-    auto model{ data_test::MakeModelWithBond() };
-    auto * atom{ model->GetAtomList().at(0).get() };
-    auto analysis{ model->EditAnalysis() };
-    analysis.SetAtomLocalRawSamplingEntries(*atom, {
-        LocalPotentialSample{ 4.0, SamplingPoint{ 1.25, { 1.0, 2.0, 3.0 }, true } },
-        LocalPotentialSample{ 6.0, SamplingPoint{ 1.75, { 4.0, 5.0, 6.0 }, false } }
-    });
-    analysis.SetAtomLocalPeelingSamplingEntries(*atom, {
-        LocalPotentialSample{ 2.0, SamplingPoint{ 1.75, { 4.0, 5.0, 6.0 }, false } },
-        LocalPotentialSample{ 1.0, SamplingPoint{ 1.25, { 1.0, 2.0, 3.0 }, true } }
-    });
-
-    auto assessment{ rg::AtomLocalPotentialView::For(*atom).AssessLocalFittingPeelingRatio(1.0, 2.0) };
-    ASSERT_TRUE(assessment.ratio);
-    EXPECT_DOUBLE_EQ(*assessment.ratio, 0.7);
-    EXPECT_EQ(assessment.total_samples, 2u);
-    EXPECT_EQ(assessment.valid_samples, 2u);
-    EXPECT_DOUBLE_EQ(assessment.valid_raw_response_sum, 10.0);
-
-    analysis.SetAtomLocalPeelingSamplingEntries(*atom, {
-        LocalPotentialSample{ 2.0, SamplingPoint{ 1.75, { 4.0, 5.0, 6.0 }, false } },
-        LocalPotentialSample{ 1.0, SamplingPoint{ 1.25, { 1.0, 2.0, 3.5 }, true } }
-    });
-    assessment = rg::AtomLocalPotentialView::For(*atom).AssessLocalFittingPeelingRatio(1.0, 2.0);
-    EXPECT_FALSE(assessment.ratio);
-    EXPECT_EQ(assessment.reason, "peeling-sample-identity-mismatch");
-    EXPECT_EQ(assessment.total_samples, 2u);
-    EXPECT_EQ(assessment.valid_samples, 1u);
 }
 
 TEST(
@@ -1129,20 +866,13 @@ TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewGetsSamplingEntriesByFit
         LocalPotentialSample{ 6.0, SamplingPoint{ 0.0, { 0.0, 0.0, 0.0 }, true } },
         LocalPotentialSample{ 4.0, SamplingPoint{ 0.5, { 0.0, 0.0, 0.0 }, false } }
     });
-    analysis.SetAtomLocalPeelingSamplingEntries(*atom, {
-        LocalPotentialSample{ 3.0, SamplingPoint{ 0.0, { 0.0, 0.0, 0.0 }, true } },
-        LocalPotentialSample{ 5.0, SamplingPoint{ 0.5, { 0.0, 0.0, 0.0 }, false } }
-    });
-
     const auto view{ rg::AtomLocalPotentialView::For(*atom) };
     const auto first_entries{ view.GetSamplingEntries(rg::FittingStage::First) };
     const auto second_entries{ view.GetSamplingEntries(rg::FittingStage::Second) };
 
     ASSERT_EQ(first_entries.size(), 1u);
     EXPECT_DOUBLE_EQ(first_entries.front().response, 6.0);
-    ASSERT_EQ(second_entries.size(), 2u);
-    EXPECT_DOUBLE_EQ(second_entries.at(0).response, 3.0);
-    EXPECT_DOUBLE_EQ(second_entries.at(1).response, 5.0);
+    EXPECT_TRUE(second_entries.empty());
     EXPECT_THROW(
         view.GetSamplingEntries(static_cast<rg::FittingStage>(2)),
         std::invalid_argument);
@@ -1182,7 +912,7 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupGaussianRes
         rg::GaussianModel3DUncertainty{}
     };
     analysis.SetAtomLocalGaussianResult(
-        rg::FittingStage::Second,
+        rg::FittingStage::First,
         *atom_list.front(),
         first_atom_local_result);
 
@@ -1227,7 +957,7 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupGaussianRes
 
     const auto & gaussian_result{
         rg::AtomLocalPotentialView::For(*atom_list.front())
-            .GetGaussianResult(rg::FittingStage::Second)
+            .GetGaussianResult(rg::FittingStage::First)
     };
     EXPECT_NEAR(
         first_atom_local_result.mdpde.GetModel().GetAmplitude(),
@@ -1350,18 +1080,18 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorInitializesLocalAlphaForSel
     model->SelectAllAtoms(false);
     model->SetAtomSelected(first_atom->GetSerialID(), true);
     model->SetAtomSelected(second_atom->GetSerialID(), false);
-    analysis.SetAtomLocalAlphaR(rg::FittingStage::Second, *second_atom, 0.9);
+    analysis.SetAtomLocalAlphaR(rg::FittingStage::First, *second_atom, 0.9);
 
-    analysis.InitializeLocalAlpha(rg::FittingStage::Second, 0.4);
+    analysis.InitializeLocalAlpha(rg::FittingStage::First, 0.4);
 
     EXPECT_DOUBLE_EQ(
         0.4,
         rg::AtomLocalPotentialView::For(*first_atom).GetAlphaR(
-            rg::FittingStage::Second));
+            rg::FittingStage::First));
     EXPECT_DOUBLE_EQ(
         0.9,
         rg::AtomLocalPotentialView::For(*second_atom).GetAlphaR(
-        rg::FittingStage::Second));
+        rg::FittingStage::First));
 }
 
 TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorEnsuresSelectedAtomLocalPotentials)
@@ -1381,33 +1111,12 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorEnsuresSelectedAtomLocalPot
     EXPECT_TRUE(rg::AtomLocalPotentialView::For(*selected_atom).IsAvailable());
     EXPECT_FALSE(rg::AtomLocalPotentialView::For(*unselected_atom).IsAvailable());
 
-    analysis.SetAtomLocalAlphaR(rg::FittingStage::Second, *selected_atom, 0.42);
+    analysis.SetAtomLocalAlphaR(rg::FittingStage::First, *selected_atom, 0.42);
     analysis.EnsureSelectedAtomLocalPotentials();
     EXPECT_DOUBLE_EQ(
         0.42,
         rg::AtomLocalPotentialView::For(*selected_atom).GetAlphaR(
-            rg::FittingStage::Second));
-}
-
-TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorEnsuresAtomGroupLocalPotentials)
-{
-    auto model{ data_test::MakeModelWithBond() };
-    auto * first_atom{ model->GetAtomList().at(0).get() };
-    auto * second_atom{ model->GetAtomList().at(1).get() };
-    auto & analysis_data{ rg::ModelAnalysisData::Of(*model) };
-    auto analysis{ model->EditAnalysis() };
-    analysis_data.AtomGroupEntry().AddMember(101,
-        *first_atom);
-    analysis_data.AtomGroupEntry().AddMember(202,
-        *second_atom);
-
-    analysis.EnsureAtomGroupLocalPotentials(101);
-
-    EXPECT_TRUE(rg::AtomLocalPotentialView::For(*first_atom).IsAvailable());
-    EXPECT_FALSE(rg::AtomLocalPotentialView::For(*second_atom).IsAvailable());
-    EXPECT_THROW(
-        analysis.EnsureAtomGroupLocalPotentials(999),
-        std::runtime_error);
+            rg::FittingStage::First));
 }
 
 TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomLocalGaussianResult)
@@ -1429,13 +1138,13 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomLocalGaussianRes
     };
 
     analysis.SetAtomLocalGaussianResult(
-        rg::FittingStage::Second,
+        rg::FittingStage::First,
         *target_atom,
         result);
 
     const auto & saved_result{
         rg::AtomLocalPotentialView::For(*target_atom)
-            .GetGaussianResult(rg::FittingStage::Second)
+            .GetGaussianResult(rg::FittingStage::First)
     };
     EXPECT_DOUBLE_EQ(0.42, saved_result.alpha_r);
     EXPECT_DOUBLE_EQ(1.0, saved_result.ols.GetModel().GetAmplitude());
@@ -1448,100 +1157,6 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomLocalGaussianRes
         *missing_atom,
         result);
     EXPECT_TRUE(rg::AtomLocalPotentialView::For(*missing_atom).IsAvailable());
-}
-
-TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorInitializesLocalFittingSeedModels)
-{
-    auto model{ data_test::MakeModelWithBond() };
-    auto * selected_atom{ model->GetAtomList().at(0).get() };
-    auto * unselected_atom{ model->GetAtomList().at(1).get() };
-    model->SelectAllAtoms(false);
-    model->SetAtomSelected(selected_atom->GetSerialID(), true);
-    auto analysis{ model->EditAnalysis() };
-
-    rg::LocalGaussianResult selected_result;
-    selected_result.alpha_r = 0.42;
-    selected_result.ols = rg::GaussianModel3DWithUncertainty{
-        rg::GaussianModel3D{ 2.0, 0.7, -0.3 },
-        rg::GaussianModel3DUncertainty{ 0.1, 0.2, 0.3 }
-    };
-    selected_result.mdpde = selected_result.ols;
-    selected_result.fit_result = rg::RHBMBetaEstimateResult{};
-    analysis.SetAtomLocalRawSamplingEntries(
-        *selected_atom,
-        { LocalPotentialSample{ 5.0, SamplingPoint{ 0.4 } } });
-    analysis.SetAtomLocalPeelingSamplingEntries(
-        *selected_atom,
-        { LocalPotentialSample{ 3.0, SamplingPoint{ 0.6 } } });
-    analysis.SetAtomLocalNeighborCountForPeeling(*selected_atom, 7);
-    analysis.SetAtomLocalGaussianResult(
-        rg::FittingStage::First, *selected_atom, selected_result);
-
-    rg::LocalGaussianResult unselected_result;
-    unselected_result.alpha_r = 0.9;
-    unselected_result.mdpde = rg::GaussianModel3DWithUncertainty{
-        rg::GaussianModel3D{ 4.0, 0.8, 0.2 },
-        rg::GaussianModel3DUncertainty{}
-    };
-    analysis.SetAtomLocalGaussianResult(
-        rg::FittingStage::Second, *unselected_atom, unselected_result);
-
-    auto & analysis_data{ rg::ModelAnalysisData::Of(*model) };
-    const rg::GroupGaussianMemberResult group_result{ selected_result.mdpde, true, 2.5 };
-    analysis_data.EnsureAtomLocalEntry(*selected_atom).SetGroupMemberResult(group_result);
-    analysis_data.EnsureAtomLocalEntry(*unselected_atom).SetGroupMemberResult(group_result);
-    analysis.InitializeLocalFittingSeedModels();
-
-    const auto selected_view{ rg::AtomLocalPotentialView::For(*selected_atom) };
-    for (const auto stage : {
-             rg::FittingStage::First,
-             rg::FittingStage::Second })
-    {
-        const auto result{ selected_view.GetGaussianResult(stage) };
-        EXPECT_DOUBLE_EQ(0.42, result.alpha_r);
-        EXPECT_DOUBLE_EQ(0.0, result.ols.GetModel().GetAmplitude());
-        EXPECT_DOUBLE_EQ(1.0, result.ols.GetModel().GetWidth());
-        EXPECT_DOUBLE_EQ(0.0, result.ols.GetModel().GetOffset());
-        EXPECT_DOUBLE_EQ(0.0, result.mdpde.GetModel().GetAmplitude());
-        EXPECT_DOUBLE_EQ(1.0, result.mdpde.GetModel().GetWidth());
-        EXPECT_DOUBLE_EQ(0.0, result.mdpde.GetModel().GetOffset());
-        EXPECT_FALSE(result.fit_result.has_value());
-    }
-    EXPECT_EQ(1u, selected_view.GetRawSamplingEntries(false).size());
-    EXPECT_EQ(1u, selected_view.GetPeelingSamplingEntries(false).size());
-    EXPECT_EQ(7, selected_view.GetNeighborCountForPeeling());
-    EXPECT_FALSE(selected_view.GetGroupMemberResult().has_value());
-
-    const auto unselected_view{ rg::AtomLocalPotentialView::For(*unselected_atom) };
-    ASSERT_TRUE(unselected_view.GetGroupMemberResult().has_value());
-    EXPECT_TRUE(unselected_view.GetGroupMemberResult()->is_outlier);
-    EXPECT_DOUBLE_EQ(unselected_view.GetGroupMemberResult()->statistical_distance, 2.5);
-    EXPECT_DOUBLE_EQ(
-        0.9,
-        unselected_view.GetGaussianResult(rg::FittingStage::Second).alpha_r);
-    EXPECT_DOUBLE_EQ(
-        4.0,
-        unselected_view.GetGaussianResult(rg::FittingStage::Second)
-            .mdpde.GetModel().GetAmplitude());
-}
-
-TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorInitializesMissingLocalFittingSeedEntry)
-{
-    auto model{ data_test::MakeModelWithBond() };
-    auto * atom{ model->GetAtomList().at(0).get() };
-    model->SelectAllAtoms(false);
-    model->SetAtomSelected(atom->GetSerialID(), true);
-
-    const auto view_before{ rg::AtomLocalPotentialView::For(*atom) };
-    EXPECT_FALSE(view_before.IsAvailable());
-
-    model->EditAnalysis().InitializeLocalFittingSeedModels();
-
-    const auto view_after{ rg::AtomLocalPotentialView::For(*atom) };
-    EXPECT_DOUBLE_EQ(
-        1.0,
-        view_after.GetGaussianResult(rg::FittingStage::Second)
-            .ols.GetModel().GetWidth());
 }
 
 TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorInitializesGroupAlphaForExistingGroups)
@@ -1567,86 +1182,6 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorInitializesGroupAlphaForExi
     EXPECT_DOUBLE_EQ(
         analysis_view.GetAtomAlphaG(group_key_list.front()),
         0.8);
-}
-
-TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorCopiesLocalFittingStageResult)
-{
-    auto model{ data_test::MakeModelWithBond() };
-    auto * selected_atom{ model->GetAtomList().at(0).get() };
-    auto * unselected_atom{ model->GetAtomList().at(1).get() };
-    model->SelectAllAtoms(false);
-    model->SetAtomSelected(selected_atom->GetSerialID(), true);
-    auto analysis{ model->EditAnalysis() };
-    analysis.RebuildAtomGroupsFromSelection();
-
-    rg::LocalGaussianResult source_result;
-    source_result.alpha_r = 0.7;
-    source_result.ols = rg::GaussianModel3DWithUncertainty{
-        rg::GaussianModel3D{ 1.0, 0.6, -0.1 },
-        rg::GaussianModel3DUncertainty{ 0.1, 0.2, 0.3 }
-    };
-    source_result.mdpde = rg::GaussianModel3DWithUncertainty{
-        rg::GaussianModel3D{ 1.5, 0.8, -0.2 },
-        rg::GaussianModel3DUncertainty{ 0.4, 0.5, 0.6 }
-    };
-    rg::GroupGaussianMemberResult source_group_result;
-    source_group_result.posterior = rg::GaussianModel3DWithUncertainty{
-        rg::GaussianModel3D{ 1.8, 0.9, -0.3 },
-        rg::GaussianModel3DUncertainty{ 0.7, 0.8, 0.9 }
-    };
-    source_group_result.is_outlier = true;
-    source_group_result.statistical_distance = 2.5;
-    rg::ModelAnalysisData::Of(*model).EnsureAtomLocalEntry(*selected_atom)
-        .SetGroupMemberResult(source_group_result);
-    source_result.fit_result = rg::RHBMBetaEstimateResult{};
-    analysis.SetAtomLocalGaussianResult(
-        rg::FittingStage::First,
-        *selected_atom,
-        source_result);
-
-    rg::LocalGaussianResult unselected_result;
-    unselected_result.alpha_r = 0.9;
-    analysis.SetAtomLocalGaussianResult(
-        rg::FittingStage::Second,
-        *unselected_atom,
-        unselected_result);
-
-    analysis.CopyLocalFittingStageResult(
-        rg::FittingStage::First,
-        rg::FittingStage::Second);
-
-    const auto copied_result{
-        rg::AtomLocalPotentialView::For(*selected_atom)
-            .GetGaussianResult(rg::FittingStage::Second)
-    };
-    EXPECT_DOUBLE_EQ(copied_result.alpha_r, source_result.alpha_r);
-    EXPECT_DOUBLE_EQ(
-        copied_result.ols.GetModel().GetOffset(),
-        source_result.ols.GetModel().GetOffset());
-    EXPECT_DOUBLE_EQ(
-        copied_result.ols.GetStandardDeviationModel().GetWidth(),
-        source_result.ols.GetStandardDeviationModel().GetWidth());
-    EXPECT_DOUBLE_EQ(
-        copied_result.mdpde.GetModel().GetAmplitude(),
-        source_result.mdpde.GetModel().GetAmplitude());
-    const auto & group_result{
-        rg::AtomLocalPotentialView::For(*selected_atom).GetGroupMemberResult()
-    };
-    EXPECT_FALSE(group_result.has_value()); // Replacing Second invalidates its previous posterior.
-    EXPECT_TRUE(copied_result.fit_result.has_value());
-
-    EXPECT_DOUBLE_EQ(
-        rg::AtomLocalPotentialView::For(*unselected_atom)
-            .GetGaussianResult(rg::FittingStage::Second)
-            .alpha_r,
-        unselected_result.alpha_r);
-
-    analysis.SetAtomLocalAlphaR(rg::FittingStage::Second, *selected_atom, 0.95);
-    EXPECT_DOUBLE_EQ(
-        rg::AtomLocalPotentialView::For(*selected_atom)
-            .GetGaussianResult(rg::FittingStage::First)
-            .alpha_r,
-        source_result.alpha_r);
 }
 
 TEST(DataObjectModelAnalysisTest, CollectAtomGroupKeysReturnsRebuiltGroupKeySet)
@@ -1773,13 +1308,12 @@ TEST(DataObjectModelAnalysisTest, SelectedAtomsAndBondsRemainQueryableForContext
     EXPECT_EQ(bond_map.at(2).size(), 1);
 }
 
-TEST(DataObjectModelAnalysisTest, StageAvailabilitySeparatesSeedsZeroAmplitudeAndMethods)
+TEST(DataObjectModelAnalysisTest, StageAvailabilitySeparatesMissingAndZeroAmplitude)
 {
     auto model = data_test::MakeModelWithBond();
     model->SelectAllAtoms();
     auto editor = model->EditAnalysis();
     editor.InitializeFromSelection();
-    editor.InitializeLocalFittingSeedModels();
     const auto & atom = *model->GetSelectedAtoms().front();
     const auto view = rg::AtomLocalPotentialView::For(atom);
     EXPECT_FALSE(view.HasFinalModel(rg::FittingStage::First));
@@ -1966,7 +1500,7 @@ TEST(DataObjectModelAnalysisTest, PostJointLocalResultHasIndependentJointEndpoin
     EXPECT_FALSE(model->GetAnalysisView().GetJointResult());
 }
 
-TEST(DataObjectModelAnalysisTest, StageGettersProjectOnePointAndJointSamplesCannotBeOverwrittenIndependently)
+TEST(DataObjectModelAnalysisTest, NativeDiagnosticsAndJointSamplesAreIndependent)
 {
     auto model = data_test::MakeModelWithBond();
     const auto & atom = *model->GetAtomList().front();
@@ -1975,18 +1509,18 @@ TEST(DataObjectModelAnalysisTest, StageGettersProjectOnePointAndJointSamplesCann
     local.mdpde = {rg::GaussianModel3D{2, .5, .1}, {}};
     local.fit_result = rg::RHBMBetaEstimateResult{};
     local.fit_result->diagnostics.iterations = 7;
-    editor.SetAtomLocalGaussianResult(rg::FittingStage::Second, atom, local);
+    editor.SetAtomLocalGaussianResult(rg::FittingStage::First, atom, local);
     const auto view = rg::AtomLocalPotentialView::For(atom);
     editor.ClearTransientFitStates();
-    ASSERT_TRUE(view.GetGaussianResult(rg::FittingStage::Second).diagnostics);
-    EXPECT_EQ(view.GetGaussianResult(rg::FittingStage::Second).diagnostics->iterations.iterations, 7);
-    EXPECT_FALSE(view.GetGaussianResult(rg::FittingStage::Second).fit_result);
-    auto stage = view.GetStageEstimate(rg::FittingStage::Second);
+    ASSERT_TRUE(view.GetGaussianResult(rg::FittingStage::First).diagnostics);
+    EXPECT_EQ(view.GetGaussianResult(rg::FittingStage::First).diagnostics->iterations.iterations, 7);
+    EXPECT_FALSE(view.GetGaussianResult(rg::FittingStage::First).fit_result);
+    auto stage = view.GetStageEstimate(rg::FittingStage::First);
     stage.point = stage.point->WithAmplitude(4);
-    editor.SetAtomStageEstimate(rg::FittingStage::Second, atom, stage);
-    EXPECT_EQ(view.GetFinalModel(rg::FittingStage::Second).ToVector(), view.GetEstimateMDPDE(rg::FittingStage::Second).ToVector());
-    EXPECT_EQ(view.GetGaussianResult(rg::FittingStage::Second).mdpde.GetModel().ToVector(), stage.point->ToVector());
-    EXPECT_FALSE(view.GetGaussianResult(rg::FittingStage::Second).diagnostics);
+    editor.SetAtomStageEstimate(rg::FittingStage::First, atom, stage);
+    EXPECT_EQ(view.GetFinalModel(rg::FittingStage::First).ToVector(), view.GetEstimateMDPDE(rg::FittingStage::First).ToVector());
+    EXPECT_EQ(view.GetGaussianResult(rg::FittingStage::First).mdpde.GetModel().ToVector(), stage.point->ToVector());
+    EXPECT_FALSE(view.GetGaussianResult(rg::FittingStage::First).diagnostics);
     stage.source.method = rg::EstimateMethod::JointComponents;
     stage.source.role = rg::FittingRole::Target;
     editor.SetAtomStageEstimate(rg::FittingStage::Second, atom, stage);
@@ -1998,8 +1532,6 @@ TEST(DataObjectModelAnalysisTest, StageGettersProjectOnePointAndJointSamplesCann
         {2, {}, second_stage_test::postprocessing::MakeGridObservation(1,1,.2,4,atom.GetPosition())}};
     peeling.neighbor_count = 3;
     editor.SetAtomPostFitPeeling(atom, peeling);
-    EXPECT_THROW(editor.SetAtomLocalPeelingSamplingEntries(atom, {}), std::invalid_argument);
-    EXPECT_THROW(editor.SetAtomLocalNeighborCountForPeeling(atom, 99), std::invalid_argument);
     EXPECT_DOUBLE_EQ(*view.GetLocalFittingPeelingRatio(0, 1), .5);
     EXPECT_EQ(view.GetSamplingEntries(rg::FittingStage::Second)[1].response, 2);
     EXPECT_EQ(view.GetNeighborCountForPeeling(), 3);

@@ -1,9 +1,7 @@
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include "core/detail/FirstStageInitialization.hpp"
-#include "core/detail/GroupPotentialFitting.hpp"
 #include "core/detail/joint_component/Numerics.hpp"
 #include "core/detail/gaussian_fit/FittingRanges.hpp"
-#include "core/detail/gaussian_fit/GaussianModelOperations.hpp"
 #include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
 
 #include <cstddef>
@@ -17,7 +15,6 @@
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
-#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
@@ -30,7 +27,6 @@
 namespace rhbm_gem::core {
 namespace {
 constexpr std::size_t kMinimumAlphaRTrainingSampleCount{ 10 };
-constexpr std::size_t kMinimumAlphaGTrainingMemberCount{ 10 };
 rhbm_trainer::RHBMTrainingOptions MakeTrainingOptions(const FitOptions & options)
 {
     rhbm_trainer::RHBMTrainingOptions training_options;
@@ -49,6 +45,16 @@ std::vector<double> CollectSampleResponses(const LocalPotentialSampleList & samp
         response_list.emplace_back(sample.response);
     }
     return response_list;
+}
+
+GaussianModel3DWithUncertainty WithPreservedUncertaintyOffset(
+    const GaussianModel3DWithUncertainty & gaussian,
+    double offset)
+{
+    return {
+        gaussian.GetModel().WithOffset(offset),
+        gaussian.GetStandardDeviationModel()
+    };
 }
 
 std::vector<GroupGaussianMemberResult> DecodeMemberGaussianResults(
@@ -80,7 +86,7 @@ std::vector<GroupGaussianMemberResult> DecodeMemberGaussianResults(
                 result.capital_sigma_posterior_list.at(member_index))
         };
         const auto gaussian_with_offset{
-            detail::WithPreservedUncertaintyOffset(gaussian, offset)
+            WithPreservedUncertaintyOffset(gaussian, offset)
         };
         member_results.emplace_back(GroupGaussianMemberResult{
             gaussian_with_offset,
@@ -114,7 +120,7 @@ GroupGaussianResult DecodeGroupGaussianResult(
         alpha_g,
         mean,
         mdpde,
-        detail::WithPreservedUncertaintyOffset(prior, group_offset),
+        WithPreservedUncertaintyOffset(prior, group_offset),
         DecodeMemberGaussianResults(result, member_offset_list)
     };
 }
@@ -129,37 +135,6 @@ double EvaluateGroupMemberResponseAtDistance(const GroupGaussianMemberResult & m
         distance * distance, member.fixed_charge->width, 2.5).charge;
     return gaussian.SignalAtDistance(distance) + member.fixed_charge->coefficient * charge;
 }
-
-void detail::RunGroupAlphaTraining(ModelObject & model_object, const FitOptions & options)
-{
-    auto analysis{ model_object.EditAnalysis() };
-    const auto analysis_view{ model_object.GetAnalysisView() };
-    const auto group_key_list{ analysis_view.CollectAtomGroupKeys() };
-
-    std::vector<std::vector<GaussianModel3D>> model_group_list;
-    model_group_list.reserve(group_key_list.size());
-    for (const auto group_key : group_key_list)
-    {
-        const auto & group_atom_list{ analysis_view.GetAtomObjectList(group_key) };
-        if (group_atom_list.size() < kMinimumAlphaGTrainingMemberCount) continue;
-        if (group_atom_list.front()->IsMainChainAtom() == false) continue;
-        analysis.EnsureAtomGroupLocalPotentials(group_key);
-
-        std::vector<GaussianModel3D> group_member_models;
-        group_member_models.reserve(group_atom_list.size());
-        for (auto * atom : group_atom_list)
-        {
-            const auto local_view{ AtomLocalPotentialView::For(*atom) };
-            group_member_models.emplace_back(
-                local_view.GetEstimateMDPDE(FittingStage::Second));
-        }
-        model_group_list.emplace_back(std::move(group_member_models));
-    }
-
-    const auto alpha_g{ TrainAlphaG(model_group_list, options) };
-    analysis.InitializeGroupAlpha(alpha_g);
-}
-
 
 void RunFixedOffsetLocalFitting(
     ModelObject & model_object,
@@ -176,6 +151,8 @@ void RunFixedOffsetLocalFitting(
     FittingStage stage,
     const std::vector<AtomObject *> & atom_list)
 {
+    if (stage != FittingStage::First)
+        throw std::invalid_argument("Native local fitting requires FirstStage.");
     const auto selected_atom_size{ atom_list.size() };
     auto analysis{ model_object.EditAnalysis() };
     std::vector<LocalGaussianResult> local_results(selected_atom_size);
@@ -192,10 +169,7 @@ void RunFixedOffsetLocalFitting(
     for (size_t i = 0; i < selected_atom_size; i++)
     {
         auto & atom{ *atom_list[i] };
-        const auto local_view{ AtomLocalPotentialView::For(atom) };
-        local_results[i] = stage == FittingStage::First ? detail::FitFirstStageAtom(atom, options) :
-            EstimateLocalGaussian(local_view.GetSamplingEntries(stage), local_view.GetAlphaR(stage),
-                options, local_view.GetEstimateMDPDE(stage));
+        local_results[i] = detail::FitFirstStageAtom(atom, options);
 
         if (!options.quiet_mode)
         {
@@ -370,61 +344,6 @@ void RunLocalAlphaTraining(
         if (!options.quiet_mode)
         {
             Logger::ProgressPercent(count, atom_list.size());
-        }
-    }
-}
-
-void RunGroupPotentialFitting(ModelObject & model_object, const FitOptions & options)
-{
-    if (options.estimator == PotentialEstimator::JOINT_COMPONENTS)
-    { detail::RunJointGroupPotentialFitting(model_object, options); return; }
-    auto analysis{ model_object.EditAnalysis() };
-    const auto analysis_view{ model_object.GetAnalysisView() };
-    analysis.EnsureSelectedAtomLocalPotentials();
-    if (!options.quiet_mode)
-    {
-        Logger::Log(LogLevel::Info, "Run atom group fitting.");
-    }
-
-    auto group_key_list{ analysis_view.CollectAtomGroupKeys() };
-    auto group_key_size{ group_key_list.size() };
-    size_t key_count{ 0 };
-
-#ifdef USE_OPENMP
-    #pragma omp parallel for num_threads(options.thread_size)
-#endif
-    for (size_t k = 0; k < group_key_size; k++)
-    {
-        auto group_key{ group_key_list[k] };
-        const auto & atom_list{ analysis_view.GetAtomObjectList(group_key) };
-        const auto alpha_g{ analysis_view.GetAtomAlphaG(group_key) };
-        std::vector<GroupGaussianMemberInput> member_list;
-        member_list.reserve(atom_list.size());
-        for (const auto & atom : atom_list)
-        {
-            const auto local_view{ AtomLocalPotentialView::For(*atom) };
-            const auto & local_result{ local_view.GetGaussianResult(FittingStage::Second) };
-            auto sample_entries{ local_view.GetSamplingEntries(FittingStage::Second) };
-            member_list.emplace_back(GroupGaussianMemberInput{
-                std::move(sample_entries),
-                local_result.alpha_r,
-                local_result.mdpde.GetModel()
-            });
-        }
-        const auto result{
-            EstimateGroupGaussian(member_list, alpha_g, options)
-        };
-
-#ifdef USE_OPENMP
-        #pragma omp critical
-#endif
-        {
-            analysis.ApplyAtomGroupGaussianResult(group_key, result);
-            key_count++;
-            if (!options.quiet_mode)
-            {
-                Logger::ProgressBar(key_count, group_key_size);
-            }
         }
     }
 }

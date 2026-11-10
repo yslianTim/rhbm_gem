@@ -120,7 +120,7 @@ void ExpectSelectedAtomsHaveFiniteNonNegativeAlphaR(const rg::ModelObject & mode
     {
         const auto alpha_r{
             rg::AtomLocalPotentialView::For(*atom).GetAlphaR(
-                rg::FittingStage::Second)
+                rg::FittingStage::First)
         };
         EXPECT_TRUE(std::isfinite(alpha_r));
         EXPECT_GE(alpha_r, 0.0);
@@ -128,15 +128,6 @@ void ExpectSelectedAtomsHaveFiniteNonNegativeAlphaR(const rg::ModelObject & mode
 }
 
 } // namespace
-
-TEST(CommandApiPipelineTest, PotentialFittingDefaultsToJointComponents)
-{
-    EXPECT_EQ(static_cast<int>(rgc::PotentialEstimator::TWO_STAGE), 0);
-    EXPECT_EQ(static_cast<int>(rgc::PotentialEstimator::JOINT_COMPONENTS), 1);
-    EXPECT_EQ(rgc::FitOptions{}.estimator, rgc::PotentialEstimator::JOINT_COMPONENTS);
-    EXPECT_EQ(rgc::PotentialAnalysisRequest{}.estimator,
-        rgc::PotentialEstimator::JOINT_COMPONENTS);
-}
 
 TEST(CommandApiPipelineTest, FittingIgnoresSimulationTruthAndResolutionMetadata)
 {
@@ -152,13 +143,13 @@ TEST(CommandApiPipelineTest, FittingIgnoresSimulationTruthAndResolutionMetadata)
     const auto map{FindGeneratedMap(directory.path())};
     const auto manifest{std::filesystem::path(map.string()+".simulation.json")};
     std::vector<double> reference;
+    std::optional<rg::JointAnalysisResult> reference_joint;
     for (int variant = 0; variant < 4; ++variant)
     {
         if (variant == 1) std::filesystem::remove(manifest);
         if (variant == 2) { std::ofstream out(manifest); out << "{broken"; }
         if (variant == 3) { std::ofstream out(manifest); out << R"({"charge_used":99999,"blurring_width":123.456})"; }
         rgc::PotentialAnalysisRequest request;
-        request.estimator = rgc::PotentialEstimator::TWO_STAGE;
         request.database_path = directory.path() / (std::to_string(variant)+".sqlite");
         request.model_file_path = simulation.model_file_path;
         request.map_file_path = map;
@@ -173,19 +164,24 @@ TEST(CommandApiPipelineTest, FittingIgnoresSimulationTruthAndResolutionMetadata)
         rg::DataRepository repository{request.database_path};
         auto model{repository.LoadModel("isolation")};
         ASSERT_NE(model, nullptr);
+        ASSERT_EQ(result.outcome, rgc::CommandOutcome::JointNotConverged);
+        const auto & joint = model->GetAnalysisView().GetJointResult();
+        ASSERT_TRUE(joint);
+        if (!reference_joint) reference_joint = *joint;
+        else ExpectJointNumericalResultPreserved(*reference_joint, *joint);
         std::vector<double> values;
         for (const auto & atom : model->GetAtomList())
         {
             const auto view{rg::AtomLocalPotentialView::For(*atom)};
-            const auto fit{view.GetGaussianResult(rg::FittingStage::Second)};
+            const auto fit{view.GetGaussianResult(rg::FittingStage::First)};
             for (const auto & gaussian : {fit.ols.GetModel(), fit.mdpde.GetModel()})
             {
                 values.push_back(gaussian.GetAmplitude()); values.push_back(gaussian.GetWidth());
                 values.push_back(gaussian.GetOffset());
             }
-            values.push_back(view.GetAlphaR(rg::FittingStage::Second));
-            for (const auto & samples : {view.GetRawSamplingEntries(false), view.GetPeelingSamplingEntries(false)})
-                for (const auto & sample : samples) { values.push_back(sample.point.distance); values.push_back(sample.response); }
+            values.push_back(view.GetAlphaR(rg::FittingStage::First));
+            for (const auto & sample : view.GetRawSamplingEntriesView())
+            { values.push_back(sample.point.distance); values.push_back(sample.response); }
         }
         if (variant == 0) reference = values;
         else EXPECT_EQ(values, reference);
@@ -220,7 +216,6 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
     ASSERT_TRUE(std::filesystem::exists(generated_map_file));
 
     rgc::PotentialAnalysisRequest analysis_request;
-    analysis_request.estimator = rgc::PotentialEstimator::TWO_STAGE;
     analysis_request.database_path = database_path;
     analysis_request.output_dir = analysis_output_dir;
     analysis_request.model_file_path = command_test::TestDataPath("test_model.cif");
@@ -256,96 +251,10 @@ TEST(CommandApiPipelineTest, ExecutesSimulationAnalysisAndDumpPipeline)
     ASSERT_TRUE(dump_result.succeeded);
     EXPECT_GT(CountRegularFiles(dump_output_dir), 0u);
 
-    const auto analysis_view{ model->GetAnalysisView() };
-    const auto group_keys{ analysis_view.CollectAtomGroupKeys() };
-    ASSERT_EQ(group_keys.size(), 1u);
-    const auto group_key{ group_keys.front() };
-    rg::GroupGaussianResult group_result;
-    group_result.alpha_g = analysis_view.GetAtomAlphaG(group_key);
-    group_result.mean = analysis_view.GetAtomGroupMean(group_key);
-    group_result.mdpde = analysis_view.GetAtomGroupMDPDE(group_key);
-    group_result.prior = analysis_view.GetAtomGroupPriorWithUncertainty(group_key);
-    for (const auto * atom : analysis_view.GetAtomObjectList(group_key))
-    {
-        const auto & member{ rg::AtomLocalPotentialView::For(*atom).GetGroupMemberResult() };
-        ASSERT_TRUE(member.has_value());
-        group_result.member_results.emplace_back(*member);
-    }
-    group_result.member_results.front().is_outlier = true;
-    model->EditAnalysis().ApplyAtomGroupGaussianResult(group_key, group_result);
-    repository.SaveModel(*model, "pipeline/model test");
+    ASSERT_TRUE(model->GetAnalysisView().GetJointResult());
+    EXPECT_EQ(analysis_result.outcome, rgc::CommandOutcome::JointNotConverged);
     dump_request.printer_choice = rgc::PrinterType::ATOM_OUTLIER;
-    ASSERT_TRUE(rgc::RunCommand(dump_request).succeeded);
-
-    bool found_outlier_csv{ false };
-    for (const auto & entry : std::filesystem::directory_iterator(dump_output_dir))
-    {
-        if (entry.path().extension() != ".csv"
-            || !entry.path().filename().string().starts_with("atom_outlier_list_")) continue;
-        found_outlier_csv = true;
-        std::ifstream file{ entry.path() };
-        std::string line;
-        ASSERT_TRUE(static_cast<bool>(std::getline(file, line)));
-        EXPECT_EQ(line, "SerialID,Residue,Element,Spot");
-        ASSERT_TRUE(static_cast<bool>(std::getline(file, line)));
-        EXPECT_TRUE(line.starts_with(std::to_string(
-            analysis_view.GetAtomObjectList(group_key).front()->GetSerialID()) + ","));
-    }
-    EXPECT_TRUE(found_outlier_csv);
-
-}
-
-TEST(CommandApiPipelineTest, PotentialAnalysisFixedPoliciesMatchDirectTwoStageWorkflow)
-{
-    command_test::ScopedTempDir directory{ "potential_analysis_fixed_policies" };
-    const auto model_path{ command_test::TestDataPath("test_model.cif") };
-    const auto map_path{ command_test::GenerateMapFile(directory.path() / "maps", model_path) };
-    rgc::PotentialAnalysisRequest request;
-    request.estimator = rgc::PotentialEstimator::TWO_STAGE;
-    request.database_path = directory.path() / "analysis.sqlite";
-    request.model_file_path = model_path;
-    request.map_file_path = map_path;
-    request.saved_key_tag = "fixed-policies";
-    request.verbosity = 0;
-    const auto api_result=rgc::RunCommand(request);
-    ASSERT_TRUE(api_result.succeeded);
-    EXPECT_EQ(api_result.outcome,rgc::CommandOutcome::Completed);
-
-    rg::DataRepository repository{ request.database_path };
-    const auto command_model{ repository.LoadModel(request.saved_key_tag) };
-    ASSERT_NE(command_model, nullptr);
-    ASSERT_EQ(command_model->GetNumberOfAtom(), 1u);
-    ASSERT_EQ(command_model->GetSelectedAtomCount(), 1u);
-    EXPECT_EQ(command_model->GetSelectedAtoms().front()->GetElement(), Element::CARBON);
-
-    auto direct_map{ rg::ReadMap(map_path) };
-    auto direct_model{ rg::ReadModel(model_path) };
-    ASSERT_NE(direct_map, nullptr);
-    ASSERT_NE(direct_model, nullptr);
-    ASSERT_TRUE(direct_map->MapValueArrayNormalization());
-    direct_model->SelectAtoms([](const rg::AtomObject & atom)
-    {
-        return atom.GetElement() != Element::HYDROGEN;
-    });
-    rgc::FitOptions direct_options;
-    direct_options.thread_size = 1;
-    direct_options.estimator = rgc::PotentialEstimator::TWO_STAGE;
-    direct_options.quiet_mode = true;
-    rgc::RunPotentialFittingWorkflow(*direct_map, *direct_model, direct_options);
-
-    const auto & command_atom{ *command_model->FindAtomPtr(1) };
-    const auto & direct_atom{ *direct_model->FindAtomPtr(1) };
-    for (const auto stage : { rg::FittingStage::First, rg::FittingStage::Second })
-    {
-        const auto & command_fit{ rg::AtomLocalPotentialView::For(command_atom).GetFinalModel(stage) };
-        const auto & direct_fit{ rg::AtomLocalPotentialView::For(direct_atom).GetFinalModel(stage) };
-        EXPECT_DOUBLE_EQ(command_fit.GetAmplitude(), direct_fit.GetAmplitude());
-        EXPECT_DOUBLE_EQ(command_fit.GetWidth(), direct_fit.GetWidth());
-        EXPECT_DOUBLE_EQ(command_fit.GetOffset(), direct_fit.GetOffset());
-        EXPECT_DOUBLE_EQ(
-            rg::AtomLocalPotentialView::For(command_atom).GetAlphaR(stage),
-            rg::AtomLocalPotentialView::For(direct_atom).GetAlphaR(stage));
-    }
+    EXPECT_TRUE(rgc::RunCommand(dump_request).succeeded);
 }
 
 TEST(CommandApiPipelineTest, DirectPotentialFittingExcludesHydrogenAndKeepsSelectedSubset)
@@ -364,7 +273,6 @@ TEST(CommandApiPipelineTest, DirectPotentialFittingExcludesHydrogenAndKeepsSelec
     });
 
     rgc::FitOptions options;
-    options.estimator = rgc::PotentialEstimator::TWO_STAGE;
     options.thread_size = 1;
     options.quiet_mode = true;
     rgc::RunPotentialFittingWorkflow(*map, *model, options);
@@ -372,9 +280,14 @@ TEST(CommandApiPipelineTest, DirectPotentialFittingExcludesHydrogenAndKeepsSelec
     ASSERT_EQ(model->GetSelectedAtomCount(), 1u);
     EXPECT_EQ(model->GetSelectedAtoms().front()->GetSerialID(), 1);
     EXPECT_EQ(model->GetSelectedAtoms().front()->GetElement(), Element::CARBON);
-    EXPECT_FALSE(rg::AtomLocalPotentialView::For(*model->FindAtomPtr(2)).IsAvailable());
     EXPECT_FALSE(rg::AtomLocalPotentialView::For(*model->FindAtomPtr(7)).IsAvailable());
-    EXPECT_EQ(rg::AtomLocalPotentialView::For(*model->FindAtomPtr(1)).GetNeighborCountForPeeling(), 5);
+    const auto & joint = model->GetAnalysisView().GetJointResult();
+    ASSERT_TRUE(joint);
+    ASSERT_TRUE(joint->selection_domain);
+    ASSERT_EQ(joint->selection_domain->target_indices.size(), 1u);
+    EXPECT_EQ(joint->atom_ids.at(joint->selection_domain->target_indices.front()), "1");
+    EXPECT_TRUE(joint->initialization.valid);
+    EXPECT_FALSE(rg::IsQualifiedJointAnalysisResult(*joint));
 
     auto hydrogen_only_model{ rg::ReadModel(model_path) };
     ASSERT_NE(hydrogen_only_model, nullptr);
@@ -387,7 +300,7 @@ TEST(CommandApiPipelineTest, DirectPotentialFittingExcludesHydrogenAndKeepsSelec
     EXPECT_EQ(hydrogen_only_model->GetSelectedAtomCount(), 0u);
 }
 
-TEST(CommandApiPipelineTest, JointOptInPersistsSmallSelectionCalibrationFailureAndExportsWithoutSourceInputs)
+TEST(CommandApiPipelineTest, JointPersistsSmallSelectionCalibrationFailureAndExportsWithoutSourceInputs)
 {
     command_test::ScopedTempDir directory{"joint_command_pipeline"};
     rgc::MapSimulationRequest simulation;
@@ -401,7 +314,7 @@ TEST(CommandApiPipelineTest, JointOptInPersistsSmallSelectionCalibrationFailureA
     const auto map_path=FindGeneratedMap(directory.path()); ASSERT_FALSE(map_path.empty());
     rgc::PotentialAnalysisRequest request;
     request.model_file_path=simulation.model_file_path; request.map_file_path=map_path;
-    request.estimator=rgc::PotentialEstimator::JOINT_COMPONENTS; request.selected_chain_ids={"A"};
+    request.selected_chain_ids={"A"};
     request.database_path=directory.path()/"joint.sqlite"; request.saved_key_tag="joint/model";
     request.verbosity=0;
     const auto api_result=rgc::RunCommand(request);
@@ -483,7 +396,7 @@ TEST(CommandApiPipelineTest, JointOptInPersistsSmallSelectionCalibrationFailureA
         ASSERT_TRUE(sparse_model->GetAnalysisView().GetJointResult());
         EXPECT_FALSE(sparse_model->GetAnalysisView().GetJointResult()->initialization.valid);
         const auto sparse_cli_database=directory.path()/"sparse-cli.sqlite";
-        const int sparse_cli_status=RunCli({"RHBM-GEM","potential_analysis","--estimator","joint-components",
+        const int sparse_cli_status=RunCli({"RHBM-GEM","potential_analysis",
             "--model",request.model_file_path.string(),"--map",sparse_path.string(),
             "--database",sparse_cli_database.string(),"--save-key","sparse-cli","--select-chain","A",
             "--verbose","0"});
@@ -502,7 +415,7 @@ TEST(CommandApiPipelineTest, JointOptInPersistsSmallSelectionCalibrationFailureA
     }
     const auto cli_database=directory.path()/"cli.sqlite";
     const auto cli_output=directory.path()/"cli-output";
-    const int cli_status=RunCli({"RHBM-GEM","potential_analysis","--estimator","joint-components",
+    const int cli_status=RunCli({"RHBM-GEM","potential_analysis",
         "--model",request.model_file_path.string(),"--map",map_path.string(),
         "--database",cli_database.string(),"--save-key","cli-joint","--select-chain","A",
         "--folder",cli_output.string(),"--verbose","0"});
@@ -608,7 +521,6 @@ TEST(CommandApiPipelineTest, JointFailureAndUnavailableOutcomesPersistThroughApi
     rgc::PotentialAnalysisRequest request;
     request.model_file_path=model_path;
     request.map_file_path=map_path;
-    request.estimator=rgc::PotentialEstimator::JOINT_COMPONENTS;
     request.selected_chain_ids={"A"};
     request.verbosity=0;
 
@@ -668,7 +580,7 @@ TEST(CommandApiPipelineTest, JointFailureAndUnavailableOutcomesPersistThroughApi
         request.database_path=directory.path()/(request.saved_key_tag+".sqlite");
         {
             ScopedJointPostprocessingSnapshotHook hook{failure.hook};
-            EXPECT_EQ(RunCli({"RHBM-GEM","potential_analysis","--estimator","joint-components",
+            EXPECT_EQ(RunCli({"RHBM-GEM","potential_analysis",
                 "--model",model_path.string(),"--map",map_path.string(),
                 "--database",request.database_path.string(),"--save-key",request.saved_key_tag,
                 "--select-chain","A","--verbose","0"}),failure.cli_exit);
@@ -719,7 +631,7 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
     const auto database_path=directory.path()/"bounded.sqlite";
     constexpr const char * key="bounded-joint";
     testing::internal::CaptureStdout();
-    const auto cli_status=RunCli({"RHBM-GEM","potential_analysis","--estimator","joint-components",
+    const auto cli_status=RunCli({"RHBM-GEM","potential_analysis",
         "--model",model_path.string(),"--map",map_path.string(),
         "--database",database_path.string(),"--save-key",key,
         "--select-chain","A","--verbose","4"});
@@ -909,7 +821,7 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
     const auto small_database_path=directory.path()/"small-bounded.sqlite";
     constexpr const char * small_key="small-bounded-joint";
     int small_cli_status{};
-    small_cli_status=RunCli({"RHBM-GEM","potential_analysis","--estimator","joint-components",
+    small_cli_status=RunCli({"RHBM-GEM","potential_analysis",
         "--model",template_path.string(),"--map",small_map_path.string(),
         "--database",small_database_path.string(),"--save-key",small_key,
         "--select-chain","A","--verbose","0"});

@@ -1,6 +1,5 @@
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include "core/detail/joint_component/JointComponentEstimator.hpp"
-#include <rhbm_gem/core/MapSampler.hpp>
 #include "core/detail/joint_component/JointCliProgressReporter.hpp"
 #include "core/detail/FirstStageInitialization.hpp"
 #include "core/detail/FittingWorkset.hpp"
@@ -12,7 +11,6 @@
 #include "core/detail/joint_component/ResourceWork.hpp"
 #include "data/detail/PostJointLocalValidation.hpp"
 #include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
-#include "core/detail/second_stage/IterationProcess.hpp"
 #include "data/detail/JointStageAdapter.hpp"
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
@@ -182,34 +180,6 @@ JointPostprocessingSnapshotHook & JointPostprocessingSnapshotHookForTesting()
     return hook;
 }
 #endif
-
-void RunTwoStageFromPreparedSamples(
-    ModelObject & model, const std::vector<AtomObject *> & atoms, const FitOptions & options)
-{
-    model.EditAnalysis().InitializeLocalFittingSeedModels();
-    RunBatchFirstStageFromPreparedSamples(model, atoms, options);
-    RunSecondStageIterations(model, options);
-
-    if (!options.quiet_mode) Logger::Log(LogLevel::Info, BuildSecondStageSpotSummary(model));
-    RunGroupAlphaTraining(model, options);
-    RunGroupPotentialFitting(model, options);
-}
-
-void RunTwoStageFromPreparedSamples(ModelObject & model, const FitOptions & options)
-{
-    const auto workset = MakeTwoStageFittingWorkset(model);
-    RunTwoStageFromPreparedSamples(model, workset.contributors, options);
-}
-
-void RunTwoStageWorkflow(MapObject & map, ModelObject & model, const FitOptions & options)
-{
-    model.EditAnalysis().InitializeFromSelection();
-    const auto workset = MakeTwoStageFittingWorkset(model);
-    const auto first_stage_atoms = CollectFirstStageAtoms(workset);
-    RunPotentialSamplingWorkflow(map, model, first_stage_atoms, options.thread_size,
-        " Sampling", options.quiet_mode, options.first_stage_sampling_method);
-    RunTwoStageFromPreparedSamples(model, workset.contributors, options);
-}
 
 void RunJointComponentWorkflow(
     MapObject & map, ModelObject & model, const FitOptions & options,
@@ -410,7 +380,7 @@ void RunJointPostprocessing(
     postprocessing_metrics.estimated_peak_postprocessing_payload_bytes +=
         joint_targets.capacity() * sizeof(const AtomObject *);
     postprocessing_metrics.rss_after_local_bytes = joint_component::CurrentRssBytes();
-    if (!options.quiet_mode) LogJointInfo(BuildSecondStageSpotSummary(model));
+    if (!options.quiet_mode) LogJointInfo(BuildJointTargetSpotSummary(model));
     RunJointGroupPotentialFitting(model, options, &postprocessing_metrics);
     postprocessing_metrics.rss_after_group_bytes = joint_component::CurrentRssBytes();
     if (!options.quiet_mode)
@@ -461,16 +431,7 @@ void RunPotentialFittingWorkflow(MapObject & map, ModelObject & model, const Fit
     if (model.GetSelectedAtoms().empty())
         throw std::invalid_argument("Potential fitting requires at least one selected non-hydrogen target.");
 
-    switch (options.estimator)
-    {
-    case PotentialEstimator::TWO_STAGE:
-        detail::RunTwoStageWorkflow(map, model, options);
-        return;
-    case PotentialEstimator::JOINT_COMPONENTS:
-        detail::RunJointComponentWorkflow(map, model, options);
-        return;
-    }
-    throw std::invalid_argument("Unsupported potential estimator.");
+    detail::RunJointComponentWorkflow(map, model, options);
 }
 
 } // namespace rhbm_gem::core

@@ -91,7 +91,6 @@ void NormalizeAndValidateRequest(
     runner.RequireFiniteNonNegativeScalar(
         request, &PotentialAnalysisRequest::simulated_map_resolution);
     runner.RequireNonEmptyList(request, &PotentialAnalysisRequest::saved_key_tag);
-    runner.RequireEnum(request, &PotentialAnalysisRequest::estimator);
     std::vector<std::string> selected_chain_ids;
     std::unordered_set<std::string> unique_chain_ids;
     bool has_empty_chain_id{};
@@ -113,14 +112,11 @@ void NormalizeAndValidateRequest(
         runner.AddFieldValidationError(&PotentialAnalysisRequest::selected_chain_ids,
             "--select-chain cannot contain an empty chain ID.");
     }
-    if (request.estimator==PotentialEstimator::JOINT_COMPONENTS)
+    if (request.job_count > 4)
     {
-        if (request.job_count>4)
-        {
-            request.job_count=4;
-            runner.AddFieldNormalizationWarning(&PotentialAnalysisRequest::job_count,
-                "Joint initialization is limited to four workers.");
-        }
+        request.job_count = 4;
+        runner.AddFieldNormalizationWarning(&PotentialAnalysisRequest::job_count,
+            "Joint initialization is limited to four workers.");
     }
 }
 
@@ -130,14 +126,13 @@ bool ExecutePreparedRequest(
     CommandOutcome & outcome)
 {
     JointAnalysisMetadata metadata{ std::move(inputs.metadata) };
-    const bool joint=request.estimator==PotentialEstimator::JOINT_COMPONENTS;
     auto model_object{ std::move(inputs.model_object) };
     std::unique_ptr<MapObject> map_object;
     try
     {
         map_object = ReadMap(request.map_file_path);
-        if (joint && (FileSha256(request.model_file_path)!=*metadata.model_sha256 ||
-                      FileSha256(request.map_file_path)!=*metadata.map_sha256))
+        if (FileSha256(request.model_file_path)!=*metadata.model_sha256 ||
+            FileSha256(request.map_file_path)!=*metadata.map_sha256)
             throw std::runtime_error("Model/map file changed while preparing joint input.");
     }
     catch (const std::exception & e)
@@ -194,9 +189,7 @@ bool ExecutePreparedRequest(
     Logger::Log(LogLevel::Info, BuildAtomCountingSummary(*model_object));
 
     FitOptions options;
-    options.thread_size = joint ? 1 : request.job_count;
-    options.joint_initialization_thread_size = joint ? request.job_count : 1;
-    options.estimator = request.estimator;
+    options.joint_initialization_thread_size = request.job_count;
     try
     {
         RunPotentialFittingWorkflow(*map_object, *model_object, options);
@@ -209,7 +202,6 @@ bool ExecutePreparedRequest(
     }
 
     Logger::Log(LogLevel::Info, BuildAtomGroupingSummary(*model_object));
-    if (joint)
     {
         const auto & fit=*model_object->GetAnalysisView().GetJointResult();
         metadata.model_path=request.model_file_path.string(); metadata.map_path=request.map_file_path.string();
@@ -219,52 +211,48 @@ bool ExecutePreparedRequest(
         metadata.software=fit.metadata.software;
         metadata.solver=fit.metadata.solver;
         model_object->EditAnalysis().UpdateJointMetadata(std::move(metadata));
-
     }
 
     DataRepository repository{ request.database_path };
     repository.SaveModel(*model_object, request.saved_key_tag);
-    if (joint)
+    const auto & fit=*model_object->GetAnalysisView().GetJointResult();
+    std::size_t available=0;
+    for (const auto & component:fit.components)
     {
-        const auto & fit=*model_object->GetAnalysisView().GetJointResult();
-        std::size_t available=0;
-        for (const auto & component:fit.components)
-        {
-            available+=component.state.has_value();
-            Logger::Log(LogLevel::Info,"Joint component "+component.id+": stop="+component.stop_reason+
-                ", runtime_convergence="+std::string(joint_result_io::StatusText(component.runtime_convergence))+
-                ", target_runtime_convergence="+std::string(joint_result_io::StatusText(component.target_runtime_convergence)));
-        }
-        const auto targets=fit.selection_domain->target_indices.size();
-        Logger::Log(LogLevel::Info,"Joint targets="+std::to_string(targets)+", halo="+
-            std::to_string(fit.atom_ids.size()-targets));
-        Logger::Log(LogLevel::Info,"Joint result saved: search_completed="+std::to_string(fit.search_completed)+
-            ", available_components="+std::to_string(available)+"/"+std::to_string(fit.components.size())+
-            ", runtime_convergence="+std::string(joint_result_io::StatusText(fit.runtime_convergence))+
-            ", target_runtime_convergence="+std::string(joint_result_io::StatusText(fit.target_runtime_convergence)));
-        if (!fit.initialization.valid) Logger::Log(LogLevel::Warning,"Joint initialization unavailable: "+fit.initialization.reason);
-        if (!fit.initialization.valid)
-        {
-            outcome = CommandOutcome::JointInitializationFailed;
-            Logger::Log(LogLevel::Warning,"Joint initialization failed; diagnostic result was saved (CLI exit 2).");
-        }
-        else if (!IsQualifiedJointAnalysisResult(fit))
-        {
-            outcome = CommandOutcome::JointNotConverged;
-            Logger::Log(LogLevel::Warning,"Joint fitting did not converge; diagnostic result was saved (CLI exit 3).");
-        }
-        else if (HasUnavailableJointHaloMedianReconstruction(fit))
-        {
-            outcome = CommandOutcome::JointDownstreamUnavailable;
-            Logger::Log(LogLevel::Warning,
-                "Joint fitting qualified but Halo median reconstruction was unavailable; "
-                "diagnostic result was saved (CLI exit 4).");
-        }
-        else
-        {
-            outcome = CommandOutcome::JointQualified;
-            Logger::Log(LogLevel::Info,"Joint fitting qualified.");
-        }
+        available+=component.state.has_value();
+        Logger::Log(LogLevel::Info,"Joint component "+component.id+": stop="+component.stop_reason+
+            ", runtime_convergence="+std::string(joint_result_io::StatusText(component.runtime_convergence))+
+            ", target_runtime_convergence="+std::string(joint_result_io::StatusText(component.target_runtime_convergence)));
+    }
+    const auto targets=fit.selection_domain->target_indices.size();
+    Logger::Log(LogLevel::Info,"Joint targets="+std::to_string(targets)+", halo="+
+        std::to_string(fit.atom_ids.size()-targets));
+    Logger::Log(LogLevel::Info,"Joint result saved: search_completed="+std::to_string(fit.search_completed)+
+        ", available_components="+std::to_string(available)+"/"+std::to_string(fit.components.size())+
+        ", runtime_convergence="+std::string(joint_result_io::StatusText(fit.runtime_convergence))+
+        ", target_runtime_convergence="+std::string(joint_result_io::StatusText(fit.target_runtime_convergence)));
+    if (!fit.initialization.valid) Logger::Log(LogLevel::Warning,"Joint initialization unavailable: "+fit.initialization.reason);
+    if (!fit.initialization.valid)
+    {
+        outcome = CommandOutcome::JointInitializationFailed;
+        Logger::Log(LogLevel::Warning,"Joint initialization failed; diagnostic result was saved (CLI exit 2).");
+    }
+    else if (!IsQualifiedJointAnalysisResult(fit))
+    {
+        outcome = CommandOutcome::JointNotConverged;
+        Logger::Log(LogLevel::Warning,"Joint fitting did not converge; diagnostic result was saved (CLI exit 3).");
+    }
+    else if (HasUnavailableJointHaloMedianReconstruction(fit))
+    {
+        outcome = CommandOutcome::JointDownstreamUnavailable;
+        Logger::Log(LogLevel::Warning,
+            "Joint fitting qualified but Halo median reconstruction was unavailable; "
+            "diagnostic result was saved (CLI exit 4).");
+    }
+    else
+    {
+        outcome = CommandOutcome::JointQualified;
+        Logger::Log(LogLevel::Info,"Joint fitting qualified.");
     }
     model_object->EditAnalysis().ClearTransientFitStates();
     return true;
@@ -283,14 +271,10 @@ void ValidatePreparedRequest(
         return;
     }
 
-    const bool joint{ request.estimator == PotentialEstimator::JOINT_COMPONENTS };
     try
     {
-        if (joint)
-        {
-            inputs.metadata.model_sha256 = FileSha256(request.model_file_path);
-            inputs.metadata.map_sha256 = FileSha256(request.map_file_path);
-        }
+        inputs.metadata.model_sha256 = FileSha256(request.model_file_path);
+        inputs.metadata.map_sha256 = FileSha256(request.map_file_path);
         inputs.model_object = ReadModel(request.model_file_path);
     }
     catch (const std::exception & error)

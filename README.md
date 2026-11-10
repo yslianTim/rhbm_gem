@@ -27,14 +27,13 @@ For the full documentation map, start at [`docs/README.md`](/docs/README.md).
 
 Browse runnable examples and helper assets in [`resources/README.md`](/resources/README.md).
 
-## Joint component workflow (default)
+## Joint component workflow
 
-The default estimator is `joint-components`; use `--estimator two-stage` to
-select the two-stage workflow. New results use **SQLite v21**. Existing
-databases must use the current schema; older schemas are rejected.
+Potential Analysis uses the Joint Component Estimator (JCE). Results use
+**SQLite v22**. The repository accepts only the current database schema.
 
 ```sh
-RHBM-GEM potential_analysis --estimator joint-components -a model.cif -m map.mrc -d joint.sqlite -k example
+RHBM-GEM potential_analysis -a model.cif -m map.mrc -d joint.sqlite -k example
 RHBM-GEM result_dump --printer joint -d joint.sqlite -k example -o results
 ```
 
@@ -45,15 +44,13 @@ failure, an unqualified fit, unavailable Halo reconstruction, and a qualified
 fit. CLI exit codes are `1` for execution or saving failure, `2` when Joint
 initialization failed after saving diagnostics, `3` when Joint fitting
 did not qualify after saving diagnostics, `4` when Joint qualified but Halo
-reconstruction was unavailable, and `0` for a qualified Joint fit or completed
-Two-Stage command. See the
+reconstruction was unavailable, and `0` for a qualified Joint fit. See the
 [joint workflow contract](docs/developer/commands/potential_analysis.md#joint-component-workflow)
-for options and JSON/CSV output. Joint endpoints populate the
-common Second stage. Plots, comparisons, Gaussian/outlier dumps and UMAP use the
+for options and JSON/CSV output. The Second stage stores Joint endpoints. Plots, comparisons, Gaussian/outlier dumps and UMAP use the
 available saved data; missing uncertainty or peeling coverage is never replaced
 with zero. Qualified Target A/tau/C points provide geometry-local kNN-4 Halo
 medians for downstream peeling. The current formats are Joint JSON schema 24
-and Stage JSON version 5. See [Joint Stage Integration](docs/developer/joint-stage-integration.md).
+and Stage JSON version 6. See [Joint Stage Integration](docs/developer/joint-stage-integration.md).
 
 ## License, Citation, and Third-Party Notices
 

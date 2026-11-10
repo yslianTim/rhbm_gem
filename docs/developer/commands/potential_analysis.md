@@ -30,7 +30,6 @@ Concrete implementation:
 | `job_count` | `-j, --jobs` |
 | `verbosity` | `-v, --verbose` |
 | `output_dir` | `-o, --folder` |
-| `estimator` | `--estimator` |
 | `database_path` | `-d, --database` |
 | `model_file_path` | `-a, --model` |
 | `map_file_path` | `-m, --map` |
@@ -39,11 +38,8 @@ Concrete implementation:
 | `simulated_map_resolution` | `-r, --sim-resolution` |
 | `saved_key_tag` | `-k, --save-key` |
 
-The request catalog supplies the CLI and Python bindings. All surfaces default
-to Joint Components (`PotentialEstimator::JOINT_COMPONENTS`), with
-`two-stage` (`PotentialEstimator::TWO_STAGE`) available explicitly. Joint uses
-the job count for FirstStage, capped at four workers. Two-Stage passes it
-through as its fitting thread count.
+The CLI, C++, and Python use Joint Components. The job count controls FirstStage
+initialization and is capped at four workers.
 
 ## Execution Contract
 
@@ -54,8 +50,7 @@ Expected result contract:
 - `result.succeeded == true` when execution completes and saves its result,
   including a Joint diagnostic result whose fitting did not qualify
 - `result.succeeded == false` when normalization, validation, preflight, or execution stops the command
-- `result.outcome` is `Completed` for ordinary command completion,
-  `JointInitializationFailed` when the saved initialization is invalid,
+- `result.outcome` is `JointInitializationFailed` when the saved initialization is invalid,
   `JointNotConverged` when fitting did not qualify (including unavailable
   calibration after valid initialization), `JointDownstreamUnavailable` when
   Joint qualified but Halo reconstruction is unavailable, or `JointQualified`
@@ -66,7 +61,7 @@ The CLI uses the following exit codes:
 
 | Exit | Meaning |
 | ---: | --- |
-| 0 | Qualified Joint result or ordinary command success |
+| 0 | Qualified Joint result |
 | 1 | Execution or persistence failure |
 | 2 | Joint initialization failure was saved |
 | 3 | Joint numerical non-convergence was saved |
@@ -93,7 +88,8 @@ The anonymous-namespace `NormalizeAndValidateRequest(...)` phase handles field v
 
 `ExecutePreparedRequest(...)`:
 
-- reuses the validated model and loads the map through `ReadMap(...)`
+- reuses the validated model, loads the map through `ReadMap(...)`, and verifies
+  both input files against their preparation fingerprints
 - optionally switches the model object into simulation mode
 - skips map normalization for simulation requests and always attempts it for
   other requests
@@ -103,10 +99,12 @@ The anonymous-namespace `NormalizeAndValidateRequest(...)` phase handles field v
   Fibonacci points
 - excludes hydrogen from all potential-fitting targets, neighbor masks and
   contributor sets
-- applies the fixed Second Stage refinement and final-polish policies
+- calibrates the Target width bound and runs the Joint solver and endpoint checks
+- reconstructs Halo profiles and runs Original-grid peeling, Post-Joint Local
+  fitting, and Group Fitting when downstream inputs qualify
 - persists the prepared model through `DataRepository::SaveModel(...)`
 - writes to the repository using `request.saved_key_tag` as the persisted key
-- clears sampled local-potential distance/value buffers after persistence to keep runtime state lean
+- clears transient fit states after persistence
 - returns a numerical `CommandOutcome` after persistence so the API and CLI
   distinguish saved diagnostics from a qualified Joint result
 
@@ -126,14 +124,14 @@ IDs are deduplicated; token whitespace is trimmed.
 Direct C++ calls to `RunPotentialFittingWorkflow` remove hydrogen only from the
 currently selected targets, preserving the caller's non-hydrogen subset. They
 do not select previously unselected atoms, and fail clearly if no non-hydrogen
-target remains. Hydrogen neighbors do not affect sample masks, Second Stage
-neighbor counts, frozen background or peeling.
+target remains. Hydrogen is excluded from the sample masks, Joint support,
+and Original-grid peeling contributor set.
 
 C++ callers can assign `request.selected_chain_ids = {"A", "B", "C"}`;
 Python callers can assign `request.selected_chain_ids = ["A", "B", "C"]`.
 An empty vector or list selects every non-hydrogen atom in the model.
 
-For Joint Components, selected chains define targets and their voxel
+Selected chains define Targets and their voxel
 observations. Other non-hydrogen atoms remain eligible as halo contributors
 when their support overlaps those observations. Chain selection does not crop
 the contributor model or change the target/halo distinction.
@@ -152,31 +150,21 @@ RHBM-GEM potential_analysis \
 
 # One target chain
 RHBM-GEM potential_analysis \
-    --estimator joint-components \
     --model model.cif \
     --map map.mrc \
     --select-chain A
 
 # Several target chains
 RHBM-GEM potential_analysis \
-    --estimator joint-components \
     --model model.cif \
     --map map.mrc \
     --select-chain A,B,C
-
-# Explicitly select the Two-Stage estimator
-RHBM-GEM potential_analysis \
-    --estimator two-stage \
-    --model model.cif \
-    --map map.mrc
 ```
 
 ## Fixed fitting policies
 
-[Production Fitting](../production-fitting.md) owns the shared per-atom
-MDPDE and failed-only refinement contract.
-[Two-Stage local fitting](../second-stage-local-fitting.md) owns its outer
-iteration, signal and tail ranges, and final dependency polish.
+[Production Fitting](../production-fitting.md) describes the workflow from
+FirstStage initialization through downstream fitting.
 
 ## Tests to Update When Behavior Changes
 
@@ -195,11 +183,10 @@ for downstream data and result availability.
 
 ```cpp
 rhbm_gem::core::PotentialAnalysisRequest request;
-request.estimator = rhbm_gem::core::PotentialEstimator::JOINT_COMPONENTS;
 request.model_file_path = "model.cif";
 request.map_file_path = "map.mrc";
 request.selected_chain_ids = {"A"};
-request.database_path = "joint.sqlite"; // SQLite schema v21
+request.database_path = "joint.sqlite"; // SQLite schema v22
 request.saved_key_tag = "example";
 auto completed = rhbm_gem::core::RunCommand(request);
 ```

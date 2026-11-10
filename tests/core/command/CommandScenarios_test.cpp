@@ -164,7 +164,6 @@ PotentialAnalysisRequest MakeNormalizationScenarioRequest(
     const std::filesystem::path & map_path)
 {
     PotentialAnalysisRequest request{};
-    request.estimator = PotentialEstimator::TWO_STAGE;
     request.database_path = temp_dir / "analysis.sqlite";
     request.model_file_path = command_test::TestDataPath("test_model.cif");
     request.map_file_path = map_path;
@@ -204,7 +203,6 @@ TEST(CommandScenariosTest, PotentialAnalysisDefaultsToAllChains)
     PotentialAnalysisRequest request{};
 
     EXPECT_TRUE(request.selected_chain_ids.empty());
-    EXPECT_EQ(request.estimator, PotentialEstimator::JOINT_COMPONENTS);
 }
 
 TEST(CommandScenariosTest, MapSimulationDefaultsToIncludingHydrogen)
@@ -255,13 +253,14 @@ TEST(CommandScenariosTest, PotentialAnalysisSelectsAllChainsAndExcludesHydrogen)
 
     PotentialAnalysisRequest include_request{};
     include_request.output_dir = temp_dir.path() / "analysis_output";
-    include_request.estimator = PotentialEstimator::TWO_STAGE;
     include_request.database_path = database_path;
     include_request.model_file_path = model_path;
     include_request.map_file_path = map_path;
     include_request.saved_key_tag = "all_chains";
     include_request.verbosity = 0;
-    ASSERT_TRUE(RunCommand(include_request).succeeded);
+    const auto result = RunCommand(include_request);
+    ASSERT_TRUE(result.succeeded);
+    EXPECT_EQ(result.outcome, CommandOutcome::JointNotConverged);
 
     DataRepository repository{ database_path };
     auto model{ repository.LoadModel("all_chains") };
@@ -288,13 +287,14 @@ TEST(CommandScenariosTest, PotentialAnalysisSelectsBackboneAndSideChainAtoms)
 
     PotentialAnalysisRequest all_atom_request{};
     all_atom_request.output_dir = temp_dir.path() / "analysis_output";
-    all_atom_request.estimator = PotentialEstimator::TWO_STAGE;
     all_atom_request.database_path = database_path;
     all_atom_request.model_file_path = model_path;
     all_atom_request.map_file_path = map_path;
     all_atom_request.saved_key_tag = "all_atoms";
     all_atom_request.verbosity = 0;
-    ASSERT_TRUE(RunCommand(all_atom_request).succeeded);
+    const auto result = RunCommand(all_atom_request);
+    ASSERT_TRUE(result.succeeded);
+    EXPECT_EQ(result.outcome, CommandOutcome::JointNotConverged);
 
     DataRepository repository{ database_path };
     auto all_atom_model{ repository.LoadModel("all_atoms") };
@@ -342,11 +342,10 @@ TEST(CommandScenariosTest, PotentialAnalysisCliSelectsCommaSeparatedTargetChains
     const auto database_path{ temp_dir.path() / "analysis.sqlite" };
     const auto result{ RunCli({
         "RHBM-GEM", "potential_analysis",
-        "--estimator", "two-stage",
         "--model", model_path.string(), "--map", map_path.string(),
         "--database", database_path.string(), "--folder", (temp_dir.path() / "out").string(),
         "--save-key", "cli", "--select-chain", "C, A", "--verbose", "0" }) };
-    ASSERT_EQ(result, 0);
+    ASSERT_EQ(result, 3);
 
     DataRepository repository{ database_path };
     const auto model{ repository.LoadModel("cli") };
@@ -364,7 +363,6 @@ TEST(CommandScenariosTest, PotentialAnalysisChainSelectionNormalizesAndKeepsMode
     };
     const auto database_path{ temp_dir.path() / "analysis.sqlite" };
     PotentialAnalysisRequest request{};
-    request.estimator = PotentialEstimator::TWO_STAGE;
     request.database_path = database_path;
     request.model_file_path = model_path;
     request.map_file_path = map_path;
@@ -459,15 +457,16 @@ TEST(CommandScenariosTest, PotentialAnalysisNoLongerAcceptsRemovedOptions)
         + testing::internal::GetCapturedStderr() };
     ASSERT_EQ(help_result, 0);
     EXPECT_NE(help_output.find("--select-chain"), std::string::npos);
-    EXPECT_NE(help_output.find("joint-components (default)"), std::string::npos);
     for (const auto * option : {
-        "--map-normalization", "--exclude-hydrogen", "--only-backbone", "--asymmetry",
+        "--estimator", "--map-normalization", "--exclude-hydrogen", "--only-backbone", "--asymmetry",
         "--sampling-method", "--second-stage-failed-only-refinement" })
     {
         EXPECT_EQ(help_output.find(option), std::string::npos) << option;
     }
 
     const std::vector<std::pair<std::string, std::string>> removed_options{
+        { "--estimator", "two-stage" },
+        { "--estimator", "joint-components" },
         { "--map-normalization", "false" },
         { "--exclude-hydrogen", "true" },
         { "--only-backbone", "true" },

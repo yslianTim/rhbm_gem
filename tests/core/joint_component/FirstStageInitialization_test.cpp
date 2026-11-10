@@ -173,7 +173,7 @@ TEST(FirstStageInitializationTest, ExactRawSamplingAcrossWorkersAndCrowdedSelect
         auto model=second_stage_test::FirstStageSyntheticModel(separation);
         auto map=second_stage_test::FirstStageSyntheticMap(*model,.4);
         model->EditAnalysis().InitializeFromSelection();
-        const auto workset=d::MakeTwoStageFittingWorkset(*model);
+        const auto workset=d::MakeJointFittingWorkset(*model,BuildPureHaloSupportExclusionProblem(*map,*model));
         std::vector<LocalPotentialSampleList> serial;
         RunPotentialSamplingWorkflow(*map,*model,workset.contributors,1,{},true);
         for(const auto * atom:workset.contributors)

@@ -37,8 +37,6 @@ public:
 #ifdef HAVE_ROOT
     std::unique_ptr<::TH1D> CreateComponentCountHistogram(const std::vector<GroupKey> & group_key_list) const;
     std::unique_ptr<::TH1D> CreateAtomGausEstimateHistogram(GroupKey group_key, int par_id) const;
-    std::unique_ptr<::TH1D> CreateLinearModelDataHistogram(int dimension_id, bool apply_selection=true, bool use_peeling_sampling_entries=false) const;
-    std::unique_ptr<::TH2D> CreateDistanceToMapValueHistogram(int x_bin_size=20, int y_bin_size=1000, bool apply_selection=true, bool use_peeling_sampling_entries=false) const;
     std::vector<std::unique_ptr<::TH1D>> CreateMainChainAtomGausRankHistogram(int par_id, int & chain_size, Residue residue=Residue::UNK, size_t extra_id=0, std::vector<Residue> veto_residues_list={});
     std::unordered_map<std::string, std::unique_ptr<::TGraphErrors>> CreateAtomMapValueToSequenceIDGraphMap(size_t main_chain_element_id, Residue residue=Residue::UNK);
     std::unordered_map<std::string, std::unique_ptr<::TGraphErrors>> CreateAtomGausEstimateToSequenceIDGraphMap(size_t main_chain_element_id, const int par_id=0, Residue residue=Residue::UNK);
@@ -49,7 +47,6 @@ public:
     std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateScatterGraph(const std::vector<GroupKey> & group_key_list, int par1_id=0, int par2_id=1);
     std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateScatterGraph(Element element, FittingStage stage, int choice=0);
     std::unique_ptr<::TGraphErrors> CreateDistanceToMapValueGraph(bool apply_selection=true, bool use_peeling_sampling_entries=false);
-    std::unique_ptr<::TGraphErrors> CreateLinearModelDistanceToMapValueGraph(bool apply_selection=true, bool use_peeling_sampling_entries=false);
     std::unique_ptr<::TGraphErrors> CreateBinnedDistanceToRawMapValueGraph(int bin_size=20, double x_min=0.0, double x_max=2.0);
     std::unique_ptr<::TGraphErrors> CreateBinnedDistanceToPeelingMapValueGraph(int bin_size=20, double x_min=0.0, double x_max=2.0);
     std::unique_ptr<::TGraphErrors> CreateBinnedDistanceToNeighborMapValueGraph(int bin_size=20, double x_min=0.0, double x_max=2.0);
@@ -69,9 +66,6 @@ public:
     static std::optional<GaussianModel3DWithUncertainty> ComputeComponentAtomAveragePrior(
         const ModelAnalysisView & model_view,
         AtomKey atom_key);
-    std::unique_ptr<::TF1> CreateAtomLocalLinearModelFunctionOLS() const;
-    std::unique_ptr<::TF1> CreateAtomLocalLinearModelFunctionMDPDE() const;
-    std::unique_ptr<::TF1> CreateAtomLocalGausFunctionOLS() const;
     std::unique_ptr<::TF1> CreateAtomLocalGausFunctionFinal() const;
     std::unique_ptr<::TF1> CreateAtomGroupGausFunctionMean(GroupKey group_key) const;
     std::unique_ptr<::TF1> CreateAtomGroupGausFunctionPrior(GroupKey group_key) const;

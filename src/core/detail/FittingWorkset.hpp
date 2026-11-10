@@ -18,7 +18,6 @@ struct FittingWorkset
     std::vector<bool> target_mask;
 };
 
-FittingWorkset MakeTwoStageFittingWorkset(ModelObject &);
 FittingWorkset MakeJointFittingWorkset(ModelObject &, const JointProblem &);
 std::vector<AtomObject *> CollectFirstStageAtoms(const FittingWorkset &);
 

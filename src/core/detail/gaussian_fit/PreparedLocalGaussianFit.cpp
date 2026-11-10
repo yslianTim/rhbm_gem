@@ -1,5 +1,4 @@
 #include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
-#include "utils/hrl/MDPDEEndpointRefinement.hpp"
 #include <rhbm_gem/utils/hrl/RHBMTrainer.hpp>
 
 #include <cmath>
@@ -136,7 +135,7 @@ RHBMMemberDataset PreparedLocalGaussianDesign::BuildDataset(
     const std::vector<double> & responses, const GaussianModel3D & offset_model) const
 {
     auto dataset=BuildSelectedDataset(responses,offset_model);
-    // Retain the existing FirstStage/Two-Stage empty-response sentinel contract.
+    // Retain the FirstStage empty-response sentinel contract.
     if (dataset.y.size()==0)
     {
         dataset.X=RHBMDesignMatrix::Zero(1,2);
@@ -149,18 +148,10 @@ LocalGaussianResult PreparedLocalGaussianDesign::Estimate(
     const std::vector<double> & sample_response_list,
     double alpha_r,
     int thread_size,
-    const GaussianModel3D & offset_model,
-    bool enable_failed_only_refinement) const
+    const GaussianModel3D & offset_model) const
 {
     const auto dataset=BuildDataset(sample_response_list,offset_model);
-    auto result=EstimateLocalGaussianDataset(dataset,alpha_r,thread_size,offset_model.GetOffset());
-    if (enable_failed_only_refinement)
-    {
-        const auto refined=mdpde_detail::ApplyFailedOnlyRefinement(dataset,alpha_r,
-            RHBMExecutionOptions{.thread_size=thread_size},*result.fit_result);
-        return DecodeLocalGaussianResult(alpha_r,refined,offset_model.GetOffset());
-    }
-    return result;
+    return EstimateLocalGaussianDataset(dataset,alpha_r,thread_size,offset_model.GetOffset());
 }
 
 } // namespace rhbm_gem::core::detail

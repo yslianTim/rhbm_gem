@@ -1,7 +1,5 @@
 #pragma once
 
-#include <algorithm>
-#include <array>
 #include <cmath>
 #include <cstddef>
 #include <optional>
@@ -28,40 +26,27 @@ class LocalPotentialEntry
         std::optional<RHBMBetaEstimateResult> fit_result;
     };
     LocalPotentialSampleList m_raw_sampling_entries;
-    LocalPotentialSampleList m_peeling_sampling_entries;
-    std::array<StageRecord, 2> m_stages{};
+    StageRecord m_first_stage;
+    LocalStageEstimate m_joint_estimate;
     std::optional<PostFitPeelingResult> m_post_fit_peeling;
     std::optional<PostJointLocalResult> m_post_joint_local_result;
     bool m_sample_geometry_available{ true };
     std::optional<GroupGaussianMemberResult> m_group_member_result{};
-    int m_neighbor_count_for_peeling{ 0 };
 
 public:
-    void SetAlphaR(FittingStage stage, double value) { Record(stage).alpha_r = value; }
-    double AlphaR(FittingStage stage) const { return Record(stage).alpha_r; }
+    void SetAlphaR(FittingStage stage, double value) { NativeRecord(stage).alpha_r = value; }
+    double AlphaR(FittingStage stage) const { return NativeRecord(stage).alpha_r; }
     void SetRawSamplingEntries(LocalPotentialSampleList value) { m_raw_sampling_entries = std::move(value); }
-    void SetPeelingSamplingEntries(LocalPotentialSampleList value)
-    {
-        if (StageEstimate(FittingStage::Second).source.method == EstimateMethod::JointComponents)
-            throw std::invalid_argument("Joint peeling requires original-grid observations.");
-        m_peeling_sampling_entries = std::move(value);
-    }
-    void SetNeighborCountForPeeling(int value)
-    {
-        if (StageEstimate(FittingStage::Second).source.method == EstimateMethod::JointComponents)
-            throw std::invalid_argument("Joint neighbor count belongs to paired peeling.");
-        m_neighbor_count_for_peeling = value;
-    }
     void SetGaussianResult(FittingStage stage, LocalGaussianResult value)
     {
-        auto & record = Record(stage);
+        auto & record = NativeRecord(stage);
         record = StageRecord{};
         const auto & model = value.mdpde.GetModel();
         if (std::isfinite(model.GetAmplitude()) && std::isfinite(model.GetOffset()) &&
             std::isfinite(model.GetWidth()) && model.GetWidth() > 0)
         {
             record.estimate.point = model;
-            record.estimate.source.method = stage == FittingStage::First ? EstimateMethod::LocalMDPDE : EstimateMethod::Peeling;
+            record.estimate.source.method = EstimateMethod::LocalMDPDE;
             record.estimate.reason.clear();
         }
         else record.unfitted_model = model;
@@ -75,12 +60,20 @@ public:
                 value.fit_result->diagnostics, value.fit_result->refinement, value.fit_result->failed_only_recovery};
         record.fit_result = std::move(value.fit_result);
     }
-    const LocalStageEstimate & StageEstimate(FittingStage stage) const { return Record(stage).estimate; }
+    const LocalStageEstimate & StageEstimate(FittingStage stage) const
+    {
+        if (stage == FittingStage::Second) return m_joint_estimate;
+        return NativeRecord(stage).estimate;
+    }
     void SetStageEstimate(FittingStage stage, LocalStageEstimate value)
     {
-        auto & record = Record(stage);
-        if (value.source.method == EstimateMethod::JointComponents) record = StageRecord{};
-        else if (!value.point && record.estimate.point) record.unfitted_model = record.estimate.point;
+        if (stage == FittingStage::Second)
+        {
+            m_joint_estimate = std::move(value);
+            return;
+        }
+        auto & record = NativeRecord(stage);
+        if (!value.point && record.estimate.point) record.unfitted_model = record.estimate.point;
         if (record.estimate.point && value.point && record.estimate.point->ToVector() != value.point->ToVector())
         {
             record.diagnostics.reset(); record.fit_result.reset(); record.mdpde_uncertainty = {};
@@ -90,27 +83,24 @@ public:
     }
     LocalGaussianResult GaussianResult(FittingStage stage, bool include_transient = true) const
     {
-        const auto & r = Record(stage);
+        const auto & r = NativeRecord(stage);
         return {r.alpha_r, r.ols, {MDPDEModel(stage), r.mdpde_uncertainty}, include_transient ? r.fit_result : std::nullopt, r.diagnostics, r.uncertainty_recorded};
     }
     const GaussianModel3D & MDPDEModel(FittingStage stage) const
     {
-        const auto & r = Record(stage);
+        const auto & r = NativeRecord(stage);
         if (r.estimate.point) return *r.estimate.point;
         if (r.unfitted_model) return *r.unfitted_model;
         static const GaussianModel3D missing{0, 0};
         return missing;
     }
-    const GaussianModel3D & OLSModel(FittingStage stage) const { return Record(stage).ols.GetModel(); }
+    const GaussianModel3D & OLSModel(FittingStage stage) const { return NativeRecord(stage).ols.GetModel(); }
     const std::optional<PostFitPeelingResult> & PostFitPeeling() const { return m_post_fit_peeling; }
     void SetPostFitPeeling(PostFitPeelingResult value)
     {
-        m_peeling_sampling_entries.clear();
-        m_neighbor_count_for_peeling = 0;
         m_post_joint_local_result.reset();
         m_post_fit_peeling = std::move(value);
     }
-    void ClearPostFitPeeling() { m_post_fit_peeling.reset(); }
     const std::optional<PostJointLocalResult> & PostJointLocalResult() const { return m_post_joint_local_result; }
     void SetPostJointLocalResult(rhbm_gem::PostJointLocalResult value) { m_post_joint_local_result = std::move(value); }
     void ClearPostJointLocalResult() { m_post_joint_local_result.reset(); }
@@ -121,35 +111,27 @@ public:
     {
         m_post_fit_peeling.reset();
         m_post_joint_local_result.reset();
-        m_peeling_sampling_entries.clear();
-        m_neighbor_count_for_peeling = 0;
     }
     void ClearGroupMemberResult() { m_group_member_result.reset(); }
-    void ClearTransientFitState(FittingStage stage) { Record(stage).fit_result.reset(); }
+    void ClearTransientFitState(FittingStage stage) { NativeRecord(stage).fit_result.reset(); }
     void ClearPostJointTransientFitState()
     {
         if (m_post_joint_local_result) m_post_joint_local_result->fit.fit_result.reset();
     }
     int RawSamplingEntryCount() const { return static_cast<int>(m_raw_sampling_entries.size()); }
-    int PeelingSamplingEntryCount() const
-    {
-        if (m_post_fit_peeling) return static_cast<int>(std::count_if(m_post_fit_peeling->samples.begin(),
-            m_post_fit_peeling->samples.end(), [](const auto & s) { return s.response.has_value(); }));
-        return static_cast<int>(m_peeling_sampling_entries.size());
-    }
     int NeighborCountForPeeling() const
-    { return m_post_fit_peeling ? static_cast<int>(m_post_fit_peeling->neighbor_count) : m_neighbor_count_for_peeling; }
+    { return m_post_fit_peeling ? static_cast<int>(m_post_fit_peeling->neighbor_count) : 0; }
     const std::optional<GroupGaussianMemberResult> & GroupMemberResult() const { return m_group_member_result; }
     const LocalPotentialSampleList & RawSamplingEntries() const { return m_raw_sampling_entries; }
     LocalPotentialSampleList PeelingSamplingEntries() const
     {
-        if (!m_post_fit_peeling) return m_peeling_sampling_entries;
         LocalPotentialSampleList samples;
-        for (std::size_t i = 0; i < m_post_fit_peeling->samples.size(); ++i)
+        if (!m_post_fit_peeling) return samples;
+        for (const auto & estimate : m_post_fit_peeling->samples)
         {
-            if (!m_post_fit_peeling->samples[i].response) continue;
-            const auto & observation=m_post_fit_peeling->samples[i].observation;
-            LocalPotentialSample sample{*m_post_fit_peeling->samples[i].response,
+            if (!estimate.response) continue;
+            const auto & observation = estimate.observation;
+            LocalPotentialSample sample{*estimate.response,
                 {std::sqrt(observation.squared_distance),observation.position,true}};
             samples.push_back(std::move(sample));
         }
@@ -157,13 +139,22 @@ public:
     }
 
 private:
-    StageRecord & Record(FittingStage stage) { return m_stages.at(StageIndex(stage)); }
-    const StageRecord & Record(FittingStage stage) const { return m_stages.at(StageIndex(stage)); }
-    static std::size_t StageIndex(FittingStage stage)
+    static void RequireFirstStage(FittingStage stage)
     {
-        const auto index = static_cast<std::size_t>(stage);
-        if (index >= 2) throw std::invalid_argument("Unknown local fitting stage.");
-        return index;
+        if (stage != FittingStage::First)
+            throw std::invalid_argument("Native local fitting diagnostics require FirstStage.");
+    }
+
+    StageRecord & NativeRecord(FittingStage stage)
+    {
+        RequireFirstStage(stage);
+        return m_first_stage;
+    }
+
+    const StageRecord & NativeRecord(FittingStage stage) const
+    {
+        RequireFirstStage(stage);
+        return m_first_stage;
     }
 };
 

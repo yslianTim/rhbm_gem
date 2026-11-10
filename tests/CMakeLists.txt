@@ -104,13 +104,6 @@ set(CORE_QSCORE_TEST_SOURCES
 )
 
 set(CORE_ESTIMATOR_TEST_SOURCES
-    core/second_stage/GraphAndBackground_test.cpp
-    core/second_stage/SeedAndState_test.cpp
-    core/second_stage/SolverAndProposal_test.cpp
-    core/second_stage/CandidateAcceptance_test.cpp
-    core/second_stage/Recovery_test.cpp
-    core/second_stage/ProductionFitting_test.cpp
-    core/second_stage/ConvergenceAndFinalization_test.cpp
     core/EstimatorTester_test.cpp
     core/TestDataFactory_test.cpp
 )
@@ -288,7 +281,6 @@ add_dependencies(tests_all rhbm_tests)
 
 # Shared test-only helpers compile into the test executable.
 target_sources(rhbm_tests PRIVATE
-    support/SecondStageTestSupport.cpp
     support/JointBcdDiagnostic.cpp
     support/JointSyntheticWorkload.cpp
     support/JointBlockCoordinate.cpp
@@ -397,10 +389,6 @@ add_rhbm_gtest_group(rhbm_tests_utils_math
     SOURCES ${UTILS_MATH_TEST_SOURCES}
 )
 
-# Eigen scope tests intentionally exercise a two-thread setting.
-set_tests_properties(rhbm_tests_utils_math PROPERTIES
-    ENVIRONMENT "OMP_NUM_THREADS=2;OMP_THREAD_LIMIT=2")
-
 add_rhbm_gtest_group(rhbm_tests_utils_domain
     DOMAIN utils
     INTENTS validation
@@ -412,6 +400,11 @@ add_rhbm_gtest_group(rhbm_tests_utils_hrl
     INTENTS algorithm
     SOURCES ${UTILS_HRL_TEST_SOURCES}
 )
+
+# Eigen scope tests intentionally exercise a two-thread setting.
+set_tests_properties(rhbm_tests_utils_math rhbm_tests_utils_hrl PROPERTIES
+    PROCESSORS 2
+    ENVIRONMENT "OMP_NUM_THREADS=2;OMP_THREAD_LIMIT=2")
 
 add_rhbm_gtest_group(rhbm_tests_integration_command
     DOMAIN integration

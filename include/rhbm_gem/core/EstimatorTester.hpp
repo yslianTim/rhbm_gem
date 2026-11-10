@@ -82,14 +82,4 @@ GaussianModel3D EstimateAtomicModelFirstStageMean(
     const FitOptions & options
 );
 
-GaussianModel3D EstimateAtomicModelFullStageMean(
-    const AtomicModelTestData & input,
-    const FitOptions & options
-);
-
-BiasStatistics RunAtomicModelFullEstimationTest(
-    const AtomicModelTestData & input,
-    const FitOptions & options
-);
-
 } // namespace rhbm_gem::core
