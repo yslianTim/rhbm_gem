@@ -1,6 +1,8 @@
 #pragma once
+
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include "joint_component/JointComponentEstimator.hpp"
+
 #include <vector>
 
 namespace rhbm_gem::core::detail {

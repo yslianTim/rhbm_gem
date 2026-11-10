@@ -1,12 +1,12 @@
 #include "core/estimator/gaussian_fit/PreparedLocalGaussianFit.hpp"
-#include <rhbm_gem/utils/hrl/RHBMTrainer.hpp>
-
-#include <cmath>
-#include <stdexcept>
 
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
+#include <rhbm_gem/utils/hrl/RHBMTrainer.hpp>
 #include <rhbm_gem/utils/math/NumericValidation.hpp>
+
+#include <cmath>
+#include <stdexcept>
 
 namespace rhbm_gem::core::detail {
 

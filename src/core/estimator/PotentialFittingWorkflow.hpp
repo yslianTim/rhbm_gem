@@ -2,6 +2,7 @@
 
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include "joint_component/PostFitPeeling.hpp"
+
 #include <string>
 
 namespace rhbm_gem { struct JointAnalysisResult; }

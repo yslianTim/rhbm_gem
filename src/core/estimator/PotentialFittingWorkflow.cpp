@@ -1,14 +1,15 @@
-#include <rhbm_gem/core/GaussianEstimator.hpp>
+#include "PotentialFittingWorkflow.hpp"
+#include "core/estimator/InitialStage.hpp"
+#include "core/estimator/GroupingStage.hpp"
+#include "core/estimator/gaussian_fit/PreparedLocalGaussianFit.hpp"
+#include "core/estimator/joint_component/HaloMedianReconstruction.hpp"
 #include "core/estimator/joint_component/JointComponentEstimator.hpp"
 #include "core/estimator/joint_component/JointCliProgressReporter.hpp"
-#include "core/estimator/InitialStage.hpp"
-#include "core/estimator/PotentialFittingWorkflow.hpp"
-#include "core/estimator/joint_component/HaloMedianReconstruction.hpp"
 #include "core/estimator/joint_component/PostFitPeeling.hpp"
-#include "core/estimator/GroupingStage.hpp"
 #include "core/estimator/joint_component/ResourceWork.hpp"
 #include "data/detail/PostJointLocalValidation.hpp"
-#include "core/estimator/gaussian_fit/PreparedLocalGaussianFit.hpp"
+
+#include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
@@ -18,6 +19,7 @@
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
+
 #include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <Eigen/Cholesky>

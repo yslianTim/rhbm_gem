@@ -1,5 +1,6 @@
 #include "GroupingStage.hpp"
 #include "data/detail/PostJointLocalValidation.hpp"
+
 #include <rhbm_gem/core/GaussianEstimator.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
@@ -9,6 +10,7 @@
 #include <rhbm_gem/utils/hrl/LinearizationService.hpp>
 #include <rhbm_gem/utils/hrl/RHBMHelper.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
+
 #include <chrono>
 #include <limits>
 
