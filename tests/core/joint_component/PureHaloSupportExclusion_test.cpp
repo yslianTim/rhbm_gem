@@ -7,7 +7,7 @@
 
 #include "core/detail/FirstStageInitialization.hpp"
 #include "core/detail/gaussian_fit/PreparedLocalGaussianFit.hpp"
-#include "core/detail/MapInterpolation.hpp"
+#include "core/sampling/MapInterpolation.hpp"
 #include "core/detail/joint_component/HaloMedianReconstruction.hpp"
 #include "core/detail/GroupPotentialFitting.hpp"
 #include "core/detail/joint_component/PostFitPeeling.hpp"

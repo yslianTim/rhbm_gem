@@ -250,7 +250,7 @@ function(rhbm_guard_check_structure)
         "src/core/detail/joint_component/JointComponentEstimator.hpp"
         "src/core/detail/PotentialFittingWorkflow.cpp"
         "src/core/detail/PotentialFittingWorkflow.hpp"
-        "src/core/detail/MapInterpolation.hpp"
+        "src/core/sampling/MapInterpolation.hpp"
     )
         if(NOT EXISTS "${PROJECT_SOURCE_DIR}/${REQUIRED_PATH}")
             message(FATAL_ERROR

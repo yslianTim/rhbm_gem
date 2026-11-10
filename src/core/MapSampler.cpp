@@ -1,5 +1,5 @@
 #include <rhbm_gem/core/MapSampler.hpp>
-#include "core/detail/MapInterpolation.hpp"
+#include "core/sampling/MapInterpolation.hpp"
 
 #include <array>
 #include <cstddef>

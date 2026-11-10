@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "core/detail/MapInterpolation.hpp"
+#include "core/sampling/MapInterpolation.hpp"
 #include <cmath>
 #include <functional>
 #include <limits>

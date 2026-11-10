@@ -30,7 +30,7 @@
 #include "core/detail/joint_component/HaloMedianReconstruction.hpp"
 #include "core/detail/PotentialFittingWorkflow.hpp"
 #include "core/detail/joint_component/PostFitPeeling.hpp"
-#include "core/detail/MapInterpolation.hpp"
+#include "core/sampling/MapInterpolation.hpp"
 #include "data/io/detail/JointResultJson.hpp"
 #include "data/io/detail/StageResultJson.hpp"
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
