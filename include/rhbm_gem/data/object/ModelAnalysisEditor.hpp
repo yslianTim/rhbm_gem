@@ -1,5 +1,6 @@
 #pragma once
 #include <rhbm_gem/data/object/JointAnalysisResult.hpp>
+#include <rhbm_gem/data/object/PostJointQScoreResult.hpp>
 #include <map>
 #include <utility>
 #include <vector>
@@ -25,6 +26,8 @@ public:
     // Publish snapshot endpoints atomically, then retain the diagnostic snapshot.
     void ApplyJointResult(JointAnalysisResult result, const std::string & run_id);
     void ClearJointResult();
+    void ClearPostJointQScores();
+    void ApplyPostJointQScoresBatch(std::vector<std::pair<int, PostJointQScoreResult>>);
     void UpdateJointMetadata(JointAnalysisMetadata metadata);
     void ApplyJointStageEstimates(std::map<int, LocalStageEstimate> estimates);
     void SetAtomInitialStageEstimate(const AtomObject & atom, LocalStageEstimate value);

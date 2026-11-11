@@ -46,6 +46,7 @@ target_sources(rhbm_gem PRIVATE
     core/estimator/joint_component/PostFitPeeling.cpp
     core/estimator/gaussian_fit/PreparedLocalGaussianFit.cpp
     core/sampling/MapSampler.cpp
+    core/estimator/joint_component/PostJointQScore.cpp
     core/QScoreHelper.cpp
     core/TestDataFactory.cpp
     core/command/CommandSystem.cpp
@@ -59,6 +60,7 @@ target_sources(rhbm_gem PRIVATE
     # data
     data/detail/AtomClassifier.cpp
     data/detail/JointStageAdapter.cpp
+    data/detail/PostJointQScoreValidation.cpp
     data/detail/PostJointLocalValidation.cpp
     data/object/AtomLocalPotentialView.cpp
     data/object/AtomObject.cpp

@@ -206,8 +206,8 @@ postprocessing contexts borrow their immutable inputs.
 ## Persistence
 
 [DataObject I/O](architecture/dataobject-io-architecture.md) owns version
-acceptance and the database lifecycle. SQLite v24 stores Joint Result
-JSON schema 25 and Stage Result JSON version 8. Joint JSON requires
+acceptance and the database lifecycle. SQLite v25 stores Joint Result
+JSON schema 25 and Stage Result JSON version 9. Joint JSON requires
 `target-only-pure-halo-support-exclusion-v1`, the current point validation
 contract, and `strict-v2` or `practical-v2` convergence criteria. Its state
 keys are `ac`, `tau`, `log_tau`, `eta_gradient` and `objective`.
@@ -270,3 +270,6 @@ See [PotentialFittingWorkflow.cpp](../../src/core/estimator/PotentialFittingWork
 [PostFitPeeling.cpp](../../src/core/estimator/joint_component/PostFitPeeling.cpp),
 [GroupingStage.cpp](../../src/core/estimator/GroupingStage.cpp)
 and [PostJointLocalValidation.cpp](../../src/data/detail/PostJointLocalValidation.cpp).
+
+[Joint-peeled QScore comparisons](joint-qscore-comparisons.md) describes the
+independent analysis-time comparison records and sequence-summary coverage.

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <rhbm_gem/data/object/PostJointQScoreResult.hpp>
+
 #include <cmath>
 #include <cstddef>
 #include <optional>
@@ -29,6 +31,7 @@ class LocalPotentialEntry
     LocalStageEstimate m_joint_stage_estimate;
     std::optional<PostFitPeelingResult> m_post_fit_peeling;
     std::optional<PostJointLocalResult> m_post_joint_local_result;
+    std::optional<PostJointQScoreResult> m_post_joint_qscore;
     bool m_sample_geometry_available{ true };
     std::optional<GroupGaussianMemberResult> m_group_member_result{};
 
@@ -99,8 +102,12 @@ public:
     bool SampleGeometryAvailable() const { return m_sample_geometry_available; }
     void SetSampleGeometryAvailable(bool value) { m_sample_geometry_available = value; }
     void SetGroupMemberResult(GroupGaussianMemberResult value) { m_group_member_result = std::move(value); }
+    const std::optional<PostJointQScoreResult> & PostJointQScore() const { return m_post_joint_qscore; }
+    void SetPostJointQScore(PostJointQScoreResult value) { m_post_joint_qscore = std::move(value); }
+    void ClearPostJointQScore() { m_post_joint_qscore.reset(); }
     void ClearPeeling()
     {
+        m_post_joint_qscore.reset();
         m_post_fit_peeling.reset();
         m_post_joint_local_result.reset();
     }

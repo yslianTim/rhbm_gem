@@ -23,7 +23,7 @@ void ExpectCurrentSchemaValidationFailure(
     const command_test::ScopedTempDir temp_dir{temp_dir_name};
     const auto path{temp_dir.path() / database_name};
     { rg::DataRepository repository{path}; }
-    ASSERT_EQ(data_test::GetUserVersion(path), 24);
+    ASSERT_EQ(data_test::GetUserVersion(path), 25);
 
     mutate_database(path);
     std::ifstream before_file(path,std::ios::binary);
@@ -31,7 +31,7 @@ void ExpectCurrentSchemaValidationFailure(
     EXPECT_THROW((void)rg::DataRepository(path), std::runtime_error);
     std::ifstream after_file(path,std::ios::binary);
     EXPECT_EQ(std::string((std::istreambuf_iterator<char>(after_file)),{}),before);
-    EXPECT_EQ(data_test::GetUserVersion(path), 24);
+    EXPECT_EQ(data_test::GetUserVersion(path), 25);
 }
 
 void RecreateChainMapTable(

@@ -449,6 +449,18 @@ TEST(CommandApiPipelineTest, JointPersistsSmallSelectionCalibrationFailureAndExp
         display.verbosity=0;
         display.reference_model_groups={{"with_charge",{request.saved_key_tag}},{"no_charge",{request.saved_key_tag}}};
         EXPECT_TRUE(rgc::RunCommand(display).succeeded) << static_cast<int>(painter);
+        if (painter==rgc::PainterType::GAUS)
+        {
+            bool found_coverage=false;
+            for (const auto & file:std::filesystem::recursive_directory_iterator(display.output_dir))
+                if (file.path().filename().string().ends_with("_coverage.tsv"))
+                {
+                    std::ifstream input(file.path());std::string header;std::getline(input,header);
+                    EXPECT_EQ(header,"chain\tsequence_id\teligible_atoms\tblue_atoms\tgreen_red_atoms");
+                    found_coverage=true;
+                }
+            EXPECT_TRUE(found_coverage);
+        }
     }
 #endif
 #ifdef RHBM_GEM_ENABLE_UMAP
@@ -557,6 +569,14 @@ TEST(CommandApiPipelineTest, JointFailureAndUnavailableOutcomesPersistThroughApi
             {
                 const auto view=rg::AtomLocalPotentialView::For(*atom);
                 EXPECT_EQ(view.GetJointStageEstimate().point.has_value(),qualified);
+                const auto & qscore=view.GetPostJointQScore();
+                EXPECT_EQ(qscore.has_value(),qualified);
+                if (qscore && qscore->missing_contributor_count)
+                {
+                    EXPECT_FALSE(qscore->scores);
+                    EXPECT_EQ(qscore->status,rg::EvidenceStatus::Unavailable);
+                    EXPECT_FALSE(qscore->reason.empty());
+                }
                 EXPECT_FALSE(view.GetPostFitPeeling());
                 EXPECT_FALSE(view.GetPostJointLocalResult());
                 EXPECT_FALSE(view.GetGroupMemberResult());

@@ -4,6 +4,7 @@
 #include "data/detail/LocalPotentialEntry.hpp"
 #include "data/detail/JointStageAdapter.hpp"
 #include "data/detail/PostJointLocalValidation.hpp"
+#include "data/detail/PostJointQScoreValidation.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
@@ -64,6 +65,44 @@ EstimateSource Source(const V & v)
         throw std::invalid_argument("Unknown estimate method.");
     return {method,Read<std::string>(o,"atom"),Read<std::string>(o,"component"),Read<std::string>(o,"run"),
         Enum<FittingRole>(o.at("role"),2),has_fixed_source && Read<bool>(o,"fixed_from_initial_stage")};
+}
+V Pack(const PostJointQScoreResult & q)
+{
+    A halos;
+    for (const auto & halo:q.extra_halos)
+        halos.push_back(O{{"atom",halo.atom_id},{"donors",j::value_from(halo.donor_atom_ids)}});
+    return O{{"source",Pack(q.source)},{"contract",q.contract},{"status",static_cast<int>(q.status)},
+        {"scores",q.scores ? V(A{q.scores->standard,q.scores->joint}):V{}},{"reason",q.reason},
+        {"reference",A{q.reference_height,q.reference_offset}},{"samples",q.sample_count},
+        {"contributors",q.contributor_count},{"missing_contributors",q.missing_contributor_count},
+        {"contributions",q.evaluated_contributions},{"halos",q.halo_count},{"extra_halos",std::move(halos)}};
+}
+PostJointQScoreResult QScore(const V & value)
+{
+    const auto & o=value.as_object();
+    if (o.size()!=12) throw std::invalid_argument("Invalid QScore result fields.");
+    PostJointQScoreResult q;
+    q.source=Source(o.at("source")); q.contract=Read<std::string>(o,"contract");
+    q.status=Enum<EvidenceStatus>(o.at("status"),3); q.reason=Read<std::string>(o,"reason");
+    if (!o.at("scores").is_null())
+    {
+        const auto & scores=o.at("scores").as_array();
+        if (scores.size()!=2) throw std::invalid_argument("Invalid paired QScore shape.");
+        q.scores=PostJointQScoreValues{Number(scores[0]),Number(scores[1])};
+    }
+    const auto & reference=o.at("reference").as_array();
+    if (reference.size()!=2) throw std::invalid_argument("Invalid QScore reference shape.");
+    q.reference_height=Number(reference[0]); q.reference_offset=Number(reference[1]);
+    q.sample_count=Read<std::size_t>(o,"samples"); q.contributor_count=Read<std::size_t>(o,"contributors");
+    q.missing_contributor_count=Read<std::size_t>(o,"missing_contributors");
+    q.evaluated_contributions=Read<std::size_t>(o,"contributions"); q.halo_count=Read<std::size_t>(o,"halos");
+    for (const auto & halo:o.at("extra_halos").as_array())
+    {
+        const auto & h=halo.as_object();
+        if (h.size()!=2) throw std::invalid_argument("Invalid QScore Halo fields.");
+        q.extra_halos.push_back({Read<int>(h,"atom"),Read<std::vector<std::string>>(h,"donors")});
+    }
+    return q;
 }
 V Pack(const LocalStageEstimate & s)
 {
@@ -348,6 +387,7 @@ std::string Encode(const ModelObject & model)
         atoms.push_back(O{{"id",atom->GetSerialID()},{"initial",Pack(e->InitialStageEstimate())},{"joint",Pack(e->JointStageEstimate())},
             {"initial_native",InitialNative(*e)},
             {"geometry",e->SampleGeometryAvailable()},{"raw",Samples(e->RawSamplingEntries(),e->SampleGeometryAvailable())},
+            {"post_joint_qscore",e->PostJointQScore() ? Pack(*e->PostJointQScore()):V{}},
             {"peeling",peeling},{"post_joint_local",e->PostJointLocalResult() ? Pack(*e->PostJointLocalResult()):V{}},
             {"posterior",e->GroupMemberResult() ? Pack(*e->GroupMemberResult()):V{}}});
     }
@@ -366,7 +406,7 @@ void Decode(ModelObject & model, const std::string & text)
     {
         const auto & o=value.as_object(); const int id=Read<int>(o,"id"); auto * atom=model.FindAtomPtr(id);
         if(!atom || !seen.insert(id).second) throw std::invalid_argument("Invalid stage atom identity.");
-        if(o.size()!=9 || !o.contains("initial") || !o.contains("joint") || !o.contains("initial_native"))
+        if(o.size()!=10 || !o.contains("initial") || !o.contains("joint") || !o.contains("initial_native"))
             throw std::invalid_argument("Invalid Stage atom fields.");
         auto & entry=data.EnsureAtomLocalEntry(*atom);
         RestoreInitialNative(entry,o.at("initial_native"),Stage(o.at("initial")));
@@ -392,6 +432,8 @@ void Decode(ModelObject & model, const std::string & text)
         }
         if(!o.at("post_joint_local").is_null())
             entry.SetPostJointLocalResult(PostJointLocal(o.at("post_joint_local")));
+        entry.ClearPostJointQScore();
+        if(!o.at("post_joint_qscore").is_null()) entry.SetPostJointQScore(QScore(o.at("post_joint_qscore")));
         entry.ClearGroupMemberResult();
         if(!o.at("posterior").is_null()) entry.SetGroupMemberResult(Member(o.at("posterior")));
     }
@@ -435,6 +477,10 @@ void Validate(const ModelObject & model)
     const auto * joint_snapshot=data.joint_result ? &*data.joint_result : nullptr;
     const bool unqualified_joint=joint_snapshot && !IsQualifiedJointAnalysisResult(*joint_snapshot);
     std::optional<std::string> joint_run_id;
+    std::optional<data_internal::PostJointQScoreValidation> qscore_validation;
+    if (std::any_of(data.AtomLocalEntries().begin(),data.AtomLocalEntries().end(),
+            [](const auto & item){return item.second->PostJointQScore().has_value();}))
+        qscore_validation.emplace(model);
     for(const auto & [id,e]:data.AtomLocalEntries())
     {
         const auto & initial=e->InitialStageEstimate();
@@ -469,6 +515,11 @@ void Validate(const ModelObject & model)
                 throw std::invalid_argument("Available grid peeling requires Halo reconstruction provenance.");
             const auto position=model.FindAtomPtr(id)->GetPosition();
             const auto reason=data_internal::ValidatePostFitPeelingResult(*e->PostFitPeeling(),s,joint_snapshot,&position);
+            if(!reason.empty()) throw std::invalid_argument(reason);
+        }
+        if(e->PostJointQScore())
+        {
+            const auto reason=qscore_validation->Validate(*e->PostJointQScore(),*model.FindAtomPtr(id),s);
             if(!reason.empty()) throw std::invalid_argument(reason);
         }
         if(e->PostJointLocalResult())

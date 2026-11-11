@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <map>
 #include <memory>
 #include <optional>
@@ -25,6 +26,19 @@ namespace rhbm_gem {
 class AtomObject;
 class ModelObject;
 
+enum class QScoreMode { Standard, JointPeeledStandard, JointPeeledModel };
+inline constexpr std::array<const char *,3> QScoreMethodLabels{
+    "Standard QScore", "Joint-Peeled QScore (standard reference)",
+    "Joint-Peeled QScore (Joint model reference)"};
+struct ResidueQScoreAverage
+{
+    std::optional<double> average;
+    std::size_t available_atoms{}, eligible_atoms{};
+};
+using ResidueQScoreMap = std::map<std::string,std::map<int,ResidueQScoreAverage>>;
+ResidueQScoreMap CollectResidueQScores(const ModelObject &, QScoreMode);
+std::pair<double,double> QScoreDisplayRange(const std::vector<double> &);
+
 class PotentialPlotBuilder
 {
     ModelObject * m_model_object{ nullptr };
@@ -40,7 +54,7 @@ public:
     std::vector<std::unique_ptr<::TH1D>> CreateMainChainAtomGausRankHistogram(int par_id, int & chain_size, Residue residue=Residue::UNK, size_t extra_id=0, std::vector<Residue> veto_residues_list={});
     std::unordered_map<std::string, std::unique_ptr<::TGraphErrors>> CreateAtomMapValueToSequenceIDGraphMap(size_t main_chain_element_id, Residue residue=Residue::UNK);
     std::unordered_map<std::string, std::unique_ptr<::TGraphErrors>> CreateAtomGausEstimateToSequenceIDGraphMap(size_t main_chain_element_id, const int par_id=0, Residue residue=Residue::UNK);
-    std::unordered_map<std::string, std::unique_ptr<::TGraphErrors>> CreateAverageQScoreToSequenceIDGraphMap(bool use_standard=false, bool use_peeling_sampling_entries=false);
+    std::unordered_map<std::string, std::unique_ptr<::TGraphErrors>> CreateAverageQScoreToSequenceIDGraphMap(QScoreMode mode);
     std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateToResidueGraph(const std::vector<GroupKey> & group_key_list, const int par_id=0);
     std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateToAtomIdGraph(const std::map<std::string, GroupKey> & group_key_map, const std::vector<std::string> & atom_id_list, const int par_id=0);
     std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateScatterGraph(GroupKey group_key, int par1_id=0, int par2_id=1, bool select_outliers=false);

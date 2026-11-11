@@ -3,7 +3,6 @@
 #include "data/detail/AtomClassifier.hpp"
 #include "data/detail/ModelDerivedState.hpp"
 
-#include <rhbm_gem/core/QScoreHelper.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/domain/KeyPacker.hpp>
@@ -18,6 +17,7 @@
 #include <TH1.h>
 #endif
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <optional>
@@ -57,6 +57,44 @@ std::vector<GroupKey> CollectComponentAtomGroupKeys(
 }
 
 } // namespace
+
+ResidueQScoreMap CollectResidueQScores(const ModelObject & model, QScoreMode mode)
+{
+    ResidueQScoreMap result;
+    std::map<std::string,std::map<int,double>> sums;
+    for (const auto * atom:model.GetSelectedAtoms())
+    {
+        if (atom->GetElement()==Element::HYDROGEN || atom->GetSequenceID()<0) continue;
+        const auto view=AtomLocalPotentialView::For(*atom);
+        // Preserve Blue's published endpoint eligibility and stored scalar.
+        if (!view.IsAvailable() || !view.HasJointStageModel() ||
+            view.GetJointStageEstimate().source.role==FittingRole::Halo) continue;
+        auto & residue=result[atom->GetChainID()][atom->GetSequenceID()];
+        ++residue.eligible_atoms;
+        std::optional<double> score;
+        if (mode==QScoreMode::Standard) score=atom->GetStandardQScore();
+        else if (const auto & q=view.GetPostJointQScore(); q && q->scores && q->status==EvidenceStatus::Available)
+            score=mode==QScoreMode::JointPeeledStandard ? q->scores->standard : q->scores->joint;
+        if (!score || !std::isfinite(*score)) continue;
+        sums[atom->GetChainID()][atom->GetSequenceID()]+=*score;
+        ++residue.available_atoms;
+    }
+    for (auto & [chain,residues]:result)
+        for (auto & [sequence,residue]:residues)
+            if (residue.available_atoms)
+                residue.average=sums.at(chain).at(sequence)/static_cast<double>(residue.available_atoms);
+    return result;
+}
+
+std::pair<double,double> QScoreDisplayRange(const std::vector<double> & scores)
+{
+    double minimum=1.0, maximum=-1.0;
+    for (const double score:scores) if (std::isfinite(score))
+    { minimum=std::min(minimum,score); maximum=std::max(maximum,score); }
+    if (minimum>maximum) return {-1.0,1.0};
+    const double padding=std::max(0.02,0.05*(maximum-minimum));
+    return {std::max(-1.0,minimum-padding),std::min(1.0,maximum+padding)};
+}
 
 PotentialPlotBuilder::PotentialPlotBuilder(ModelObject * model_object) :
     m_model_object{ model_object }
@@ -797,69 +835,19 @@ PotentialPlotBuilder::CreateAtomMapValueToSequenceIDGraphMap(
 }
 
 std::unordered_map<std::string, std::unique_ptr<TGraphErrors>>
-PotentialPlotBuilder::CreateAverageQScoreToSequenceIDGraphMap(
-    bool use_standard,
-    bool use_peeling_sampling_entries)
+PotentialPlotBuilder::CreateAverageQScoreToSequenceIDGraphMap(QScoreMode mode)
 {
-    if (IsModelObjectAvailable() == false) return {};
-    auto apply_selection{ false };
-    auto model_object{ m_model_object };
-    std::vector<std::string> chain_id_list;
-    for (auto & [entity_id, chain_ids] : model_object->GetChainIDListMap())
-    {
-        (void) entity_id;
-        if (chain_ids.empty()) continue;
-        chain_id_list.insert(chain_id_list.end(), chain_ids.begin(), chain_ids.end());
-    }
-
-    auto reference_height{ model_object->GetReferenceHeight() };
-    auto reference_offset{ model_object->GetReferenceOffset() };
-    auto reference_width{ 0.6 };
-    std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> graph_map;
-    for (auto & chain_id : chain_id_list)
-    {
-        std::unordered_map<int, std::vector<double>> q_scores_map;
-        for (auto & atom : model_object->GetSelectedAtoms())
+    std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> graphs;
+    if (!IsModelObjectAvailable()) return graphs;
+    for (const auto & [chain,residues]:CollectResidueQScores(*m_model_object,mode))
+        for (const auto & [sequence,residue]:residues)
         {
-            if (atom->GetChainID() != chain_id) continue;
-            const auto entry{ AtomLocalPotentialView::For(*atom) };
-        if (!entry.IsAvailable() || !entry.HasJointStageModel() || entry.GetJointStageEstimate().source.role == FittingRole::Halo) continue;
-            if (!entry.IsAvailable()) continue;
-            auto sequence_id{ atom->GetSequenceID() };
-            if (sequence_id < 0) continue;
-            if (use_peeling_sampling_entries)
-            {
-                reference_height = entry.GetJointStageModel().GetHeight();
-                reference_offset = entry.GetJointStageModel().GetOffset();
-                reference_width = entry.GetJointStageModel().GetWidth();
-            }
-            if (!use_peeling_sampling_entries) apply_selection = true;
-            auto q_score{ use_standard ?
-                atom->GetStandardQScore() :
-                core::CalculateQScoreForAtom(
-                    LoadSamplingEntries(
-                        entry,
-                        apply_selection,
-                        use_peeling_sampling_entries),
-                    reference_height,
-                    reference_offset,
-                    reference_width
-                )
-            };
-            q_scores_map[sequence_id].emplace_back(q_score);
+            if (!residue.average) continue;
+            auto & graph=graphs[chain];
+            if (!graph) graph=root_helper::CreateGraphErrors();
+            graph->SetPoint(graph->GetN(),static_cast<double>(sequence),*residue.average);
         }
-        if (q_scores_map.empty()) continue;
-
-        graph_map[chain_id] = root_helper::CreateGraphErrors();
-        int count{ 0 };
-        for (const auto & [seq_id, q_score_vec] : q_scores_map)
-        {
-            auto q_score_average{ array_helper::ComputeMean(q_score_vec.data(), q_score_vec.size()) };
-            graph_map[chain_id]->SetPoint(count, static_cast<double>(seq_id), q_score_average);
-            count++;
-        }
-    }
-    return graph_map;
+    return graphs;
 }
 
 std::unordered_map<std::string, std::unique_ptr<TGraphErrors>>

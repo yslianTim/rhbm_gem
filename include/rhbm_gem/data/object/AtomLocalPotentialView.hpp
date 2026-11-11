@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <rhbm_gem/data/object/PostJointQScoreResult.hpp>
 
 #include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
@@ -26,6 +27,7 @@ public:
     const GaussianModel3D & GetJointStageModel() const;
     const std::optional<PostFitPeelingResult> & GetPostFitPeeling() const;
     const std::optional<PostJointLocalResult> & GetPostJointLocalResult() const;
+    const std::optional<PostJointQScoreResult> & GetPostJointQScore() const;
     bool HasSampleGeometry() const;
     LocalGaussianResult GetInitialStageGaussianResult() const;
     const std::optional<GroupGaussianMemberResult> & GetGroupMemberResult() const;

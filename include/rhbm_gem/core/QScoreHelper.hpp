@@ -1,6 +1,9 @@
 #pragma once
 
+#include <optional>
+#include <string>
 #include <tuple>
+#include <vector>
 #include <unordered_map>
 
 #include <rhbm_gem/utils/domain/SamplingTypes.hpp>
@@ -24,6 +27,21 @@ SamplingPointList GetRadialPointsForQScore(
     double radius,
     int num_points);
 
+// Preserves center multiplicity, shell order, retries and trilinear observations.
+LocalPotentialSampleList PrepareQScoreSamples(
+    const AtomObject &, const MapObject &, const ModelObject &, int num_points=8);
+
+struct QScoreCorrelation
+{
+    std::optional<double> value;
+    std::string reason;
+};
+// New comparisons distinguish degenerate/unavailable data from a valid zero.
+QScoreCorrelation CalculateQScoreCorrelation(
+    const std::vector<double> & observations, const std::vector<double> & reference);
+std::vector<double> StandardQScoreReference(
+    const LocalPotentialSampleList &, double height, double offset, double sigma=0.6);
+
 // Calculates the MapQ-style mean-subtracted correlation for one atom.
 double CalculateQScoreForAtom(
     const AtomObject & atom,
@@ -33,12 +51,6 @@ double CalculateQScoreForAtom(
     double offset,
     double sigma=0.6,
     int num_points=8);
-
-double CalculateQScoreForAtom(
-    const LocalPotentialSampleList & sampling_entries,
-    double height,
-    double offset,
-    double sigma=0.6);
 
 // Uses caller-provided reference Gaussian parameters and also returns each
 // non-hydrogen atom Q-score keyed by serial ID.

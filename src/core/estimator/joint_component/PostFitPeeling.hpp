@@ -38,6 +38,10 @@ JointPeelingContributorUniverse BuildJointPeelingContributorUniverse(
 
 struct JointPostprocessingMetrics
 {
+    std::size_t qscore_targets{}, qscore_available{}, qscore_unavailable{}, qscore_samples{};
+    std::size_t qscore_contributions{}, qscore_halos{}, qscore_extra_halos{}, qscore_unavailable_halos{};
+    std::size_t estimated_qscore_peak_bytes{};
+    double qscore_seconds{};
     std::size_t halo_median_valid_target_count{};
     std::size_t halo_median_geometry_local_halos{};
     std::size_t halo_median_unavailable_halos{};

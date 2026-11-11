@@ -3,6 +3,7 @@
 #include "data/detail/GroupPotentialEntry.hpp"
 #include "data/detail/JointStageAdapter.hpp"
 #include "data/detail/PostJointLocalValidation.hpp"
+#include "data/detail/PostJointQScoreValidation.hpp"
 #include "data/detail/AtomClassifier.hpp"
 #include "data/detail/LocalPotentialEntry.hpp"
 #include "data/detail/ModelAnalysisData.hpp"
@@ -150,6 +151,32 @@ void ModelAnalysisEditor::SetJointResult(JointAnalysisResult result)
 {
     ClearJointResult();
     ModelAnalysisData::Of(m_model_object).joint_result=std::move(result);
+}
+
+void ModelAnalysisEditor::ClearPostJointQScores()
+{
+    for (auto & [id,entry]:ModelAnalysisData::Of(m_model_object).AtomLocalEntries())
+    { (void)id; entry->ClearPostJointQScore(); }
+}
+
+void ModelAnalysisEditor::ApplyPostJointQScoresBatch(std::vector<std::pair<int,PostJointQScoreResult>> results)
+{
+    auto & data=ModelAnalysisData::Of(m_model_object);
+    const data_internal::PostJointQScoreValidation validation(m_model_object);
+    std::set<int> ids;
+    std::string run;
+    for (const auto & [id,result]:results)
+    {
+        if (!ids.insert(id).second) throw std::invalid_argument("Duplicate QScore target.");
+        const auto * atom=m_model_object.FindAtomPtr(id);
+        const auto * entry=data.FindAtomLocalEntry(*atom);
+        if (!entry) throw std::invalid_argument("QScore target has no local analysis.");
+        if (run.empty()) run=result.source.run_id;
+        if (run!=result.source.run_id) throw std::invalid_argument("QScores mix Joint runs.");
+        const auto reason=validation.Validate(result,*atom,entry->JointStageEstimate());
+        if (!reason.empty()) throw std::invalid_argument(reason);
+    }
+    for (auto & [id,result]:results) data.AtomLocalEntries().at(id)->SetPostJointQScore(std::move(result));
 }
 
 void ModelAnalysisEditor::SetAtomInitialStageEstimate(const AtomObject & atom, LocalStageEstimate value)

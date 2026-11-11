@@ -41,18 +41,18 @@ codecs decode float32 mode-2 voxels into the runtime's contiguous double map.
 
 | Layer | Supported format |
 | --- | --- |
-| SQLite | Schema v24 only |
-| Stage Result JSON | Version 8 only |
+| SQLite | Schema v25 only |
+| Stage Result JSON | Version 9 only |
 | Joint Result JSON | Schema v25 only |
 
-SQLite initializes schema v24 when `PRAGMA user_version` is zero and
+SQLite initializes schema v25 when `PRAGMA user_version` is zero and
 `sqlite_master` contains no user schema objects. An existing database opens
-only when `user_version` is 24 and the exact current schema validates.
+only when `user_version` is 25 and the exact current schema validates.
 SQLite and both JSON codecs require their current formats without migration.
 The repository rejects unsupported versions or structures before schema or
 row mutation.
 
-Stage JSON readers require `{"version":8}`. Joint JSON writers always emit
+Stage JSON readers require `{"version":9}`. Joint JSON writers always emit
 schema 25, and Joint readers require schema 25 with the
 `target-only-pure-halo-support-exclusion-v1` parameterization. Version
 selection does not depend on convergence, Halo count, or reconstruction
@@ -63,7 +63,7 @@ results, and nullable diagnostics.
 
 ## SQLite schema and lifecycle
 
-Schema v24 contains these tables:
+Schema v25 contains these tables:
 
 - `model_object`
 - `model_chain_map`
@@ -93,7 +93,7 @@ transaction. A failed write rolls back all rows for that save. A key saved
 without a Joint result has no Joint result row.
 
 Load validates the database, loads the current model structure, decodes a
-Joint result only as schema 25, and decodes a Stage result only as version 8.
+Joint result only as schema 25, and decodes a Stage result only as version 9.
 Any malformed JSON or unsupported payload fails the load; it is not rewritten
 in place.
 
@@ -103,7 +103,7 @@ in place.
 - `src/data/io/sqlite/ModelObjectStorage.cpp`: current model and result SQL.
 - `src/data/io/detail/PersistenceSchema.hpp`: SQLite, Stage, and Joint
   version constants.
-- `src/data/io/detail/StageResultJson.cpp`: Stage JSON version 8.
+- `src/data/io/detail/StageResultJson.cpp`: Stage JSON version 9.
 - `src/data/io/detail/JointResultJson.cpp`: Joint JSON schema 25.
 - `tests/data/DataObjectSchemaLifecycle_test.cpp` and
   `DataObjectSchemaValidation_test.cpp`: database bootstrap and rejection.

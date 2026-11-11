@@ -1,4 +1,6 @@
 #include <gtest/gtest.h>
+#include "core/sampling/MapInterpolation.hpp"
+#include <rhbm_gem/utils/math/NumericValidation.hpp>
 
 #include <algorithm>
 #include <array>
@@ -983,4 +985,163 @@ TEST(QScoreHelperTest, NonfiniteCenterIsRejectedByMapInterpolation)
     }
     const auto map{ MakeGaussianMapObject() };
     EXPECT_THROW(rhbm_gem::core::CalculateQScoreForAtom(atom, map, *model, 1.0, 0.0), std::out_of_range);
+}
+
+// Frozen arithmetic from the pre-refactor Standard implementation. This guards
+// bit-level compatibility independently of the new preparation/reference path.
+namespace {
+using rhbm_gem::AtomObject;
+using rhbm_gem::MapObject;
+using rhbm_gem::ModelObject;
+using rhbm_gem::core::GetRadialPointsForQScore;
+namespace numeric_validation=rhbm_gem::numeric_validation;
+namespace detail=rhbm_gem::core::detail;
+constexpr double kMaximumRadiusTolerance{0.01};
+double InterpolateQScoreResponse(const MapObject & map, const std::array<double, 3> & position)
+{
+    try
+    {
+        return detail::InterpolateTrilinear(map, position);
+    }
+    catch (const std::out_of_range &)
+    {
+        throw std::out_of_range(
+            "CalculateQScoreForAtom sampling position is outside the map boundary.");
+    }
+}
+
+double LegacyMeanSubtractedCorrelation(
+    const std::vector<double> & map_values,
+    const std::vector<double> & reference_values)
+{
+    if (map_values.empty())
+    {
+        return 0.0;
+    }
+
+    double map_value_sum{ 0.0 };
+    double reference_value_sum{ 0.0 };
+    for (std::size_t i = 0; i < map_values.size(); ++i)
+    {
+        map_value_sum += map_values.at(i);
+        reference_value_sum += reference_values.at(i);
+    }
+    const auto sample_count{ static_cast<double>(map_values.size()) };
+    const auto map_value_mean{ map_value_sum / sample_count };
+    const auto reference_value_mean{ reference_value_sum / sample_count };
+
+    double numerator{ 0.0 };
+    double map_value_norm_square{ 0.0 };
+    double reference_value_norm_square{ 0.0 };
+    for (std::size_t i = 0; i < map_values.size(); ++i)
+    {
+        const auto map_value_difference{
+            map_values.at(i) - map_value_mean
+        };
+        const auto reference_value_difference{
+            reference_values.at(i) - reference_value_mean
+        };
+        numerator += map_value_difference * reference_value_difference;
+        map_value_norm_square += map_value_difference * map_value_difference;
+        reference_value_norm_square += reference_value_difference * reference_value_difference;
+    }
+
+    const auto denominator{
+        std::sqrt(map_value_norm_square) * std::sqrt(reference_value_norm_square)
+    };
+    if (denominator == 0.0 ||
+        !std::isfinite(denominator) ||
+        !std::isfinite(numerator))
+    {
+        return 0.0;
+    }
+
+    const auto q_score{ numerator / denominator };
+    return std::isfinite(q_score) ? q_score : 0.0;
+}
+
+[[gnu::noinline]] double LegacyStandardScore(
+    const AtomObject & atom,
+    const MapObject & map,
+    const ModelObject & model,
+    double height,
+    double offset,
+    double sigma,
+    int num_points)
+{
+    numeric_validation::RequireFinitePositive(sigma, "CalculateQScoreForAtom sigma");
+    numeric_validation::RequireAtLeast(num_points, 2, "CalculateQScoreForAtom num_points");
+
+    const auto center_map_value{
+        InterpolateQScoreResponse(map, atom.GetPositionRef())
+    };
+    const auto center_reference_value{ height + offset };
+
+    std::vector<double> map_values(static_cast<std::size_t>(num_points), center_map_value);
+    std::vector<double> reference_values(static_cast<std::size_t>(num_points), center_reference_value);
+
+    for (double radius = 0.1; radius < 2.0 + kMaximumRadiusTolerance; radius += 0.1)
+    {
+        const auto radial_points{
+            GetRadialPointsForQScore(atom, model, radius, num_points)
+        };
+        if (radial_points.empty()) continue;
+        const auto reference_value{
+            height * std::exp(-0.5 * radius * radius / (sigma * sigma)) + offset
+        };
+        for (const auto & radial_point : radial_points)
+        {
+            map_values.emplace_back(InterpolateQScoreResponse(map, radial_point.position));
+            reference_values.emplace_back(reference_value);
+        }
+    }
+
+    return LegacyMeanSubtractedCorrelation(map_values, reference_values);
+}
+
+
+}
+
+TEST(QScoreHelperTest, PreparedSamplesAndStandardArithmeticMatchLegacyExactly)
+{
+    const auto map=MakeGaussianMapObject();
+    for (const double neighbor_z:{.5,1.2,4.0})
+    {
+        const auto model=MakeModelObject({{{0,0,0}},{{0,0,neighbor_z}}});
+        const auto & atom=*model->GetAtomList().front();
+        for (const int count:{2,8})
+        {
+            const auto samples=rhbm_gem::core::PrepareQScoreSamples(atom,map,*model,count);
+            std::size_t k{};
+            for (int center=0;center<count;++center,++k)
+            {
+                EXPECT_EQ(samples[k].point.position,atom.GetPositionRef());
+                EXPECT_EQ(samples[k].point.distance,0);
+                EXPECT_EQ(samples[k].response,1);
+            }
+            for (double radius=.1;radius<2.01;radius+=.1)
+                for (const auto & point:rhbm_gem::core::GetRadialPointsForQScore(atom,*model,radius,count))
+                {
+                    ASSERT_LT(k,samples.size());
+                    EXPECT_EQ(samples[k].point.position,point.position);
+                    EXPECT_EQ(samples[k].point.distance,radius);
+                    EXPECT_EQ(samples[k].response,rhbm_gem::core::detail::InterpolateTrilinear(map,point.position));
+                    ++k;
+                }
+            EXPECT_EQ(k,samples.size());
+            EXPECT_EQ(rhbm_gem::core::CalculateQScoreForAtom(atom,map,*model,1.7,-.31,.6,count),
+                LegacyStandardScore(atom,map,*model,1.7,-.31,.6,count));
+        }
+    }
+}
+
+TEST(QScoreHelperTest, ExplicitCorrelationDistinguishesZeroFromUnavailable)
+{
+    using rhbm_gem::core::CalculateQScoreCorrelation;
+    const auto zero=CalculateQScoreCorrelation({-1,0,1},{1,-2,1});
+    ASSERT_TRUE(zero.value); EXPECT_EQ(*zero.value,0);
+    EXPECT_EQ(CalculateQScoreCorrelation({.1,.1,.1},{0,1,2}).reason,"observation-zero-variance");
+    EXPECT_EQ(CalculateQScoreCorrelation({0,1,2},{.1,.1,.1}).reason,"reference-zero-variance");
+    EXPECT_EQ(CalculateQScoreCorrelation({},{}).reason,"sample-unavailable");
+    EXPECT_EQ(CalculateQScoreCorrelation({0,std::numeric_limits<double>::infinity()},{0,1}).reason,"nonfinite-response");
 }

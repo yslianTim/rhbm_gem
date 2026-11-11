@@ -6,6 +6,7 @@
 #include "core/estimator/joint_component/JointComponentEstimator.hpp"
 #include "core/estimator/joint_component/JointCliProgressReporter.hpp"
 #include "core/estimator/joint_component/PostFitPeeling.hpp"
+#include "core/estimator/joint_component/PostJointQScore.hpp"
 #include "core/estimator/joint_component/ResourceWork.hpp"
 #include "data/detail/PostJointLocalValidation.hpp"
 
@@ -286,8 +287,25 @@ bool RunJointStagePostprocessing(
     }
     model.EditAnalysis().ApplyJointResult(std::move(snapshot), joint_run_id);
     model.EditAnalysis().BindJointMapObservations(map);
-    if (halo_reconstruction_unavailable) return false;
     const auto & joint_snapshot = *model.GetAnalysisView().GetJointResult();
+    model.EditAnalysis().ApplyPostJointQScoresBatch(BuildPostJointQScores(
+        map,model,problem,joint_snapshot,halo_median_build ? &*halo_median_build : nullptr,postprocessing_metrics));
+    if (!options.quiet_mode)
+    {
+        std::ostringstream message;
+        message << "[QScore] Joint-peeled comparisons | targets=" << postprocessing_metrics.qscore_targets
+            << " | available=" << postprocessing_metrics.qscore_available
+            << " | unavailable=" << postprocessing_metrics.qscore_unavailable
+            << " | samples=" << postprocessing_metrics.qscore_samples
+            << " | contributions=" << postprocessing_metrics.qscore_contributions
+            << " | halos=" << postprocessing_metrics.qscore_halos
+            << " | extra_halos=" << postprocessing_metrics.qscore_extra_halos
+            << " | unavailable_halos=" << postprocessing_metrics.qscore_unavailable_halos
+            << " | elapsed=" << postprocessing_metrics.qscore_seconds << "s"
+            << " | estimated_payload_bytes=" << postprocessing_metrics.estimated_qscore_peak_bytes;
+        LogJointInfo(message.str());
+    }
+    if (halo_reconstruction_unavailable) return false;
     auto phase_start = std::chrono::steady_clock::now();
     auto contributor_universe=BuildJointPeelingContributorUniverse(model,problem,joint_snapshot);
     const JointPostprocessingContext postprocessing(map, model, problem, joint_snapshot,

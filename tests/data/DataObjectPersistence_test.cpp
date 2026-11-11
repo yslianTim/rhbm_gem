@@ -1286,7 +1286,7 @@ TEST(DataObjectPersistenceTest, JointNeutralRoundTripPreservesCurrentJointAndSta
     EXPECT_FALSE(data_test::HasTable(dir.path()/"result.sqlite","model_atom_local_potential"));
 }
 
-TEST(DataObjectPersistenceTest, StageResultJsonV8OnlyAcceptsCurrentRoundTrip)
+TEST(DataObjectPersistenceTest, StageResultJsonV9OnlyAcceptsCurrentRoundTrip)
 {
     auto model=data_test::MakeModelWithBond();
     model->SelectAllAtoms();
@@ -1296,7 +1296,7 @@ TEST(DataObjectPersistenceTest, StageResultJsonV8OnlyAcceptsCurrentRoundTrip)
     initial.source.fixed_from_initial_stage=true;
     editor.SetAtomInitialStageEstimate(*model->FindAtomPtr(1),initial);
     const auto encoded=rg::stage_result_io::Encode(*model);
-    EXPECT_EQ(boost::json::parse(encoded).at("version").as_int64(),8);
+    EXPECT_EQ(boost::json::parse(encoded).at("version").as_int64(),9);
 
     auto restored=data_test::MakeModelWithBond();
     restored->SelectAllAtoms();
@@ -1306,7 +1306,7 @@ TEST(DataObjectPersistenceTest, StageResultJsonV8OnlyAcceptsCurrentRoundTrip)
     EXPECT_TRUE(rg::AtomLocalPotentialView::For(*restored->FindAtomPtr(1))
         .GetInitialStageEstimate().source.fixed_from_initial_stage);
 
-    for(const int version:{1,2,3,4,5,6,7,9})
+    for(const int version:{1,2,3,4,5,6,7,8,10})
     {
         auto old=boost::json::parse(encoded).as_object();
         old["version"]=version;
@@ -1391,6 +1391,101 @@ TEST(DataObjectPersistenceTest, CanonicalNativeDiagnosticsAndMissingStatesRoundT
     EXPECT_DOUBLE_EQ(loaded->GetAnalysisView().GetAtomAlphaG(group),.87);
     EXPECT_FALSE(actual.fit_result); ASSERT_TRUE(actual.diagnostics); EXPECT_EQ(actual.diagnostics->iterations.iterations,17);
     EXPECT_EQ(actual.diagnostics->refinement->relative_coordinate_difference,fit.refinement->relative_coordinate_difference);
-    const auto document=boost::json::parse(expected).as_object(); EXPECT_EQ(document.at("version").as_int64(),8);
+    const auto document=boost::json::parse(expected).as_object(); EXPECT_EQ(document.at("version").as_int64(),9);
     EXPECT_FALSE(loaded->GetAnalysisView().GetJointResult());
+}
+
+#include "support/JointQScoreFixture.hpp"
+TEST(DataObjectPersistenceTest, JointPeeledQScoresRoundTripAndRejectInconsistentEvidence)
+{
+    auto f=qscore_test::Make({{{0,0,0},{2,.6,.2}},{{3.5,0,0},{2,.6,.2},false},{{0,2,0},{2,.6,.3}}},true);
+    f.model->EditAnalysis().ApplyPostJointQScoresBatch(f.results);
+    const command_test::ScopedTempDir dir{"joint_qscore_roundtrip"};
+    rg::DataRepository repository(dir.path()/"qscore.sqlite");
+    repository.SaveModel(*f.model,"qscore");
+    auto loaded=repository.LoadModel("qscore");
+    const auto expected=rg::stage_result_io::Encode(*f.model);
+    EXPECT_EQ(rg::stage_result_io::Encode(*loaded),expected);
+    const auto & q=rg::AtomLocalPotentialView::For(*loaded->FindAtomPtr(1)).GetPostJointQScore();
+    ASSERT_TRUE(q); ASSERT_TRUE(q->scores);
+    EXPECT_EQ(q->source.run_id,"qscore-test-run");
+    EXPECT_EQ(q->sample_count,f.results.front().second.sample_count);
+    ASSERT_EQ(q->extra_halos.size(),1u);
+    EXPECT_EQ(q->extra_halos.front().donor_atom_ids,std::vector<std::string>({"1","3"}));
+    EXPECT_EQ(q->scores->standard,f.results.front().second.scores->standard);
+    EXPECT_EQ(q->scores->joint,f.results.front().second.scores->joint);
+    auto invalid=f.results;
+    for (int variant=0;variant<9;++variant)
+    {
+        invalid=f.results;auto & result=invalid.front().second;
+        if (variant==0) result.scores->standard=std::numeric_limits<double>::infinity();
+        if (variant==1) result.source.run_id="stale-run";
+        if (variant==2) result.sample_count=9;
+        if (variant==3) result.reason="unavailable-with-scores";
+        if (variant==4) result.scores->joint=1.001;
+        if (variant==5) result.extra_halos.front().donor_atom_ids={"2"};
+        if (variant==6) result.reference_height+=1;
+        if (variant==7) result.status=rg::EvidenceStatus::Unavailable;
+        if (variant==8) std::reverse(result.extra_halos.front().donor_atom_ids.begin(),result.extra_halos.front().donor_atom_ids.end());
+        EXPECT_THROW(f.model->EditAnalysis().ApplyPostJointQScoresBatch(invalid),std::invalid_argument) << variant;
+    }
+    EXPECT_EQ(rg::stage_result_io::Encode(*f.model),expected);
+    for (int variant=0;variant<5;++variant)
+    {
+        auto json=boost::json::parse(expected).as_object();
+        auto & result=json.at("atoms").as_array().front().as_object().at("post_joint_qscore").as_object();
+        if (variant==0) result["samples"]=9;
+        if (variant==1) result["scores"]=boost::json::array{2.,0.};
+        if (variant==2) result.at("source").as_object()["atom"]="2";
+        if (variant==3) result.at("extra_halos").as_array().front().as_object()["donors"]=boost::json::array{"2"};
+        if (variant==4) result["scores"]=nullptr;
+        auto copy=*loaded;
+        EXPECT_THROW(rg::stage_result_io::Decode(copy,boost::json::serialize(json)),std::invalid_argument) << variant;
+    }
+    auto zero=f.results;
+    zero.front().second.scores=rg::PostJointQScoreValues{0.,0.};
+    f.model->EditAnalysis().ApplyPostJointQScoresBatch(zero);
+    repository.SaveModel(*f.model,"valid-zero");
+    const auto zero_model=repository.LoadModel("valid-zero");
+    const auto & zero_result=rg::AtomLocalPotentialView::For(*zero_model->FindAtomPtr(1)).GetPostJointQScore();
+    ASSERT_TRUE(zero_result && zero_result->scores);
+    EXPECT_EQ(zero_result->scores->standard,0.);
+    EXPECT_TRUE(zero_result->reason.empty());
+    f.model->SetReferenceHeight(0);
+    f.Calculate();
+    ASSERT_FALSE(f.results.front().second.scores);
+    f.model->EditAnalysis().ApplyPostJointQScoresBatch(f.results);
+    repository.SaveModel(*f.model,"unavailable");
+    const auto unavailable=repository.LoadModel("unavailable");
+    const auto & restored=rg::AtomLocalPotentialView::For(*unavailable->FindAtomPtr(1)).GetPostJointQScore();
+    ASSERT_TRUE(restored);EXPECT_FALSE(restored->scores);
+    EXPECT_EQ(restored->status,rg::EvidenceStatus::Unavailable);
+    EXPECT_EQ(restored->reason,"standard:reference-zero-variance");
+}
+
+TEST(DataObjectPersistenceTest, JointPeeledQScoresInvalidateWithSourcesButSurviveSelection)
+{
+    auto f=qscore_test::Make();
+    f.model->EditAnalysis().ApplyPostJointQScoresBatch(f.results);
+    f.model->SelectAtoms([](const auto &){return false;});
+    EXPECT_TRUE(rg::AtomLocalPotentialView::For(*f.model->FindAtomPtr(1)).GetPostJointQScore());
+    f.model->SelectAllAtoms();
+    f.model->SetReferenceOffset(f.model->GetReferenceOffset()+1);
+    EXPECT_FALSE(rg::AtomLocalPotentialView::For(*f.model->FindAtomPtr(1)).GetPostJointQScore());
+    f.Calculate();f.model->EditAnalysis().ApplyPostJointQScoresBatch(f.results);
+    auto copy=*f.model;
+    auto endpoint=rg::AtomLocalPotentialView::For(*copy.FindAtomPtr(1)).GetJointStageEstimate();
+    endpoint.point=endpoint.point->WithOffset(.3);
+    copy.EditAnalysis().SetAtomJointStageEstimate(*copy.FindAtomPtr(1),endpoint);
+    EXPECT_FALSE(rg::AtomLocalPotentialView::For(*copy.FindAtomPtr(1)).GetPostJointQScore());
+    auto hydrogen=*f.model;
+    hydrogen.FindAtomPtr(1)->SetElement(Element::HYDROGEN);
+    EXPECT_FALSE(rg::AtomLocalPotentialView::For(*hydrogen.FindAtomPtr(1)).GetPostJointQScore());
+    auto geometry=*f.model;
+    geometry.FindAtomPtr(1)->SetPosition(.1,0,0);
+    EXPECT_FALSE(rg::AtomLocalPotentialView::For(*geometry.FindAtomPtr(1)).IsAvailable());
+    auto values=std::make_unique<double[]>(f.map->GetMapValueArraySize());
+    std::fill_n(values.get(),f.map->GetMapValueArraySize(),0.);
+    f.map->SetMapValueArray(std::move(values));
+    EXPECT_FALSE(rg::AtomLocalPotentialView::For(*f.model->FindAtomPtr(1)).IsAvailable());
 }

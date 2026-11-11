@@ -61,14 +61,14 @@ def main() -> int:
         assert not list(collision.glob("joint_*")), "Collision must fail before writing any result"
         saved = json.loads((root / "joint_result_example.json").read_text())
         with sqlite3.connect(database) as connection:
-            assert connection.execute("PRAGMA user_version").fetchone()[0] == 24
+            assert connection.execute("PRAGMA user_version").fetchone()[0] == 25
             payload = connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='example'").fetchone()[0]
             changed = json.loads(connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='changed'").fetchone()[0])
             stages = json.loads(connection.execute("SELECT result_json FROM model_stage_result WHERE key_tag='example'").fetchone()[0])
-            assert stages["version"] == 8
+            assert stages["version"] == 9
             assert len(stages["atoms"]) == 25
             assert all(set(atom) == {"id", "initial", "joint", "initial_native", "raw",
-                                     "geometry", "peeling", "post_joint_local", "posterior"}
+                                     "geometry", "peeling", "post_joint_local", "post_joint_qscore", "posterior"}
                        for atom in stages["atoms"])
             for group in stages["groups"]:
                 if group["summary"] and group["summary"]["inference"]:

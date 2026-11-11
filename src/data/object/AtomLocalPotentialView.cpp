@@ -137,6 +137,11 @@ const std::optional<PostJointLocalResult> & AtomLocalPotentialView::GetPostJoint
     return RequireEntry("Post-Joint local result").PostJointLocalResult();
 }
 
+const std::optional<PostJointQScoreResult> & AtomLocalPotentialView::GetPostJointQScore() const
+{
+    return RequireEntry("Post-Joint QScore").PostJointQScore();
+}
+
 bool AtomLocalPotentialView::HasSampleGeometry() const
 {
     return IsAvailable() && RequireEntry("Sample geometry").SampleGeometryAvailable();

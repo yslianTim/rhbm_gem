@@ -57,6 +57,13 @@ void AtomObject::SetAtomID(const std::string & value)
     m_spot = ChemicalDataHelper::GetSpotFromString(m_atom_id, false);
 }
 
+void AtomObject::SetElement(Element value)
+{
+    if ((m_element==Element::HYDROGEN)!=(value==Element::HYDROGEN) && m_owner_model!=nullptr)
+        m_owner_model->EditAnalysis().ClearPostJointQScores();
+    m_element=value;
+}
+
 void AtomObject::SetPosition(double x, double y, double z)
 {
     m_position.at(0) = x;

@@ -54,7 +54,7 @@ public:
     void SetTemperature(double value) { m_temperature = value; }
     void SetStandardQScore(double value) { m_standard_qscore = value; }
     void SetResidue(Residue value) { m_residue = value; }
-    void SetElement(Element value) { m_element = value; }
+    void SetElement(Element value);
     void SetSpot(Spot value) { m_spot = value; }
     void SetStructure(Structure value) { m_structure = value; }
     void SetPosition(double x, double y, double z);

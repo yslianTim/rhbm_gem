@@ -101,6 +101,7 @@ set(CORE_SAMPLER_TEST_SOURCES
 
 set(CORE_QSCORE_TEST_SOURCES
     core/QScoreHelper_test.cpp
+    core/PostJointQScore_test.cpp
 )
 
 set(CORE_ESTIMATOR_TEST_SOURCES
@@ -322,7 +323,7 @@ set(joint_persistence_test_patterns
     DataObjectPersistenceTest.JointMetadataRejectsInvalidValuesAndOldDocumentsWithoutWrites
     DataObjectPersistenceTest.JointSelectionMetadataValidationAndCsvRoles
     DataObjectPersistenceTest.JointNeutralRoundTripPreservesCurrentJointAndStageResults
-    DataObjectPersistenceTest.StageResultJsonV8OnlyAcceptsCurrentRoundTrip
+    DataObjectPersistenceTest.StageResultJsonV9OnlyAcceptsCurrentRoundTrip
     DataObjectPersistenceTest.CanonicalNativeDiagnosticsAndMissingStatesRoundTripExactly
     DataObjectPersistenceTest.UncertifiedCandidateDiagnosticsRoundTripWithoutEnteringScientificExports
     DataObjectPersistenceTest.CandidateDiagnosticsRejectInvalidOrUntrustedCheckpointParameters

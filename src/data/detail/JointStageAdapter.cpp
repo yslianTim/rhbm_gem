@@ -37,6 +37,12 @@ std::map<int, LocalStageEstimate> BuildJointStageEstimates(
         if (component.state && (component.state->ac.size() != 2 * full.size() ||
             component.state->tau.size() != full.size()))
             throw std::invalid_argument("Joint component state/mapping size mismatch.");
+        std::map<std::size_t,std::size_t> state_indices;
+        for (std::size_t k=0;k<full.size();++k) state_indices.emplace(full[k],k);
+        std::map<std::size_t,const JointAtomPointValidation *> point_evidence;
+        if (component.target_evidence)
+            for (const auto & point:component.target_evidence->point_atoms)
+                point_evidence.emplace(point.atom,&point);
         for (std::size_t local = 0; local < component.atoms.size(); ++local)
         {
             const auto global = component.atoms[local];
@@ -44,19 +50,16 @@ std::map<int, LocalStageEstimate> BuildJointStageEstimates(
                 throw std::invalid_argument("Invalid or duplicate joint component mapping.");
             auto & estimate = estimates.at(identities[global]);
             estimate.source.component_id = component.id;
-            const auto found=std::find(full.begin(),full.end(),global);
-            if(found==full.end())
+            const auto found=state_indices.find(global);
+            if(found==state_indices.end())
                 throw std::invalid_argument("Joint target component is missing its state mapping.");
             if(component.target_evidence)
             {
-                const auto & points=component.target_evidence->point_atoms;
-                const auto point=std::find_if(points.begin(),points.end(),[&](const auto & value) {
-                    return value.atom==global;
-                });
-                if(point==points.end() || point->parameter_validity!=JointCheckStatus::Passed ||
-                    point->component_convergence!=JointCheckStatus::Passed)
+                const auto point=point_evidence.find(global);
+                if(point==point_evidence.end() || point->second->parameter_validity!=JointCheckStatus::Passed ||
+                    point->second->component_convergence!=JointCheckStatus::Passed)
                 {
-                    estimate.reason=point==points.end() ? "missing-point-validation" : point->reason;
+                    estimate.reason=point==point_evidence.end() ? "missing-point-validation" : point->second->reason;
                     estimate.convergence=JointCheckStatus::Unavailable;
                     continue;
                 }
@@ -66,7 +69,7 @@ std::map<int, LocalStageEstimate> BuildJointStageEstimates(
                 JointCheckStatus::Unavailable;
             if (!component.state) { estimate.reason = component.stop_reason; continue; }
             const auto & state = *component.state;
-            const auto index=static_cast<std::size_t>(found-full.begin());
+            const auto index=found->second;
             const double a = state.ac[2 * index], c = state.ac[2 * index + 1], tau = state.tau[index];
             if (!std::isfinite(a) || a < 0 || !std::isfinite(c) || !std::isfinite(tau) || tau <= 0)
                 throw std::invalid_argument("Invalid joint point estimate.");

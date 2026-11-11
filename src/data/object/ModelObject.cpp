@@ -359,6 +359,18 @@ ModelAnalysisView ModelObject::GetAnalysisView() const
     return ModelAnalysisView(*this);
 }
 
+void ModelObject::SetReferenceHeight(double value)
+{
+    if (m_reference_height!=value) EditAnalysis().ClearPostJointQScores();
+    m_reference_height=value;
+}
+
+void ModelObject::SetReferenceOffset(double value)
+{
+    if (m_reference_offset!=value) EditAnalysis().ClearPostJointQScores();
+    m_reference_offset=value;
+}
+
 void ModelObject::InvalidateDerivedState()
 {
     if (m_derived_state == nullptr)

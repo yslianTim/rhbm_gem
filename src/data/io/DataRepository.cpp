@@ -177,7 +177,7 @@ void ValidateColumns(
     if (columns.size() != expected_names.size())
     {
         throw std::runtime_error(
-            "Schema v24 column mismatch for table: " + std::string(table_name));
+            "Schema v25 column mismatch for table: " + std::string(table_name));
     }
 
     auto column_iter{ columns.begin() };
@@ -186,7 +186,7 @@ void ValidateColumns(
         if (column_iter->name != expected_name)
         {
             throw std::runtime_error(
-                "Schema v24 column mismatch for table: " + std::string(table_name));
+                "Schema v25 column mismatch for table: " + std::string(table_name));
         }
         ++column_iter;
     }
@@ -209,7 +209,7 @@ void ValidatePrimaryKey(
     if (primary_key_columns.size() != expected_names.size())
     {
         throw std::runtime_error(
-            "Schema v24 primary key mismatch for table: " + std::string(table_name));
+            "Schema v25 primary key mismatch for table: " + std::string(table_name));
     }
 
     auto primary_key_iter{ primary_key_columns.begin() };
@@ -218,7 +218,7 @@ void ValidatePrimaryKey(
         if (primary_key_iter->second != expected_name)
         {
             throw std::runtime_error(
-                "Schema v24 primary key mismatch for table: " + std::string(table_name));
+                "Schema v25 primary key mismatch for table: " + std::string(table_name));
         }
         ++primary_key_iter;
     }
@@ -236,7 +236,7 @@ void ValidateSelectionColumn(
         }
     }
     throw std::runtime_error(
-        "Schema v24 requires a NOT NULL is_selected column on table: "
+        "Schema v25 requires a NOT NULL is_selected column on table: "
         + std::string(table_name));
 }
 
@@ -255,19 +255,19 @@ void ValidateModelRootForeignKey(
         }
     }
     throw std::runtime_error(
-        "Schema v24 model root foreign key mismatch for table: "
+        "Schema v25 model root foreign key mismatch for table: "
         + std::string(table_name));
 }
 
 void ValidateCurrentSchema(rhbm_gem::SQLiteWrapper & database)
 {
     if (QueryUserVersion(database) != kCurrentSchemaVersion)
-        throw std::runtime_error("Unsupported SQLite schema: expected schema v24.");
+        throw std::runtime_error("Unsupported SQLite schema: expected schema v25.");
 
     if (QuerySingleInt(database, std::string(kUserSchemaObjectCountSql))
         != static_cast<int>(kModelTableNames.size()))
     {
-        throw std::runtime_error("Schema v24 contains an unexpected schema object.");
+        throw std::runtime_error("Schema v25 contains an unexpected schema object.");
     }
 
     const auto table_names{ QueryTableNames(database) };
@@ -277,13 +277,13 @@ void ValidateCurrentSchema(rhbm_gem::SQLiteWrapper & database)
             kModelTableNames.begin(),
             kModelTableNames.end()))
     {
-        throw std::runtime_error("Schema v24 contains an unexpected table set.");
+        throw std::runtime_error("Schema v25 contains an unexpected table set.");
     }
 
     ValidateColumns(database, "model_stage_result", {"key_tag", "result_json"});
     ValidatePrimaryKey(database, "model_stage_result", {"key_tag"});
     if (QueryTableInfo(database, "model_stage_result").at(1).not_null != 1)
-        throw std::runtime_error("Schema v24 requires NOT NULL stage result JSON.");
+        throw std::runtime_error("Schema v25 requires NOT NULL stage result JSON.");
     ValidateColumns(database, "model_object", {
         "key_tag", "pdb_id", "emd_id", "map_resolution", "resolution_method",
         "standard_average_qscore", "reference_height", "reference_offset" });
@@ -310,7 +310,7 @@ void ValidateCurrentSchema(rhbm_gem::SQLiteWrapper & database)
     ValidateColumns(database, "model_joint_result", { "key_tag", "result_json" });
     ValidatePrimaryKey(database, "model_joint_result", { "key_tag" });
     if (QueryTableInfo(database, "model_joint_result").at(1).not_null != 1)
-        throw std::runtime_error("Schema v24 requires NOT NULL model_joint_result.result_json.");
+        throw std::runtime_error("Schema v25 requires NOT NULL model_joint_result.result_json.");
     ValidatePrimaryKey(database, "model_object", { "key_tag" });
     ValidatePrimaryKey(database, "model_chain_map", {
         "key_tag", "entity_id", "chain_ordinal" });
@@ -346,7 +346,7 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
         return;
     }
     throw std::runtime_error(
-        "Unsupported SQLite schema: expected an empty version-0 database or schema v24.");
+        "Unsupported SQLite schema: expected an empty version-0 database or schema v25.");
 }
 
 } // namespace

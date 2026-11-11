@@ -68,8 +68,8 @@ public:
     void SetResolution(double value) { m_resolution = value; }
     void SetResolutionMethod(const std::string & value) { m_resolution_method = value; }
     void SetStandardAverageQScore(double value) { m_standard_average_qscore = value; }
-    void SetReferenceHeight(double value) { m_reference_height = value; }
-    void SetReferenceOffset(double value) { m_reference_offset = value; }
+    void SetReferenceHeight(double value);
+    void SetReferenceOffset(double value);
 
     bool HasStandardRNAComponent() const;
     bool HasStandardDNAComponent() const;
