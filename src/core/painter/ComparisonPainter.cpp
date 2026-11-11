@@ -58,7 +58,7 @@ private:
     void AddReferenceModel(ModelObject & data_object, std::string_view label);
     void PaintGroupGausEstimateComparison(const std::string & name);
     void PaintGausEstimateResidueClassDenseComparison(const std::string & name);
-    void PainMapValueComparison(
+    void PaintSamplingValueComparison(
         const std::string & name,
         ModelObject * model_object,
         const std::vector<ModelObject *> & ref_model_object_list);
@@ -137,7 +137,7 @@ void ComparisonPainter::Run()
         auto & ref_model_object_list{ m_ref_model_object_list_map.at("with_charge") };
         if (model_object->GetPdbID() == ref_model_object_list.at(0)->GetPdbID())
         {
-            PainMapValueComparison(plot_name, model_object, ref_model_object_list);
+            PaintSamplingValueComparison(plot_name, model_object, ref_model_object_list);
         }
     }
 
@@ -662,13 +662,13 @@ void ComparisonPainter::PaintGausEstimateResidueClassDenseComparison(const std::
     #endif
 }
 
-void ComparisonPainter::PainMapValueComparison(
+void ComparisonPainter::PaintSamplingValueComparison(
     const std::string & name,
     ModelObject * model_object,
     const std::vector<ModelObject *> & ref_model_object_list)
 {
     auto file_path{ m_folder_path + name };
-    Logger::Log(LogLevel::Info, " ComparisonPainter::PainMapValueComparison");
+    Logger::Log(LogLevel::Info, " ComparisonPainter::PaintSamplingValueComparison");
     (void)model_object;
     (void)ref_model_object_list;
 
@@ -698,7 +698,7 @@ void ComparisonPainter::PainMapValueComparison(
         {
             const auto atom_key{ static_cast<AtomKey>(data_internal::GetMainChainSpot(i)) };
             auto graph{
-                PotentialPlotBuilder::CreateMapValueScatterGraph(
+                PotentialPlotBuilder::CreateBinnedSamplingValueScatterGraph(
                     atom_key, ref_model_object, model_object, 15, 0.0, 1.5)
             };
             if (graph->GetN() >= 2) r_square[i] = root_helper::PerformLinearRegression(graph.get(), slope[i], intercept[i]);
@@ -750,7 +750,7 @@ void ComparisonPainter::PainMapValueComparison(
                 root_helper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.08/y_factor), 506);
                 root_helper::SetLineAttribute(frame[i][j].get(), 1, 0);
                 frame[i][j]->GetXaxis()->SetTitle("");
-                frame[i][j]->GetYaxis()->SetTitle("Real Map Value");
+                frame[i][j]->GetYaxis()->SetTitle("Real Sampling Value");
                 frame[i][j]->GetYaxis()->CenterTitle();
                 frame[i][j]->SetStats(0);
                 frame[i][j]->Draw();
@@ -801,7 +801,7 @@ void ComparisonPainter::PainMapValueComparison(
         root_helper::SetPaveTextDefaultStyle(bottom_title_text.get());
         root_helper::SetFillAttribute(bottom_title_text.get(), 4000);
         root_helper::SetTextAttribute(bottom_title_text.get(), 50.0f, 133, 22);
-        bottom_title_text->AddText("Simulated Map Value");
+        bottom_title_text->AddText("Simulated Sampling Value");
         bottom_title_text->Draw();
         root_helper::PrintCanvasPad(canvas.get(), file_path);
     }

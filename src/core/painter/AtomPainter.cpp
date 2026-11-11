@@ -110,7 +110,7 @@ void AtomPainter::PaintDemoPlot(const std::string & name)
 
     const auto atom_entry{ AtomLocalPotentialView::For(*atom_object) };
     auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom_object) };
-    auto map_value_range{
+    auto sampling_value_range{
         local_potential_series::ComputeResponseRange(
             atom_entry.GetRawSamplingEntries(), 0.3)
     };
@@ -119,17 +119,17 @@ void AtomPainter::PaintDemoPlot(const std::string & name)
             atom_entry.GetRawSamplingEntries(), 0.0)
     };
 
-    auto map_value_graph{ atom_plot_builder->CreateDistanceToMapValueGraph() };
-    auto map_value_ref_graph{ atom_plot_builder->CreateDistanceToMapValueGraph() };
+    auto sampling_value_graph{ atom_plot_builder->CreateDistanceToResponseGraph() };
+    auto sampling_value_ref_graph{ atom_plot_builder->CreateDistanceToResponseGraph() };
 
-    auto map_value_hist{ root_helper::CreateHist2D("hist","", 15, std::get<0>(distance_range), std::get<1>(distance_range), 1000, std::get<0>(map_value_range), std::get<1>(map_value_range)) };
-    for (int p = 0; p < map_value_graph->GetN(); p++)
+    auto sampling_value_hist{ root_helper::CreateHist2D("hist","", 15, std::get<0>(distance_range), std::get<1>(distance_range), 1000, std::get<0>(sampling_value_range), std::get<1>(sampling_value_range)) };
+    for (int p = 0; p < sampling_value_graph->GetN(); p++)
     {
-        map_value_hist->Fill(map_value_graph->GetPointX(p), map_value_graph->GetPointY(p));
+        sampling_value_hist->Fill(sampling_value_graph->GetPointX(p), sampling_value_graph->GetPointY(p));
     }
 
     pad_main->cd();
-    auto frame_hist{ root_helper::CreateHist2D("frame","", 100, 0.0, 1.5, 100, std::get<0>(map_value_range), std::get<1>(map_value_range)) };
+    auto frame_hist{ root_helper::CreateHist2D("frame","", 100, 0.0, 1.5, 100, std::get<0>(sampling_value_range), std::get<1>(sampling_value_range)) };
     root_helper::SetPadDefaultStyle(gPad);
     root_helper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
     root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, kWhite, 1, 0);
@@ -146,7 +146,7 @@ void AtomPainter::PaintDemoPlot(const std::string & name)
     frame_hist->GetXaxis()->CenterTitle();
     frame_hist->GetYaxis()->CenterTitle();
     frame_hist->GetXaxis()->SetTitle("Radial Distance #font[12]{r_{j}} #[]{#AA}");
-    frame_hist->GetYaxis()->SetTitle("Sampled Map Value around #font[102]{C_{#alpha}}(ALA-1) #font[12]{y_{1, j}}");
+    frame_hist->GetYaxis()->SetTitle("Sampling Value around #font[102]{C_{#alpha}}(ALA-1) #font[12]{y_{1, j}}");
     frame_hist->Draw("");
 
     auto ref_line{ root_helper::CreateLine(0.0, 0.0, 1.5, 0.0) };
@@ -154,18 +154,18 @@ void AtomPainter::PaintDemoPlot(const std::string & name)
     ref_line->Draw();
 
     auto marker_size{ 1.5f };
-    root_helper::SetMarkerAttribute(map_value_graph.get(), 20, marker_size, kSpring-1);
-    root_helper::SetLineAttribute(map_value_graph.get(), 1, 1, kBlack);
-    map_value_graph->Draw("P SAME");
+    root_helper::SetMarkerAttribute(sampling_value_graph.get(), 20, marker_size, kSpring-1);
+    root_helper::SetLineAttribute(sampling_value_graph.get(), 1, 1, kBlack);
+    sampling_value_graph->Draw("P SAME");
 
-    root_helper::SetMarkerAttribute(map_value_ref_graph.get(), 24, marker_size, kBlack, 0.5);
-    map_value_ref_graph->Draw("P SAME");
+    root_helper::SetMarkerAttribute(sampling_value_ref_graph.get(), 24, marker_size, kBlack, 0.5);
+    sampling_value_ref_graph->Draw("P SAME");
 
-    map_value_hist->SetStats(0);
-    map_value_hist->SetBarWidth(1.0);
-    root_helper::SetFillAttribute(map_value_hist.get(), 1001, kAzure-7, 0.5);
-    root_helper::SetLineAttribute(map_value_hist.get(), 1, 2, kAzure-5);
-    map_value_hist->Draw("CANDLE2 SAME");
+    sampling_value_hist->SetStats(0);
+    sampling_value_hist->SetBarWidth(1.0);
+    root_helper::SetFillAttribute(sampling_value_hist.get(), 1001, kAzure-7, 0.5);
+    root_helper::SetLineAttribute(sampling_value_hist.get(), 1, 2, kAzure-5);
+    sampling_value_hist->Draw("CANDLE2 SAME");
 
     const auto & estimate{
         atom_entry.GetJointStageModel()
@@ -206,18 +206,18 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
         if (stage.source.method != EstimateMethod::JointComponents || stage.source.role != FittingRole::Target) continue;
         canvas->Clear(); canvas->cd();
         auto builder=std::make_unique<PotentialPlotBuilder>(atom_object);
-        auto raw=builder->CreateDistanceToMapValueGraph(DistanceSamplingMode::AllRaw);
-        auto peeled=builder->CreateDistanceToMapValueGraph(DistanceSamplingMode::Peeling);
-        raw->SetTitle(("Joint components: atom " + std::to_string(atom_object->GetSerialID()) + ";Radial distance (Angstrom);Map response").c_str());
-        root_helper::SetMarkerAttribute(raw.get(),20,0.7f,kGray+1);
-        if (raw->GetN()>0) raw->Draw("AP");
-        else canvas->DrawFrame(0,-1,2,1,"Joint samples unavailable;Radial distance (Angstrom);Map response");
-        root_helper::SetMarkerAttribute(peeled.get(),20,0.7f,kBlue);
-        peeled->Draw("P SAME");
+        auto raw_sampling_graph=builder->CreateDistanceToResponseGraph(DistanceSamplingMode::AllRaw);
+        auto peeled_response_graph=builder->CreateDistanceToResponseGraph(DistanceSamplingMode::Peeling);
+        raw_sampling_graph->SetTitle(("Joint components: atom " + std::to_string(atom_object->GetSerialID()) + ";Radial distance (Angstrom);Response").c_str());
+        root_helper::SetMarkerAttribute(raw_sampling_graph.get(),20,0.7f,kGray+1);
+        if (raw_sampling_graph->GetN()>0) raw_sampling_graph->Draw("AP");
+        else canvas->DrawFrame(0,-1,2,1,"Joint samples unavailable;Radial distance (Angstrom);Response");
+        root_helper::SetMarkerAttribute(peeled_response_graph.get(),20,0.7f,kBlue);
+        peeled_response_graph->Draw("P SAME");
         auto curve=builder->CreateAtomLocalGausFunctionFinal();
         auto legend=root_helper::CreateLegend(0.55,0.68,0.95,0.94,false);
-        if (raw->GetN()>0) legend->AddEntry(raw.get(),"Raw samples","p");
-        if(entry_view.GetPostFitPeeling()) legend->AddEntry(peeled.get(),"Joint peeling (individual target charge retained)","p");
+        if (raw_sampling_graph->GetN()>0) legend->AddEntry(raw_sampling_graph.get(),"Raw sampling values","p");
+        if(entry_view.GetPostFitPeeling()) legend->AddEntry(peeled_response_graph.get(),"Peeled response (individual target charge retained)","p");
         if(curve) {root_helper::SetLineAttribute(curve.get(),1,2,kRed); curve->Draw("SAME"); legend->AddEntry(curve.get(),"Joint Second: Gaussian + charge C","l");}
         else legend->AddEntry(static_cast<TObject *>(nullptr),("Second unavailable: " + entry_view.GetJointStageEstimate().reason).c_str(), "");
         legend->Draw();

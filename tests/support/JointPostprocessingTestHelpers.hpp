@@ -18,12 +18,12 @@ using rhbm_gem::PostFitPeelingResult;
 // Synthetic line-grid observations for editor/eligibility fixtures without a map.
 // Map integration tests use the Original support collector instead.
 inline rhbm_gem::PostJointGridObservation MakeGridObservation(
-    std::size_t row, std::size_t grid, double distance, double response,
+    std::size_t row, std::size_t grid, double distance, double map_value,
     const std::array<double,3> & center = {})
 {
     auto position=center;
     position[0]+=distance;
-    return {row,grid,distance*distance,response,position};
+    return {row,grid,distance*distance,map_value,position};
 }
 
 inline JointPostprocessingContext MakeJointPostprocessingContext(

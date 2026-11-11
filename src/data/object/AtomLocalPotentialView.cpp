@@ -202,18 +202,18 @@ PeelingRatioAssessment AtomLocalPotentialView::AssessLocalFittingPeelingRatio(
             const double distance=std::sqrt(sample.observation.squared_distance);
             if (distance<distance_min || distance>distance_max) continue;
             ++assessment.total_samples;
-            if (std::isfinite(sample.observation.raw_response)) raw_sum+=sample.observation.raw_response;
+            if (std::isfinite(sample.observation.map_value)) raw_sum+=sample.observation.map_value;
             if (!sample.response)
             {
                 if (missing_reason.empty()) missing_reason=sample.reason;
                 continue;
             }
-            if (!std::isfinite(sample.observation.raw_response) || !std::isfinite(*sample.response))
+            if (!std::isfinite(sample.observation.map_value) || !std::isfinite(*sample.response))
             {
                 if (missing_reason.empty()) missing_reason="nonfinite-response";
                 continue;
             }
-            valid_raw_sum+=sample.observation.raw_response;
+            valid_raw_sum+=sample.observation.map_value;
             peeled_sum+=*sample.response;
             ++assessment.valid_samples;
         }

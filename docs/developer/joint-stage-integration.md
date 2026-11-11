@@ -25,7 +25,8 @@ with ten points per shell. The internal `FitOptions::initial_stage_sampling_meth
 can select `SphereSamplingMethod::SpiralDeterministic`. The default is
 `SphereSamplingMethod::FibonacciDeterministic`. Both methods apply the
 strict Ownership and 30° cone exclusions for non-hydrogen neighbors.
-Tricubic samples feed alpha training and OLS/MDPDE on selected positive
+Tricubic interpolation of stored voxel Map Values produces Sampling Values.
+These raw sampling entries feed alpha training and OLS/MDPDE on selected positive
 responses within 1 Å.
 The internal `RunInitialStageLocalAlphaTraining` and
 `RunInitialStageLocalFitting` support the current selection or an explicit atom list.
@@ -124,8 +125,16 @@ For Local fitting subtract the Target's own charge,
 prediction evaluations here use the Original grid without interpolation.
 The fixed-charge profile preserves the Joint C and width independently of
 the Gaussian estimates. Each observation records Original row, global
-grid index, squared distance, voxel position, raw response and either
+grid index, squared distance, voxel position, `PostJointGridObservation::map_value`
+(the unpeeled stored voxel value) and either
 a peeled response or an unavailable reason.
+
+`JointProblemInput::observations` is a neutral solver field populated directly
+from `map.GetMapValue(index)`, without interpolation. InitialStage's raw
+interpolated samples and these raw voxel observations have different sources.
+Peeling, charge correction and Gaussian responses are derived quantities;
+they are not Sampling Values. Shared response containers and correlation
+helpers retain neutral names when they accept more than one source.
 
 ## Post-Joint Local and Group Fitting
 

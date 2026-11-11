@@ -54,7 +54,7 @@ public:
     std::unique_ptr<::TH1D> CreateComponentCountHistogram(const std::vector<GroupKey> & group_key_list) const;
     std::unique_ptr<::TH1D> CreateAtomGausEstimateHistogram(GroupKey group_key, int par_id) const;
     std::vector<std::unique_ptr<::TH1D>> CreateMainChainAtomGausRankHistogram(int par_id, int & chain_size, Residue residue=Residue::UNK, size_t extra_id=0, std::vector<Residue> veto_residues_list={});
-    std::unordered_map<std::string, std::unique_ptr<::TGraphErrors>> CreateAtomMapValueToSequenceIDGraphMap(size_t main_chain_element_id, Residue residue=Residue::UNK);
+    std::unordered_map<std::string, std::unique_ptr<::TGraphErrors>> CreateAtomSamplingValueToSequenceIDGraphMap(size_t main_chain_element_id, Residue residue=Residue::UNK);
     std::unordered_map<std::string, std::unique_ptr<::TGraphErrors>> CreateAtomGausEstimateToSequenceIDGraphMap(size_t main_chain_element_id, const int par_id=0, Residue residue=Residue::UNK);
     std::unordered_map<std::string, std::unique_ptr<::TGraphErrors>> CreateAverageQScoreToSequenceIDGraphMap(QScoreMode mode);
     std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateToResidueGraph(const std::vector<GroupKey> & group_key_list, const int par_id=0);
@@ -62,15 +62,15 @@ public:
     std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateScatterGraph(GroupKey group_key, int par1_id=0, int par2_id=1, bool select_outliers=false);
     std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateScatterGraph(const std::vector<GroupKey> & group_key_list, int par1_id=0, int par2_id=1);
     std::unique_ptr<::TGraphErrors> CreateJointStageParameterScatterGraph(Element element, int choice=0);
-    std::unique_ptr<::TGraphErrors> CreateDistanceToMapValueGraph(
+    std::unique_ptr<::TGraphErrors> CreateDistanceToResponseGraph(
         DistanceSamplingMode mode = DistanceSamplingMode::SelectedRaw);
-    std::unique_ptr<::TGraphErrors> CreateBinnedDistanceToRawMapValueGraph(int bin_size=20, double x_min=0.0, double x_max=2.0);
-    std::unique_ptr<::TGraphErrors> CreateBinnedDistanceToPeelingMapValueGraph(int bin_size=20, double x_min=0.0, double x_max=2.0);
-    std::unique_ptr<::TGraphErrors> CreateBinnedDistanceToNeighborMapValueGraph(int bin_size=20, double x_min=0.0, double x_max=2.0);
+    std::unique_ptr<::TGraphErrors> CreateBinnedDistanceToSamplingValueGraph(int bin_size=20, double x_min=0.0, double x_max=2.0);
+    std::unique_ptr<::TGraphErrors> CreateBinnedDistanceToPeeledResponseGraph(int bin_size=20, double x_min=0.0, double x_max=2.0);
+    std::unique_ptr<::TGraphErrors> CreateBinnedDistanceToNeighborContributionGraph(int bin_size=20, double x_min=0.0, double x_max=2.0);
     std::unique_ptr<::TGraphErrors> CreateInRangeAtomsToGausEstimateGraph(GroupKey group_key, double range=5.0, int par_id=0);
     std::unique_ptr<::TGraphErrors> CreateCOMDistanceToGausEstimateGraph(GroupKey group_key, int par_id=0);
     std::unique_ptr<::TGraphErrors> CreateAtomXYPositionTomographyGraph(double normalized_z_pos=0.5, double z_ratio_window=0.1, bool com_center=false);
-    static std::unique_ptr<::TGraphErrors> CreateMapValueScatterGraph(
+    static std::unique_ptr<::TGraphErrors> CreateBinnedSamplingValueScatterGraph(
         AtomKey atom_key,
         ModelObject * model1,
         ModelObject * model2,

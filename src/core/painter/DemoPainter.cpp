@@ -123,11 +123,11 @@ public:
 private:
     void AddModel(ModelObject & data_object);
     void AddReferenceModel(ModelObject & data_object, std::string_view label);
-    void PainMapValueComparisonSingle(
+    void PaintSamplingValueComparisonSingle(
         const std::string & name,
         ModelObject * model_object,
         ModelObject * ref_model_object);
-    void PaintAtomMapValueExample(ModelObject * model_object, const std::string & name);
+    void PaintAtomSamplingValueExample(ModelObject * model_object, const std::string & name);
     void PaintGroupGausMainChainSummary(
         const std::vector<ModelObject *> & model_list,
         const std::string & name);
@@ -287,7 +287,7 @@ void DemoPainter::Run()
     }
     PaintGroupGausMergeResidueDemo(demo_alpha_carbon_list, "figure_gaus_backbone_boxplot.pdf");
 
-    PaintAtomMapValueExample(demo_model_object, "figure_1_a.pdf");
+    PaintAtomSamplingValueExample(demo_model_object, "figure_1_a.pdf");
     PaintGroupGausMainChainSummary(demo_model_list, "figure_1_b.pdf");
     PaintAtomGausMainChainDemoSingle(demo_model_object, "figure_2_c1.pdf", 0);
 
@@ -302,18 +302,18 @@ void DemoPainter::Run()
         {
             PaintAtomGausMainChainDemoSingle(model, "figure_2_c2.pdf", 0);
             PaintGroupGausMainChainSingle(model, "figure_2_d.pdf");
-            PainMapValueComparisonSingle("figure_5.pdf", demo_model_object, model);
+            PaintSamplingValueComparisonSingle("figure_5.pdf", demo_model_object, model);
         }
     }
 }
 
-void DemoPainter::PainMapValueComparisonSingle(
+void DemoPainter::PaintSamplingValueComparisonSingle(
     const std::string & name,
     ModelObject * model_object,
     ModelObject * ref_model_object)
 {
     auto file_path{ m_folder_path + name };
-    Logger::Log(LogLevel::Info, " DemoPainter::PainMapValueComparisonSingle");
+    Logger::Log(LogLevel::Info, " DemoPainter::PaintSamplingValueComparisonSingle");
     (void)model_object;
     (void)ref_model_object;
 
@@ -341,7 +341,7 @@ void DemoPainter::PainMapValueComparisonSingle(
     {
         const auto atom_key{ static_cast<AtomKey>(data_internal::GetMainChainSpot(i)) };
         auto graph{
-            PotentialPlotBuilder::CreateMapValueScatterGraph(
+            PotentialPlotBuilder::CreateBinnedSamplingValueScatterGraph(
                 atom_key, ref_model_object, model_object, 15, 0.0, 1.5)
         };
         r_square[i] = root_helper::PerformLinearRegression(graph.get(), slope[i], intercept[i]);
@@ -392,7 +392,7 @@ void DemoPainter::PainMapValueComparisonSingle(
             root_helper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.08/y_factor), 506);
             root_helper::SetLineAttribute(frame[i][j].get(), 1, 0);
             frame[i][j]->GetXaxis()->SetTitle("");
-            frame[i][j]->GetYaxis()->SetTitle("Real Map Value");
+            frame[i][j]->GetYaxis()->SetTitle("Real Sampling Value");
             frame[i][j]->GetYaxis()->CenterTitle();
             frame[i][j]->SetStats(0);
             frame[i][j]->Draw();
@@ -443,7 +443,7 @@ void DemoPainter::PainMapValueComparisonSingle(
     root_helper::SetPaveTextDefaultStyle(bottom_title_text.get());
     root_helper::SetFillAttribute(bottom_title_text.get(), 4000);
     root_helper::SetTextAttribute(bottom_title_text.get(), 50.0f, 133, 22);
-    bottom_title_text->AddText("Simulated Map Value");
+    bottom_title_text->AddText("Simulated Sampling Value");
     bottom_title_text->Draw();
     root_helper::PrintCanvasPad(canvas.get(), file_path);
 
@@ -452,11 +452,11 @@ void DemoPainter::PainMapValueComparisonSingle(
     #endif
 }
 
-void DemoPainter::PaintAtomMapValueExample(
+void DemoPainter::PaintAtomSamplingValueExample(
     ModelObject * model_object, const std::string & name)
 {
     auto file_path{ m_folder_path + name };
-    Logger::Log(LogLevel::Info, " DemoPainter::PaintAtomMapValueExample");
+    Logger::Log(LogLevel::Info, " DemoPainter::PaintAtomSamplingValueExample");
 
     if (model_object == nullptr) return;
     auto entry_iter{ model_object->GetAnalysisView() };
@@ -471,7 +471,7 @@ void DemoPainter::PaintAtomMapValueExample(
     root_helper::SetCanvasDefaultStyle(canvas.get());
     root_helper::PrintCanvasOpen(canvas.get(), file_path);
 
-    std::vector<std::unique_ptr<TGraphErrors>> map_value_graph_list;
+    std::vector<std::unique_ptr<TGraphErrors>> sampling_value_graph_list;
     std::unique_ptr<TF1> gaus_function;
     double amplitude_prior;
     double width_prior;
@@ -481,16 +481,16 @@ void DemoPainter::PaintAtomMapValueExample(
     for (auto atom : entry_iter.GetAtomObjectList(group_key))
     {
         auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
-        auto graph{ atom_plot_builder->CreateBinnedDistanceToRawMapValueGraph() };
+        auto graph{ atom_plot_builder->CreateBinnedDistanceToSamplingValueGraph() };
         root_helper::SetLineAttribute(graph.get(), 1, 5, static_cast<short>(kAzure-7), 0.3f);
-        map_value_graph_list.emplace_back(std::move(graph));
+        sampling_value_graph_list.emplace_back(std::move(graph));
         const auto atom_view{ AtomLocalPotentialView::For(*atom) };
-        auto map_value_range{
+        auto sampling_value_range{
             local_potential_series::ComputeResponseRange(
                 atom_view.GetRawSamplingEntries(), 0.0)
         };
-        y_array.emplace_back(std::get<0>(map_value_range));
-        y_array.emplace_back(std::get<1>(map_value_range));
+        y_array.emplace_back(std::get<0>(sampling_value_range));
+        y_array.emplace_back(std::get<1>(sampling_value_range));
     }
     gaus_function = plot_builder->CreateAtomGroupGausFunctionPrior(group_key);
     amplitude_prior = entry_iter.GetAtomGroupPrior(group_key).GetDisplayParameter(0);
@@ -517,10 +517,10 @@ void DemoPainter::PaintAtomMapValueExample(
     root_helper::SetLineAttribute(frame.get(), 1, 0);
     frame->SetStats(0);
     frame->GetXaxis()->SetTitle("Radial Distance #[]{#AA}");
-    frame->GetYaxis()->SetTitle("Map Value");
+    frame->GetYaxis()->SetTitle("Sampling Value");
     frame->Draw();
 
-    for (auto & graph : map_value_graph_list) graph->Draw("L X0");
+    for (auto & graph : sampling_value_graph_list) graph->Draw("L X0");
 
     root_helper::SetLineAttribute(line_ref.get(), 2, 3, kBlack);
     line_ref->Draw();
@@ -542,8 +542,8 @@ void DemoPainter::PaintAtomMapValueExample(
     legend->SetMargin(0.15f);
     legend->AddEntry(gaus_function.get(),
         "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})}", "l");
-    legend->AddEntry(map_value_graph_list.at(0).get(),
-        "Map Value", "l");
+    legend->AddEntry(sampling_value_graph_list.at(0).get(),
+        "Sampling Value", "l");
     legend->Draw();
 
     root_helper::PrintCanvasPad(canvas.get(), file_path);

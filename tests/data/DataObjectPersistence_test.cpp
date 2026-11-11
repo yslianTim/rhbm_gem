@@ -83,6 +83,10 @@ TEST(DataObjectPersistenceTest, RawSamplingEntriesRoundTripPreservesSelection)
         LocalPotentialSample{
             4.0, SamplingPoint{ 0.2, { 0.0, 0.0, 0.0 }, false } }
     });
+    const auto document{ boost::json::parse(rg::stage_result_io::Encode(*model)) };
+    const auto & raw_sample{ document.at("atoms").as_array().front().at("raw").as_array().front() };
+    EXPECT_DOUBLE_EQ(raw_sample.at("y").to_number<double>(), 6.0);
+    EXPECT_FALSE(raw_sample.as_object().contains("sampling_value"));
     repository.SaveModel(*model, "model");
 
     auto loaded_model{ repository.LoadModel("model") };

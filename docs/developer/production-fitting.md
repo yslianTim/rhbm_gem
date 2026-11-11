@@ -1,16 +1,18 @@
 # Production fitting
 
-Potential Analysis runs the Joint Component Estimator. It consumes map responses
-and atomic geometry. Simulation metadata supplies the model resolution, and a
+Potential Analysis runs the Joint Component Estimator. It consumes stored voxel
+Map Values and atomic geometry. Simulation metadata supplies the model resolution, and a
 simulation request skips map normalization. The fit uses neither simulation
 manifests nor truth parameters.
 
 1. Prepare the selected non-hydrogen Targets, check the model and map
    fingerprints, and build the Joint observation domains.
-2. **InitialStage** samples map responses on deterministic spheres and
-   fits native OLS/MDPDE estimates that supply initial widths.
-3. **JointStage** calibrates the global width bound using qualified Target donors
-   and partitions the problem by structural component. Gauss–Seidel block
+2. **InitialStage** obtains Sampling Values by Tricubic interpolation of Map Values
+   on deterministic spheres and fits native OLS/MDPDE estimates that supply initial widths.
+3. **JointStage** uses Original-grid voxel observations read directly from
+   `MapObject::GetMapValue()`, without interpolation. It calibrates the global
+   width bound using qualified Target donors and partitions the problem by
+   structural component. Gauss–Seidel block
    coordinate descent uses constrained A/C variable projection and bounded
    active-set LM for width updates. The stage verifies global practical convergence,
    endpoint feasibility, and independent replay, and records Local Conditioning
@@ -39,3 +41,8 @@ and outcome semantics. [Runtime](joint-component-runtime.md) and
 [Numerics](joint-component-numerics.md) specify the solver and qualification.
 [Stage Integration](joint-stage-integration.md) specifies InitialStage and
 downstream data ownership.
+
+Map Value always refers to the current stored voxel value, including a normalized
+map. Sampling Value always refers to an interpolation output. Observations and
+responses are neutral solver/container terms; peeled responses, model predictions,
+charge contributions and residuals retain their specific derived-value names.

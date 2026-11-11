@@ -98,7 +98,7 @@ TEST(MapSamplerTest, GridSamplerProducesMapSamples)
     sampler.SetReferenceUVector({ 1.0, 0.0, 0.0 });
 
     const auto sampling_data{
-        SampleMapValues(
+        BuildInterpolatedMapSamples(
             map,
             sampler,
             { 0.5, 0.5, 0.5 },
@@ -119,7 +119,7 @@ TEST(MapSamplerTest, SpiralAtomSamplesUseInitialStageMaskAndTricubicResponses)
     const auto * atom{ model->GetAtomList().at(0).get() };
     constexpr auto method{ SphereSamplingMethod::SpiralDeterministic };
     const auto points{ sphere_sampler::GenerateSamplingPointList(atom->GetPositionRef(), method) };
-    const auto samples{ SampleAtomMapValues(map, *atom, method) };
+    const auto samples{ BuildAtomInterpolatedMapSamples(map, *atom, method) };
 
     ASSERT_EQ(samples.size(), 200u);
     ASSERT_EQ(samples.size(), points.size());
@@ -154,8 +154,8 @@ TEST(MapSamplerTest, AtomSamplerDefaultMatchesExplicitFibonacci)
     auto model{ MakeLinearNeighborModel() };
     const auto * atom{ model->GetAtomList().at(0).get() };
 
-    const auto default_samples{ SampleAtomMapValues(map, *atom) };
-    const auto explicit_samples{ SampleAtomMapValues(
+    const auto default_samples{ BuildAtomInterpolatedMapSamples(map, *atom) };
+    const auto explicit_samples{ BuildAtomInterpolatedMapSamples(
         map, *atom, SphereSamplingMethod::FibonacciDeterministic) };
 
     ASSERT_EQ(default_samples.size(), explicit_samples.size());
@@ -192,8 +192,8 @@ TEST(MapSamplerTest, HydrogenNeighborDoesNotChangeSamplingMask)
     hydrogen_atoms.emplace_back(std::move(hydrogen_neighbor));
     ModelObject hydrogen_model{ std::move(hydrogen_atoms) };
 
-    const auto baseline{ SampleAtomMapValues(map, *baseline_model.FindAtomPtr(1)) };
-    const auto with_hydrogen{ SampleAtomMapValues(map, *hydrogen_model.FindAtomPtr(1)) };
+    const auto baseline{ BuildAtomInterpolatedMapSamples(map, *baseline_model.FindAtomPtr(1)) };
+    const auto with_hydrogen{ BuildAtomInterpolatedMapSamples(map, *hydrogen_model.FindAtomPtr(1)) };
 
     ASSERT_EQ(baseline.size(), with_hydrogen.size());
     for (std::size_t i = 0; i < baseline.size(); ++i)
@@ -207,7 +207,7 @@ TEST(MapSamplerTest, AtomSamplerKeepsRejectedSamplesAsUnselected)
     const auto * atom{ model->GetAtomList().at(0).get() };
 
     const auto sampling_data{
-        SampleAtomMapValues(
+        BuildAtomInterpolatedMapSamples(
             map,
             *atom,
             SphereSamplingMethod::FibonacciDeterministic)
@@ -335,7 +335,7 @@ TEST(MapSamplerTest, AtomSamplerRequiresAttachedAtomBeforeSampling)
     detached_atom.SetPosition(0.0, 0.0, 0.0);
 
     EXPECT_THROW(
-        (void)SampleAtomMapValues(
+        (void)BuildAtomInterpolatedMapSamples(
             map,
             detached_atom,
             SphereSamplingMethod::FibonacciDeterministic),
@@ -379,7 +379,7 @@ TEST(MapSamplerTest, TricubicBaselineAtOffGridAndHalfVoxelBoundary)
 {
     const auto map = MakeMapObject();
     const SamplingPointList points{{0., {0.3, 0.6, 0.8}}, {0., {-0.5, 0., 0.}}};
-    const auto samples = detail::BuildLocalPotentialSampleList(map, points);
+    const auto samples = detail::BuildInterpolatedSamplingEntries(map, points);
     ASSERT_EQ(samples.size(), 2u);
     EXPECT_NEAR(samples[0].response, 5.898, 2e-14);
     EXPECT_DOUBLE_EQ(samples[1].response, 0.9375);
@@ -392,7 +392,7 @@ TEST(MapSamplerTest, ExplicitMapPointsUseTheProductionInterpolationPath)
     for (std::size_t i=0;i<64;++i) values[i]=static_cast<double>(i);
     map.SetMapValueArray(std::move(values));
     const SamplingPointList points{{0.25,{-0.1,-0.1,-0.1},true},{1.5,{0.0,0.0,0.0},false}};
-    const auto samples{detail::BuildLocalPotentialSampleList(map,points)};
+    const auto samples{detail::BuildInterpolatedSamplingEntries(map,points)};
     ASSERT_EQ(samples.size(), points.size());
     EXPECT_DOUBLE_EQ(samples[0].response,map.GetMapValue(0,0,0));
     EXPECT_DOUBLE_EQ(samples[1].response,map.GetMapValue(1,1,1));

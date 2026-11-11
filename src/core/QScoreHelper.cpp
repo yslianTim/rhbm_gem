@@ -43,7 +43,7 @@ bool IsInsideNeighborExclusion(
     return distance_square < exclusion_radius_squared;
 }
 
-double InterpolateQScoreResponse(const MapObject & map, const std::array<double, 3> & position)
+double InterpolateQScoreSamplingValue(const MapObject & map, const std::array<double, 3> & position)
 {
     try
     {
@@ -57,43 +57,43 @@ double InterpolateQScoreResponse(const MapObject & map, const std::array<double,
 }
 
 double CalculateMeanSubtractedCorrelation(
-    const std::vector<double> & map_values,
+    const std::vector<double> & observations,
     const std::vector<double> & reference_values)
 {
-    if (map_values.empty())
+    if (observations.empty())
     {
         return 0.0;
     }
 
-    double map_value_sum{ 0.0 };
+    double observation_sum{ 0.0 };
     double reference_value_sum{ 0.0 };
-    for (std::size_t i = 0; i < map_values.size(); ++i)
+    for (std::size_t i = 0; i < observations.size(); ++i)
     {
-        map_value_sum += map_values.at(i);
+        observation_sum += observations.at(i);
         reference_value_sum += reference_values.at(i);
     }
-    const auto sample_count{ static_cast<double>(map_values.size()) };
-    const auto map_value_mean{ map_value_sum / sample_count };
+    const auto sample_count{ static_cast<double>(observations.size()) };
+    const auto observation_mean{ observation_sum / sample_count };
     const auto reference_value_mean{ reference_value_sum / sample_count };
 
     double numerator{ 0.0 };
-    double map_value_norm_square{ 0.0 };
+    double observation_norm_square{ 0.0 };
     double reference_value_norm_square{ 0.0 };
-    for (std::size_t i = 0; i < map_values.size(); ++i)
+    for (std::size_t i = 0; i < observations.size(); ++i)
     {
-        const auto map_value_difference{
-            map_values.at(i) - map_value_mean
+        const auto observation_difference{
+            observations.at(i) - observation_mean
         };
         const auto reference_value_difference{
             reference_values.at(i) - reference_value_mean
         };
-        numerator += map_value_difference * reference_value_difference;
-        map_value_norm_square += map_value_difference * map_value_difference;
+        numerator += observation_difference * reference_value_difference;
+        observation_norm_square += observation_difference * observation_difference;
         reference_value_norm_square += reference_value_difference * reference_value_difference;
     }
 
     const auto denominator{
-        std::sqrt(map_value_norm_square) * std::sqrt(reference_value_norm_square)
+        std::sqrt(observation_norm_square) * std::sqrt(reference_value_norm_square)
     };
     if (denominator == 0.0 ||
         !std::isfinite(denominator) ||
@@ -179,14 +179,14 @@ LocalPotentialSampleList PrepareQScoreSamples(
     const AtomObject & atom, const MapObject & map, const ModelObject & model, int num_points)
 {
     numeric_validation::RequireAtLeast(num_points, 2, "CalculateQScoreForAtom num_points");
-    const auto center_map_value{InterpolateQScoreResponse(map, atom.GetPositionRef())};
+    const auto center_sampling_value{InterpolateQScoreSamplingValue(map, atom.GetPositionRef())};
     LocalPotentialSampleList samples(static_cast<std::size_t>(num_points),
-        LocalPotentialSample{center_map_value, {0.0, atom.GetPositionRef(), true}});
+        LocalPotentialSample{center_sampling_value, {0.0, atom.GetPositionRef(), true}});
     for (double radius = 0.1; radius < 2.0 + kMaximumRadiusTolerance; radius += 0.1)
     {
         const auto radial_points{GetRadialPointsForQScore(atom, model, radius, num_points)};
         for (const auto & point : radial_points)
-            samples.push_back({InterpolateQScoreResponse(map, point.position), point});
+            samples.push_back({InterpolateQScoreSamplingValue(map, point.position), point});
     }
     return samples;
 }
@@ -258,10 +258,10 @@ double CalculateQScoreForAtom(
 {
     numeric_validation::RequireFinitePositive(sigma, "CalculateQScoreForAtom sigma");
     const auto samples=PrepareQScoreSamples(atom,map,model,num_points);
-    std::vector<double> map_values;
-    map_values.reserve(samples.size());
-    for (const auto & sample:samples) map_values.push_back(sample.response);
-    return CalculateMeanSubtractedCorrelation(map_values,StandardQScoreReference(samples,height,offset,sigma));
+    std::vector<double> sampling_values;
+    sampling_values.reserve(samples.size());
+    for (const auto & sample:samples) sampling_values.push_back(sample.response);
+    return CalculateMeanSubtractedCorrelation(sampling_values,StandardQScoreReference(samples,height,offset,sigma));
 }
 
 double CalculateAverageQScores(

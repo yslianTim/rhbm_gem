@@ -723,7 +723,7 @@ TEST(JointComponentPartialSelectionTest, PostFitPeelingUsesOriginalGridAndPreser
         {0.2, {0.13, 0.07, 0.02}, false},
         {2.4, {2.4, 0, 0}, true},
         {2.9, {2.9, 0, 0}, true}};
-    const auto raw = core::detail::BuildLocalPotentialSampleList(*f.map, points);
+    const auto raw = core::detail::BuildInterpolatedSamplingEntries(*f.map, points);
     editor.SetAtomLocalRawSamplingEntries(*atom, raw);
     const auto view = rhbm_gem::AtomLocalPotentialView::For(*atom);
     const auto before = view.GetJointStageModel().ToVector();
@@ -742,7 +742,7 @@ TEST(JointComponentPartialSelectionTest, PostFitPeelingUsesOriginalGridAndPreser
         const double charge=r<1e-5 ? std::sqrt(2.0/std::acos(-1.0))/tau : std::erf(r/(std::sqrt(2.0)*tau))/r;
         const double prediction=square>6.25 ? 0.0 : neighbor.GetAmplitude()*
             std::pow(2.0*std::acos(-1.0)*tau*tau,-1.5)*std::exp(-square/(2*tau*tau))+neighbor.GetOffset()*charge;
-        EXPECT_NEAR(*sample.response,observation.raw_response-prediction,1e-12);
+        EXPECT_NEAR(*sample.response,observation.map_value-prediction,1e-12);
     }
     editor.SetAtomPostFitPeeling(*atom, output);
     ASSERT_TRUE(view.GetLocalFittingPeelingRatio(0, 1));
@@ -775,7 +775,7 @@ TEST(JointComponentPartialSelectionTest, ExcludedFitRowsRemainInOriginalPeelingD
     f.model->EditAnalysis().ApplyJointResult(snapshot,"original-peeling-domain");
     const SamplingPointList points{{1.5,{1.5,0.0,0.0},true}};
     f.model->EditAnalysis().SetAtomLocalRawSamplingEntries(*f.model->FindAtomPtr(1),
-        core::detail::BuildLocalPotentialSampleList(*f.map,points));
+        core::detail::BuildInterpolatedSamplingEntries(*f.map,points));
     const auto context=postprocessing_test::MakeJointPostprocessingContext(*f.map,*f.model,problem,snapshot);
     const auto peelings=postprocessing_test::BuildPostFitPeelingSamples(
         context,problem.OriginalInput().selection_domain->target_indices);
@@ -803,14 +803,14 @@ TEST(JointComponentPartialSelectionTest, PeelingIgnoresContributorsOutsideActual
     auto editor = f.model->EditAnalysis();
     auto * target = f.model->FindAtomPtr(1);
     const SamplingPointList points{{2.11, {2.11, 0, 0}, true}};
-    auto raw = core::detail::BuildLocalPotentialSampleList(*f.map, points);
+    auto raw = core::detail::BuildInterpolatedSamplingEntries(*f.map, points);
     editor.SetAtomLocalRawSamplingEntries(*target, raw);
     auto result = postprocessing_test::BuildPostFitPeelingSamples(*f.map, *f.model, problem,std::nullopt,&snapshot).at(1);
     ASSERT_FALSE(result.samples.empty());
     for(const auto & sample:result.samples)
     {
         ASSERT_TRUE(sample.response) << sample.reason;
-        EXPECT_DOUBLE_EQ(*sample.response,sample.observation.raw_response);
+        EXPECT_DOUBLE_EQ(*sample.response,sample.observation.map_value);
         EXPECT_LE(sample.observation.squared_distance,4.0);
     }
     EXPECT_EQ(result.neighbor_count,0u);
@@ -926,9 +926,9 @@ TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextPreservesGri
             EXPECT_EQ(shared.samples[i].original_row_index,shared_peeling.samples[i].observation.original_row_index);
             EXPECT_EQ(shared.samples[i].original_row_index,standalone.samples[i].original_row_index);
             EXPECT_DOUBLE_EQ(shared.samples[i].distance,std::sqrt(shared_peeling.samples[i].observation.squared_distance));
-            EXPECT_DOUBLE_EQ(shared.samples[i].raw_response,shared_peeling.samples[i].observation.raw_response);
+            EXPECT_DOUBLE_EQ(shared.samples[i].map_value,shared_peeling.samples[i].observation.map_value);
             EXPECT_DOUBLE_EQ(shared.samples[i].distance,standalone.samples[i].distance);
-            EXPECT_DOUBLE_EQ(shared.samples[i].raw_response,standalone.samples[i].raw_response);
+            EXPECT_DOUBLE_EQ(shared.samples[i].map_value,standalone.samples[i].map_value);
             EXPECT_EQ(shared.samples[i].peeled_response,standalone.samples[i].peeled_response);
             EXPECT_EQ(shared.samples[i].fixed_charge_response, standalone.samples[i].fixed_charge_response);
             EXPECT_EQ(shared.samples[i].gaussian_response, standalone.samples[i].gaussian_response);
@@ -1383,7 +1383,7 @@ TEST(JointComponentPartialSelectionTest, TargetOnlyPostprocessingRetainsFullCont
     ASSERT_TRUE(target_stage.point) << target_stage.reason;
     for (const auto & atom : f.model->GetAtomList())
         f.model->EditAnalysis().SetAtomLocalRawSamplingEntries(*atom,
-            core::SampleAtomMapValues(*f.map, *atom, SphereSamplingMethod::FibonacciDeterministic));
+            core::BuildAtomInterpolatedMapSamples(*f.map, *atom, SphereSamplingMethod::FibonacciDeterministic));
     const std::vector<std::size_t> all{0, 1};
     const auto target = postprocessing_test::BuildPostFitPeelingSamples(*f.map, *f.model, problem,std::nullopt,&snapshot);
     const auto complete = postprocessing_test::BuildPostFitPeelingSamples(*f.map, *f.model, problem,all,&snapshot);
@@ -1457,7 +1457,7 @@ TEST(JointComponentPartialSelectionTest, ExistingSampleFirstExecutorUsesOnlyTheE
     seed.mdpde = {rhbm_gem::GaussianModel3D{0, 1, 0}, {}};
     const auto & halo = *f.model->FindAtomPtr(2);
     editor.SetAtomInitialStageGaussianResult(halo, seed);
-    editor.SetAtomLocalRawSamplingEntries(halo, core::SampleAtomMapValues(*f.map, halo, SphereSamplingMethod::FibonacciDeterministic));
+    editor.SetAtomLocalRawSamplingEntries(halo, core::BuildAtomInterpolatedMapSamples(*f.map, halo, SphereSamplingMethod::FibonacciDeterministic));
     const auto selected = f.model->GetSelectedAtoms();
     const std::vector<rhbm_gem::AtomObject *> atoms{f.model->FindAtomPtr(2)};
     core::FitOptions options; options.quiet_mode = true; options.thread_size = 1;

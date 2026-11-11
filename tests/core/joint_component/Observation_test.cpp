@@ -16,7 +16,7 @@ TEST(JointComponentObservationTest, CompactStencilMatchesSamplerWithAnisotropicG
     SamplingPointList points{{0.0,grid.GetOrigin(),true},{0.0,grid.GetGridPosition(377),true},
         {0.0,{-0.702,-0.80,-0.90},true},{0.0,{-0.122,0.15,0.55},true},
         {0.0,{-0.71300000001,-0.827,-0.919},true}};
-    const auto samples{rhbm_gem::core::detail::BuildLocalPotentialSampleList(grid,points)};
+    const auto samples{rhbm_gem::core::detail::BuildInterpolatedSamplingEntries(grid,points)};
     for (std::size_t i=0;i<points.size();++i)
     {
         const auto stencil{m::MakeStencil(grid,grid,points[i].position)};

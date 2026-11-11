@@ -379,7 +379,7 @@ std::string Encode(const ModelObject & model)
                 const auto & observation=sample.observation;
                 samples.push_back(O{{"response",sample.response ? V(*sample.response):V{}},{"reason",sample.reason},
                     {"original_row",observation.original_row_index},{"grid",observation.global_grid_index},
-                    {"squared_distance",observation.squared_distance},{"raw_response",observation.raw_response},
+                    {"squared_distance",observation.squared_distance},{"raw_response",observation.map_value},
                     {"position",j::value_from(observation.position)}});
             }
             peeling=O{{"source",Pack(p.source)},{"mode",p.mode},{"neighbors",p.neighbor_count},{"samples",samples}};

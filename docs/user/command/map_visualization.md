@@ -39,7 +39,7 @@ Current defaults from [`include/rhbm_gem/core/CommandSystem.hpp`](/include/rhbm_
 
 ## What The Command Produces
 
-The command loads one model and one map, normalizes the map values, selects one target atom, constructs a local 2D sampling plane near that atom, samples interpolated map values on a square grid, and writes the result as a PDF heatmap.
+The command loads one model and one map, normalizes the stored voxel Map Values, selects one target atom, constructs a local 2D sampling plane near that atom, obtains interpolated Sampling Values on a square grid, and writes the result as a PDF heatmap.
 
 The output file name comes from [`MapVisualizationCommand::BuildOutputFilePath()`](/src/core/command/MapVisualizationCommand.cpp#L281):
 
@@ -55,9 +55,9 @@ map_slice_<model_name>_atom<atom_serial_id>.pdf
 2. `BuildDataObject()` loads the model and map objects.
 3. `RunMapObjectPreprocessing()` normalizes the map array.
 4. `RunModelObjectPreprocessing()` selects all atoms and bonds so the command can derive local bond context.
-5. `RunAtomMapValueSampling()` finds the requested atom, finds one usable bond attached to it, builds a local sampling plane, samples interpolated values, and renders the 2D histogram PDF.
+5. `RunAtomInterpolatedSampling()` finds the requested atom, finds one usable bond attached to it, builds a local sampling plane, samples interpolated values, and renders the 2D histogram PDF.
 
-In practice, the geometry work happens entirely inside [`MapVisualizationCommand::RunAtomMapValueSampling()`](/src/core/command/MapVisualizationCommand.cpp#L170).
+In practice, the geometry work happens entirely inside [`MapVisualizationCommand::RunAtomInterpolatedSampling()`](/src/core/command/MapVisualizationCommand.cpp#L170).
 
 ## Geometry Overview
 
@@ -81,7 +81,7 @@ where `a` and `b` move across a square window.
 
 ### Step 1: Choose `u` From A Bond
 
-Inside [`RunAtomMapValueSampling()`](/src/core/command/MapVisualizationCommand.cpp#L206), the command scans the bonds connected to the target atom and picks the first non-degenerate bond vector:
+Inside [`RunAtomInterpolatedSampling()`](/src/core/command/MapVisualizationCommand.cpp#L206), the command scans the bonds connected to the target atom and picks the first non-degenerate bond vector:
 
 ```text
 reference_u_vector = bond_vector
@@ -115,7 +115,7 @@ This fallback is implemented in [`MapVisualizationCommand.cpp`](/src/core/comman
 `MapVisualizationCommand` passes:
 
 - `u` through `SetReferenceUVector(...)`
-- `n` through `SampleMapValues(..., plane_normal = n)`
+- `n` through `BuildInterpolatedMapSamples(..., plane_normal = n)`
 
 Inside [`GridSampler::GenerateSamplingPoints()`](/src/utils/math/GridSampler.cpp#L31), the sampler then does:
 
@@ -298,7 +298,8 @@ The sampler returns:
 - the Euclidean in-plane distance `|shift|`
 - the 3D sample position
 
-`SampleMapValues()` then interpolates the map value at each 3D position in
+`BuildInterpolatedMapSamples()` then uses Tricubic interpolation of the stored
+voxel Map Values to obtain a Sampling Value at each 3D position in
 [`src/core/sampling/MapSampler.cpp`](/src/core/sampling/MapSampler.cpp).
 
 ## Important Interpretation Notes
@@ -318,6 +319,6 @@ The sampler returns:
 - use a global helper axis to derive a plane normal `n`
 - reconstruct `v` so that `u x v = n`
 - sample a square in that local `u-v` plane
-- interpolate map values and render them as a PDF heatmap
+- interpolate voxel Map Values and render Sampling Values as a PDF heatmap
 
 This is why the command is best understood as a bond-oriented local slice visualizer rather than a generic Cartesian map slicer.

@@ -450,7 +450,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateJointStageParameterSca
     return graph;
 }
 
-std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateDistanceToMapValueGraph(
+std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateDistanceToResponseGraph(
     DistanceSamplingMode mode)
 {
     auto graph{ root_helper::CreateGraphErrors() };
@@ -477,7 +477,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateDistanceToMapValueGrap
     return graph;
 }
 
-std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToRawMapValueGraph(
+std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToSamplingValueGraph(
     int bin_size, double x_min, double x_max)
 {
     auto data_array{
@@ -494,7 +494,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToRawMap
     return graph;
 }
 
-std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToPeelingMapValueGraph(
+std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToPeeledResponseGraph(
     int bin_size, double x_min, double x_max)
 {
     auto data_array{
@@ -511,24 +511,24 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToPeelin
     return graph;
 }
 
-std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToNeighborMapValueGraph(
+std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToNeighborContributionGraph(
     int bin_size, double x_min, double x_max)
 {
-    LocalPotentialSampleList neighbor_sampling_entries;
+    LocalPotentialSampleList neighbor_contribution_entries;
     if (const auto & postfit = GetLocalEntry().GetPostFitPeeling(); postfit)
     {
         for (const auto & sample : postfit->samples)
         {
             if (!sample.response) continue;
             const auto & observation = sample.observation;
-            neighbor_sampling_entries.push_back({
-                observation.raw_response - *sample.response,
+            neighbor_contribution_entries.push_back({
+                observation.map_value - *sample.response,
                 {std::sqrt(observation.squared_distance), observation.position, true}
             });
         }
     }
     auto data_array{
-        local_potential_series::BuildBinnedDistanceResponseSeries(neighbor_sampling_entries, bin_size, x_min, x_max)
+        local_potential_series::BuildBinnedDistanceResponseSeries(neighbor_contribution_entries, bin_size, x_min, x_max)
     };
     auto graph{ root_helper::CreateGraphErrors(bin_size) };
     auto count{ 0 };
@@ -626,7 +626,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomXYPositionTomograp
     return graph;
 }
 
-std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateMapValueScatterGraph(
+std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedSamplingValueScatterGraph(
     AtomKey atom_key,
     ModelObject * model1,
     ModelObject * model2,
@@ -801,7 +801,7 @@ namespace rhbm_gem {
 #ifdef HAVE_ROOT
 
 std::unordered_map<std::string, std::unique_ptr<TGraphErrors>>
-PotentialPlotBuilder::CreateAtomMapValueToSequenceIDGraphMap(
+PotentialPlotBuilder::CreateAtomSamplingValueToSequenceIDGraphMap(
     size_t main_chain_element_id, Residue residue)
 {
     if (IsModelObjectAvailable() == false) return {};
@@ -829,7 +829,7 @@ PotentialPlotBuilder::CreateAtomMapValueToSequenceIDGraphMap(
         graph_map[chain_id]->SetPoint(
             count_map[chain_id],
             x_value,
-            local_potential_series::ComputeMapValueNearCenter(entry.GetRawSamplingEntries()));
+            local_potential_series::ComputeMeanSamplingValueNearCenter(entry.GetRawSamplingEntries()));
         count_map[chain_id]++;
     }
     return graph_map;

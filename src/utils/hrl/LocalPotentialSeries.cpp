@@ -27,14 +27,14 @@ std::tuple<double, double> ComputeResponseRange(
     const LocalPotentialSampleList & sampling_entries,
     double margin_rate)
 {
-    std::vector<double> map_value_array;
-    map_value_array.reserve(sampling_entries.size());
+    std::vector<double> response_values;
+    response_values.reserve(sampling_entries.size());
     for (const auto & sample : sampling_entries)
     {
-        map_value_array.emplace_back(sample.response);
+        response_values.emplace_back(sample.response);
     }
     return array_helper::ComputeScalingRangeTuple(
-        map_value_array, margin_rate);
+        response_values, margin_rate);
 }
 
 SeriesPointList BuildBinnedDistanceResponseSeries(
@@ -73,7 +73,7 @@ SeriesPointList BuildBinnedDistanceResponseSeries(
     return binned_distance_response_series;
 }
 
-double ComputeMapValueNearCenter(const LocalPotentialSampleList & sampling_entries)
+double ComputeMeanSamplingValueNearCenter(const LocalPotentialSampleList & sampling_entries)
 {
     if (sampling_entries.empty()) return 0.0;
     int count{ 0 };

@@ -22,10 +22,10 @@
 namespace rhbm_gem::core {
 namespace {
 
-LocalPotentialSampleList SampleAtomMapValuesFromPoints(
+LocalPotentialSampleList BuildAtomInterpolatedSamplesFromPoints(
     const MapObject & map_object,
     const AtomObject & atom,
-    SamplingPointList sample_point_list)
+    SamplingPointList sampling_points)
 {
     const auto local_position{ atom.GetPosition() };
     const auto neighbor_atom_list{ atom.FindNeighborAtoms() };
@@ -36,38 +36,38 @@ LocalPotentialSampleList SampleAtomMapValuesFromPoints(
         if (neighbor_atom->GetElement() == Element::HYDROGEN) continue;
         reject_position_list.emplace_back(neighbor_atom->GetPosition());
     }
-    sample_filter::FilterSamplingPointList(sample_point_list, local_position, reject_position_list);
-    return detail::BuildLocalPotentialSampleList(map_object, sample_point_list);
+    sample_filter::FilterSamplingPointList(sampling_points, local_position, reject_position_list);
+    return detail::BuildInterpolatedSamplingEntries(map_object, sampling_points);
 }
 
 } // namespace
 
-LocalPotentialSampleList SampleMapValues(
+LocalPotentialSampleList BuildInterpolatedMapSamples(
     const MapObject & map_object,
     const GridSampler & sampler,
     const std::array<double, 3> & position,
     const std::array<double, 3> & direction)
 {
-    const auto sample_point_list{ sampler.GenerateSamplingPoints(position, direction) };
-    return detail::BuildLocalPotentialSampleList(map_object, sample_point_list);
+    const auto sampling_points{ sampler.GenerateSamplingPoints(position, direction) };
+    return detail::BuildInterpolatedSamplingEntries(map_object, sampling_points);
 }
 
-LocalPotentialSampleList SampleAtomMapValues(
+LocalPotentialSampleList BuildAtomInterpolatedMapSamples(
     const MapObject & map_object,
     const AtomObject & atom)
 {
-    return SampleAtomMapValuesFromPoints(
+    return BuildAtomInterpolatedSamplesFromPoints(
         map_object,
         atom,
         sphere_sampler::GenerateSamplingPointList(atom.GetPosition()));
 }
 
-LocalPotentialSampleList SampleAtomMapValues(
+LocalPotentialSampleList BuildAtomInterpolatedMapSamples(
     const MapObject & map_object,
     const AtomObject & atom,
     SphereSamplingMethod sampling_method)
 {
-    return SampleAtomMapValuesFromPoints(
+    return BuildAtomInterpolatedSamplesFromPoints(
         map_object,
         atom,
         sphere_sampler::GenerateSamplingPointList(atom.GetPosition(), sampling_method));
@@ -105,7 +105,7 @@ void RunPotentialSamplingWorkflow(
 #endif
     for (size_t i = 0; i < atom_list.size(); i++)
     {
-        try { raw_sampling_entries_list[i] = SampleAtomMapValues(map_object, *atom_list[i], sampling_method); }
+        try { raw_sampling_entries_list[i] = BuildAtomInterpolatedMapSamples(map_object, *atom_list[i], sampling_method); }
         catch (...) { failures[i] = std::current_exception(); }
 
 #ifdef USE_OPENMP

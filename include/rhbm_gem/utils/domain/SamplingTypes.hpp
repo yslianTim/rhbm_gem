@@ -24,6 +24,7 @@ using SamplingPointList = std::vector<SamplingPoint>;
 
 struct LocalPotentialSample
 {
+    // Neutral payload: raw interpolated sampling value or transformed response.
     double response{ 0.0 };
     SamplingPoint point{};
 };

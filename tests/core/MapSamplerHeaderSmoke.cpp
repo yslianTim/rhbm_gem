@@ -19,9 +19,9 @@ using SelectedAtomsWorkflow = void (*)(
     rhbm_gem::MapObject &, rhbm_gem::ModelObject &, int);
 
 static_assert(std::is_same_v<decltype(static_cast<DefaultAtomSampler>(
-    &rhbm_gem::core::SampleAtomMapValues)), DefaultAtomSampler>);
+    &rhbm_gem::core::BuildAtomInterpolatedMapSamples)), DefaultAtomSampler>);
 static_assert(std::is_same_v<decltype(static_cast<ExplicitAtomSampler>(
-    &rhbm_gem::core::SampleAtomMapValues)), ExplicitAtomSampler>);
+    &rhbm_gem::core::BuildAtomInterpolatedMapSamples)), ExplicitAtomSampler>);
 static_assert(std::is_same_v<decltype(static_cast<AtomDomainWorkflow>(
     &rhbm_gem::core::RunPotentialSamplingWorkflow)), AtomDomainWorkflow>);
 static_assert(std::is_same_v<decltype(static_cast<ExplicitAtomDomainWorkflow>(

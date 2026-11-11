@@ -556,7 +556,7 @@ TEST(PureHaloSupportExclusionTest, PeelingUsesOriginalRowsAndReconstructedHalo)
         data_internal::BuildJointStageEstimates(snapshot, "reconstruction-only-run"));
     const SamplingPointList points{{2.5,{2.5,0,0},true}};
     fixture.model.EditAnalysis().SetAtomLocalRawSamplingEntries(*fixture.model.FindAtomPtr(1),
-        core::detail::BuildLocalPotentialSampleList(fixture.map,points));
+        core::detail::BuildInterpolatedSamplingEntries(fixture.map,points));
     const auto context=postprocessing_test::MakeJointPostprocessingContext(
         fixture.map,fixture.model,problem,snapshot);
     const auto peelings=postprocessing_test::BuildPostFitPeelingSamples(context, std::vector<std::size_t>{0});
@@ -587,7 +587,7 @@ TEST(PureHaloSupportExclusionTest, GridPeelingAndOwnChargeMatchIndependentDirect
     const SamplingPointList points{
         {1.6,{1.6,0.0,0.0},true},
         {1.9,{1.9,0.0,0.0},true}};
-    const auto raw=core::detail::BuildLocalPotentialSampleList(fixture.map,points);
+    const auto raw=core::detail::BuildInterpolatedSamplingEntries(fixture.map,points);
     fixture.model.EditAnalysis().SetAtomLocalRawSamplingEntries(*fixture.model.FindAtomPtr(1),raw);
 
     core::detail::JointPostprocessingMetrics metrics;
@@ -605,7 +605,7 @@ TEST(PureHaloSupportExclusionTest, GridPeelingAndOwnChargeMatchIndependentDirect
         for(const auto & center:halo_positions)
             neighbor_prediction+=ReferenceContribution(core::simulation::SupportSquare(
                 observation.position,center),reconstructed_halo);
-        EXPECT_NEAR(*sample.response,observation.raw_response-neighbor_prediction,1e-12);
+        EXPECT_NEAR(*sample.response,observation.map_value-neighbor_prediction,1e-12);
     }
     EXPECT_EQ(metrics.available_peeling_sample_count,peeling.samples.size());
     const auto local=context.BuildPostJointLocalSamples(1,peeling);
@@ -635,7 +635,7 @@ TEST(PureHaloSupportExclusionTest, PeelingIsInvariantToExtraContributorChemicalL
             data_internal::BuildJointStageEstimates(snapshot, "reconstruction-only-run"));
         const SamplingPointList points{{1.5,{1.5,0.0,0.0},true},{2.8,{2.8,0.0,0.0},true}};
         fixture.model.EditAnalysis().SetAtomLocalRawSamplingEntries(*fixture.model.FindAtomPtr(1),
-            core::detail::BuildLocalPotentialSampleList(fixture.map,points));
+            core::detail::BuildInterpolatedSamplingEntries(fixture.map,points));
         const auto context=postprocessing_test::MakeJointPostprocessingContext(
             fixture.map,fixture.model,problem,snapshot);
         auto peeling=postprocessing_test::BuildPostFitPeelingSamples(context, std::vector<std::size_t>{0}).at(1);
@@ -669,7 +669,7 @@ TEST(PureHaloSupportExclusionTest, PeelingIsInvariantToExtraContributorChemicalL
         EXPECT_EQ(original.peeling[sample].reason,changed.peeling[sample].reason);
         const auto & left=original.local_samples[sample];
         const auto & right=changed.local_samples[sample];
-        EXPECT_DOUBLE_EQ(left.raw_response,right.raw_response);
+        EXPECT_DOUBLE_EQ(left.map_value,right.map_value);
         EXPECT_EQ(left.peeled_response.has_value(),right.peeled_response.has_value());
         if (left.peeled_response) EXPECT_DOUBLE_EQ(*left.peeled_response,*right.peeled_response);
         EXPECT_EQ(left.fixed_charge_response.has_value(),right.fixed_charge_response.has_value());
@@ -1037,7 +1037,7 @@ TEST(PostJointGridContractTest, SelectsOriginalVoxelsAtInclusiveRadiusWithStable
             EXPECT_TRUE(actual.insert(sample.global_grid_index).second);
             EXPECT_EQ(input.row_ids.at(sample.original_row_index),std::to_string(sample.global_grid_index));
             EXPECT_EQ(sample.position,map.GetGridPosition(sample.global_grid_index));
-            EXPECT_DOUBLE_EQ(sample.raw_response,map.GetMapValue(sample.global_grid_index));
+            EXPECT_DOUBLE_EQ(sample.map_value,map.GetMapValue(sample.global_grid_index));
             EXPECT_DOUBLE_EQ(sample.squared_distance,core::simulation::SupportSquare(sample.position,center));
             EXPECT_EQ(sample.global_grid_index,repeated[i].global_grid_index);
             if(std::find(problem.FittingToOriginalRows().begin(),problem.FittingToOriginalRows().end(),
@@ -1116,10 +1116,10 @@ TEST(PureHaloSupportExclusionTest, GridSubtractionCoversOverlapsHalosChargesAndS
                     total+=value; if(atom!=target) neighbor+=value;
                 }
                 const double charge=ReferenceContribution(sample.squared_distance,points[target],true);
-                const double expected=static_cast<double>(static_cast<long double>(sample.raw_response)-neighbor-charge);
+                const double expected=static_cast<double>(static_cast<long double>(sample.map_value)-neighbor-charge);
                 EXPECT_NEAR(*sample.gaussian_response,expected,1e-10*std::max(1.,std::abs(expected)));
                 const double gaussian=ReferenceContribution(sample.squared_distance,points[target])-charge;
-                const double alternative=static_cast<double>(sample.raw_response-total+gaussian);
+                const double alternative=static_cast<double>(sample.map_value-total+gaussian);
                 EXPECT_NEAR(*sample.gaussian_response,alternative,1e-10*std::max(1.,std::abs(expected)));
             }
         }
@@ -1285,6 +1285,21 @@ TEST(PureHaloSupportExclusionTest, GridPersistenceRejectsForeignIdentitiesAndInv
         EXPECT_DOUBLE_EQ(point->GetOffset(),median);
     const auto text=stage_result_io::Encode(fixture.model);
     const auto original=boost::json::parse(text);
+    std::size_t voxel_observation_count=0;
+    for(const auto & atom:original.at("atoms").as_array())
+    {
+        if(atom.at("peeling").is_null()) continue;
+        for(const auto & sample:atom.at("peeling").at("samples").as_array())
+        {
+            EXPECT_TRUE(sample.as_object().contains("response"));
+            EXPECT_FALSE(sample.as_object().contains("map_value"));
+            EXPECT_DOUBLE_EQ(sample.at("raw_response").to_number<double>(),
+                fixture.map.GetMapValue(sample.at("grid").to_number<std::size_t>()));
+            ++voxel_observation_count;
+        }
+    }
+    EXPECT_GT(voxel_observation_count,0u);
+
     for(int mutation=0;mutation<7;++mutation)
     {
         auto document=original;

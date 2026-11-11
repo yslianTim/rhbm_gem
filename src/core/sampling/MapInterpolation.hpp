@@ -155,21 +155,21 @@ inline double InterpolateTrilinear(const MapObject & map, const std::array<doubl
         fractions.at(2));
 }
 
-inline LocalPotentialSampleList BuildLocalPotentialSampleList(
+inline LocalPotentialSampleList BuildInterpolatedSamplingEntries(
     const MapObject & map_object,
-    const SamplingPointList & sample_point_list)
+    const SamplingPointList & sampling_points)
 {
-    LocalPotentialSampleList sampling_data_list;
-    sampling_data_list.reserve(sample_point_list.size());
-    for (const auto & sampling_point : sample_point_list)
+    LocalPotentialSampleList sampling_entries;
+    sampling_entries.reserve(sampling_points.size());
+    for (const auto & sampling_point : sampling_points)
     {
-        const auto map_value{InterpolateTricubic(MakeTricubicStencil(map_object, sampling_point.position),
+        const auto sampling_value{InterpolateTricubic(MakeTricubicStencil(map_object, sampling_point.position),
             [&](const auto & node) { return map_object.GetMapValue(node[0], node[1], node[2]); })};
-        sampling_data_list.emplace_back(LocalPotentialSample{
-            map_value,
+        sampling_entries.emplace_back(LocalPotentialSample{
+            sampling_value,
             sampling_point
         });
     }
-    return sampling_data_list;
+    return sampling_entries;
 }
 } // namespace rhbm_gem::core::detail

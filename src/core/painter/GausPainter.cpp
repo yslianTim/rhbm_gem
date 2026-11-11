@@ -83,7 +83,7 @@ public:
 
 private:
     void AddModel(ModelObject & data_object);
-    void PaintMapValueMainChain(ModelObject * model_object, const std::string & name);
+    void PaintPeeledResponseMainChain(ModelObject * model_object, const std::string & name);
     void PaintAtomXYPosition(ModelObject * model_object, const std::string & name);
     void PaintGausScatterPlot(ModelObject * model_object, const std::string & name);
     void PaintGroupGausScatterPlot(ModelObject * model_object, const std::string & name);
@@ -91,8 +91,8 @@ private:
     void PaintLocalGausSummary(ModelObject * model_object, const std::string & name);
     void PaintGroupGausSummary(ModelObject * model_object, const std::string & name);
     void PaintAverageQScoreToSequenceSummary(ModelObject * model_object, const std::string & name);
-    void PaintGroupFittingComparison(ModelObject * model_object, const std::string & name);
-    void PaintGroupMapValueAminoAcidMainChainComponent(ModelObject * model_object, const std::string & name);
+    void PaintGroupSamplingAndPeelingComparison(ModelObject * model_object, const std::string & name);
+    void PaintGroupPeeledResponseAminoAcidMainChainComponent(ModelObject * model_object, const std::string & name);
     void PaintGroupGausAminoAcidMainChainComponent(ModelObject * model_object, const std::string & name);
     void PaintLocalGausToSequenceAminoAcidMainChain(ModelObject * model_object, const std::string & name);
 
@@ -134,22 +134,22 @@ void GausPainter::Run()
         PaintAtomXYPosition(model_object, "atom_position_"+ label);
         PaintGausScatterPlot(model_object, "gaus_scatter_"+ label);
         PaintGroupGausScatterPlot(model_object, "group_gaus_scatter_"+ label);
-        PaintMapValueMainChain(model_object, "map_value_main_chain_"+ label);
+        PaintPeeledResponseMainChain(model_object, "peeled_response_main_chain_"+ label);
         PaintGausRankMainChain(model_object, "gaus_rank_main_chain_"+ label);
         PaintLocalGausSummary(model_object, "local_gaus_summary_"+ label);
         PaintGroupGausSummary(model_object, "group_gaus_summary_"+ label);
         PaintAverageQScoreToSequenceSummary(model_object, "average_qscore_to_sequence_summary_" + label);
-        PaintGroupFittingComparison(model_object, "group_fitting_comparison_"+ label);
-        PaintGroupMapValueAminoAcidMainChainComponent(model_object, "group_map_value_amino_acid_main_chain_component_"+ label);
+        PaintGroupSamplingAndPeelingComparison(model_object, "group_fitting_comparison_"+ label);
+        PaintGroupPeeledResponseAminoAcidMainChainComponent(model_object, "group_peeled_response_amino_acid_main_chain_component_"+ label);
         PaintGroupGausAminoAcidMainChainComponent(model_object, "group_gaus_amino_acid_main_chain_component_"+ label);
         PaintLocalGausToSequenceAminoAcidMainChain(model_object, "local_gaus_to_sequence_amino_acid_main_chain_"+ label);
     }
 }
 
-void GausPainter::PaintMapValueMainChain(ModelObject * model_object, const std::string & name)
+void GausPainter::PaintPeeledResponseMainChain(ModelObject * model_object, const std::string & name)
 {
     auto file_path{ m_folder_path + name };
-    Logger::Log(LogLevel::Info, "GausPainter::PaintMapValueMainChain");
+    Logger::Log(LogLevel::Info, "GausPainter::PaintPeeledResponseMainChain");
 
     #ifdef HAVE_ROOT
     auto entry_iter{ model_object->GetAnalysisView() };
@@ -167,7 +167,7 @@ void GausPainter::PaintMapValueMainChain(ModelObject * model_object, const std::
 
     const size_t main_chain_element_size{ 4 };
 
-    std::vector<std::unique_ptr<TGraphErrors>> map_value_graph_list[main_chain_element_size];
+    std::vector<std::unique_ptr<TGraphErrors>> peeled_response_graph_list[main_chain_element_size];
     std::unique_ptr<TF1> gaus_function[main_chain_element_size];
     double amplitude_prior[main_chain_element_size];
     double width_prior[main_chain_element_size];
@@ -185,16 +185,16 @@ void GausPainter::PaintMapValueMainChain(ModelObject * model_object, const std::
         for (auto atom : atom_list)
         {
             auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
-            auto graph{ atom_plot_builder->CreateBinnedDistanceToPeelingMapValueGraph() };
+            auto graph{ atom_plot_builder->CreateBinnedDistanceToPeeledResponseGraph() };
             root_helper::SetLineAttribute(graph.get(), 1, 2, static_cast<short>(kAzure-7), 0.3f);
-            map_value_graph_list[k].emplace_back(std::move(graph));
+            peeled_response_graph_list[k].emplace_back(std::move(graph));
             const auto atom_view{ AtomLocalPotentialView::For(*atom) };
-            auto map_value_range{
+            auto sampling_value_range{
                 local_potential_series::ComputeResponseRange(
                     atom_view.GetRawSamplingEntries(), 0.0)
             };
-            y_array.emplace_back(std::get<0>(map_value_range));
-            y_array.emplace_back(std::get<1>(map_value_range));
+            y_array.emplace_back(std::get<0>(sampling_value_range));
+            y_array.emplace_back(std::get<1>(sampling_value_range));
         }
         if (!average_prior) continue;
         gaus_function[k] = plot_builder->CreateComponentAtomAverageGausFunctionPrior(atom_key);
@@ -232,10 +232,10 @@ void GausPainter::PaintMapValueMainChain(ModelObject * model_object, const std::
             root_helper::SetLineAttribute(frame[i][j].get(), 1, 0);
             frame[i][j]->SetStats(0);
             frame[i][j]->GetXaxis()->SetTitle("");
-            frame[i][j]->GetYaxis()->SetTitle("Map Value");
+            frame[i][j]->GetYaxis()->SetTitle("Peeled Response");
             frame[i][j]->Draw();
 
-            for (auto & graph : map_value_graph_list[i])
+            for (auto & graph : peeled_response_graph_list[i])
             {
                 graph->Draw("L X0");
             }
@@ -309,10 +309,10 @@ void GausPainter::PaintMapValueMainChain(ModelObject * model_object, const std::
         has_joint_result
             ? "Mean prior + mean Joint C medians"
             : "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau},#font[1]{c})}", "l");
-    legend->AddEntry(map_value_graph_list[0].at(0).get(),
+    legend->AddEntry(peeled_response_graph_list[0].at(0).get(),
         has_joint_result
-            ? "Joint peeling (individual target charge retained)"
-            : "Map Value", "l");
+            ? "Peeled response (individual target charge retained)"
+            : "Peeled Response", "l");
     legend->Draw();
 
     canvas->cd();
@@ -1059,14 +1059,14 @@ void GausPainter::PaintLocalGausSummary(ModelObject * model_object, const std::s
             root_helper::SetPadMarginInCanvas(gPad, 0.10, 0.00, 0.12, 0.10);
             auto member_size{ entry_iter.GetAtomObjectList(group_key).size() };
             auto outlier_size{ CountOutlierAtoms(entry_iter, group_key) };
-            std::vector<std::unique_ptr<TGraphErrors>> map_value_graph_list;
+            std::vector<std::unique_ptr<TGraphErrors>> peeled_response_graph_list;
             std::vector<double> y_array;
-            map_value_graph_list.reserve(member_size);
+            peeled_response_graph_list.reserve(member_size);
             y_array.reserve(member_size * 2);
             for (auto atom : entry_iter.GetAtomObjectList(group_key))
             {
                 auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
-                auto graph{ atom_plot_builder->CreateBinnedDistanceToPeelingMapValueGraph() };
+                auto graph{ atom_plot_builder->CreateBinnedDistanceToPeeledResponseGraph() };
                 const auto & result{
                     AtomLocalPotentialView::For(*atom).GetGroupMemberResult()
                 };
@@ -1077,7 +1077,7 @@ void GausPainter::PaintLocalGausSummary(ModelObject * model_object, const std::s
                 auto range_in_graph{ root_helper::GetRangeInGraph(graph.get()) };
                 y_array.emplace_back(std::get<0>(range_in_graph));
                 y_array.emplace_back(std::get<1>(range_in_graph));
-                map_value_graph_list.emplace_back(std::move(graph));
+                peeled_response_graph_list.emplace_back(std::move(graph));
             }
 
             auto frame{ root_helper::CreateHist2D("hist_0","", 100, 0.0, 1.0, 100, 0.0, 1.0) };
@@ -1093,7 +1093,7 @@ void GausPainter::PaintLocalGausSummary(ModelObject * model_object, const std::s
             frame->SetStats(0);
             frame->GetYaxis()->CenterTitle();
             frame->GetXaxis()->SetTitle("Radial Distance #[]{#AA}");
-            frame->GetYaxis()->SetTitle("Map Value");
+            frame->GetYaxis()->SetTitle("Peeled Response");
             auto y_range{ painter_internal::ComputePlotRange(y_array, 0.1) };
             auto x_min_tmp{ 0.01 };
             auto x_max_tmp{ 1.49 };
@@ -1103,7 +1103,7 @@ void GausPainter::PaintLocalGausSummary(ModelObject * model_object, const std::s
             frame->GetYaxis()->SetLimits(y_min_tmp, y_max_tmp);
             frame->SetStats(0);
             frame->Draw();
-            for (auto & graph : map_value_graph_list)
+            for (auto & graph : peeled_response_graph_list)
             {
                 graph->Draw("L X0");
             }
@@ -1129,10 +1129,10 @@ void GausPainter::PaintLocalGausSummary(ModelObject * model_object, const std::s
                     : Form("Group prior, #alpha_{g} = %.1f", entry_iter.GetAtomAlphaG(group_key)), "l");
             if (gaus_mean) legend->AddEntry(gaus_mean.get(),
                 has_joint_result ? "Group mean + median Joint charge" : "Group mean", "l");
-            legend->AddEntry(map_value_graph_list.at(0).get(),
+            legend->AddEntry(peeled_response_graph_list.at(0).get(),
                 has_joint_result
-                    ? "Joint peeling (individual target charge retained)"
-                    : "Map Value", "l");
+                    ? "Peeled response (individual target charge retained)"
+                    : "Peeled Response", "l");
             legend->Draw();
 
             auto count_text{ root_helper::CreatePaveText(0.45, 0.75, 1.00, 0.90, "nbNDC", false) };
@@ -1555,11 +1555,11 @@ void GausPainter::PaintAverageQScoreToSequenceSummary(
     Logger::Log(LogLevel::Info, average_qscore_message.str());
 }
 
-void GausPainter::PaintGroupFittingComparison(
+void GausPainter::PaintGroupSamplingAndPeelingComparison(
     ModelObject * model_object, const std::string & name)
 {
     auto file_path{ m_folder_path + name };
-    Logger::Log(LogLevel::Info, "GausPainter::PaintGroupFittingComparison");
+    Logger::Log(LogLevel::Info, "GausPainter::PaintGroupSamplingAndPeelingComparison");
 
     auto entry_iter{ model_object->GetAnalysisView() };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
@@ -1590,7 +1590,7 @@ void GausPainter::PaintGroupFittingComparison(
         if (component_entry == nullptr) continue;
         auto component_id{ component_entry->GetComponentId() };
 
-        std::map<Spot, std::vector<std::unique_ptr<TGraphErrors>>> map_value_graph_list_map[row_size];
+        std::map<Spot, std::vector<std::unique_ptr<TGraphErrors>>> response_graph_list_map[row_size];
         std::map<Spot, std::unique_ptr<TF1>> gaus_prior_map;
         std::vector<double> global_y_array;
         std::vector<double> neighbor_y_array;
@@ -1600,36 +1600,36 @@ void GausPainter::PaintGroupFittingComparison(
             if (!data_internal::IsMainChainMember(spot, member_id)) continue;
             auto group_key{ data_internal::GetMainChainGroupKey(member_id, residue) };
             gaus_prior_map[spot]=nullptr;
-            for (auto & map : map_value_graph_list_map) map[spot].clear();
+            for (auto & map : response_graph_list_map) map[spot].clear();
             if (!entry_iter.HasAtomGroup(group_key)) continue;
             auto gaus_prior{ plot_builder->CreateAtomGroupGausFunctionPrior(group_key) };
             gaus_prior_map[spot]=std::move(gaus_prior);
 
             auto member_size{ entry_iter.GetAtomObjectList(group_key).size() };
-            std::vector<std::unique_ptr<TGraphErrors>> raw_map_value_graph_list;
-            std::vector<std::unique_ptr<TGraphErrors>> peeling_map_value_graph_list;
-            std::vector<std::unique_ptr<TGraphErrors>> neighbor_map_value_graph_list;
-            raw_map_value_graph_list.reserve(member_size);
-            peeling_map_value_graph_list.reserve(member_size);
-            neighbor_map_value_graph_list.reserve(member_size);
+            std::vector<std::unique_ptr<TGraphErrors>> raw_sampling_graph_list;
+            std::vector<std::unique_ptr<TGraphErrors>> peeled_response_graph_list;
+            std::vector<std::unique_ptr<TGraphErrors>> neighbor_contribution_graph_list;
+            raw_sampling_graph_list.reserve(member_size);
+            peeled_response_graph_list.reserve(member_size);
+            neighbor_contribution_graph_list.reserve(member_size);
             for (auto atom : entry_iter.GetAtomObjectList(group_key))
             {
                 auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
-                auto raw_graph{ atom_plot_builder->CreateBinnedDistanceToRawMapValueGraph() };
-                auto peeling_graph{ atom_plot_builder->CreateBinnedDistanceToPeelingMapValueGraph() };
-                auto neighbor_graph{ atom_plot_builder->CreateBinnedDistanceToNeighborMapValueGraph() };
+                auto raw_sampling_graph{ atom_plot_builder->CreateBinnedDistanceToSamplingValueGraph() };
+                auto peeled_response_graph{ atom_plot_builder->CreateBinnedDistanceToPeeledResponseGraph() };
+                auto neighbor_contribution_graph{ atom_plot_builder->CreateBinnedDistanceToNeighborContributionGraph() };
                 const auto & result{
                     AtomLocalPotentialView::For(*atom).GetGroupMemberResult()
                 };
                 auto is_outlier{ result.has_value() && result->is_outlier };
                 auto line_color{ kAzure-7 };
                 if (show_outlier == true && is_outlier == true) line_color = kRed+1;
-                root_helper::SetLineAttribute(raw_graph.get(), 1, 3, static_cast<short>(line_color), 0.3f);
-                root_helper::SetLineAttribute(peeling_graph.get(), 1, 3, static_cast<short>(line_color), 0.3f);
-                root_helper::SetLineAttribute(neighbor_graph.get(), 1, 3, static_cast<short>(line_color), 0.3f);
-                auto range_in_raw_graph{ root_helper::GetRangeInGraph(raw_graph.get()) };
-                auto range_in_peeling_graph{ root_helper::GetRangeInGraph(peeling_graph.get()) };
-                auto range_in_neighbor_graph{ root_helper::GetRangeInGraph(neighbor_graph.get()) };
+                root_helper::SetLineAttribute(raw_sampling_graph.get(), 1, 3, static_cast<short>(line_color), 0.3f);
+                root_helper::SetLineAttribute(peeled_response_graph.get(), 1, 3, static_cast<short>(line_color), 0.3f);
+                root_helper::SetLineAttribute(neighbor_contribution_graph.get(), 1, 3, static_cast<short>(line_color), 0.3f);
+                auto range_in_raw_graph{ root_helper::GetRangeInGraph(raw_sampling_graph.get()) };
+                auto range_in_peeling_graph{ root_helper::GetRangeInGraph(peeled_response_graph.get()) };
+                auto range_in_neighbor_graph{ root_helper::GetRangeInGraph(neighbor_contribution_graph.get()) };
 
                 global_y_array.emplace_back(std::get<0>(range_in_raw_graph));
                 global_y_array.emplace_back(std::get<1>(range_in_raw_graph));
@@ -1637,13 +1637,13 @@ void GausPainter::PaintGroupFittingComparison(
                 global_y_array.emplace_back(std::get<1>(range_in_peeling_graph));
                 neighbor_y_array.emplace_back(std::get<0>(range_in_neighbor_graph));
                 neighbor_y_array.emplace_back(std::get<1>(range_in_neighbor_graph));
-                raw_map_value_graph_list.emplace_back(std::move(raw_graph));
-                peeling_map_value_graph_list.emplace_back(std::move(peeling_graph));
-                neighbor_map_value_graph_list.emplace_back(std::move(neighbor_graph));
+                raw_sampling_graph_list.emplace_back(std::move(raw_sampling_graph));
+                peeled_response_graph_list.emplace_back(std::move(peeled_response_graph));
+                neighbor_contribution_graph_list.emplace_back(std::move(neighbor_contribution_graph));
             }
-            map_value_graph_list_map[0].emplace(spot, std::move(raw_map_value_graph_list));
-            map_value_graph_list_map[1].emplace(spot, std::move(peeling_map_value_graph_list));
-            map_value_graph_list_map[2].emplace(spot, std::move(neighbor_map_value_graph_list));
+            response_graph_list_map[0].emplace(spot, std::move(raw_sampling_graph_list));
+            response_graph_list_map[1].emplace(spot, std::move(peeled_response_graph_list));
+            response_graph_list_map[2].emplace(spot, std::move(neighbor_contribution_graph_list));
         }
 
         double y_min[row_size]{ 0.0 };
@@ -1681,8 +1681,8 @@ void GausPainter::PaintGroupFittingComparison(
                 frame[i][j]->SetStats(0);
                 frame[i][j]->Draw("");
 
-                const auto & map_value_graph_list{ map_value_graph_list_map[row_size-j-1].at(spot) };
-                for (auto & graph : map_value_graph_list) graph->Draw("L X0");
+                const auto & response_graph_list{ response_graph_list_map[row_size-j-1].at(spot) };
+                for (auto & graph : response_graph_list) graph->Draw("L X0");
 
                 if (j == row_size - 1)
                 {
@@ -1753,15 +1753,15 @@ void GausPainter::PaintGroupFittingComparison(
             has_joint_result ? "Group prior + median Joint charge" : "Final group prior #color[633]{#phi (#font[1]{A},#font[1]{#tau},#font[1]{C})}", "l");
         if (has_joint_result)
         {
-            if (!map_value_graph_list_map[0].at(Spot::CA).empty()) legend->AddEntry(map_value_graph_list_map[0].at(Spot::CA).front().get(),
-                "Raw map response (all contributors)", "l");
-            if (!map_value_graph_list_map[1].at(Spot::CA).empty()) legend->AddEntry(map_value_graph_list_map[1].at(Spot::CA).front().get(),
-                "Joint peeling (individual target charge retained)", "l");
-            if (!map_value_graph_list_map[2].at(Spot::CA).empty()) legend->AddEntry(map_value_graph_list_map[2].at(Spot::CA).front().get(),
-                "Neighbor signal (raw minus peeling)", "l");
+            if (!response_graph_list_map[0].at(Spot::CA).empty()) legend->AddEntry(response_graph_list_map[0].at(Spot::CA).front().get(),
+                "Raw sampling values (all contributors)", "l");
+            if (!response_graph_list_map[1].at(Spot::CA).empty()) legend->AddEntry(response_graph_list_map[1].at(Spot::CA).front().get(),
+                "Peeled response (individual target charge retained)", "l");
+            if (!response_graph_list_map[2].at(Spot::CA).empty()) legend->AddEntry(response_graph_list_map[2].at(Spot::CA).front().get(),
+                "Neighbor contribution (voxel minus peeled)", "l");
         }
-        else if (!map_value_graph_list_map[0].at(Spot::CA).empty()) legend->AddEntry(map_value_graph_list_map[0].at(Spot::CA).front().get(),
-            "Members of Map Value", "l");
+        else if (!response_graph_list_map[0].at(Spot::CA).empty()) legend->AddEntry(response_graph_list_map[0].at(Spot::CA).front().get(),
+            "Raw sampling values", "l");
         legend->Draw();
 
         canvas->cd();
@@ -1774,8 +1774,8 @@ void GausPainter::PaintGroupFittingComparison(
         root_helper::SetPaveTextDefaultStyle(y_title_text.get());
         root_helper::SetFillAttribute(y_title_text.get(), 4000);
         root_helper::SetTextAttribute(y_title_text.get(), 70.0f, 133, 22);
-        y_title_text->AddText("Normalized Map Value");
-        auto y_text{ y_title_text->GetLineWith("Normalized") };
+        y_title_text->AddText("Response (normalized map)");
+        auto y_text{ y_title_text->GetLineWith("normalized") };
         y_text->SetTextAngle(90.0f);
         y_title_text->Draw();
 
@@ -1800,11 +1800,11 @@ void GausPainter::PaintGroupFittingComparison(
     #endif
 }
 
-void GausPainter::PaintGroupMapValueAminoAcidMainChainComponent(
+void GausPainter::PaintGroupPeeledResponseAminoAcidMainChainComponent(
     ModelObject * model_object, const std::string & name)
 {
     auto file_path{ m_folder_path + name };
-    Logger::Log(LogLevel::Info, "GausPainter::PaintGroupMapValueAminoAcidMainChainComponent");
+    Logger::Log(LogLevel::Info, "GausPainter::PaintGroupPeeledResponseAminoAcidMainChainComponent");
 
     auto entry_iter{ model_object->GetAnalysisView() };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
@@ -1845,7 +1845,7 @@ void GausPainter::PaintGroupMapValueAminoAcidMainChainComponent(
             }
         }
 
-        std::map<Residue, std::vector<std::unique_ptr<TGraphErrors>>> map_value_graph_list_map;
+        std::map<Residue, std::vector<std::unique_ptr<TGraphErrors>>> peeled_response_graph_list_map;
         std::map<Residue, std::unique_ptr<TF1>> gaus_prior_map;
         std::map<Residue, std::unique_ptr<TF1>> gaus_mean_map;
         std::map<Residue, std::string> component_id_map;
@@ -1867,14 +1867,14 @@ void GausPainter::PaintGroupMapValueAminoAcidMainChainComponent(
             gaus_prior_map.emplace(residue, std::move(gaus_prior));
 
             auto member_size{ entry_iter.GetAtomObjectList(group_key).size() };
-            std::vector<std::unique_ptr<TGraphErrors>> map_value_graph_list;
+            std::vector<std::unique_ptr<TGraphErrors>> peeled_response_graph_list;
             std::vector<double> y_array;
-            map_value_graph_list.reserve(member_size);
+            peeled_response_graph_list.reserve(member_size);
             y_array.reserve(member_size * 2);
             for (auto atom : entry_iter.GetAtomObjectList(group_key))
             {
                 auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
-                auto graph{ atom_plot_builder->CreateBinnedDistanceToPeelingMapValueGraph() };
+                auto graph{ atom_plot_builder->CreateBinnedDistanceToPeeledResponseGraph() };
                 const auto & result{
                     AtomLocalPotentialView::For(*atom).GetGroupMemberResult()
                 };
@@ -1885,10 +1885,10 @@ void GausPainter::PaintGroupMapValueAminoAcidMainChainComponent(
                 auto range_in_graph{ root_helper::GetRangeInGraph(graph.get()) };
                 y_array.emplace_back(std::get<0>(range_in_graph));
                 y_array.emplace_back(std::get<1>(range_in_graph));
-                map_value_graph_list.emplace_back(std::move(graph));
+                peeled_response_graph_list.emplace_back(std::move(graph));
             }
             global_y_array.insert(global_y_array.end(), y_array.begin(), y_array.end());
-            map_value_graph_list_map.emplace(residue, std::move(map_value_graph_list));
+            peeled_response_graph_list_map.emplace(residue, std::move(peeled_response_graph_list));
         }
 
         double y_min{ 0.0 };
@@ -1924,9 +1924,9 @@ void GausPainter::PaintGroupMapValueAminoAcidMainChainComponent(
                 frame[i][j]->SetStats(0);
                 frame[i][j]->Draw("");
 
-                if (!map_value_graph_list_map.contains(residue)) continue;
-                const auto & map_value_graph_list{ map_value_graph_list_map.at(residue) };
-                for (auto & graph : map_value_graph_list)
+                if (!peeled_response_graph_list_map.contains(residue)) continue;
+                const auto & peeled_response_graph_list{ peeled_response_graph_list_map.at(residue) };
+                for (auto & graph : peeled_response_graph_list)
                 {
                     graph->Draw("L X0");
                 }
@@ -1999,10 +1999,10 @@ void GausPainter::PaintGroupMapValueAminoAcidMainChainComponent(
             //Form("Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})} with #alpha_{r} = %.1f, #alpha_{g} = %.1f",
         if (gaus_mean_map.contains(Residue::ALA) && gaus_mean_map.at(Residue::ALA)) legend->AddEntry(gaus_mean_map.at(Residue::ALA).get(),
             has_joint_result ? "Group mean + median Joint charge" : "Group mean", "l");
-        if (map_value_graph_list_map.contains(Residue::ALA) && !map_value_graph_list_map.at(Residue::ALA).empty()) legend->AddEntry(map_value_graph_list_map.at(Residue::ALA).front().get(),
+        if (peeled_response_graph_list_map.contains(Residue::ALA) && !peeled_response_graph_list_map.at(Residue::ALA).empty()) legend->AddEntry(peeled_response_graph_list_map.at(Residue::ALA).front().get(),
             has_joint_result
-                ? "Joint peeling (individual target charge retained)"
-                : "Members of Map Value", "l");
+                ? "Peeled response (individual target charge retained)"
+                : "Peeled responses", "l");
         legend->Draw();
 
         canvas->cd();
@@ -2015,8 +2015,8 @@ void GausPainter::PaintGroupMapValueAminoAcidMainChainComponent(
         root_helper::SetPaveTextDefaultStyle(y_title_text.get());
         root_helper::SetFillAttribute(y_title_text.get(), 4000);
         root_helper::SetTextAttribute(y_title_text.get(), 70.0f, 133, 22);
-        y_title_text->AddText("Normalized Map Value");
-        auto y_text{ y_title_text->GetLineWith("Normalized") };
+        y_title_text->AddText("Peeled Response (normalized map)");
+        auto y_text{ y_title_text->GetLineWith("normalized") };
         y_text->SetTextAngle(90.0f);
         y_title_text->Draw();
 
@@ -2083,7 +2083,7 @@ void GausPainter::PaintLocalGausToSequenceAminoAcidMainChain(
         gaus_graph_map[1][k] = plot_builder->CreateAtomGausEstimateToSequenceIDGraphMap(k, 0);
         gaus_graph_map[0][k] = plot_builder->CreateAtomGausEstimateToSequenceIDGraphMap(k, 1);
         //gaus_graph_map[0][k] = plot_builder->CreateAtomGausEstimateToSequenceIDGraphMap(k, 2);
-        //gaus_graph_map[0][k] = plot_builder->CreateAtomMapValueToSequenceIDGraphMap(k);
+        //gaus_graph_map[0][k] = plot_builder->CreateAtomSamplingValueToSequenceIDGraphMap(k);
     }
 
     for (auto & [chain_id, gaus_graph] : gaus_graph_map[0][0])

@@ -61,6 +61,16 @@ unavailable calibration, search failure, an unqualified endpoint, missing
 component state, no Halo, unavailable reconstruction, incomplete downstream
 results, and nullable diagnostics.
 
+Numerical source names do not change the wire format. Stage JSON stores raw
+interpolated Sampling Values under `"y"`. Original-grid peeling stores the
+unpeeled voxel `PostJointGridObservation::map_value` under `"raw_response"`,
+and its derived peeled response under `"response"`. These keys distinguish
+serialization records independently of C++ member spelling. SQLite schema 25,
+Stage JSON 9 and Joint JSON 25 retain their existing round-trip contract.
+Map Value denotes the currently stored voxel, including after normalization;
+Sampling Value denotes an interpolation output. Generic response/observation
+containers may also carry derived values without changing their source semantics.
+
 ## SQLite schema and lifecycle
 
 Schema v25 contains these tables:

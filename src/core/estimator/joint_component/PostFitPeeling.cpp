@@ -75,12 +75,12 @@ std::vector<PostJointGridObservation> CollectPostJointGridObservations(
         if (!std::isfinite(square) || std::abs(square - entry.squared_distance) > 1.0e-12 * std::max(1.0,square))
             throw std::invalid_argument("Original support geometry mismatch.");
         if (entry.squared_distance > PostJointCandidateRadius * PostJointCandidateRadius) continue;
-        const double response = input.observations[entry.row];
-        if (!std::isfinite(response) || !std::isfinite(map.GetMapValue(grid)))
+        const double map_value = input.observations[entry.row];
+        if (!std::isfinite(map_value) || !std::isfinite(map.GetMapValue(grid)))
             throw std::invalid_argument("missing-original-observation");
-        if (response != map.GetMapValue(grid))
+        if (map_value != map.GetMapValue(grid))
             throw std::invalid_argument("Original observation differs from current map.");
-        samples.push_back({entry.row,grid,entry.squared_distance,response,position});
+        samples.push_back({entry.row,grid,entry.squared_distance,map_value,position});
     }
     return samples;
 }
@@ -370,7 +370,7 @@ std::vector<std::pair<int, PostFitPeelingResult>> JointPostprocessingContext::Bu
             }
             if (sample.reason.empty())
             {
-                const double response=static_cast<double>(static_cast<long double>(observation.raw_response)-prediction);
+                const double response=static_cast<double>(static_cast<long double>(observation.map_value)-prediction);
                 if (std::isfinite(response)) sample.response=response;
                 else sample.reason="nonfinite-peeled-response";
             }
@@ -440,7 +440,7 @@ PostJointLocalSamples JointPostprocessingContext::BuildPostJointLocalSamples(
             peeled.observation.global_grid_index!=observation.global_grid_index ||
             peeled.observation.position!=observation.position ||
             peeled.observation.squared_distance!=observation.squared_distance ||
-            peeled.observation.raw_response!=observation.raw_response)
+            peeled.observation.map_value!=observation.map_value)
             throw std::invalid_argument("Post-Joint grid/peeling identity mismatch.");
         PostJointLocalSample sample;
         static_cast<PostJointGridObservation &>(sample)=observation;

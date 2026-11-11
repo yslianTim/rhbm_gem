@@ -125,7 +125,7 @@ TEST(InitialStageSamplingTest, SpiralInitializesWidthsAndLeavesQScoreUnchanged)
 {
     auto map=Map(); auto model=Model(); const auto atoms=model->GetSelectedAtoms();
     const auto score=CalculateQScoreForAtom(*atoms[0],map,*model,1.,0.);
-    const auto default_samples=SampleAtomMapValues(map,*atoms[0]);
+    const auto default_samples=BuildAtomInterpolatedMapSamples(map,*atoms[0]);
     FitOptions options; options.quiet_mode=true;
     options.initial_stage_sampling_method=SphereSamplingMethod::SpiralDeterministic;
     const auto workset=d::BuildInitialStageWorkset(*model,BuildPureHaloSupportExclusionProblem(map,*model));
@@ -134,7 +134,7 @@ TEST(InitialStageSamplingTest, SpiralInitializesWidthsAndLeavesQScoreUnchanged)
     ASSERT_EQ(initialization.atoms.size(),atoms.size());
     EXPECT_EQ(initialization.atoms.front().seed_source,"fitted");
     for (const auto * atom : workset.contributors)
-        SameSamples(SampleAtomMapValues(map,*atom,options.initial_stage_sampling_method),
+        SameSamples(BuildAtomInterpolatedMapSamples(map,*atom,options.initial_stage_sampling_method),
             AtomLocalPotentialView::For(*atom).GetRawSamplingEntriesView());
     const auto & spiral=AtomLocalPotentialView::For(*atoms[0]).GetRawSamplingEntriesView();
     ASSERT_FALSE(spiral.empty());

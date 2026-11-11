@@ -128,13 +128,35 @@ Analysis facades return typed data, not presentation strings. Text that is used 
 
 This keeps formatting changes out of the object API while preserving command output and numerical behavior.
 
-The private Painter `PotentialPlotBuilder::CreateDistanceToMapValueGraph()`
+The private Painter `PotentialPlotBuilder::CreateDistanceToResponseGraph()`
 selects its source with `DistanceSamplingMode`: `SelectedRaw` (the default),
 `AllRaw`, or `Peeling`. It uses the corresponding sampling getter above and
 writes graph points in sample order with distance as X and response as Y.
 The `AllRaw` path reads the stored samples by const reference.
 
 ## 6. Sampling and Parallelism
+
+Map Value means a discrete voxel value currently stored by `MapObject`, including
+values after normalization. `GetMapValue()`, `GetMapValueArray()` and the
+`GetMapValue*()` statistics describe these stored values, not necessarily the
+unmodified MRC/CCP4 bytes. Sampling Value means the output of Trilinear or
+Tricubic interpolation at a spatial position, even at a voxel center.
+
+`BuildInterpolatedSamplingEntries()` evaluates Tricubic interpolation for the
+given sampling points. `BuildInterpolatedMapSamples()` builds planar samples;
+`BuildAtomInterpolatedMapSamples()` builds atom-local samples with the existing
+selection mask. InitialStage consumes these interpolated sampling entries.
+JointStage instead constructs its observations directly from Original-grid
+`GetMapValue(index)` reads.
+
+Observation is a neutral solver input term. Response is a neutral numerical
+payload used by `LocalPotentialSample::response` and generic processing such as
+range, binning and correlation. Raw sampling entries contain interpolation
+outputs before model subtraction; Original-grid `PostJointGridObservation::map_value`
+contains an unpeeled voxel observation. Peeled responses, Gaussian predictions,
+fixed-charge responses, neighbor contributions and residuals are derived values,
+not Sampling Values. `GetPeelingSamplingEntries()` adapts available Original-grid
+peeled responses to the same neutral container without interpolation.
 
 The private `MapSampler` computes atom sampling results into an indexed temporary result vector in parallel. After workers finish, it writes results through `ModelAnalysisEditor` in a sequential pass.
 

@@ -133,13 +133,13 @@ std::filesystem::path BuildOutputFilePath(
     return BuildMapVisualizationOutputPath(output_dir, file_name, ".pdf");
 }
 
-bool RunAtomMapValueSampling(
+bool RunAtomInterpolatedSampling(
     const MapVisualizationRequest & request,
     rhbm_gem::MapObject & map_object,
     rhbm_gem::ModelObject & model_object,
     const std::filesystem::path & output_dir)
 {
-    ScopeTimer timer("MapVisualizationCommand::RunAtomMapValueSampling");
+    ScopeTimer timer("MapVisualizationCommand::RunAtomInterpolatedSampling");
     GridSampler sampler;
     sampler.SetGridResolution(static_cast<unsigned int>(request.sampling_size));
     sampler.SetWindowSize(request.window_size);
@@ -205,19 +205,19 @@ bool RunAtomMapValueSampling(
     }
     sampler.SetReferenceUVector({u_vector(0), u_vector(1), u_vector(2)});
 
-    auto sampling_data_list{
-        SampleMapValues(
+    auto sampling_entries{
+        BuildInterpolatedMapSamples(
             map_object, sampler, target_atom_position, {n_vector(0), n_vector(1), n_vector(2)})
     };
-    if (sampling_data_list.empty())
+    if (sampling_entries.empty())
     {
         Logger::Log(LogLevel::Error, "Map sampling produced no data points.");
         return false;
     }
-    Eigen::MatrixXd map_value_matrix{
+    Eigen::MatrixXd sampling_value_matrix{
         Eigen::MatrixXd::Zero(request.sampling_size, request.sampling_size)
     };
-    for (std::size_t index = 0; index < sampling_data_list.size(); ++index)
+    for (std::size_t index = 0; index < sampling_entries.size(); ++index)
     {
         const std::size_t row{ index / static_cast<std::size_t>(request.sampling_size) };
         const std::size_t col{ index % static_cast<std::size_t>(request.sampling_size) };
@@ -227,9 +227,9 @@ bool RunAtomMapValueSampling(
                 "Map sampling produced more values than the configured heatmap grid can hold.");
             return false;
         }
-        map_value_matrix(
+        sampling_value_matrix(
             static_cast<Eigen::Index>(row),
-            static_cast<Eigen::Index>(col)) = sampling_data_list[index].response;
+            static_cast<Eigen::Index>(col)) = sampling_entries[index].response;
     }
 
     auto x_min{ target_atom_position.at(0) - 0.5 * request.window_size };
@@ -239,12 +239,12 @@ bool RunAtomMapValueSampling(
 
     rhbm_gem::HeatmapRequest heatmap_request;
     heatmap_request.output_path = BuildOutputFilePath(request, model_object, output_dir);
-    heatmap_request.values = std::move(map_value_matrix);
+    heatmap_request.values = std::move(sampling_value_matrix);
     heatmap_request.x_axis.title = "#font[2]{u} Position #[]{#AA}";
     heatmap_request.x_axis.range = std::make_pair(x_min, x_max);
     heatmap_request.y_axis.title = "#font[2]{v} Position #[]{#AA}";
     heatmap_request.y_axis.range = std::make_pair(y_min, y_max);
-    heatmap_request.z_axis.title = "Normalized Map Value";
+    heatmap_request.z_axis.title = "Sampling Value (normalized map)";
 
     const auto plot_result{ rhbm_gem::local_painter::SaveHeatmap(heatmap_request) };
     if (!plot_result.Succeeded())
@@ -274,7 +274,7 @@ bool ExecutePreparedRequest(const MapVisualizationRequest & request)
     if (!inputs.has_value()) return false;
     inputs->map_object->MapValueArrayNormalization();
     RunModelObjectPreprocessing(*inputs->model_object);
-    return RunAtomMapValueSampling(request, *inputs->map_object, *inputs->model_object, request.output_dir);
+    return RunAtomInterpolatedSampling(request, *inputs->map_object, *inputs->model_object, request.output_dir);
 }
 
 } // namespace

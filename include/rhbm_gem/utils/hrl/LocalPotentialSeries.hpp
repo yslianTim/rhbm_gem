@@ -19,6 +19,7 @@ SeriesPointList BuildBinnedDistanceResponseSeries(
     int bin_size = 15,
     double x_min = 0.0,
     double x_max = 1.5);
-double ComputeMapValueNearCenter(const LocalPotentialSampleList & sampling_entries);
+// Mean of raw interpolated sampling values within 0.05 of the center.
+double ComputeMeanSamplingValueNearCenter(const LocalPotentialSampleList & sampling_entries);
 
 } // namespace rhbm_gem::local_potential_series

@@ -16,17 +16,17 @@ class ModelObject;
 
 namespace core {
 
-LocalPotentialSampleList SampleMapValues(
+LocalPotentialSampleList BuildInterpolatedMapSamples(
     const MapObject & map_object,
     const GridSampler & sampler,
     const std::array<double, 3> & position,
     const std::array<double, 3> & direction);
 
-LocalPotentialSampleList SampleAtomMapValues(
+LocalPotentialSampleList BuildAtomInterpolatedMapSamples(
     const MapObject & map_object,
     const AtomObject & atom);
 
-LocalPotentialSampleList SampleAtomMapValues(
+LocalPotentialSampleList BuildAtomInterpolatedMapSamples(
     const MapObject & map_object,
     const AtomObject & atom,
     SphereSamplingMethod sampling_method);

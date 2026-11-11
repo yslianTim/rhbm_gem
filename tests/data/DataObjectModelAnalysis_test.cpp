@@ -855,7 +855,7 @@ TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewComputesPeelingRatioInIn
     EXPECT_DOUBLE_EQ(*boundary_ratio, 0.75);
     EXPECT_FALSE(view.GetLocalFittingPeelingRatio(2.1, 2.2));
 
-    peeling.samples[1].observation.raw_response = 0;
+    peeling.samples[1].observation.map_value = 0;
     editor.SetAtomPostFitPeeling(atom, peeling);
     EXPECT_EQ(view.AssessLocalFittingPeelingRatio(1.0, 1.0).reason, "invalid-zero-denominator");
     peeling.samples[1].response.reset();
@@ -940,7 +940,7 @@ TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewSeparatesRawAndPeelingSa
 
 #ifdef HAVE_ROOT
     rg::PotentialPlotBuilder builder(atom);
-    EXPECT_EQ(builder.CreateDistanceToMapValueGraph(rg::DistanceSamplingMode::Peeling)->GetN(), 0);
+    EXPECT_EQ(builder.CreateDistanceToResponseGraph(rg::DistanceSamplingMode::Peeling)->GetN(), 0);
 #endif
 
     rg::LocalStageEstimate joint;
@@ -976,10 +976,23 @@ TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewSeparatesRawAndPeelingSa
             EXPECT_DOUBLE_EQ(graph->GetPointY(static_cast<int>(i)), samples[i].response);
         }
     };
-    expect_graph(builder.CreateDistanceToMapValueGraph(), first_entries);
-    expect_graph(builder.CreateDistanceToMapValueGraph(rg::DistanceSamplingMode::SelectedRaw), first_entries);
-    expect_graph(builder.CreateDistanceToMapValueGraph(rg::DistanceSamplingMode::AllRaw), raw_samples);
-    expect_graph(builder.CreateDistanceToMapValueGraph(rg::DistanceSamplingMode::Peeling), available_entries);
+    expect_graph(builder.CreateDistanceToResponseGraph(), first_entries);
+    expect_graph(builder.CreateDistanceToResponseGraph(rg::DistanceSamplingMode::SelectedRaw), first_entries);
+    expect_graph(builder.CreateDistanceToResponseGraph(rg::DistanceSamplingMode::AllRaw), raw_samples);
+    expect_graph(builder.CreateDistanceToResponseGraph(rg::DistanceSamplingMode::Peeling), available_entries);
+    // Distinct sampling/grid positions and a missing peeled row guard each source.
+    const auto expect_binned_graph = [](const auto & graph, const std::array<double, 4> & responses)
+    {
+        ASSERT_EQ(graph->GetN(), 4);
+        for (int i = 0; i < 4; ++i)
+        {
+            EXPECT_DOUBLE_EQ(graph->GetPointX(i), 0.25 + 0.5 * i);
+            EXPECT_DOUBLE_EQ(graph->GetPointY(i), responses[static_cast<std::size_t>(i)]);
+        }
+    };
+    expect_binned_graph(builder.CreateBinnedDistanceToSamplingValueGraph(4, 0.0, 2.0), {6.0, 2.0, 0.0, 0.0});
+    expect_binned_graph(builder.CreateBinnedDistanceToPeeledResponseGraph(4, 0.0, 2.0), {1.25, 0.0, 0.0, 0.75});
+    expect_binned_graph(builder.CreateBinnedDistanceToNeighborContributionGraph(4, 0.0, 2.0), {4.75, 0.0, 0.0, 1.25});
 #endif
 
     peeling.samples[0].response.reset();
@@ -989,7 +1002,7 @@ TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewSeparatesRawAndPeelingSa
     analysis.SetAtomPostFitPeeling(*atom, peeling);
     EXPECT_TRUE(view.GetPeelingSamplingEntries().empty());
 #ifdef HAVE_ROOT
-    EXPECT_EQ(builder.CreateDistanceToMapValueGraph(rg::DistanceSamplingMode::Peeling)->GetN(), 0);
+    EXPECT_EQ(builder.CreateDistanceToResponseGraph(rg::DistanceSamplingMode::Peeling)->GetN(), 0);
 #endif
 }
 

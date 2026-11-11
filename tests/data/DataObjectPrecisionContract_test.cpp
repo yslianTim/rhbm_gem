@@ -109,7 +109,7 @@ static_assert(std::is_same_v<
         const std::vector<std::array<double, 3>> &,
         double)>);
 static_assert(std::is_same_v<
-    decltype(&rg::core::SampleMapValues),
+    decltype(&rg::core::BuildInterpolatedMapSamples),
     LocalPotentialSampleList (*)(
         const rg::MapObject &,
         const GridSampler &,

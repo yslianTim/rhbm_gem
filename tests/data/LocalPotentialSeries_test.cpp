@@ -40,7 +40,7 @@ SeriesPointList BuildExpectedDatasetSeries(
 
 } // namespace
 
-TEST(LocalPotentialSeriesTest, ComputesRangeAndBinningForDistanceMapSeries)
+TEST(LocalPotentialSeriesTest, ComputesRangeAndBinningForDistanceResponseSeries)
 {
     const LocalPotentialSampleList sampling_entries{
         {2.0, SamplingPoint{ 0.0 }},
@@ -50,13 +50,13 @@ TEST(LocalPotentialSeriesTest, ComputesRangeAndBinningForDistanceMapSeries)
     };
 
     const auto distance_range{ lps::ComputeDistanceRange(sampling_entries, 0.0) };
-    const auto map_value_range{ lps::ComputeResponseRange(sampling_entries, 0.0) };
+    const auto response_range{ lps::ComputeResponseRange(sampling_entries, 0.0) };
     const auto binned{ lps::BuildBinnedDistanceResponseSeries(sampling_entries, 2, 0.0, 1.0) };
 
     EXPECT_DOUBLE_EQ(std::get<0>(distance_range), 0.0);
     EXPECT_DOUBLE_EQ(std::get<1>(distance_range), 1.0);
-    EXPECT_DOUBLE_EQ(std::get<0>(map_value_range), -1.0);
-    EXPECT_DOUBLE_EQ(std::get<1>(map_value_range), 8.0);
+    EXPECT_DOUBLE_EQ(std::get<0>(response_range), -1.0);
+    EXPECT_DOUBLE_EQ(std::get<1>(response_range), 8.0);
     ASSERT_EQ(binned.size(), 2U);
     EXPECT_DOUBLE_EQ(binned.at(0).response, 3.0);
     EXPECT_DOUBLE_EQ(binned.at(1).response, 8.0);
@@ -123,7 +123,7 @@ TEST(LocalPotentialSeriesTest, PureHelpersWorkWithResolvedEntrySamples)
 
     const auto view{ rg::AtomLocalPotentialView::For(*atom) };
     const auto & raw_sampling_entries{ view.GetRawSamplingEntries() };
-    const auto map_value_range{
+    const auto response_range{
         lps::ComputeResponseRange(raw_sampling_entries, 0.0)
     };
     const auto binned{
@@ -131,8 +131,8 @@ TEST(LocalPotentialSeriesTest, PureHelpersWorkWithResolvedEntrySamples)
             raw_sampling_entries, 2, 0.0, 1.0)
     };
 
-    EXPECT_DOUBLE_EQ(std::get<0>(map_value_range), 2.0);
-    EXPECT_DOUBLE_EQ(std::get<1>(map_value_range), 6.0);
+    EXPECT_DOUBLE_EQ(std::get<0>(response_range), 2.0);
+    EXPECT_DOUBLE_EQ(std::get<1>(response_range), 6.0);
     ASSERT_EQ(binned.size(), 2U);
     EXPECT_DOUBLE_EQ(binned.at(0).response, 3.0);
     EXPECT_DOUBLE_EQ(binned.at(1).response, 6.0);
@@ -158,4 +158,16 @@ TEST(LocalPotentialSeriesTest, BinningReturnsZeroResponseForEmptyBins)
     ASSERT_EQ(binned.size(), 2U);
     EXPECT_DOUBLE_EQ(binned.at(0).response, 2.0);
     EXPECT_DOUBLE_EQ(binned.at(1).response, 0.0);
+}
+
+TEST(LocalPotentialSeriesTest, MeanSamplingValueNearCenterPreservesThresholdAndEmptyBehavior)
+{
+    const LocalPotentialSampleList sampling_entries{
+        {2.0, SamplingPoint{ 0.0 }},
+        {6.0, SamplingPoint{ 0.05, {}, false }},
+        {100.0, SamplingPoint{ 0.050001 }}
+    };
+    EXPECT_DOUBLE_EQ(lps::ComputeMeanSamplingValueNearCenter(sampling_entries), 4.0);
+    EXPECT_DOUBLE_EQ(lps::ComputeMeanSamplingValueNearCenter({}), 0.0);
+    EXPECT_DOUBLE_EQ(lps::ComputeMeanSamplingValueNearCenter({{100.0, SamplingPoint{ 0.1 }}}), 0.0);
 }

@@ -64,7 +64,7 @@ std::string ValidatePostFitPeelingResult(const PostFitPeelingResult & peeling,
         if ((previous && observation.original_row_index<=*previous) ||
             !grids.insert(observation.global_grid_index).second ||
             !std::isfinite(observation.squared_distance) || observation.squared_distance<0 ||
-            observation.squared_distance>4.0 || !std::isfinite(observation.raw_response) ||
+            observation.squared_distance>4.0 || !std::isfinite(observation.map_value) ||
             !std::all_of(observation.position.begin(),observation.position.end(),
                 [](double value){return std::isfinite(value);}))
             return "Invalid Post-Joint grid identity/order/observation.";

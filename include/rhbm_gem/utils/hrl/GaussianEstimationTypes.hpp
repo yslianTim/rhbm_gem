@@ -43,13 +43,13 @@ struct LocalStageEstimate
     StageUncertainty uncertainty;
 };
 
-// An observation of the original map, independent of InitialStage sampling.
+// An Original-grid voxel observation, independent of InitialStage interpolation.
 struct PostJointGridObservation
 {
     std::size_t original_row_index{};
     std::size_t global_grid_index{};
     double squared_distance{};
-    double raw_response{};
+    double map_value{}; // Current stored voxel value; JSON key remains "raw_response".
     std::array<double,3> position{};
 };
 
