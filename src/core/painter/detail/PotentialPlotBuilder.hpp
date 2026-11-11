@@ -30,12 +30,7 @@ enum class QScoreMode { Standard, JointPeeledStandard, JointPeeledModel };
 inline constexpr std::array<const char *,3> QScoreMethodLabels{
     "Standard QScore", "Joint-Peeled QScore (standard reference)",
     "Joint-Peeled QScore (Joint model reference)"};
-struct ResidueQScoreAverage
-{
-    std::optional<double> average;
-    std::size_t available_atoms{}, eligible_atoms{};
-};
-using ResidueQScoreMap = std::map<std::string,std::map<int,ResidueQScoreAverage>>;
+using ResidueQScoreMap = std::map<std::string,std::map<int,double>>;
 ResidueQScoreMap CollectResidueQScores(const ModelObject &, QScoreMode);
 std::pair<double,double> QScoreDisplayRange(const std::vector<double> &);
 

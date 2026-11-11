@@ -40,7 +40,6 @@
 #include <TH1.h>
 #endif
 
-#include <fstream>
 #include <set>
 #include <iomanip>
 #include <map>
@@ -1446,20 +1445,6 @@ void GausPainter::PaintAverageQScoreToSequenceSummary(
 {
     auto file_path{ m_folder_path + name };
     Logger::Log(LogLevel::Info, "GausPainter::PaintAverageQScoreToSequenceSummary");
-
-    const auto blue_coverage=CollectResidueQScores(*model_object,QScoreMode::Standard);
-    const auto joint_coverage=CollectResidueQScores(*model_object,QScoreMode::JointPeeledStandard);
-    std::ofstream coverage(file_path+"_coverage.tsv");
-    if (!coverage) throw std::runtime_error("Cannot write QScore atom coverage.");
-    coverage << "chain\tsequence_id\teligible_atoms\tblue_atoms\tgreen_red_atoms\n";
-    for (const auto & [chain,residues]:blue_coverage)
-        for (const auto & [sequence,residue]:residues)
-        {
-            const auto count=joint_coverage.at(chain).at(sequence).available_atoms;
-            coverage << chain << '\t' << sequence << '\t' << residue.eligible_atoms << '\t'
-                << residue.available_atoms << '\t' << count << '\n';
-        }
-    Logger::Log(LogLevel::Info,"QScore residue atom coverage: "+file_path+"_coverage.tsv");
 
     #ifdef HAVE_ROOT
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };

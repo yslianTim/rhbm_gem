@@ -449,18 +449,6 @@ TEST(CommandApiPipelineTest, JointPersistsSmallSelectionCalibrationFailureAndExp
         display.verbosity=0;
         display.reference_model_groups={{"with_charge",{request.saved_key_tag}},{"no_charge",{request.saved_key_tag}}};
         EXPECT_TRUE(rgc::RunCommand(display).succeeded) << static_cast<int>(painter);
-        if (painter==rgc::PainterType::GAUS)
-        {
-            bool found_coverage=false;
-            for (const auto & file:std::filesystem::recursive_directory_iterator(display.output_dir))
-                if (file.path().filename().string().ends_with("_coverage.tsv"))
-                {
-                    std::ifstream input(file.path());std::string header;std::getline(input,header);
-                    EXPECT_EQ(header,"chain\tsequence_id\teligible_atoms\tblue_atoms\tgreen_red_atoms");
-                    found_coverage=true;
-                }
-            EXPECT_TRUE(found_coverage);
-        }
     }
 #endif
 #ifdef RHBM_GEM_ENABLE_UMAP

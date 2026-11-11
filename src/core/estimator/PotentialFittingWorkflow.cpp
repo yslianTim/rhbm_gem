@@ -31,6 +31,7 @@
 #include <iomanip>
 #include <limits>
 #include <map>
+#include <new>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -288,9 +289,35 @@ bool RunJointStagePostprocessing(
     model.EditAnalysis().ApplyJointResult(std::move(snapshot), joint_run_id);
     model.EditAnalysis().BindJointMapObservations(map);
     const auto & joint_snapshot = *model.GetAnalysisView().GetJointResult();
-    model.EditAnalysis().ApplyPostJointQScoresBatch(BuildPostJointQScores(
-        map,model,problem,joint_snapshot,halo_median_build ? &*halo_median_build : nullptr,postprocessing_metrics));
-    if (!options.quiet_mode)
+    bool qscore_published{};
+    try
+    {
+        JointPostprocessingMetrics qscore_metrics;
+        auto results=BuildPostJointQScores(
+            map,model,problem,joint_snapshot,halo_median_build ? &*halo_median_build : nullptr,qscore_metrics);
+        model.EditAnalysis().ApplyPostJointQScoresBatch(std::move(results));
+        postprocessing_metrics.qscore_targets=qscore_metrics.qscore_targets;
+        postprocessing_metrics.qscore_available=qscore_metrics.qscore_available;
+        postprocessing_metrics.qscore_unavailable=qscore_metrics.qscore_unavailable;
+        postprocessing_metrics.qscore_samples=qscore_metrics.qscore_samples;
+        postprocessing_metrics.qscore_contributions=qscore_metrics.qscore_contributions;
+        postprocessing_metrics.qscore_halos=qscore_metrics.qscore_halos;
+        postprocessing_metrics.qscore_extra_halos=qscore_metrics.qscore_extra_halos;
+        postprocessing_metrics.qscore_unavailable_halos=qscore_metrics.qscore_unavailable_halos;
+        postprocessing_metrics.estimated_qscore_peak_bytes=qscore_metrics.estimated_qscore_peak_bytes;
+        postprocessing_metrics.qscore_seconds=qscore_metrics.qscore_seconds;
+        qscore_published=true;
+    }
+    catch (const std::bad_alloc &)
+    {
+        throw;
+    }
+    catch (const std::exception & error)
+    {
+        model.EditAnalysis().ClearPostJointQScores();
+        LogJointWarning("[QScore] Joint-peeled comparison skipped: "+std::string(error.what()));
+    }
+    if (qscore_published && !options.quiet_mode)
     {
         std::ostringstream message;
         message << "[QScore] Joint-peeled comparisons | targets=" << postprocessing_metrics.qscore_targets

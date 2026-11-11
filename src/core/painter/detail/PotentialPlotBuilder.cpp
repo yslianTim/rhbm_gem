@@ -61,7 +61,7 @@ std::vector<GroupKey> CollectComponentAtomGroupKeys(
 ResidueQScoreMap CollectResidueQScores(const ModelObject & model, QScoreMode mode)
 {
     ResidueQScoreMap result;
-    std::map<std::string,std::map<int,double>> sums;
+    std::map<std::string,std::map<int,std::pair<double,std::size_t>>> sums;
     for (const auto * atom:model.GetSelectedAtoms())
     {
         if (atom->GetElement()==Element::HYDROGEN || atom->GetSequenceID()<0) continue;
@@ -69,20 +69,18 @@ ResidueQScoreMap CollectResidueQScores(const ModelObject & model, QScoreMode mod
         // Preserve Blue's published endpoint eligibility and stored scalar.
         if (!view.IsAvailable() || !view.HasJointStageModel() ||
             view.GetJointStageEstimate().source.role==FittingRole::Halo) continue;
-        auto & residue=result[atom->GetChainID()][atom->GetSequenceID()];
-        ++residue.eligible_atoms;
         std::optional<double> score;
         if (mode==QScoreMode::Standard) score=atom->GetStandardQScore();
         else if (const auto & q=view.GetPostJointQScore(); q && q->scores && q->status==EvidenceStatus::Available)
             score=mode==QScoreMode::JointPeeledStandard ? q->scores->standard : q->scores->joint;
         if (!score || !std::isfinite(*score)) continue;
-        sums[atom->GetChainID()][atom->GetSequenceID()]+=*score;
-        ++residue.available_atoms;
+        auto & [sum,count]=sums[atom->GetChainID()][atom->GetSequenceID()];
+        sum+=*score;
+        ++count;
     }
-    for (auto & [chain,residues]:result)
-        for (auto & [sequence,residue]:residues)
-            if (residue.available_atoms)
-                residue.average=sums.at(chain).at(sequence)/static_cast<double>(residue.available_atoms);
+    for (const auto & [chain,residues]:sums)
+        for (const auto & [sequence,total]:residues)
+            result[chain][sequence]=total.first/static_cast<double>(total.second);
     return result;
 }
 
@@ -840,12 +838,11 @@ PotentialPlotBuilder::CreateAverageQScoreToSequenceIDGraphMap(QScoreMode mode)
     std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> graphs;
     if (!IsModelObjectAvailable()) return graphs;
     for (const auto & [chain,residues]:CollectResidueQScores(*m_model_object,mode))
-        for (const auto & [sequence,residue]:residues)
+        for (const auto & [sequence,average]:residues)
         {
-            if (!residue.average) continue;
             auto & graph=graphs[chain];
             if (!graph) graph=root_helper::CreateGraphErrors();
-            graph->SetPoint(graph->GetN(),static_cast<double>(sequence),*residue.average);
+            graph->SetPoint(graph->GetN(),static_cast<double>(sequence),average);
         }
     return graphs;
 }

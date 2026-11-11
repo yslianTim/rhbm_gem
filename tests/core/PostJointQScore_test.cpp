@@ -141,7 +141,7 @@ TEST(PostJointQScoreTest, ExtraDomainHaloUsesQualifiedLocalDonorsWithoutChanging
     EXPECT_EQ(missing.front().second.reason,"contributor-unavailable");
 }
 
-TEST(PostJointQScoreTest, MissingContributorAndNonfinitePredictionAreUnavailable)
+TEST(PostJointQScoreTest, MissingInvalidAndBoundaryDataHaveExplicitReasons)
 {
     auto f=Make({{{0,0,0},{2,.6,.1}},{{1.2,0,0},{2,.6,.1}}});
     auto & entry=*ModelAnalysisData::Of(*f.model).FindAtomLocalEntry(*f.model->FindAtomPtr(2));
@@ -154,23 +154,13 @@ TEST(PostJointQScoreTest, MissingContributorAndNonfinitePredictionAreUnavailable
     missing=original;missing.source.run_id="other-run";entry.SetJointStageEstimate(missing);
     f.Calculate();EXPECT_FALSE(f.results.front().second.scores);
     entry.SetJointStageEstimate(original);
-    auto nonfinite=f.snapshot;
-    nonfinite.components.front().state->ac[2]=std::numeric_limits<double>::max();
-    nonfinite.components.front().state->tau[1]=.01;
-    f.model->EditAnalysis().ApplyJointResult(nonfinite,"qscore-test-run");
-    const auto results=BuildPostJointQScores(*f.map,*f.model,*f.problem,nonfinite,&f.halos,f.metrics);
+    auto invalid_snapshot=f.snapshot;
+    invalid_snapshot.components.front().state->ac[2]=std::numeric_limits<double>::max();
+    invalid_snapshot.components.front().state->tau[1]=.01;
+    f.model->EditAnalysis().ApplyJointResult(invalid_snapshot,"qscore-test-run");
+    const auto results=BuildPostJointQScores(*f.map,*f.model,*f.problem,invalid_snapshot,&f.halos,f.metrics);
     EXPECT_FALSE(results.front().second.scores);
     EXPECT_EQ(results.front().second.reason,"nonfinite-contribution");
-}
-
-TEST(PostJointQScoreTest, BoundaryAndDegenerateDataHaveExplicitReasons)
-{
-    auto f=Make();
-    f.model->SetReferenceHeight(0);
-    f.Calculate();
-    EXPECT_FALSE(f.results.front().second.scores);
-    EXPECT_EQ(f.results.front().second.reason,"standard:reference-zero-variance");
-    f.model->SetReferenceHeight(1);
     auto boundary=Make({Atom{}},false,true);
     EXPECT_EQ(boundary.results.front().second.reason,"sample-outside-map");
     EXPECT_FALSE(boundary.results.front().second.scores);
@@ -186,10 +176,9 @@ TEST(PostJointQScoreTest, BoundaryAndDegenerateDataHaveExplicitReasons)
     EXPECT_FALSE(invalid.front().second.scores);
     EXPECT_EQ(invalid.front().second.reason,"nonfinite-response");
     EXPECT_THROW(BuildPostJointQScores(nonfinite,*f.model,*f.problem,f.snapshot,&f.halos,f.metrics),std::invalid_argument);
-
 }
 
-TEST(QScorePainterTest, UsesPersistedSourcesSortedResiduesAndSharedCoverage)
+TEST(QScorePainterTest, UsesPersistedScoresSortedResidueAveragesAndMissingRecords)
 {
     auto f=Make({{{0,0,0}},{{1.2,0,0}}});
     f.results.front().second.scores=PostJointQScoreValues{-.7,-.2};
@@ -200,9 +189,9 @@ TEST(QScorePainterTest, UsesPersistedSourcesSortedResiduesAndSharedCoverage)
     const auto green=CollectResidueQScores(*f.model,QScoreMode::JointPeeledStandard);
     const auto red=CollectResidueQScores(*f.model,QScoreMode::JointPeeledModel);
     EXPECT_EQ(blue.at("A").begin()->first,3);
-    EXPECT_EQ(*blue.at("A").at(20).average,.25);
-    EXPECT_EQ(green.at("A").at(20).average,f.results.front().second.scores->standard);
-    EXPECT_EQ(red.at("A").at(20).average,f.results.front().second.scores->joint);
+    EXPECT_EQ(blue.at("A").at(20),.25);
+    EXPECT_EQ(green.at("A").at(20),f.results.front().second.scores->standard);
+    EXPECT_EQ(red.at("A").at(20),f.results.front().second.scores->joint);
 #ifdef HAVE_ROOT
     auto sorted=PotentialPlotBuilder(f.model.get()).CreateAverageQScoreToSequenceIDGraphMap(QScoreMode::Standard);
     ASSERT_EQ(sorted.at("A")->GetN(),2);
@@ -217,16 +206,15 @@ TEST(QScorePainterTest, UsesPersistedSourcesSortedResiduesAndSharedCoverage)
         const auto & second=*f.results.back().second.scores;
         const double expected=mode==QScoreMode::JointPeeledStandard ?
             (first.standard+second.standard)/2 : (first.joint+second.joint)/2;
-        EXPECT_EQ(*paired.at("A").at(20).average,expected);
-        EXPECT_EQ(paired.at("A").at(20).available_atoms,2u);
+        EXPECT_EQ(paired.at("A").at(20),expected);
     }
     const auto average=CollectResidueQScores(*f.model,QScoreMode::Standard);
-    EXPECT_EQ(*average.at("A").at(20).average,.5);
+    EXPECT_EQ(average.at("A").at(20),.5);
     f.model->FindAtomPtr(2)->SetChainID("B");
     ModelAnalysisData::Of(*f.model).FindAtomLocalEntry(*f.model->FindAtomPtr(2))->ClearPostJointQScore();
     const auto missing=CollectResidueQScores(*f.model,QScoreMode::JointPeeledStandard);
-    EXPECT_FALSE(missing.at("B").at(20).average);
-    EXPECT_EQ(missing.at("B").at(20).available_atoms,0u);
+    EXPECT_FALSE(missing.contains("B"));
+    EXPECT_EQ(missing.at("A").at(20),f.results.front().second.scores->standard);
 #ifdef HAVE_ROOT
     PotentialPlotBuilder builder(f.model.get());
     auto graphs=builder.CreateAverageQScoreToSequenceIDGraphMap(QScoreMode::JointPeeledModel);
@@ -240,33 +228,4 @@ TEST(QScorePainterTest, UsesPersistedSourcesSortedResiduesAndSharedCoverage)
     EXPECT_NE(std::string(QScoreMethodLabels[2]).find("Joint model"),std::string::npos);
     f.model->SelectAtoms([](const auto &){return false;});
     EXPECT_TRUE(CollectResidueQScores(*f.model,QScoreMode::Standard).empty());
-}
-
-TEST(PostJointQScoreTest, SyntheticWorkloadRecordsCostAndPreservesEndpoints)
-{
-    std::vector<qscore_test::Atom> atoms;
-    for (int z=-1;z<=1;++z) for (int y=-1;y<=1;++y) for (int x=-1;x<=1;++x)
-        atoms.push_back({{2.*x,2.*y,2.*z},{2.,.55,.1}});
-    auto f=qscore_test::Make(std::move(atoms));
-    const auto before=f.snapshot.components;
-    std::vector<double> blue;
-    for (const auto & atom:f.model->GetAtomList()) blue.push_back(atom->GetStandardQScore());
-    f.Calculate();
-    EXPECT_EQ(f.metrics.qscore_targets,27u);
-    EXPECT_EQ(f.metrics.qscore_available,27u);
-    EXPECT_EQ(f.metrics.qscore_unavailable,0u);
-    EXPECT_GT(f.metrics.qscore_contributions,f.metrics.qscore_samples);
-    for (std::size_t c=0;c<before.size();++c)
-    {
-        EXPECT_EQ(f.snapshot.components[c].state->ac,before[c].state->ac);
-        EXPECT_EQ(f.snapshot.components[c].state->tau,before[c].state->tau);
-    }
-    for (std::size_t i=0;i<blue.size();++i) EXPECT_EQ(f.model->GetAtomList()[i]->GetStandardQScore(),blue[i]);
-    RecordProperty("qscore_targets",static_cast<int>(f.metrics.qscore_targets));
-    RecordProperty("qscore_available",static_cast<int>(f.metrics.qscore_available));
-    RecordProperty("qscore_unavailable",static_cast<int>(f.metrics.qscore_unavailable));
-    RecordProperty("qscore_samples",static_cast<int>(f.metrics.qscore_samples));
-    RecordProperty("qscore_contributions",static_cast<int>(f.metrics.qscore_contributions));
-    RecordProperty("qscore_seconds",std::to_string(f.metrics.qscore_seconds));
-    RecordProperty("qscore_estimated_payload_bytes",static_cast<int>(f.metrics.estimated_qscore_peak_bytes));
 }

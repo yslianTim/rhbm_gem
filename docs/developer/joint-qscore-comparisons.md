@@ -14,11 +14,11 @@ contributors, never Target outputs. Painter selection changes aggregation only.
 
 Blue versus Green isolates neighbor peeling. Green versus Red isolates reference
 choice. Neither comparison implies an ordering of scores. Blue can include more
-atoms than the paired curves; the summary's `_coverage.tsv` file gives eligible,
-Blue, and shared Green/Red atom counts for every chain/residue. Missing values
-are omitted, never zero-filled. Residues are sorted by sequence ID. Plot limits
-include finite correlations, including negative values, within [-1,1]. Empty
-curves are skipped and an all-empty summary is reported.
+atoms than the paired curves. The summary produces plots only, without an
+auxiliary atom-count TSV. Missing values are omitted, never zero-filled; residues
+without valid scores are omitted entirely. Residues are sorted by sequence ID.
+Plot limits include finite correlations, including negative values, within
+[-1,1]. Empty curves are skipped and an all-empty summary is reported.
 
 ## Sampling and arithmetic
 
@@ -78,8 +78,28 @@ owned by `LocalPotentialEntry`, read through `AtomLocalPotentialView`, and
 validated/published in one batch by `ModelAnalysisEditor`. Painter only reads
 these records and does not load or interpolate a map.
 
+Joint-peeled QScore is optional derived analysis. Only its builder and batch
+publisher share a best-effort exception boundary, after qualified Joint
+publication and map binding. A recoverable `std::exception` clears all QScore
+records, logs one warning, and lets Original-grid Peeling, Post-Joint Local and
+GroupingStage proceed under their existing policies. `std::bad_alloc` is
+re-thrown. Joint solving, Halo reconstruction, Joint publication/map binding,
+contributor/context construction and core downstream fitting remain outside
+this boundary. In particular, unavailable formal Halo reconstruction still
+prevents downstream processing and preserves `JointDownstreamUnavailable`.
+
+The publisher validates the entire batch before updating records. QScore
+metrics accumulate locally and commit only after publication succeeds, without
+replacing core metrics. A batch failure leaves `post_joint_qscore = null` for
+all atoms, including any previous run's results; it does not manufacture zero
+scores or per-atom Unavailable records. A normally completed builder can still
+publish individual `EvidenceStatus::Unavailable` records with explicit reasons.
+Failure handling does not change the formal Blue/Green/Red definitions or the
+shared sampling points, observations, peeling responses, order and weights.
+
 SQLite schema **25** stores Stage Result JSON **9**; Joint Result JSON stays
-**25**. `post_joint_qscore` is null when not run, otherwise contains:
+**25**. `post_joint_qscore` is null when not run or when batch computation or
+publication fails, otherwise contains:
 
 - calculation contract `joint-peeled-qscore-v1` and complete Joint source;
 - one optional pair `[standard, joint]`, availability status and failure reason;
@@ -110,11 +130,12 @@ Target and compact result records, not all Target sample vectors. Map/problem
 storage and allocator overhead are outside the payload estimate; process RSS
 also includes fitting, ROOT, and the test runtime.
 
-`QScoreHelper_test.cpp` compares sampling order and Standard scores exactly with
-frozen legacy arithmetic. `PostJointQScore_test.cpp` covers independent scalar
-peeling/kernel oracles, shared observations, support boundaries, Hydrogen,
+`QScoreHelper_test.cpp` checks sampling order, fixed counts and representative
+positions, plus six Standard score goldens captured from the independent legacy
+scalar oracle (absolute tolerance 2e-14). `PostJointQScore_test.cpp` covers
+independent scalar peeling/kernel oracles, shared observations, support boundaries, Hydrogen,
 Target/Halo coverage, missing/nonfinite data, map boundaries, sorted averages,
-negative display ranges and a deterministic 27-Target workload. Persistence
-checks cover paired round-trip, unavailable reasons, corrupt sources/counts,
+negative display ranges. Persistence checks cover paired round-trip, unavailable
+reasons, corrupt sources/counts,
 extra-Halo donors and invalidation. Full CTest additionally covers unchanged
 Joint endpoints, Original-grid peeling, Post-Joint Local and Grouping workflows.
