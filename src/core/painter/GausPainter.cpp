@@ -261,7 +261,8 @@ void GausPainter::PaintMapValueMainChain(ModelObject * model_object, const std::
             root_helper::SetTextAttribute(result_text[i].get(), 20.0f, 133, 22, 0.0, kRed);
             root_helper::SetFillAttribute(result_text[i].get(), 4000);
             if (gaus_function[i]) result_text[i]->AddText(
-                Form("#font[2]{A} = %.2f  ;  #tau = %.2f  ;  c = %.2f",
+                Form(has_joint_result ? "#font[2]{A} = %.2f ; #tau = %.2f ; mean C_{med} = %.2f" :
+                    "#font[2]{A} = %.2f  ;  #tau = %.2f  ;  c = %.2f",
                     amplitude_prior[i], width_prior[i], offset_prior[i]));
             else result_text[i]->AddText("Group prior unavailable");
             result_text[i]->Draw();
@@ -305,11 +306,11 @@ void GausPainter::PaintMapValueMainChain(ModelObject * model_object, const std::
     legend->SetMargin(0.15f);
     legend->AddEntry(gaus_function[0].get(),
         has_joint_result
-            ? "Gaussian-only group prior (C = 0)"
+            ? "Mean prior + mean Joint C medians"
             : "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau},#font[1]{c})}", "l");
     legend->AddEntry(map_value_graph_list[0].at(0).get(),
         has_joint_result
-            ? "Joint peeling (includes target-own charge)"
+            ? "Joint peeling (individual target charge retained)"
             : "Map Value", "l");
     legend->Draw();
 
@@ -977,9 +978,6 @@ void GausPainter::PaintLocalGausSummary(ModelObject * model_object, const std::s
             auto offset_prior{
                 entry_iter.GetAtomGroupPrior(group_key).GetOffset()
             };
-            const auto group_summary = entry_iter.GetGroupParameterSummary(group_key);
-            if (group_summary && group_summary->descriptive_charge_median)
-                offset_prior = *group_summary->descriptive_charge_median;
             auto offset_error{
                 entry_iter.GetAtomGroupPriorWithUncertainty(group_key)
                     .GetStandardDeviationModel().GetOffset()
@@ -1126,13 +1124,13 @@ void GausPainter::PaintLocalGausSummary(ModelObject * model_object, const std::s
             legend->SetNColumns(3);
             if (gaus_prior) legend->AddEntry(gaus_prior.get(),
                 has_joint_result
-                    ? "Gaussian-only group prior (C = 0)"
+                    ? "Group prior + median Joint charge"
                     : Form("Group prior, #alpha_{g} = %.1f", entry_iter.GetAtomAlphaG(group_key)), "l");
             if (gaus_mean) legend->AddEntry(gaus_mean.get(),
-                has_joint_result ? "Gaussian-only group mean" : "Group mean", "l");
+                has_joint_result ? "Group mean + median Joint charge" : "Group mean", "l");
             legend->AddEntry(map_value_graph_list.at(0).get(),
                 has_joint_result
-                    ? "Joint peeling (includes target-own charge)"
+                    ? "Joint peeling (individual target charge retained)"
                     : "Map Value", "l");
             legend->Draw();
 
@@ -1737,13 +1735,13 @@ void GausPainter::PaintGroupFittingComparison(
         root_helper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
         legend->SetMargin(0.25f);
         if (gaus_prior_map.contains(Spot::CA) && gaus_prior_map.at(Spot::CA)) legend->AddEntry(gaus_prior_map.at(Spot::CA).get(),
-            has_joint_result ? "Gaussian-only group prior (C = 0)" : "Final group prior #color[633]{#phi (#font[1]{A},#font[1]{#tau},#font[1]{C})}", "l");
+            has_joint_result ? "Group prior + median Joint charge" : "Final group prior #color[633]{#phi (#font[1]{A},#font[1]{#tau},#font[1]{C})}", "l");
         if (has_joint_result)
         {
             if (!map_value_graph_list_map[0].at(Spot::CA).empty()) legend->AddEntry(map_value_graph_list_map[0].at(Spot::CA).front().get(),
                 "Raw map response (all contributors)", "l");
             if (!map_value_graph_list_map[1].at(Spot::CA).empty()) legend->AddEntry(map_value_graph_list_map[1].at(Spot::CA).front().get(),
-                "Joint peeling (includes target-own charge)", "l");
+                "Joint peeling (individual target charge retained)", "l");
             if (!map_value_graph_list_map[2].at(Spot::CA).empty()) legend->AddEntry(map_value_graph_list_map[2].at(Spot::CA).front().get(),
                 "Neighbor signal (raw minus peeling)", "l");
         }
@@ -1982,13 +1980,13 @@ void GausPainter::PaintGroupMapValueAminoAcidMainChainComponent(
         root_helper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
         legend->SetMargin(0.25f);
         if (gaus_prior_map.contains(Residue::ALA) && gaus_prior_map.at(Residue::ALA)) legend->AddEntry(gaus_prior_map.at(Residue::ALA).get(),
-            has_joint_result ? "Gaussian-only group prior (C = 0)" : "Group prior (available evidence)", "l");
+            has_joint_result ? "Group prior + median Joint charge" : "Group prior (available evidence)", "l");
             //Form("Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})} with #alpha_{r} = %.1f, #alpha_{g} = %.1f",
         if (gaus_mean_map.contains(Residue::ALA) && gaus_mean_map.at(Residue::ALA)) legend->AddEntry(gaus_mean_map.at(Residue::ALA).get(),
-            has_joint_result ? "Gaussian-only group mean" : "Group mean", "l");
+            has_joint_result ? "Group mean + median Joint charge" : "Group mean", "l");
         if (map_value_graph_list_map.contains(Residue::ALA) && !map_value_graph_list_map.at(Residue::ALA).empty()) legend->AddEntry(map_value_graph_list_map.at(Residue::ALA).front().get(),
             has_joint_result
-                ? "Joint peeling (includes target-own charge)"
+                ? "Joint peeling (individual target charge retained)"
                 : "Members of Map Value", "l");
         legend->Draw();
 

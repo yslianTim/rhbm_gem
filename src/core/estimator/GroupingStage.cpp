@@ -115,16 +115,15 @@ void RunGroupingStage(
         summary.point_count = beta.size();
         summary.eligible_count = beta.size();
         summary.excluded_count = target_count - beta.size();
-        if (!beta.empty())
-            summary.descriptive_mean = GaussianModel3D(
-                sums(0) / static_cast<double>(beta.size()), sums(1) / static_cast<double>(beta.size()),
-                0.0);
         if (!fixed_charges.empty())
         {
             std::vector<double> coefficients;
             coefficients.reserve(fixed_charges.size());
             for (const auto & profile : fixed_charges) coefficients.push_back(profile.coefficient);
             summary.descriptive_charge_median = array_helper::ComputeMedian(coefficients);
+            summary.descriptive_mean = GaussianModel3D(
+                sums(0) / static_cast<double>(beta.size()), sums(1) / static_cast<double>(beta.size()),
+                *summary.descriptive_charge_median);
         }
         if (beta.size() < 2)
             summary.reason = beta.empty() ? "no-eligible-post-joint-local-results" : "single-member";
@@ -147,9 +146,12 @@ void RunGroupingStage(
                     if (web.status != RHBMEstimationStatus::SUCCESS) throw std::runtime_error("WEB failed.");
                     GroupGaussianResult group;
                     group.alpha_g = alpha;
-                    group.mean = linearization_service::DecodeParameterVector(mu.mu_mean).WithOffset(0.0);
-                    group.mdpde = linearization_service::DecodeParameterVector(mu.mu_mdpde).WithOffset(0.0);
-                    group.prior = Decode(web.mu_prior, mu.capital_lambda);
+                    // Published composite models use descriptive Joint charge, outside the A/tau inference.
+                    const double group_c = *summary.descriptive_charge_median;
+                    group.mean = linearization_service::DecodeParameterVector(mu.mu_mean).WithOffset(group_c);
+                    group.mdpde = linearization_service::DecodeParameterVector(mu.mu_mdpde).WithOffset(group_c);
+                    const auto prior = Decode(web.mu_prior, mu.capital_lambda);
+                    group.prior = {prior.GetModel().WithOffset(group_c), prior.GetStandardDeviationModel()};
                     const auto distances = rhbm_helper::CalculateMemberStatisticalDistance(
                         web.mu_prior, mu.capital_lambda, web.beta_posterior_matrix);
                     const auto flags = rhbm_helper::CalculateOutlierMemberFlag(2, distances);

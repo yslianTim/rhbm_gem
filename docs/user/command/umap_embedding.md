@@ -26,7 +26,7 @@ fallback downloads.
 ## SQLite Model Contract
 
 The database must already exist, be a regular file, and use a supported SQLite
-schema (v23 only). `--model-key` must identify exactly one
+schema (v24 only). `--model-key` must identify exactly one
 model saved by `potential_analysis`; the command neither enumerates nor combines
 models.
 

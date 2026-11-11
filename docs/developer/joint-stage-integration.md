@@ -153,6 +153,39 @@ solve. The Group posterior is Gaussian and preserves each member's
 separate fixed Joint charge. Local information and Group covariance
 are conditional working quantities.
 
+For exactly the eligible members `E_g` used by Group MDPDE/WEB,
+`C_g = median({post_joint.fixed_charge.coefficient : i in E_g})`.
+Each coefficient and its fixed width must match the same-source Joint
+endpoint. Charges may be positive, negative or zero. The existing
+`descriptive_charge_median` stores this descriptive Joint statistic.
+`descriptive_mean` retains the arithmetic means of Local A and tau;
+Group `mean`, `mdpde` and WEB `prior` retain their decoded Gaussian A/tau
+estimates. All four published models use C_g:
+
+```text
+f_g(r) = A_g G(r; tau_g) + C_g K(r; tau_g)
+```
+
+`GaussianModel3D::offset` is a charge-kernel coefficient, not a constant
+background. C_g does not enter the two-dimensional Group optimization or
+covariance. Prior A/tau standard deviations are unchanged and its C standard
+deviation is NaN (not inferred). Member posteriors remain Gaussian-only with
+C=0, `charge_inferred=false`, a two-dimensional parameter covariance and
+NaN C standard deviation. Each member separately retains its own Joint
+`fixed_charge = (C_i, tau_i)`; Group tau never overwrites that profile.
+One eligible member has a descriptive mean and median but no inference;
+zero eligible members have neither. Failed group inference retains its
+descriptive evidence without publishing a prior.
+
+Group curves evaluate `C_g K(r; tau_g)`, while Original-grid peeling retains
+the individual target's `C_i K(r; tau_i)`. Local fitting subtracts that
+individual profile once. Parameter heterogeneity, model approximation and
+sample selection can therefore leave differences between a representative
+group curve and peeled observations; exact agreement is not required.
+Component-average plots retain equal-weight arithmetic parameter averages
+across available groups, so their C is the mean of group charge medians,
+not the pooled eligible-atom median.
+
 ## Invalidation
 
 Changing a Joint stage endpoint invalidates its run's peeling, Local and
@@ -173,8 +206,8 @@ postprocessing contexts borrow their immutable inputs.
 ## Persistence
 
 [DataObject I/O](architecture/dataobject-io-architecture.md) owns version
-acceptance and the database lifecycle. SQLite v23 stores Joint Result
-JSON schema 25 and Stage Result JSON version 7. Joint JSON requires
+acceptance and the database lifecycle. SQLite v24 stores Joint Result
+JSON schema 25 and Stage Result JSON version 8. Joint JSON requires
 `target-only-pure-halo-support-exclusion-v1`, the current point validation
 contract, and `strict-v2` or `practical-v2` convergence criteria. Its state
 keys are `ac`, `tau`, `log_tau`, `eta_gradient` and `objective`.
@@ -218,7 +251,16 @@ source/run identity, and Local failure-row identities and counts. It
 replays the correction for available Local records. `fixed_charge` must
 match the Joint endpoint and `fitting_radius` must be exactly 1.0 Å for
 Available, Unavailable and Ineligible records. Persisted Group members
-must match their Local source and fixed charge. Nullable diagnostics,
+must match their Local source and fixed charge. Group validation independently
+rebuilds eligible membership from the selected GroupKey members and current
+Local evidence, checks counts and run identities, and recomputes C_g. The
+stored charge median and all four published model coefficients must equal
+that value exactly. Stage JSON uses precise double parsing and SQLite stores
+the JSON text, preserving endpoint coefficients and their median on
+round-trip. Empty groups cannot acquire a zero fallback or successful
+inference; member posterior C remains zero and its charge uncertainty,
+like the prior's, remains NaN. Unsupported database/JSON versions are rejected
+without migration or inferred charge repair. Nullable diagnostics,
 missing states and unavailable reconstruction are representable outcomes.
 
 See [PotentialFittingWorkflow.cpp](../../src/core/estimator/PotentialFittingWorkflow.cpp),

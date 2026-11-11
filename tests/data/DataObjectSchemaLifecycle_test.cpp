@@ -45,14 +45,14 @@ void ExpectUnsupportedVersionRejectedWithoutMutation(int version)
 
 } // namespace
 
-TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsSchemaV23)
+TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsSchemaV24)
 {
-    const command_test::ScopedTempDir temp_dir{"schema_v23_bootstrap"};
+    const command_test::ScopedTempDir temp_dir{"schema_v24_bootstrap"};
     const auto path{temp_dir.path() / "schema.sqlite"};
 
     { rg::DataRepository repository{path}; }
 
-    EXPECT_EQ(data_test::GetUserVersion(path), 23);
+    EXPECT_EQ(data_test::GetUserVersion(path), 24);
     for (const auto table : std::array<std::string_view, 9>{
              "model_atom", "model_bond", "model_chain_map", "model_component",
              "model_component_atom", "model_component_bond", "model_joint_result",
@@ -61,22 +61,34 @@ TEST(DataObjectSchemaLifecycleTest, EmptyDatabaseBootstrapsSchemaV23)
     EXPECT_NO_THROW((void)rg::DataRepository(path));
 }
 
-TEST(DataObjectSchemaLifecycleTest, ExistingSchemaV23OpensWithoutMutation)
+TEST(DataObjectSchemaLifecycleTest, ExistingSchemaV24OpensWithoutMutation)
 {
-    const command_test::ScopedTempDir temp_dir{"schema_v23_open"};
+    const command_test::ScopedTempDir temp_dir{"schema_v24_open"};
     const auto path{temp_dir.path() / "schema.sqlite"};
     { rg::DataRepository repository{path}; }
     const auto before{ReadFile(path)};
 
     EXPECT_NO_THROW((void)rg::DataRepository(path));
     EXPECT_EQ(ReadFile(path), before);
-    EXPECT_EQ(data_test::GetUserVersion(path), 23);
+    EXPECT_EQ(data_test::GetUserVersion(path), 24);
 }
 
 TEST(DataObjectSchemaLifecycleTest, UnsupportedVersionsAreRejectedWithoutMutation)
 {
-    for (const int version : {17, 18, 19, 21, 22, 99})
+    for (const int version : {17, 18, 19, 21, 22, 23, 99})
         ExpectUnsupportedVersionRejectedWithoutMutation(version);
+}
+
+TEST(DataObjectSchemaLifecycleTest, CurrentTableLayoutWithOldGroupContractVersionIsRejectedWithoutMutation)
+{
+    const command_test::ScopedTempDir temp_dir{"schema_v23_group_contract"};
+    const auto path{temp_dir.path() / "schema.sqlite"};
+    { rg::DataRepository repository{path}; }
+    data_test::ExecuteSql(path,"PRAGMA user_version=23;");
+    const auto before{ReadFile(path)};
+    EXPECT_THROW((void)rg::DataRepository(path),std::runtime_error);
+    EXPECT_EQ(ReadFile(path),before);
+    EXPECT_EQ(data_test::GetUserVersion(path),23);
 }
 
 TEST(DataObjectSchemaLifecycleTest, NonemptyUnversionedDatabaseIsRejectedWithoutMutation)

@@ -20,6 +20,11 @@
 #include "support/DataObjectTestSupport.hpp"
 #include "support/JointPostprocessingTestHelpers.hpp"
 
+#ifdef HAVE_ROOT
+#include "core/painter/detail/PotentialPlotBuilder.hpp"
+#include <TF1.h>
+#endif
+
 namespace rg = rhbm_gem;
 
 TEST(DataObjectModelAnalysisTest, StandardQScoresDefaultToZeroAndCanBeSet)
@@ -614,7 +619,68 @@ TEST(DataObjectModelAnalysisTest, GroupPotentialEntryKeepsSingleResultPerGroup)
     EXPECT_DOUBLE_EQ(entry.GetPrior(group_key).GetAmplitude(), 2.2);
     EXPECT_DOUBLE_EQ(entry.GetPriorStandardDeviation(group_key).GetOffset(), 0.06);
     EXPECT_DOUBLE_EQ(entry.GetAlphaG(group_key), 0.3);
+
+    rg::GroupParameterSummary summary;
+    summary.descriptive_charge_median=-0.25;
+    summary.descriptive_mean=rg::GaussianModel3D{3.0,0.9,-0.25};
+    result.mean=result.mean.WithOffset(-0.25);
+    result.mdpde=result.mdpde.WithOffset(-0.25);
+    result.prior={result.prior.GetModel().WithOffset(-0.25),
+        rg::GaussianModel3DUncertainty{0.04,0.05,std::numeric_limits<double>::quiet_NaN()}};
+    summary.inference=result;
+    entry.SetParameterSummary(group_key,summary);
+    EXPECT_EQ(entry.GetMean(group_key).ToVector(),summary.descriptive_mean->ToVector());
+    EXPECT_EQ(entry.GetMDPDE(group_key).ToVector(),result.mdpde.ToVector());
+    EXPECT_EQ(entry.GetPrior(group_key).ToVector(),result.prior.GetModel().ToVector());
+    EXPECT_EQ(entry.GetPriorWithUncertainty(group_key).GetModel().ToVector(),result.prior.GetModel().ToVector());
+    EXPECT_DOUBLE_EQ(*entry.GetParameterSummary(group_key)->descriptive_charge_median,-0.25);
+    EXPECT_TRUE(std::isnan(entry.GetPriorStandardDeviation(group_key).GetOffset()));
 }
+
+#ifdef HAVE_ROOT
+TEST(DataObjectModelAnalysisTest, ComponentAveragePriorKeepsEqualGroupWeightsAndUnavailableChargeUncertainty)
+{
+    std::vector<std::unique_ptr<rg::AtomObject>> atoms;
+    for(int id=1;id<=4;++id)
+    {
+        auto atom=std::make_unique<rg::AtomObject>();
+        atom->SetSerialID(id); atom->SetElement(Element::CARBON);
+        atom->SetComponentKey(id==1 ? 1 : 2); atom->SetAtomKey(7);
+        atoms.push_back(std::move(atom));
+    }
+    rg::ModelObject model(std::move(atoms)); model.SelectAllAtoms();
+    model.EditAnalysis().InitializeFromSelection();
+    const auto view=model.GetAnalysisView();
+    for(const auto key:view.CollectAtomGroupKeys())
+    {
+        const auto & members=view.GetAtomObjectList(key);
+        const double charge=members.size()==1 ? -.75 : .25;
+        rg::GroupParameterSummary summary;
+        summary.descriptive_charge_median=charge;
+        summary.descriptive_mean=rg::GaussianModel3D{2.,.5,charge};
+        rg::GroupGaussianResult inference;
+        inference.prior={*summary.descriptive_mean,
+            rg::GaussianModel3DUncertainty{.1,.02,std::numeric_limits<double>::quiet_NaN()}};
+        for(const auto * atom:members)
+        {
+            summary.member_ids.push_back(atom->GetSerialID());
+            inference.member_results.emplace_back();
+        }
+        summary.inference=std::move(inference);
+        model.EditAnalysis().ApplyAtomGroupParameterSummary(key,std::move(summary));
+    }
+    const auto average=rg::PotentialPlotBuilder::ComputeComponentAtomAveragePrior(view,7);
+    ASSERT_TRUE(average);
+    // One member in the first group, three in the second: the pooled median is .25.
+    EXPECT_DOUBLE_EQ(average->GetModel().GetOffset(),-.25);
+    EXPECT_TRUE(std::isnan(average->GetStandardDeviationModel().GetOffset()));
+    rg::PotentialPlotBuilder plot(&model);
+    const auto curve=plot.CreateComponentAtomAverageGausFunctionPrior(7);
+    ASSERT_TRUE(curve);
+    for(double distance:{0.,.5,1.2})
+        EXPECT_DOUBLE_EQ(curve->Eval(distance),average->GetModel().ResponseAtDistance(distance));
+}
+#endif
 
 TEST(DataObjectModelAnalysisTest, ModelCopyPreservesGroupResultAndRebindsMembers)
 {

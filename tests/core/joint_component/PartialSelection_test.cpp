@@ -1157,6 +1157,17 @@ TEST(JointComponentPartialSelectionTest, PostJointEvidenceAssessmentEnforcesAvai
     EXPECT_FALSE(assessCurrent(bad).valid);
     bad = result; bad.fixed_charge.width += 0.01;
     EXPECT_FALSE(assessCurrent(bad).valid);
+    bad = result; bad.fixed_charge.coefficient += 0.01;
+    EXPECT_FALSE(assessCurrent(bad).group_eligible);
+    auto missing = joint; missing.point.reset();
+    EXPECT_FALSE(assess(result, missing, &peeling).group_eligible);
+    for(const double charge:{std::numeric_limits<double>::quiet_NaN(),
+            std::numeric_limits<double>::infinity(),-std::numeric_limits<double>::infinity()})
+    {
+        bad = result; bad.fixed_charge.coefficient = charge;
+        auto endpoint = joint; endpoint.point = endpoint.point->WithOffset(charge);
+        EXPECT_FALSE(assess(bad, endpoint, &peeling).group_eligible);
+    }
     bad = result; bad.reason = "available-with-reason";
     EXPECT_FALSE(assessCurrent(bad).valid);
 
@@ -1259,10 +1270,17 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInforma
     EXPECT_FALSE(AtomLocalPotentialView::For(*model.FindAtomPtr(3)).GetGroupMemberResult());
     ASSERT_TRUE(summary.descriptive_charge_median);
     EXPECT_DOUBLE_EQ(*summary.descriptive_charge_median, -0.3);
+    ASSERT_TRUE(summary.descriptive_mean);
+    EXPECT_DOUBLE_EQ(summary.descriptive_mean->GetOffset(), *summary.descriptive_charge_median);
     ASSERT_TRUE(summary.inference);
-    EXPECT_DOUBLE_EQ(summary.inference->mean.GetOffset(), 0.0);
-    EXPECT_DOUBLE_EQ(summary.inference->mdpde.GetOffset(), 0.0);
-    EXPECT_DOUBLE_EQ(summary.inference->prior.GetModel().GetOffset(), 0.0);
+    EXPECT_DOUBLE_EQ(summary.inference->mean.GetOffset(), *summary.descriptive_charge_median);
+    EXPECT_DOUBLE_EQ(summary.inference->mdpde.GetOffset(), *summary.descriptive_charge_median);
+    EXPECT_DOUBLE_EQ(summary.inference->prior.GetModel().GetOffset(), *summary.descriptive_charge_median);
+    EXPECT_TRUE(std::isnan(summary.inference->prior.GetStandardDeviationModel().GetOffset()));
+    EXPECT_DOUBLE_EQ(model.GetAnalysisView().GetAtomGroupMean(keys[0]).GetOffset(), -0.3);
+    EXPECT_DOUBLE_EQ(model.GetAnalysisView().GetAtomGroupMDPDE(keys[0]).GetOffset(), -0.3);
+    EXPECT_DOUBLE_EQ(model.GetAnalysisView().GetAtomGroupPrior(keys[0]).GetOffset(), -0.3);
+    EXPECT_DOUBLE_EQ(model.GetAnalysisView().GetAtomGroupPriorWithUncertainty(keys[0]).GetModel().GetOffset(), -0.3);
 
     const auto first = AtomLocalPotentialView::For(*model.FindAtomPtr(1));
     ASSERT_TRUE(first.GetPostJointLocalResult());
@@ -1289,6 +1307,8 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInforma
         EXPECT_DOUBLE_EQ(member->fixed_charge->coefficient, local->fixed_charge.coefficient);
         EXPECT_DOUBLE_EQ(member->fixed_charge->width, local->fixed_charge.width);
         EXPECT_DOUBLE_EQ(member->posterior.GetModel().GetOffset(), 0.0);
+        EXPECT_FALSE(member->charge_inferred);
+        EXPECT_TRUE(std::isnan(member->posterior.GetStandardDeviationModel().GetOffset()));
         evaluateMember(*member, 0.0);
         evaluateMember(*member, 1.2);
         evaluateMember(*member, 2.5);
@@ -1679,6 +1699,16 @@ TEST(JointComponentPartialSelectionTest, GroupInferenceUsesQualifiedLocalMeasure
     const auto publish=[&] {
         editor.ApplyPostFitPeelingsBatch(peelings); editor.ApplyPostJointLocalResultsBatch(locals);
         core::detail::RunGroupingStage(model,options);
+        for(const auto & [id,expected]:stages)
+        {
+            const auto local=AtomLocalPotentialView::For(*model.FindAtomPtr(id));
+            EXPECT_EQ(local.GetJointStageModel().ToVector(),expected.point->ToVector());
+            const auto & supplied=locals[static_cast<std::size_t>(id-1)].second;
+            EXPECT_EQ(local.GetPostJointLocalResult()->fit.mdpde.GetModel().ToVector(),supplied.fit.mdpde.GetModel().ToVector());
+            const auto & samples=local.GetPostFitPeeling()->samples;
+            for(std::size_t i=0;i<samples.size();++i)
+                EXPECT_EQ(samples[i].response,peelings[static_cast<std::size_t>(id-1)].second.samples[i].response);
+        }
         const auto keys=model.GetAnalysisView().CollectAtomGroupKeys();
         return *model.GetAnalysisView().GetGroupParameterSummary(keys.front());
     };
@@ -1687,6 +1717,64 @@ TEST(JointComponentPartialSelectionTest, GroupInferenceUsesQualifiedLocalMeasure
     EXPECT_EQ(original.member_ids,(std::vector<int>{1,2,3,4}));
     EXPECT_EQ(original.source_id,"width-group"); EXPECT_EQ(original.excluded_count,1u);
     ASSERT_TRUE(original.inference);
+    const auto set_charges=[&](const std::array<double,5> & charges) {
+        for(int id=1;id<=5;++id)
+        {
+            const auto index=static_cast<std::size_t>(id-1);
+            const double charge=charges[index];
+            stages[id].point=stages[id].point->WithOffset(charge);
+            locals[index].second.fixed_charge.coefficient=charge;
+            auto & samples=peelings[index].second.samples;
+            for(std::size_t i=0;i<samples.size();++i)
+            {
+                const double distance=std::sqrt(samples[i].observation.squared_distance);
+                samples[i].response=2.+.01*static_cast<double>(i)+charge*
+                    stages[id].point->OffsetBasisAtDistance(distance);
+            }
+        }
+        editor.ApplyJointStageEstimates(stages);
+    };
+    // Vary only descriptive Joint charges with the same supplied Gaussian evidence.
+    for(const auto & [charges,median]:std::vector<std::pair<std::array<double,5>,double>>{
+            {{0.,0.,0.,0.,9.},0.}, {{-.75,.25,-.25,.75,9.},0.},
+            {{-.5,.25,.25,1.,-9.},.25}, {{.25,.5,.75,1.,-9.},.625},
+            {{-.75,-.5,-.25,0.,9.},-.375}})
+    {
+        SCOPED_TRACE(median);
+        set_charges(charges);
+        const auto charged=publish();
+        ASSERT_TRUE(charged.inference)<<charged.reason;
+        EXPECT_EQ(charged.member_ids,original.member_ids);
+        ASSERT_TRUE(charged.descriptive_charge_median);
+        EXPECT_DOUBLE_EQ(*charged.descriptive_charge_median,median);
+        EXPECT_EQ(charged.descriptive_mean->WithOffset(0.).ToVector(),original.descriptive_mean->ToVector());
+        EXPECT_DOUBLE_EQ(charged.descriptive_mean->GetOffset(),median);
+        const auto & a=*original.inference; const auto & b=*charged.inference;
+        EXPECT_DOUBLE_EQ(b.alpha_g,a.alpha_g);
+        EXPECT_EQ(b.mean.WithOffset(0.).ToVector(),a.mean.ToVector());
+        EXPECT_EQ(b.mdpde.WithOffset(0.).ToVector(),a.mdpde.ToVector());
+        EXPECT_EQ(b.prior.GetModel().WithOffset(0.).ToVector(),a.prior.GetModel().ToVector());
+        EXPECT_DOUBLE_EQ(b.mean.GetOffset(),median);
+        EXPECT_DOUBLE_EQ(b.mdpde.GetOffset(),median);
+        EXPECT_DOUBLE_EQ(b.prior.GetModel().GetOffset(),median);
+        EXPECT_DOUBLE_EQ(b.prior.GetStandardDeviationModel().GetAmplitude(),a.prior.GetStandardDeviationModel().GetAmplitude());
+        EXPECT_DOUBLE_EQ(b.prior.GetStandardDeviationModel().GetWidth(),a.prior.GetStandardDeviationModel().GetWidth());
+        EXPECT_TRUE(std::isnan(b.prior.GetStandardDeviationModel().GetOffset()));
+        for(std::size_t i=0;i<a.member_results.size();++i)
+        {
+            const auto & before=a.member_results[i]; const auto & after=b.member_results[i];
+            EXPECT_EQ(after.posterior.GetModel().ToVector(),before.posterior.GetModel().ToVector());
+            EXPECT_DOUBLE_EQ(after.posterior.GetStandardDeviationModel().GetAmplitude(),before.posterior.GetStandardDeviationModel().GetAmplitude());
+            EXPECT_DOUBLE_EQ(after.posterior.GetStandardDeviationModel().GetWidth(),before.posterior.GetStandardDeviationModel().GetWidth());
+            EXPECT_TRUE(std::isnan(after.posterior.GetStandardDeviationModel().GetOffset()));
+            EXPECT_EQ(*after.parameter_covariance,*before.parameter_covariance);
+            EXPECT_EQ(after.is_outlier,before.is_outlier);
+            EXPECT_DOUBLE_EQ(after.statistical_distance,before.statistical_distance);
+            EXPECT_FALSE(after.charge_inferred);
+            EXPECT_DOUBLE_EQ(after.fixed_charge->coefficient,charges[static_cast<std::size_t>(charged.member_ids[i]-1)]);
+        }
+    }
+    set_charges({0.,0.,0.,0.,0.});
     // The Joint Width can change on a zero-charge profile without changing the
     // supplied qualified Local Gaussian measurement, covariance or outlier flags.
     stages[1].point=GaussianModel3D{0.,1.2,0.};
@@ -1712,11 +1800,14 @@ TEST(JointComponentPartialSelectionTest, GroupInferenceUsesQualifiedLocalMeasure
         local.information.reset();
     };
     exclude(1); // Ineligible Local evidence must not enter Group inference.
+    set_charges({9.,.25,-.5,.75,-9.});
     const auto excluded=publish();
     EXPECT_EQ(excluded.member_ids,(std::vector<int>{2,3,4}));
     EXPECT_EQ(excluded.eligible_count,3u); EXPECT_EQ(excluded.excluded_count,2u);
+    ASSERT_TRUE(excluded.descriptive_charge_median);
+    EXPECT_DOUBLE_EQ(*excluded.descriptive_charge_median,.25);
     ASSERT_TRUE(excluded.inference)<<excluded.reason;
-    EXPECT_NE(excluded.inference->mean.ToVector(),original.inference->mean.ToVector());
+    EXPECT_NE(excluded.inference->mean.WithOffset(0.).ToVector(),original.inference->mean.WithOffset(0.).ToVector());
     ASSERT_TRUE(excluded.inference->member_results.front().parameter_covariance);
     EXPECT_FALSE(excluded.inference->member_results.front().parameter_covariance->isApprox(
         *original.inference->member_results[1].parameter_covariance,1e-8));
@@ -1729,7 +1820,16 @@ TEST(JointComponentPartialSelectionTest, GroupInferenceUsesQualifiedLocalMeasure
     const auto single=publish();
     EXPECT_EQ(single.member_ids,(std::vector<int>{2}));
     EXPECT_EQ(single.status,EvidenceStatus::Unavailable); EXPECT_EQ(single.reason,"single-member");
+    EXPECT_FALSE(single.inference);
+    ASSERT_TRUE(single.descriptive_charge_median); ASSERT_TRUE(single.descriptive_mean);
+    EXPECT_DOUBLE_EQ(*single.descriptive_charge_median,.25);
+    EXPECT_DOUBLE_EQ(single.descriptive_mean->GetOffset(),.25);
     exclude(2);
     const auto empty=publish();
     EXPECT_EQ(empty.reason,"no-eligible-post-joint-local-results"); EXPECT_FALSE(empty.inference);
+    EXPECT_FALSE(empty.descriptive_charge_median); EXPECT_FALSE(empty.descriptive_mean);
+    stages[5].source.run_id="foreign-run";
+    locals[4].second.source=stages[5].source; peelings[4].second.source=stages[5].source;
+    editor.ApplyJointStageEstimates(stages);
+    EXPECT_THROW(publish(),std::invalid_argument);
 }

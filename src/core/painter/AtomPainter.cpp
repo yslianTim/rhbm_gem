@@ -217,7 +217,7 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
         auto curve=builder->CreateAtomLocalGausFunctionFinal();
         auto legend=root_helper::CreateLegend(0.55,0.68,0.95,0.94,false);
         if (raw->GetN()>0) legend->AddEntry(raw.get(),"Raw samples","p");
-        if(entry_view.GetPostFitPeeling()) legend->AddEntry(peeled.get(),"Joint peeling (includes target-own charge)","p");
+        if(entry_view.GetPostFitPeeling()) legend->AddEntry(peeled.get(),"Joint peeling (individual target charge retained)","p");
         if(curve) {root_helper::SetLineAttribute(curve.get(),1,2,kRed); curve->Draw("SAME"); legend->AddEntry(curve.get(),"Joint Second: Gaussian + charge C","l");}
         else legend->AddEntry(static_cast<TObject *>(nullptr),("Second unavailable: " + entry_view.GetJointStageEstimate().reason).c_str(), "");
         legend->Draw();

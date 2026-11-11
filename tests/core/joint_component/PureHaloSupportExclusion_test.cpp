@@ -28,6 +28,12 @@
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
+#include <rhbm_gem/utils/math/ArrayHelper.hpp>
+
+#ifdef HAVE_ROOT
+#include "core/painter/detail/PotentialPlotBuilder.hpp"
+#include <TF1.h>
+#endif
 
 #include <Eigen/QR>
 #include <algorithm>
@@ -1267,6 +1273,16 @@ TEST(PureHaloSupportExclusionTest, GridPersistenceRejectsForeignIdentitiesAndInv
     const auto & group=fixture.model.GetAnalysisView().GetGroupParameterSummary(keys.front());
     ASSERT_TRUE(group && group->inference) << (group ? group->reason:"no group");
     EXPECT_GE(group->eligible_count,18u);
+    std::vector<double> charges;
+    for(const auto id:group->member_ids)
+        charges.push_back(AtomLocalPotentialView::For(*fixture.model.FindAtomPtr(id))
+            .GetPostJointLocalResult()->fixed_charge.coefficient);
+    const double median=array_helper::ComputeMedian(charges);
+    ASSERT_NE(median,0.0);
+    EXPECT_DOUBLE_EQ(*group->descriptive_charge_median,median);
+    for(const auto * point:{&*group->descriptive_mean,&group->inference->mean,
+            &group->inference->mdpde,&group->inference->prior.GetModel()})
+        EXPECT_DOUBLE_EQ(point->GetOffset(),median);
     const auto text=stage_result_io::Encode(fixture.model);
     const auto original=boost::json::parse(text);
     for(int mutation=0;mutation<7;++mutation)
@@ -1308,6 +1324,13 @@ TEST(PureHaloSupportExclusionTest, GridPersistenceRejectsForeignIdentitiesAndInv
     const auto & loaded_group=loaded->GetAnalysisView().GetGroupParameterSummary(keys.front());
     ASSERT_TRUE(loaded_group && loaded_group->inference);
     EXPECT_EQ(loaded_group->member_ids,group->member_ids);
+    EXPECT_EQ(loaded_group->descriptive_charge_median,group->descriptive_charge_median);
+    const auto loaded_view=loaded->GetAnalysisView();
+    EXPECT_EQ(loaded_view.GetAtomGroupMean(keys.front()).ToVector(),group->descriptive_mean->ToVector());
+    EXPECT_EQ(loaded_view.GetAtomGroupMDPDE(keys.front()).ToVector(),group->inference->mdpde.ToVector());
+    EXPECT_EQ(loaded_view.GetAtomGroupPrior(keys.front()).ToVector(),group->inference->prior.GetModel().ToVector());
+    EXPECT_DOUBLE_EQ(loaded_view.GetAtomGroupPriorWithUncertainty(keys.front()).GetModel().GetOffset(),median);
+    EXPECT_TRUE(std::isnan(loaded_view.GetAtomGroupPriorWithUncertainty(keys.front()).GetStandardDeviationModel().GetOffset()));
     for(std::size_t i=0;i<group->inference->member_results.size();++i)
     {
         const auto & reference=group->inference->member_results[i];
@@ -1317,6 +1340,105 @@ TEST(PureHaloSupportExclusionTest, GridPersistenceRejectsForeignIdentitiesAndInv
         ASSERT_TRUE(saved.fixed_charge); ASSERT_TRUE(reference.fixed_charge);
         EXPECT_DOUBLE_EQ(saved.fixed_charge->coefficient,reference.fixed_charge->coefficient);
         EXPECT_DOUBLE_EQ(saved.fixed_charge->width,reference.fixed_charge->width);
+    }
+
+#ifdef HAVE_ROOT
+    PotentialPlotBuilder plot(loaded.get());
+    const auto mean_curve=plot.CreateAtomGroupGausFunctionMean(keys.front());
+    const auto prior_curve=plot.CreateAtomGroupGausFunctionPrior(keys.front());
+    const auto average_curve=plot.CreateComponentAtomAverageGausFunctionPrior(loaded->FindAtomPtr(1)->GetAtomKey());
+    ASSERT_TRUE(mean_curve); ASSERT_TRUE(prior_curve); ASSERT_TRUE(average_curve);
+    for(double distance:{0.,.5,1.2,2.5})
+    {
+        EXPECT_DOUBLE_EQ(mean_curve->Eval(distance),loaded_group->descriptive_mean->ResponseAtDistance(distance));
+        const auto & prior=loaded_group->inference->prior.GetModel();
+        EXPECT_DOUBLE_EQ(prior_curve->Eval(distance),prior.ResponseAtDistance(distance));
+        EXPECT_DOUBLE_EQ(average_curve->Eval(distance),prior.ResponseAtDistance(distance));
+        EXPECT_NE(prior_curve->Eval(distance),prior.WithOffset(0.).ResponseAtDistance(distance));
+        prior_curve->SetParameter(2,0.);
+        EXPECT_DOUBLE_EQ(prior_curve->Eval(distance),prior.SignalAtDistance(distance));
+        prior_curve->SetParameter(2,median);
+    }
+    // Creating and evaluating curves must leave the recorded peeling and Local evidence intact.
+    EXPECT_EQ(stage_result_io::Encode(*loaded),round_trip);
+#endif
+
+    for(int mutation=0;mutation<36;++mutation)
+    {
+        SCOPED_TRACE(mutation);
+        auto document=original;
+        auto & saved_group=document.at("groups").as_array().front();
+        auto & summary=saved_group.at("summary");
+        auto & inference=summary.at("inference");
+        auto & atoms=document.at("atoms").as_array();
+        const int id=boost::json::value_to<int>(summary.at("ids").as_array().front());
+        auto & atom=*std::find_if(atoms.begin(),atoms.end(),[&](const auto & item){return item.at("id")==id;});
+        auto & local=atom.at("post_joint_local");
+        if(mutation==0) summary.at("charge_median")=median+1.;
+        else if(mutation==1) summary.at("mean").as_array()[2]=median+1.;
+        else if(mutation==2) inference.at("mean").as_array()[2]=median+1.;
+        else if(mutation==3) inference.at("mdpde").as_array()[2]=median+1.;
+        else if(mutation==4) inference.at("prior").at("point").as_array()[2]=median+1.;
+        else if(mutation==5 || mutation==31)
+        {
+            const double wrong=mutation==5 ? median+1. : 0.;
+            summary.at("charge_median")=wrong;
+            summary.at("mean").as_array()[2]=wrong;
+            inference.at("mean").as_array()[2]=wrong;
+            inference.at("mdpde").as_array()[2]=wrong;
+            inference.at("prior").at("point").as_array()[2]=wrong;
+        }
+        else if(mutation==6) summary.at("charge_median")=nullptr;
+        else if(mutation==7) summary.at("mean")=nullptr;
+        else if(mutation==8 || mutation==10)
+        {
+            const int removed=boost::json::value_to<int>(summary.at("ids").as_array().back());
+            summary.at("ids").as_array().pop_back();
+            summary.at("eligible")=summary.at("points")=group->eligible_count-1;
+            summary.at("excluded")=group->excluded_count+1;
+            if(mutation==10)
+            {
+                auto & ids=saved_group.at("members").as_array();
+                ids.erase(std::find(ids.begin(),ids.end(),boost::json::value(removed)));
+            }
+        }
+        else if(mutation==9) summary.at("ids").as_array().front()=summary.at("ids").as_array().back();
+        else if(mutation==11) summary.at("source")="foreign-run";
+        else if(mutation==12) local.at("fixed_charge").as_array()[0]=median+1.;
+        else if(mutation==13) local.at("fixed_charge").as_array()[1]=100.;
+        else if(mutation==14) local.at("source").at("run")="foreign-run";
+        else if(mutation==15) atom.at("joint").at("point").as_array()[2]=median+1.;
+        else if(mutation==16) local.at("fixed_charge").as_array()[0]="nan";
+        else if(mutation==17) local.at("fixed_charge").as_array()[0]="+inf";
+        else if(mutation==18) local.as_object().erase("fixed_charge");
+        else if(mutation==19) atom.at("joint").at("point")=nullptr;
+        else if(mutation==20) summary.at("status")=static_cast<int>(EvidenceStatus::Unavailable);
+        else if(mutation==21) summary.at("eligible")=0;
+        else if(mutation==22) summary.at("excluded")=group->excluded_count+1;
+        else if(mutation==23) summary.at("points")=0;
+        else if(mutation==24) saved_group.at("key")=0;
+        else if(mutation==25) atom.at("posterior").at("posterior").at("point").as_array()[2]=median;
+        else if(mutation==26) atom.at("posterior").at("charge_inferred")=true;
+        else if(mutation==27) atom.at("posterior").at("fixed_charge").as_array()[0]=median+1.;
+        else if(mutation==28) atom.at("posterior").at("posterior").at("sd").as_array()[2]=0.;
+        else if(mutation==29) inference.at("prior").at("sd").as_array()[2]=0.;
+        else if(mutation==30)
+        {
+            local.at("status")=static_cast<int>(EvidenceStatus::Unavailable);
+            local.at("reason")="test-ineligible"; local.at("information")=nullptr;
+        }
+        else if(mutation==32) local.at("source").at("atom")="foreign-atom";
+        else if(mutation==33) local.at("source").at("component")="foreign-component";
+        else if(mutation==34) summary.at("inference")=nullptr;
+        else inference.at("mean").as_array()[0]=0.;
+        const auto invalid=boost::json::serialize(document);
+        ModelObject invalid_model(fixture.model);
+        EXPECT_ANY_THROW(stage_result_io::Decode(invalid_model,invalid));
+        SQLiteWrapper database(directory.path()/"model.sqlite");
+        database.Prepare("UPDATE model_stage_result SET result_json=? WHERE key_tag=?");
+        database.Bind(1,invalid); database.Bind(2,std::string("grid-group"));
+        database.StepOnce(); database.Finalize();
+        EXPECT_ANY_THROW(repository.LoadModel("grid-group"));
     }
 
     // A saved posterior cannot make a non-production Local radius eligible.
@@ -1345,6 +1467,63 @@ TEST(PureHaloSupportExclusionTest, GridPersistenceRejectsForeignIdentitiesAndInv
             EXPECT_THROW(repository.LoadModel("grid-group"),boost::system::system_error);
         else
             EXPECT_THROW(repository.LoadModel("grid-group"),std::invalid_argument);
+    }
+}
+
+TEST(PureHaloSupportExclusionTest, SingletonAndEmptyChargeSummariesRoundTripWithoutInference)
+{
+    auto fixture=WorkflowFixture(true);
+    FitOptions options; options.quiet_mode=true;
+    core::detail::RunPotentialFittingWorkflowForSelection(fixture.map,fixture.model,options);
+    const auto keys=fixture.model.GetAnalysisView().CollectAtomGroupKeys();
+    const command_test::ScopedTempDir directory{"unavailable_group_charge"};
+    DataRepository repository(directory.path()/"model.sqlite");
+    for(int mode=0;mode<3;++mode)
+    {
+        if(mode)
+        {
+            std::vector<std::pair<int,PostJointLocalResult>> locals;
+            for(const auto * atom:fixture.model.GetSelectedAtoms())
+            {
+                auto local=*AtomLocalPotentialView::For(*atom).GetPostJointLocalResult();
+                local.status=mode==1 ? EvidenceStatus::Unavailable : EvidenceStatus::Ineligible;
+                local.reason="test-no-group-measurement"; local.information.reset();
+                locals.emplace_back(atom->GetSerialID(),std::move(local));
+            }
+            fixture.model.EditAnalysis().ApplyPostJointLocalResultsBatch(std::move(locals));
+            core::detail::RunGroupingStage(fixture.model,options);
+        }
+        if(mode==2)
+            for(const auto key:keys)
+            {
+                auto summary=*fixture.model.GetAnalysisView().GetGroupParameterSummary(key);
+                summary.status=EvidenceStatus::Ineligible;
+                fixture.model.EditAnalysis().ApplyAtomGroupParameterSummary(key,std::move(summary));
+            }
+        ASSERT_NO_THROW(repository.SaveModel(fixture.model,"unavailable"));
+        const auto loaded=repository.LoadModel("unavailable");
+        for(const auto key:keys)
+        {
+            const auto summary=loaded->GetAnalysisView().GetGroupParameterSummary(key);
+            ASSERT_TRUE(summary); EXPECT_FALSE(summary->inference);
+            EXPECT_FALSE(loaded->GetAnalysisView().HasAtomGroupPrior(key));
+            if(mode==0 && summary->eligible_count==1)
+            {
+                ASSERT_TRUE(summary->descriptive_mean); ASSERT_TRUE(summary->descriptive_charge_median);
+                const auto id=summary->member_ids.front();
+                const auto & joint=AtomLocalPotentialView::For(*loaded->FindAtomPtr(id)).GetJointStageModel();
+                EXPECT_DOUBLE_EQ(*summary->descriptive_charge_median,joint.GetOffset());
+                EXPECT_DOUBLE_EQ(summary->descriptive_mean->GetOffset(),joint.GetOffset());
+                EXPECT_EQ(summary->reason,"single-member");
+            }
+            else
+            {
+                EXPECT_EQ(summary->eligible_count,0u);
+                EXPECT_FALSE(summary->descriptive_charge_median); EXPECT_FALSE(summary->descriptive_mean);
+                EXPECT_EQ(summary->reason,"no-eligible-post-joint-local-results");
+            }
+            EXPECT_EQ(summary->status,mode==2 ? EvidenceStatus::Ineligible : EvidenceStatus::Unavailable);
+        }
     }
 }
 

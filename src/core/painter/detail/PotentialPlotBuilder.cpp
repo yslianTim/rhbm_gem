@@ -667,6 +667,8 @@ std::optional<GaussianModel3DWithUncertainty> PotentialPlotBuilder::ComputeCompo
     const ModelAnalysisView & model_view,
     AtomKey atom_key)
 {
+    // Equal-weight parameter averages across groups; C is the mean of group medians,
+    // not a pooled atom median. Non-inferred charge uncertainty remains unavailable.
     double amplitude{ 0.0 };
     double width{ 0.0 };
     double offset{ 0.0 };
@@ -715,6 +717,8 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomLocalGausFunctionFinal() co
 
 std::unique_ptr<TF1> PotentialPlotBuilder::CreateAtomGroupGausFunctionMean(GroupKey group_key) const
 {
+    // The representative profile C_g K(r; tau_g) differs from each atom's fixed
+    // Joint profile C_i K(r; tau_i), which remains in its peeled response.
     if (IsModelObjectAvailable() == false) return nullptr;
     const auto & summary=GetModelView().GetGroupParameterSummary(group_key);
     if (summary && !summary->descriptive_mean) return nullptr;

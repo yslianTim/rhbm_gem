@@ -4,9 +4,11 @@
 #include "data/detail/LocalPotentialEntry.hpp"
 #include "data/detail/JointStageAdapter.hpp"
 #include "data/detail/PostJointLocalValidation.hpp"
+#include "data/detail/AtomClassifier.hpp"
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
+#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <boost/json.hpp>
 #include <cmath>
 #include <algorithm>
@@ -484,6 +486,77 @@ void Validate(const ModelObject & model)
     {
         const auto & summary=groups.GetParameterSummary(key); if(!summary) continue;
         if(summary->eligible_count!=summary->member_ids.size()) throw std::invalid_argument("Group eligibility count mismatch.");
+        std::set<int> group_ids, selected_ids;
+        std::vector<int> eligible_ids;
+        std::vector<double> coefficients;
+        std::size_t target_count{};
+        for(const auto * atom:model.GetSelectedAtoms())
+            if(data_internal::GetGroupKey(atom)==key) selected_ids.insert(atom->GetSerialID());
+        for(const auto * atom:groups.GetMembers(key))
+        {
+            if(!group_ids.insert(atom->GetSerialID()).second || data_internal::GetGroupKey(atom)!=key)
+                throw std::invalid_argument("Joint group member identity mismatch.");
+            const auto * entry=data.FindAtomLocalEntry(*atom);
+            if(!entry) continue;
+            const auto & stage=entry->JointStageEstimate();
+            if(stage.source.method!=EstimateMethod::JointComponents || stage.source.role!=FittingRole::Target) continue;
+            ++target_count;
+            if(stage.source.run_id.empty() || stage.source.run_id!=summary->source_id)
+                throw std::invalid_argument("Joint group source mismatch.");
+            const auto & local=entry->PostJointLocalResult();
+            if(!local) continue;
+            const auto & peeling=entry->PostFitPeeling();
+            const auto assessment=data_internal::AssessPostJointLocalResult(
+                *local,atom->GetSerialID(),stage,peeling ? &*peeling:nullptr);
+            if(!assessment.valid) throw std::invalid_argument(assessment.reason);
+            if(!assessment.group_eligible) continue;
+            eligible_ids.push_back(atom->GetSerialID());
+            coefficients.push_back(local->fixed_charge.coefficient);
+        }
+        if(group_ids!=selected_ids || eligible_ids!=summary->member_ids ||
+            summary->point_count!=eligible_ids.size() ||
+            summary->excluded_count!=target_count-eligible_ids.size())
+            throw std::invalid_argument("Joint group eligibility/member identity mismatch.");
+        if((summary->status==EvidenceStatus::Available)!=summary->inference.has_value() ||
+            summary->status==EvidenceStatus::NotRun ||
+            (summary->inference ? !summary->reason.empty() : summary->reason.empty()) ||
+            (summary->inference && eligible_ids.size()<2))
+            throw std::invalid_argument("Joint group inference status mismatch.");
+        if(coefficients.empty())
+        {
+            if(summary->descriptive_charge_median || summary->descriptive_mean)
+                throw std::invalid_argument("Empty Joint group has descriptive parameters.");
+        }
+        else
+        {
+            // Precise JSON double round-trips preserve the endpoint values and median exactly.
+            const double median=array_helper::ComputeMedian(coefficients);
+            if(!std::isfinite(median) || !summary->descriptive_charge_median ||
+                *summary->descriptive_charge_median!=median || !summary->descriptive_mean)
+                throw std::invalid_argument("Joint group charge median does not match eligible evidence.");
+            std::vector<const GaussianModel3D *> models{&*summary->descriptive_mean};
+            if(summary->inference)
+            {
+                const auto & inference=*summary->inference;
+                models.insert(models.end(),{&inference.mean,&inference.mdpde,&inference.prior.GetModel()});
+                if(!std::isfinite(inference.alpha_g) || inference.alpha_g<0.0 ||
+                    !std::isnan(inference.prior.GetStandardDeviationModel().GetOffset()))
+                    throw std::invalid_argument("Joint group has invalid alpha or inferred charge uncertainty.");
+            }
+            for(const auto * point:models)
+            {
+                GaussianModel3D::RequireFinitePositiveWidthModel(*point);
+                if(point->GetAmplitude()<=0.0 || point->GetOffset()!=median)
+                    throw std::invalid_argument("Joint group model does not match its charge median.");
+            }
+        }
+        if(!summary->inference)
+            for(const auto * atom:groups.GetMembers(key))
+            {
+                const auto * entry=data.FindAtomLocalEntry(*atom);
+                if(entry && entry->GroupMemberResult())
+                    throw std::invalid_argument("Unavailable Joint group has member posteriors.");
+            }
         if (unqualified_joint && summary->inference)
         {
             const bool has_joint_member=std::any_of(summary->member_ids.begin(),summary->member_ids.end(),
@@ -521,23 +594,11 @@ void Validate(const ModelObject & model)
                     member.fixed_charge->width!=local->fixed_charge.width ||
                     !std::isfinite(member.fixed_charge->coefficient) ||
                     !std::isfinite(member.fixed_charge->width) || member.fixed_charge->width<=0.0 ||
-                    member.posterior.GetModel().GetOffset()!=0.0)
+                    member.posterior.GetModel().GetOffset()!=0.0 ||
+                    !std::isnan(member.posterior.GetStandardDeviationModel().GetOffset()))
                     throw std::invalid_argument("Group posterior lacks current post-Joint local measurement information.");
             }
         }
-        bool joint_group = false;
-        for (const auto id : summary->member_ids)
-        {
-            const auto * atom = model.FindAtomPtr(id);
-            const auto * entry = atom ? data.FindAtomLocalEntry(*atom) : nullptr;
-            joint_group |= entry && entry->JointStageEstimate().source.method == EstimateMethod::JointComponents;
-        }
-        if (joint_group && (!summary->descriptive_charge_median ||
-            !std::isfinite(*summary->descriptive_charge_median) ||
-            !summary->descriptive_mean || summary->descriptive_mean->GetOffset()!=0.0 ||
-            summary->inference->mean.GetOffset()!=0.0 || summary->inference->mdpde.GetOffset()!=0.0 ||
-            summary->inference->prior.GetModel().GetOffset()!=0.0))
-            throw std::invalid_argument("Joint group summary conflates Gaussian width and fixed charge profile.");
     }
     if(!data.joint_result) return;
     if(!IsQualifiedJointAnalysisResult(*data.joint_result)) return;

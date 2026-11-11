@@ -1286,7 +1286,7 @@ TEST(DataObjectPersistenceTest, JointNeutralRoundTripPreservesCurrentJointAndSta
     EXPECT_FALSE(data_test::HasTable(dir.path()/"result.sqlite","model_atom_local_potential"));
 }
 
-TEST(DataObjectPersistenceTest, StageResultJsonV7OnlyAcceptsCurrentRoundTrip)
+TEST(DataObjectPersistenceTest, StageResultJsonV8OnlyAcceptsCurrentRoundTrip)
 {
     auto model=data_test::MakeModelWithBond();
     model->SelectAllAtoms();
@@ -1296,7 +1296,7 @@ TEST(DataObjectPersistenceTest, StageResultJsonV7OnlyAcceptsCurrentRoundTrip)
     initial.source.fixed_from_initial_stage=true;
     editor.SetAtomInitialStageEstimate(*model->FindAtomPtr(1),initial);
     const auto encoded=rg::stage_result_io::Encode(*model);
-    EXPECT_EQ(boost::json::parse(encoded).at("version").as_int64(),7);
+    EXPECT_EQ(boost::json::parse(encoded).at("version").as_int64(),8);
 
     auto restored=data_test::MakeModelWithBond();
     restored->SelectAllAtoms();
@@ -1306,7 +1306,7 @@ TEST(DataObjectPersistenceTest, StageResultJsonV7OnlyAcceptsCurrentRoundTrip)
     EXPECT_TRUE(rg::AtomLocalPotentialView::For(*restored->FindAtomPtr(1))
         .GetInitialStageEstimate().source.fixed_from_initial_stage);
 
-    for(const int version:{1,2,3,4,5,6,8})
+    for(const int version:{1,2,3,4,5,6,7,9})
     {
         auto old=boost::json::parse(encoded).as_object();
         old["version"]=version;
@@ -1370,6 +1370,10 @@ TEST(DataObjectPersistenceTest, CanonicalNativeDiagnosticsAndMissingStatesRoundT
     summary.reason="insufficient-evidence"; summary.point_count=1; summary.excluded_count=1;
     summary.descriptive_mean=rg::GaussianModel3D{3.,.5,.1};
     editor.ApplyAtomGroupParameterSummary(group,summary);
+    EXPECT_THROW(rg::stage_result_io::Encode(*model),std::invalid_argument);
+    summary.point_count=0; summary.excluded_count=0;
+    summary.descriptive_mean.reset(); summary.reason="no-eligible-post-joint-local-results";
+    editor.ApplyAtomGroupParameterSummary(group,summary);
     const auto expected=rg::stage_result_io::Encode(*model);
     rg::DataRepository repo(path); repo.SaveModel(*model,"mixed"); const auto loaded=repo.LoadModel("mixed");
     EXPECT_EQ(rg::stage_result_io::Encode(*loaded),expected);
@@ -1387,6 +1391,6 @@ TEST(DataObjectPersistenceTest, CanonicalNativeDiagnosticsAndMissingStatesRoundT
     EXPECT_DOUBLE_EQ(loaded->GetAnalysisView().GetAtomAlphaG(group),.87);
     EXPECT_FALSE(actual.fit_result); ASSERT_TRUE(actual.diagnostics); EXPECT_EQ(actual.diagnostics->iterations.iterations,17);
     EXPECT_EQ(actual.diagnostics->refinement->relative_coordinate_difference,fit.refinement->relative_coordinate_difference);
-    const auto document=boost::json::parse(expected).as_object(); EXPECT_EQ(document.at("version").as_int64(),7);
+    const auto document=boost::json::parse(expected).as_object(); EXPECT_EQ(document.at("version").as_int64(),8);
     EXPECT_FALSE(loaded->GetAnalysisView().GetJointResult());
 }
