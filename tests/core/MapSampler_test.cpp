@@ -234,7 +234,7 @@ TEST(MapSamplerTest, PotentialSamplingWorkflowWritesSamplesToSelectedAtoms)
     for (const auto * atom : model->GetSelectedAtoms())
     {
         const auto local_view{ AtomLocalPotentialView::For(*atom) };
-        EXPECT_FALSE(local_view.GetRawSamplingEntries(false).empty());
+        EXPECT_FALSE(local_view.GetRawSamplingEntriesView().empty());
     }
 }
 
@@ -256,7 +256,7 @@ TEST(MapSamplerTest, PotentialSamplingWorkflowUsesExplicitAtomDomain)
     EXPECT_FALSE(AtomLocalPotentialView::For(*model->FindAtomPtr(1)).IsAvailable());
     const auto sampled_view{ AtomLocalPotentialView::For(*model->FindAtomPtr(2)) };
     ASSERT_TRUE(sampled_view.IsAvailable());
-    EXPECT_FALSE(sampled_view.GetRawSamplingEntries(false).empty());
+    EXPECT_FALSE(sampled_view.GetRawSamplingEntriesView().empty());
 }
 
 TEST(MapSamplerTest, DefaultSamplingWorkflowPreservesAtomOutputOrderAcrossWorkerCounts)
@@ -284,12 +284,12 @@ TEST(MapSamplerTest, DefaultSamplingWorkflowPreservesAtomOutputOrderAcrossWorker
 
     for (const auto serial_id : { 1, 2 })
     {
-        const auto serial_samples = AtomLocalPotentialView::For(
-            *serial_model->FindAtomPtr(serial_id)).GetRawSamplingEntries(false);
+        const auto & serial_samples = AtomLocalPotentialView::For(
+            *serial_model->FindAtomPtr(serial_id)).GetRawSamplingEntriesView();
         for (const auto * model : { parallel_model.get(), four_thread_model.get() })
         {
-            const auto parallel_samples = AtomLocalPotentialView::For(
-                *model->FindAtomPtr(serial_id)).GetRawSamplingEntries(false);
+            const auto & parallel_samples = AtomLocalPotentialView::For(
+                *model->FindAtomPtr(serial_id)).GetRawSamplingEntriesView();
             ASSERT_EQ(serial_samples.size(), parallel_samples.size());
             for (std::size_t i = 0; i < serial_samples.size(); ++i)
             {

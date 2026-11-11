@@ -89,7 +89,7 @@ TEST(DataObjectPersistenceTest, RawSamplingEntriesRoundTripPreservesSelection)
     ASSERT_NE(loaded_model, nullptr);
     const auto view{
         rg::AtomLocalPotentialView::For(*loaded_model->GetAtomList().at(0)) };
-    const auto raw_entries{ view.GetRawSamplingEntries(false) };
+    const auto & raw_entries{ view.GetRawSamplingEntriesView() };
 
     ASSERT_EQ(raw_entries.size(), 2u);
     EXPECT_DOUBLE_EQ(raw_entries.at(0).response, 6.0);
@@ -164,7 +164,7 @@ TEST(DataObjectPersistenceTest, DoublePrecisionDomainValuesRoundTripWithoutNarro
         123.456789012345);
 
     const auto view{ rg::AtomLocalPotentialView::For(loaded_atom) };
-    const auto loaded_raw{ view.GetRawSamplingEntries(false) };
+    const auto & loaded_raw{ view.GetRawSamplingEntriesView() };
     ASSERT_EQ(loaded_raw.size(), raw_samples.size());
     EXPECT_DOUBLE_EQ(loaded_raw.at(0).point.distance, 1.0000000000000002);
     EXPECT_DOUBLE_EQ(loaded_raw.at(0).response, 16777217.125);

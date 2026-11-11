@@ -33,9 +33,12 @@ public:
     const std::optional<GroupGaussianMemberResult> & GetGroupMemberResult() const;
     const GaussianModel3D & GetInitialStageOLS() const;
     const GaussianModel3D & GetInitialStageMDPDE() const;
-    LocalPotentialSampleList GetRawSamplingEntries(bool apply_selection = true) const;
+    // Returns selected Raw samples as a value.
+    LocalPotentialSampleList GetRawSamplingEntries() const;
+    // Returns all stored Raw samples as a const reference.
     const LocalPotentialSampleList & GetRawSamplingEntriesView() const;
-    LocalPotentialSampleList GetPeelingSamplingEntries(bool apply_selection = false) const;
+    // Returns all available Peeling samples as a value.
+    LocalPotentialSampleList GetPeelingSamplingEntries() const;
     PeelingRatioAssessment AssessLocalFittingPeelingRatio(
         double distance_min, double distance_max) const;
     std::optional<double> GetLocalFittingPeelingRatio(

@@ -178,7 +178,7 @@ TEST(InitialStageTest, ExactRawSamplingAcrossWorkersAndCrowdedSelection)
         RunPotentialSamplingWorkflow(*map,*model,workset.contributors,1,{},true);
         for(const auto * atom:workset.contributors)
         {
-            serial.push_back(AtomLocalPotentialView::For(*atom).GetRawSamplingEntries(false));
+            serial.push_back(AtomLocalPotentialView::For(*atom).GetRawSamplingEntriesView());
             captured.push_back(SampleFingerprint(serial.back()));
         }
         FitOptions options; options.quiet_mode=true; options.joint_initialization_thread_size=4;
@@ -197,7 +197,7 @@ TEST(InitialStageTest, ExactRawSamplingAcrossWorkersAndCrowdedSelection)
         }
         for(std::size_t i=0;i<serial.size();++i)
         {
-            const auto raw=AtomLocalPotentialView::For(*workset.contributors[i]).GetRawSamplingEntries(false);
+            const auto & raw=AtomLocalPotentialView::For(*workset.contributors[i]).GetRawSamplingEntriesView();
             ASSERT_EQ(raw.size(),serial[i].size());
             for(std::size_t k=0;k<raw.size();++k)
             {
@@ -275,7 +275,7 @@ TEST(InitialStageTest, RawSamplingPersistenceAndGridInvalidationIndependence)
     d::RunPotentialFittingWorkflowForSelection(*map,*model,options);
     ASSERT_TRUE(model->GetAnalysisView().GetJointResult());
     const auto original=AtomLocalPotentialView::For(*model->FindAtomPtr(1));
-    const auto raw=original.GetRawSamplingEntries(false);
+    const LocalPotentialSampleList raw=original.GetRawSamplingEntriesView();
     ASSERT_EQ(raw.size(),200u); ASSERT_TRUE(original.GetPostFitPeeling());
     ASSERT_TRUE(original.GetPostJointLocalResult());
     ASSERT_TRUE(original.GetGroupMemberResult());
@@ -286,7 +286,7 @@ TEST(InitialStageTest, RawSamplingPersistenceAndGridInvalidationIndependence)
     repository.SaveModel(*model,"F0"); auto restored=repository.LoadModel("F0");
     EXPECT_EQ(stage_result_io::Encode(*restored),stage_result_io::Encode(*model));
     const auto view=AtomLocalPotentialView::For(*restored->FindAtomPtr(1));
-    const auto saved=view.GetRawSamplingEntries(false);
+    const LocalPotentialSampleList saved=view.GetRawSamplingEntriesView();
     ASSERT_EQ(saved.size(),raw.size());
     for (std::size_t i=0;i<raw.size();++i)
     {
@@ -300,7 +300,7 @@ TEST(InitialStageTest, RawSamplingPersistenceAndGridInvalidationIndependence)
     ASSERT_TRUE(view.GetPostFitPeeling()); ASSERT_TRUE(view.GetPostJointLocalResult());
     EXPECT_EQ(view.GetPostFitPeeling()->samples.size(),peeling_count);
     EXPECT_EQ(view.GetPostJointLocalResult()->effective_sample_count,retained);
-    EXPECT_EQ(view.GetRawSamplingEntries(false).size(),1u);
+    EXPECT_EQ(view.GetRawSamplingEntriesView().size(),1u);
 }
 
 

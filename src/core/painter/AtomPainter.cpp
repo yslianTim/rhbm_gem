@@ -206,8 +206,8 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
         if (stage.source.method != EstimateMethod::JointComponents || stage.source.role != FittingRole::Target) continue;
         canvas->Clear(); canvas->cd();
         auto builder=std::make_unique<PotentialPlotBuilder>(atom_object);
-        auto raw=builder->CreateDistanceToMapValueGraph(false,false);
-        auto peeled=builder->CreateDistanceToMapValueGraph(false,true);
+        auto raw=builder->CreateDistanceToMapValueGraph(DistanceSamplingMode::AllRaw);
+        auto peeled=builder->CreateDistanceToMapValueGraph(DistanceSamplingMode::Peeling);
         raw->SetTitle(("Joint components: atom " + std::to_string(atom_object->GetSerialID()) + ";Radial distance (Angstrom);Map response").c_str());
         root_helper::SetMarkerAttribute(raw.get(),20,0.7f,kGray+1);
         if (raw->GetN()>0) raw->Draw("AP");

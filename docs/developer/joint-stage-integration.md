@@ -270,6 +270,3 @@ See [PotentialFittingWorkflow.cpp](../../src/core/estimator/PotentialFittingWork
 [PostFitPeeling.cpp](../../src/core/estimator/joint_component/PostFitPeeling.cpp),
 [GroupingStage.cpp](../../src/core/estimator/GroupingStage.cpp)
 and [PostJointLocalValidation.cpp](../../src/data/detail/PostJointLocalValidation.cpp).
-
-[Joint-peeled QScore comparisons](joint-qscore-comparisons.md) describes the
-independent analysis-time comparison records and sequence-summary coverage.

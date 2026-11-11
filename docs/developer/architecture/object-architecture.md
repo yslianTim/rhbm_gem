@@ -82,8 +82,23 @@ Group-result and membership queries take no fitting stage. `GetGroupMemberResult
 Use `GetInitialStageEstimate()` or `GetJointStageEstimate()` to read the
 estimate record. Use `HasInitialStageModel()` or `HasJointStageModel()` to
 check for a published point and `GetInitialStageModel()` or
-`GetJointStageModel()` to read it. Use `GetRawSamplingEntries()` for selected
-raw samples and `GetPostFitPeeling()` for paired Original-grid observations.
+`GetJointStageModel()` to read it.
+
+Sampling access has fixed data contracts:
+
+- `GetRawSamplingEntries()` returns selected Raw samples by value, retaining
+  only entries whose `SamplingPoint::is_selected` is true.
+- `GetRawSamplingEntriesView()` returns all stored Raw samples as a const
+  reference, including unselected points, without copying or filtering. The
+  reference must not outlive its owning model or analysis entry, or be retained
+  across replacement or clearing of that entry's samples.
+- `GetPeelingSamplingEntries()` returns all available peeled samples by value,
+  skipping observations without a response. Missing Peeling results produce
+  an empty list without falling back to Raw samples.
+
+These getters preserve sample order, responses, distances, and positions.
+Sampling-point selection is independent of the model's atom selection.
+Use `GetPostFitPeeling()` for paired Original-grid observations.
 
 Views are lightweight value objects containing a non-owning model or atom reference. Consumers, including painters, store them by value rather than allocating them through `unique_ptr`.
 
@@ -112,6 +127,12 @@ Analysis facades return typed data, not presentation strings. Text that is used 
 - group-prior summaries and local-fitting CSV serialization live in `GaussianEstimator`.
 
 This keeps formatting changes out of the object API while preserving command output and numerical behavior.
+
+The private Painter `PotentialPlotBuilder::CreateDistanceToMapValueGraph()`
+selects its source with `DistanceSamplingMode`: `SelectedRaw` (the default),
+`AllRaw`, or `Peeling`. It uses the corresponding sampling getter above and
+writes graph points in sample order with distance as X and response as Y.
+The `AllRaw` path reads the stored samples by const reference.
 
 ## 6. Sampling and Parallelism
 

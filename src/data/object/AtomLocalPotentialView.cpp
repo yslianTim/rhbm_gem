@@ -32,27 +32,6 @@ const GaussianModel3D & RequireStageModel(const LocalStageEstimate & estimate)
     return *estimate.point;
 }
 
-LocalPotentialSampleList ApplySamplingEntrySelection(
-    const LocalPotentialSampleList & sampling_entries,
-    bool apply_selection)
-{
-    if (!apply_selection)
-    {
-        return sampling_entries;
-    }
-
-    LocalPotentialSampleList selected_entries;
-    selected_entries.reserve(sampling_entries.size());
-    for (const auto & sample : sampling_entries)
-    {
-        if (sample.point.is_selected)
-        {
-            selected_entries.emplace_back(sample);
-        }
-    }
-    return selected_entries;
-}
-
 bool IsWithinRange(const SamplingPoint & point, double distance_min, double distance_max)
 {
     return std::isfinite(point.distance) && point.distance >= distance_min &&
@@ -176,10 +155,19 @@ const GaussianModel3D & AtomLocalPotentialView::GetInitialStageMDPDE() const
     return RequireInitialStageEntry("MDPDE diagnostics unavailable for Joint stage.").InitialStageMDPDEModel();
 }
 
-LocalPotentialSampleList AtomLocalPotentialView::GetRawSamplingEntries(bool apply_selection) const
+LocalPotentialSampleList AtomLocalPotentialView::GetRawSamplingEntries() const
 {
-    const auto & entry{ RequireEntry("Local raw sampling entries") };
-    return ApplySamplingEntrySelection(entry.RawSamplingEntries(), apply_selection);
+    const auto & sampling_entries{ RequireEntry("Local raw sampling entries").RawSamplingEntries() };
+    LocalPotentialSampleList selected_entries;
+    selected_entries.reserve(sampling_entries.size());
+    for (const auto & sample : sampling_entries)
+    {
+        if (sample.point.is_selected)
+        {
+            selected_entries.emplace_back(sample);
+        }
+    }
+    return selected_entries;
 }
 
 const LocalPotentialSampleList & AtomLocalPotentialView::GetRawSamplingEntriesView() const
@@ -187,10 +175,9 @@ const LocalPotentialSampleList & AtomLocalPotentialView::GetRawSamplingEntriesVi
     return RequireEntry("Local raw sampling entries").RawSamplingEntries();
 }
 
-LocalPotentialSampleList AtomLocalPotentialView::GetPeelingSamplingEntries(bool apply_selection) const
+LocalPotentialSampleList AtomLocalPotentialView::GetPeelingSamplingEntries() const
 {
-    const auto & entry{ RequireEntry("Local peeling sampling entries") };
-    return ApplySamplingEntrySelection(entry.PeelingSamplingEntries(), apply_selection);
+    return RequireEntry("Local peeling sampling entries").PeelingSamplingEntries();
 }
 
 PeelingRatioAssessment AtomLocalPotentialView::AssessLocalFittingPeelingRatio(

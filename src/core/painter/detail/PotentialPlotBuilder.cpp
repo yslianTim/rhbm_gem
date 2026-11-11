@@ -29,16 +29,6 @@ namespace rhbm_gem {
 
 namespace {
 
-LocalPotentialSampleList LoadSamplingEntries(
-    const AtomLocalPotentialView & view,
-    bool apply_selection,
-    bool use_peeling_sampling_entries)
-{
-    return use_peeling_sampling_entries
-        ? view.GetPeelingSamplingEntries(apply_selection)
-        : view.GetRawSamplingEntries(apply_selection);
-}
-
 std::vector<GroupKey> CollectComponentAtomGroupKeys(
     const ModelAnalysisView & model_view,
     AtomKey atom_key)
@@ -461,15 +451,28 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateJointStageParameterSca
 }
 
 std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateDistanceToMapValueGraph(
-    bool apply_selection,
-    bool use_peeling_sampling_entries)
+    DistanceSamplingMode mode)
 {
     auto graph{ root_helper::CreateGraphErrors() };
-    auto count{ 0 };
-    for (const auto & sample : LoadSamplingEntries(GetLocalEntry(), apply_selection, use_peeling_sampling_entries))
+    const auto append_samples = [&](const LocalPotentialSampleList & samples)
     {
-        graph->SetPoint(count, sample.point.distance, sample.response);
-        count++;
+        for (const auto & sample : samples)
+        {
+            graph->SetPoint(graph->GetN(), sample.point.distance, sample.response);
+        }
+    };
+    const auto view{ GetLocalEntry() };
+    switch (mode)
+    {
+    case DistanceSamplingMode::SelectedRaw:
+        append_samples(view.GetRawSamplingEntries());
+        break;
+    case DistanceSamplingMode::AllRaw:
+        append_samples(view.GetRawSamplingEntriesView());
+        break;
+    case DistanceSamplingMode::Peeling:
+        append_samples(view.GetPeelingSamplingEntries());
+        break;
     }
     return graph;
 }
@@ -479,7 +482,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToRawMap
 {
     auto data_array{
         local_potential_series::BuildBinnedDistanceResponseSeries(
-            GetLocalEntry().GetRawSamplingEntries(true), bin_size, x_min, x_max)
+            GetLocalEntry().GetRawSamplingEntries(), bin_size, x_min, x_max)
     };
     auto graph{ root_helper::CreateGraphErrors(bin_size) };
     auto count{ 0 };
@@ -496,7 +499,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToPeelin
 {
     auto data_array{
         local_potential_series::BuildBinnedDistanceResponseSeries(
-            GetLocalEntry().GetPeelingSamplingEntries(false), bin_size, x_min, x_max)
+            GetLocalEntry().GetPeelingSamplingEntries(), bin_size, x_min, x_max)
     };
     auto graph{ root_helper::CreateGraphErrors(bin_size) };
     auto count{ 0 };

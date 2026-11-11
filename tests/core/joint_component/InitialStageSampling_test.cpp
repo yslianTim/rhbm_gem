@@ -106,7 +106,7 @@ TEST(InitialStageSamplingTest, ParallelSamplingFailurePreservesEveryPreviousRawE
     auto model=Model(); auto map=Map(); const auto atoms=model->GetSelectedAtoms();
     RunPotentialSamplingWorkflow(map,*model,atoms,1,{},true);
     std::vector<LocalPotentialSampleList> before;
-    for(const auto * atom:atoms) before.push_back(AtomLocalPotentialView::For(*atom).GetRawSamplingEntries(false));
+    for(const auto * atom:atoms) before.push_back(AtomLocalPotentialView::For(*atom).GetRawSamplingEntriesView());
     AtomObject unattached;
     auto batch=atoms; batch.insert(batch.begin()+1,&unattached);
     auto values=std::make_unique<double[]>(32*32*32);

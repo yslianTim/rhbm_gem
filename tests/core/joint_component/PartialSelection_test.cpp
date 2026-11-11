@@ -517,7 +517,7 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsSelectedTargetsWithou
                 [&](const auto & atom){return atom.id==std::to_string(id);});
             ASSERT_NE(initialized,result.initialization.atoms.end());
             EXPECT_DOUBLE_EQ(view.GetInitialStageModel().GetWidth(),initialized->mdpde[1]);
-            EXPECT_FALSE(view.GetRawSamplingEntries(false).empty());
+            EXPECT_FALSE(view.GetRawSamplingEntriesView().empty());
         }
         const auto & stage = view.GetJointStageEstimate();
         const auto & expected = expected_stages.at(id);
@@ -749,7 +749,7 @@ TEST(JointComponentPartialSelectionTest, PostFitPeelingUsesOriginalGridAndPreser
     EXPECT_GT(*view.GetLocalFittingPeelingRatio(0, 1), 0);
     EXPECT_TRUE(view.GetLocalFittingPeelingRatio(0, 3));
     EXPECT_EQ(view.GetJointStageModel().ToVector(), before);
-    const auto after = view.GetRawSamplingEntries(false);
+    const auto & after = view.GetRawSamplingEntriesView();
     for (std::size_t i = 0; i < raw.size(); ++i)
     {
         EXPECT_EQ(after[i].response, raw[i].response);

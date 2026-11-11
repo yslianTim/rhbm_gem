@@ -50,8 +50,7 @@ for options and JSON/CSV output. JointStage stores the fitted endpoints. Plots, 
 available saved data; missing uncertainty or peeling coverage is never replaced
 with zero. Qualified Target A/tau/C points provide geometry-local kNN-4 Halo
 medians for downstream peeling. The current formats are Joint JSON schema 25
-and Stage JSON version 9. See [Joint Stage Integration](docs/developer/joint-stage-integration.md)
-and [Joint-peeled QScore comparisons](docs/developer/joint-qscore-comparisons.md).
+and Stage JSON version 9. See [Joint Stage Integration](docs/developer/joint-stage-integration.md).
 
 ## License, Citation, and Third-Party Notices
 

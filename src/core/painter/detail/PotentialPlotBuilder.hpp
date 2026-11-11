@@ -26,6 +26,13 @@ namespace rhbm_gem {
 class AtomObject;
 class ModelObject;
 
+enum class DistanceSamplingMode
+{
+    SelectedRaw,
+    AllRaw,
+    Peeling
+};
+
 enum class QScoreMode { Standard, JointPeeledStandard, JointPeeledModel };
 inline constexpr std::array<const char *,3> QScoreMethodLabels{
     "Standard QScore", "Joint-Peeled QScore (standard reference)",
@@ -55,7 +62,8 @@ public:
     std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateScatterGraph(GroupKey group_key, int par1_id=0, int par2_id=1, bool select_outliers=false);
     std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateScatterGraph(const std::vector<GroupKey> & group_key_list, int par1_id=0, int par2_id=1);
     std::unique_ptr<::TGraphErrors> CreateJointStageParameterScatterGraph(Element element, int choice=0);
-    std::unique_ptr<::TGraphErrors> CreateDistanceToMapValueGraph(bool apply_selection=true, bool use_peeling_sampling_entries=false);
+    std::unique_ptr<::TGraphErrors> CreateDistanceToMapValueGraph(
+        DistanceSamplingMode mode = DistanceSamplingMode::SelectedRaw);
     std::unique_ptr<::TGraphErrors> CreateBinnedDistanceToRawMapValueGraph(int bin_size=20, double x_min=0.0, double x_max=2.0);
     std::unique_ptr<::TGraphErrors> CreateBinnedDistanceToPeelingMapValueGraph(int bin_size=20, double x_min=0.0, double x_max=2.0);
     std::unique_ptr<::TGraphErrors> CreateBinnedDistanceToNeighborMapValueGraph(int bin_size=20, double x_min=0.0, double x_max=2.0);
