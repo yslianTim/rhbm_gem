@@ -87,7 +87,7 @@ check for a published point and `GetInitialStageModel()` or
 `LocalPotentialEntry::SamplingEntries()` stores the complete interpolated
 sampling records, including unselected points, in their original order.
 `SetSamplingEntries()` moves the records into the entry without filtering;
-`SamplingEntryCount()` counts all stored entries.
+`SamplingEntries().size()` counts all stored entries.
 The atom-local view has fixed data contracts:
 
 - `GetSelectedSamplingEntries()` returns selected interpolated samples by value, retaining

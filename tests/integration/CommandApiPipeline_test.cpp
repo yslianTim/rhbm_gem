@@ -810,7 +810,7 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
     {
         const auto * atom=reloaded_again->FindAtomPtr(serial_id);
         ASSERT_NE(atom,nullptr);
-        const auto ratio=rg::AtomLocalPotentialView::For(*atom).GetLocalFittingPeelingRatio(1.0,2.0);
+        const auto ratio=rg::AtomLocalPotentialView::For(*atom).AssessLocalFittingPeelingRatio(1.0,2.0).ratio;
         ASSERT_TRUE(ratio);
         EXPECT_DOUBLE_EQ(*ratio,expected_ratio);
     }

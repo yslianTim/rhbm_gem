@@ -521,7 +521,7 @@ TEST(DataObjectModelAnalysisTest, LocalPotentialEntryClearTransientFitStateKeeps
 TEST(DataObjectModelAnalysisTest, LocalPotentialEntryStoresSamplingEntries)
 {
     rg::LocalPotentialEntry entry;
-    EXPECT_EQ(entry.NeighborCountForPeeling(), 0);
+    EXPECT_FALSE(entry.PostFitPeeling());
     LocalPotentialSampleList samples{
         LocalPotentialSample{ 6.0, SamplingPoint{ 0.1 } },
         LocalPotentialSample{ 4.0, SamplingPoint{ 0.2, { 1.0, 2.0, 3.0 }, false } }
@@ -529,7 +529,6 @@ TEST(DataObjectModelAnalysisTest, LocalPotentialEntryStoresSamplingEntries)
     const auto * stored_data{ samples.data() };
     entry.SetSamplingEntries(std::move(samples));
     static_assert(std::is_same_v<decltype(entry.SamplingEntries()), const LocalPotentialSampleList &>);
-    EXPECT_EQ(entry.SamplingEntryCount(), 2);
     ASSERT_EQ(entry.SamplingEntries().size(), 2u);
     EXPECT_EQ(entry.SamplingEntries().data(), stored_data);
     EXPECT_DOUBLE_EQ(entry.SamplingEntries().front().response, 6.0);
@@ -858,13 +857,13 @@ TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewComputesPeelingRatioInIn
         {3, {}, MakeGridObservation(3, 3, 2., 8, atom.GetPosition())}};
     editor.SetAtomPostFitPeeling(atom, peeling);
 
-    const auto ratio = view.GetLocalFittingPeelingRatio(1.0, 2.0);
+    const auto ratio = view.AssessLocalFittingPeelingRatio(1.0, 2.0).ratio;
     ASSERT_TRUE(ratio);
     EXPECT_DOUBLE_EQ(*ratio, 0.7);
-    const auto boundary_ratio = view.GetLocalFittingPeelingRatio(1.0, 1.0);
+    const auto boundary_ratio = view.AssessLocalFittingPeelingRatio(1.0, 1.0).ratio;
     ASSERT_TRUE(boundary_ratio);
     EXPECT_DOUBLE_EQ(*boundary_ratio, 0.75);
-    EXPECT_FALSE(view.GetLocalFittingPeelingRatio(2.1, 2.2));
+    EXPECT_FALSE(view.AssessLocalFittingPeelingRatio(2.1, 2.2).ratio);
 
     peeling.samples[1].observation.map_value = 0;
     editor.SetAtomPostFitPeeling(atom, peeling);
@@ -912,18 +911,18 @@ TEST(
     const auto view{ rg::AtomLocalPotentialView::For(*atom) };
 
     EXPECT_THROW(
-        view.GetLocalFittingPeelingRatio(-0.1, 1.0),
+        view.AssessLocalFittingPeelingRatio(-0.1, 1.0),
         std::invalid_argument);
     EXPECT_THROW(
-        view.GetLocalFittingPeelingRatio(2.0, 1.0),
+        view.AssessLocalFittingPeelingRatio(2.0, 1.0),
         std::invalid_argument);
     EXPECT_THROW(
-        view.GetLocalFittingPeelingRatio(
+        view.AssessLocalFittingPeelingRatio(
             std::numeric_limits<double>::quiet_NaN(),
             1.0),
         std::invalid_argument);
     EXPECT_THROW(
-        view.GetLocalFittingPeelingRatio(
+        view.AssessLocalFittingPeelingRatio(
             0.0,
             std::numeric_limits<double>::infinity()),
         std::invalid_argument);
@@ -1685,9 +1684,10 @@ TEST(DataObjectModelAnalysisTest, NativeDiagnosticsAndJointSamplesAreIndependent
         {2, {}, joint_component_test::postprocessing::MakeGridObservation(1,1,.2,4,atom.GetPosition())}};
     peeling.neighbor_count = 3;
     editor.SetAtomPostFitPeeling(atom, peeling);
-    EXPECT_DOUBLE_EQ(*view.GetLocalFittingPeelingRatio(0, 1), .5);
+    EXPECT_DOUBLE_EQ(*view.AssessLocalFittingPeelingRatio(0, 1).ratio, .5);
     EXPECT_EQ(view.GetPeeledObservationEntries()[1].response, 2);
-    EXPECT_EQ(view.GetNeighborCountForPeeling(), 3);
+    ASSERT_TRUE(view.GetPostFitPeeling());
+    EXPECT_EQ(view.GetPostFitPeeling()->neighbor_count, 3u);
     rg::ModelObject copied(*model);
-    EXPECT_DOUBLE_EQ(*rg::AtomLocalPotentialView::For(*copied.FindAtomPtr(atom.GetSerialID())).GetLocalFittingPeelingRatio(0,1), .5);
+    EXPECT_DOUBLE_EQ(*rg::AtomLocalPotentialView::For(*copied.FindAtomPtr(atom.GetSerialID())).AssessLocalFittingPeelingRatio(0,1).ratio, .5);
 }

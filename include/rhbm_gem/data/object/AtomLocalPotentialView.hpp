@@ -42,10 +42,6 @@ public:
     LocalPotentialSampleList GetPeeledObservationEntries() const;
     PeelingRatioAssessment AssessLocalFittingPeelingRatio(
         double distance_min, double distance_max) const;
-    std::optional<double> GetLocalFittingPeelingRatio(
-        double distance_min,
-        double distance_max) const;
-    int GetNeighborCountForPeeling() const;
     double GetInitialStageAlphaR() const;
 
 private:

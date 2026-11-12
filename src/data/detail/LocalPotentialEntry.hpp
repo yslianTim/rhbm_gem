@@ -117,9 +117,6 @@ public:
     {
         if (m_post_joint_local_result) m_post_joint_local_result->fit.fit_result.reset();
     }
-    int SamplingEntryCount() const { return static_cast<int>(m_sampling_entries.size()); }
-    int NeighborCountForPeeling() const
-    { return m_post_fit_peeling ? static_cast<int>(m_post_fit_peeling->neighbor_count) : 0; }
     const std::optional<GroupGaussianMemberResult> & GroupMemberResult() const { return m_group_member_result; }
     // All interpolated sampling records, including unselected points, in stored order.
     const LocalPotentialSampleList & SamplingEntries() const { return m_sampling_entries; }

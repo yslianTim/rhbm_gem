@@ -83,7 +83,7 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(const ModelObje
         const double missing=std::numeric_limits<double>::quiet_NaN();
 
         const auto signal_peeling_ratio{
-            local_view.GetLocalFittingPeelingRatio(0.0, 1.0)
+            local_view.AssessLocalFittingPeelingRatio(0.0, 1.0).ratio
         };
         auto tail_assessment{ local_view.AssessLocalFittingPeelingRatio(1.0, 2.0) };
         if (!tail_assessment.ratio && !local_view.GetPostFitPeeling() && joint_result)

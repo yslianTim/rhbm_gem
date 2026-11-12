@@ -267,18 +267,6 @@ PeelingRatioAssessment AtomLocalPotentialView::AssessLocalFittingPeelingRatio(
     return assessment;
 }
 
-std::optional<double> AtomLocalPotentialView::GetLocalFittingPeelingRatio(
-    double distance_min,
-    double distance_max) const
-{
-    return AssessLocalFittingPeelingRatio(distance_min, distance_max).ratio;
-}
-
-int AtomLocalPotentialView::GetNeighborCountForPeeling() const
-{
-    return RequireEntry("Local peeling neighbor count").NeighborCountForPeeling();
-}
-
 double AtomLocalPotentialView::GetInitialStageAlphaR() const
 {
     return RequireInitialStageEntry("MDPDE alpha unavailable for Joint stage.").InitialStageAlphaR();
