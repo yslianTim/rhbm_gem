@@ -41,6 +41,7 @@ public:
     void ClearTransientFitStates();
     void InitializeFromSelection();
     void EnsureSelectedAtomLocalPotentials();
+    // Replaces interpolated sampling entries with available coordinates.
     void SetAtomLocalSamplingEntries(
         const AtomObject & atom_object,
         LocalPotentialSampleList value);

@@ -102,6 +102,47 @@ TEST(DataObjectPersistenceTest, SamplingEntriesRoundTripPreservesSelection)
     EXPECT_FALSE(raw_entries.at(1).point.is_selected);
 }
 
+TEST(DataObjectPersistenceTest, SamplingGeometryRoundTripsAndReplacementRestoresCoordinates)
+{
+    const command_test::ScopedTempDir dir{"sampling_geometry"};
+    rg::DataRepository repository(dir.path() / "samples.sqlite");
+    const LocalPotentialSampleList samples{
+        {6, {.1, {0, 0, 0}, true}}, {4, {.2, {1, 2, 3}, false}}};
+    for (const bool geometry : {true, false})
+    {
+        SCOPED_TRACE(geometry);
+        auto model = data_test::MakeModelWithBond();
+        model->EditAnalysis().SetAtomLocalSamplingEntries(*model->FindAtomPtr(1), samples);
+        const auto with_geometry = rg::stage_result_io::Encode(*model);
+        auto document = boost::json::parse(with_geometry);
+        auto & atom = document.at("atoms").as_array().front();
+        atom.at("geometry") = geometry;
+        if (!geometry)
+            for (auto & sample : atom.at("raw").as_array()) sample.at("position") = nullptr;
+        const auto expected = boost::json::serialize(document);
+        auto restored = data_test::MakeModelWithBond();
+        rg::stage_result_io::Decode(*restored, expected);
+        EXPECT_EQ(rg::AtomLocalPotentialView::For(*restored->FindAtomPtr(1)).HasSampleGeometry(), geometry);
+        EXPECT_EQ(rg::stage_result_io::Encode(*restored), expected);
+        repository.SaveModel(*restored, "samples");
+        auto loaded = repository.LoadModel("samples");
+        const auto view = rg::AtomLocalPotentialView::For(*loaded->FindAtomPtr(1));
+        EXPECT_EQ(view.HasSampleGeometry(), geometry);
+        EXPECT_EQ(rg::stage_result_io::Encode(*loaded), expected);
+
+        loaded->EditAnalysis().SetAtomLocalSamplingEntries(*loaded->FindAtomPtr(1), samples);
+        EXPECT_TRUE(view.HasSampleGeometry());
+        EXPECT_EQ(rg::stage_result_io::Encode(*loaded), with_geometry);
+        repository.SaveModel(*loaded, "samples");
+        auto replaced = repository.LoadModel("samples");
+        EXPECT_TRUE(rg::AtomLocalPotentialView::For(*replaced->FindAtomPtr(1)).HasSampleGeometry());
+        EXPECT_EQ(rg::stage_result_io::Encode(*replaced), with_geometry);
+        loaded->EditAnalysis().SetAtomLocalSamplingEntries(*loaded->FindAtomPtr(1), {});
+        EXPECT_TRUE(view.HasSampleGeometry());
+        EXPECT_TRUE(view.GetSamplingEntriesView().empty());
+    }
+}
+
 TEST(DataObjectPersistenceTest, DoublePrecisionDomainValuesRoundTripWithoutNarrowing)
 {
     const command_test::ScopedTempDir temp_dir{ "data_schema_double_precision_roundtrip" };
@@ -1397,6 +1438,55 @@ TEST(DataObjectPersistenceTest, CanonicalNativeDiagnosticsAndMissingStatesRoundT
     EXPECT_EQ(actual.diagnostics->refinement->relative_coordinate_difference,fit.refinement->relative_coordinate_difference);
     const auto document=boost::json::parse(expected).as_object(); EXPECT_EQ(document.at("version").as_int64(),9);
     EXPECT_FALSE(loaded->GetAnalysisView().GetJointResult());
+}
+
+TEST(DataObjectPersistenceTest, NativeInitialStageOutcomesRoundTripWithoutTransientFitState)
+{
+    const command_test::ScopedTempDir dir{"native_initial_outcomes"};
+    rg::DataRepository repository(dir.path() / "native.sqlite");
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    const double inf = std::numeric_limits<double>::infinity();
+    for (int outcome = 0; outcome < 5; ++outcome)
+    {
+        SCOPED_TRACE(outcome);
+        auto model = data_test::MakeModelWithBond();
+        const auto & atom = *model->FindAtomPtr(1);
+        auto editor = model->EditAnalysis();
+        rg::LocalGaussianResult native;
+        native.mdpde = {rg::GaussianModel3D{outcome == 3 ? nan : outcome == 4 ? inf : 2.,
+            outcome == 2 ? 0. : .5, -.1}, rg::GaussianModel3DUncertainty{.1, .2, .3}};
+        native.fit_result = rg::RHBMBetaEstimateResult{};
+        native.fit_result->status = outcome == 0 ? rg::RHBMEstimationStatus::SUCCESS :
+            rg::RHBMEstimationStatus::MAX_ITERATIONS_REACHED;
+        native.fit_result->sigma_square = nan;
+        native.fit_result->diagnostics = {7, inf, -inf};
+        editor.SetAtomInitialStageGaussianResult(atom, native);
+        if (outcome == 1)
+        {
+            auto unavailable = rg::AtomLocalPotentialView::For(atom).GetInitialStageEstimate();
+            unavailable.point.reset();
+            unavailable.reason = "native-unqualified";
+            editor.SetAtomInitialStageEstimate(atom, unavailable);
+        }
+        const auto expected = rg::stage_result_io::Encode(*model);
+        editor.ClearTransientFitStates();
+        EXPECT_EQ(rg::stage_result_io::Encode(*model), expected);
+        auto decoded = data_test::MakeModelWithBond();
+        rg::stage_result_io::Decode(*decoded, expected);
+        EXPECT_EQ(rg::stage_result_io::Encode(*decoded), expected);
+        repository.SaveModel(*decoded, "native");
+        const auto loaded = repository.LoadModel("native");
+        EXPECT_EQ(rg::stage_result_io::Encode(*loaded), expected);
+        const auto view = rg::AtomLocalPotentialView::For(*loaded->FindAtomPtr(1));
+        EXPECT_EQ(view.HasInitialStageModel(), outcome == 0);
+        const auto actual = view.GetInitialStageGaussianResult();
+        EXPECT_FALSE(actual.fit_result);
+        ASSERT_TRUE(actual.diagnostics);
+        EXPECT_EQ(actual.diagnostics->status, native.fit_result->status);
+        EXPECT_TRUE(std::isnan(actual.diagnostics->sigma_square));
+        EXPECT_EQ(actual.diagnostics->iterations.squared_beta_change, inf);
+        EXPECT_EQ(actual.diagnostics->iterations.relative_variance_change, -inf);
+    }
 }
 
 #include "support/JointQScoreFixture.hpp"

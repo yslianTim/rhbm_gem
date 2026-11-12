@@ -62,8 +62,10 @@ component state, no Halo, unavailable reconstruction, incomplete downstream
 results, and nullable diagnostics.
 
 Stage JSON encodes the complete `SamplingEntries()` through the `"raw"` array
-and restores it through `SetSamplingEntries()`. It preserves ordering, unselected
-points and the `"y"`, `"distance"`, `"selected"`, and `"position"` fields.
+and restores it through `SetSamplingEntries()` with the recorded geometry
+availability. Workflow replacements restore geometry availability. Serialization
+preserves ordering, unselected points and the `"y"`, `"distance"`, `"selected"`,
+and `"position"` fields.
 `GetSelectedSamplingEntries()` is not used to serialize the stored records.
 Original-grid peeling retains its `"peeling"` record and stores the
 unpeeled voxel `PostJointGridObservation::map_value` under `"raw_response"`,

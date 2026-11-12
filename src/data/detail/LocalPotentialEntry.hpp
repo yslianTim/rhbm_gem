@@ -38,7 +38,12 @@ class LocalPotentialEntry
 public:
     void SetInitialStageAlphaR(double value) { m_initial_stage.alpha_r = value; }
     double InitialStageAlphaR() const { return m_initial_stage.alpha_r; }
-    void SetSamplingEntries(LocalPotentialSampleList value) { m_sampling_entries = std::move(value); }
+    // Workflow replacements have geometry; persistence supplies its recorded availability.
+    void SetSamplingEntries(LocalPotentialSampleList value, bool geometry_available = true)
+    {
+        m_sampling_entries = std::move(value);
+        m_sample_geometry_available = geometry_available;
+    }
     void SetInitialStageGaussianResult(LocalGaussianResult value)
     {
         auto & record = m_initial_stage;
@@ -69,7 +74,8 @@ public:
     {
         auto & record = m_initial_stage;
         if (!value.point && record.estimate.point) record.unfitted_model = record.estimate.point;
-        if (record.estimate.point && value.point && record.estimate.point->ToVector() != value.point->ToVector())
+        if (value.point && (record.estimate.point || record.unfitted_model) &&
+            InitialStageMDPDEModel().ToVector() != value.point->ToVector())
         {
             record.diagnostics.reset(); record.fit_result.reset(); record.mdpde_uncertainty = {};
         }
@@ -100,7 +106,6 @@ public:
     void SetPostJointLocalResult(rhbm_gem::PostJointLocalResult value) { m_post_joint_local_result = std::move(value); }
     void ClearPostJointLocalResult() { m_post_joint_local_result.reset(); }
     bool SampleGeometryAvailable() const { return m_sample_geometry_available; }
-    void SetSampleGeometryAvailable(bool value) { m_sample_geometry_available = value; }
     void SetGroupMemberResult(GroupGaussianMemberResult value) { m_group_member_result = std::move(value); }
     const std::optional<PostJointQScoreResult> & PostJointQScore() const { return m_post_joint_qscore; }
     void SetPostJointQScore(PostJointQScoreResult value) { m_post_joint_qscore = std::move(value); }

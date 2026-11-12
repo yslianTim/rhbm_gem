@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 #include "core/estimator/InitialStage.hpp"
 #include "core/sampling/MapSampler.hpp"
+#include "data/io/detail/StageResultJson.hpp"
+#include <boost/json.hpp>
 #include <rhbm_gem/core/QScoreHelper.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -118,6 +120,34 @@ TEST(InitialStageSamplingTest, ParallelSamplingFailurePreservesEveryPreviousRawE
         EXPECT_THROW(RunPotentialSamplingWorkflow(replacement,*model,batch,4,{},true,method),std::runtime_error);
         for(std::size_t i=0;i<atoms.size();++i)
             SameSamples(before[i],AtomLocalPotentialView::For(*atoms[i]).GetSamplingEntriesView());
+    }
+}
+
+TEST(InitialStageSamplingTest, ResamplingRestoresGeometryLoadedWithoutCoordinates)
+{
+    auto map = Map();
+    for (const auto method : {SphereSamplingMethod::FibonacciDeterministic,
+             SphereSamplingMethod::SpiralDeterministic})
+    {
+        auto model = Model();
+        RunPotentialSamplingWorkflow(map, *model, model->GetSelectedAtoms(), 1, {}, true, method);
+        auto document = boost::json::parse(stage_result_io::Encode(*model));
+        for (auto & atom : document.at("atoms").as_array())
+        {
+            atom.at("geometry") = false;
+            for (auto & sample : atom.at("raw").as_array()) sample.at("position") = nullptr;
+        }
+        auto loaded = Model();
+        stage_result_io::Decode(*loaded, boost::json::serialize(document));
+        for (const auto * atom : loaded->GetSelectedAtoms())
+            ASSERT_FALSE(AtomLocalPotentialView::For(*atom).HasSampleGeometry());
+        RunPotentialSamplingWorkflow(map, *loaded, loaded->GetSelectedAtoms(), 4, {}, true, method);
+        for (const auto * atom : loaded->GetSelectedAtoms())
+        {
+            const auto view = AtomLocalPotentialView::For(*atom);
+            EXPECT_TRUE(view.HasSampleGeometry());
+            SameSamples(BuildAtomInterpolatedMapSamples(map, *atom, method), view.GetSamplingEntriesView());
+        }
     }
 }
 

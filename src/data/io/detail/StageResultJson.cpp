@@ -411,8 +411,8 @@ void Decode(ModelObject & model, const std::string & text)
         auto & entry=data.EnsureAtomLocalEntry(*atom);
         RestoreInitialNative(entry,o.at("initial_native"),Stage(o.at("initial")));
         entry.SetJointStageEstimate(Stage(o.at("joint")));
-        const bool geometry=Read<bool>(o,"geometry"); entry.SetSampleGeometryAvailable(geometry);
-        entry.SetSamplingEntries(Samples(o.at("raw"),geometry));
+        const bool geometry=Read<bool>(o,"geometry");
+        entry.SetSamplingEntries(Samples(o.at("raw"),geometry),geometry);
         if(!o.at("peeling").is_null())
         {
             const auto & p=o.at("peeling").as_object(); PostFitPeelingResult result;

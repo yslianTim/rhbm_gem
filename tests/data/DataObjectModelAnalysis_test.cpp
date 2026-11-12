@@ -584,6 +584,47 @@ TEST(DataObjectModelAnalysisTest, LocalPotentialEntryKeepsInitialStageAndJointPo
     EXPECT_DOUBLE_EQ(entry.JointStageEstimate().point->GetAmplitude(), 2.0);
 }
 
+TEST(DataObjectModelAnalysisTest, InitialStagePointRestorationKeepsOnlyMatchingNativeEvidence)
+{
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    for (const auto model : {rg::GaussianModel3D{2, .5, .1},
+             rg::GaussianModel3D{2, 0, .1}, rg::GaussianModel3D{nan, .5, .1}})
+    for (const bool clear_transient : {false, true})
+    {
+        rg::LocalPotentialEntry entry;
+        rg::LocalGaussianResult native;
+        native.alpha_r = .23;
+        native.mdpde = {model, rg::GaussianModel3DUncertainty{.1, .2, .3}};
+        native.fit_result = rg::RHBMBetaEstimateResult{};
+        native.fit_result->diagnostics.iterations = 7;
+        entry.SetInitialStageGaussianResult(native);
+        auto stage = entry.InitialStageEstimate();
+        const auto original_point = stage.point;
+        stage.point.reset();
+        entry.SetInitialStageEstimate(stage);
+        if (clear_transient) entry.ClearInitialStageTransientFitState();
+        if (original_point)
+        {
+            stage.point = original_point;
+            entry.SetInitialStageEstimate(stage);
+            ASSERT_TRUE(entry.InitialStageGaussianResult().diagnostics);
+            EXPECT_EQ(entry.InitialStageGaussianResult().diagnostics->iterations.iterations, 7);
+            EXPECT_DOUBLE_EQ(entry.InitialStageGaussianResult().mdpde.GetStandardDeviationModel().GetWidth(), .2);
+            stage.point.reset();
+            entry.SetInitialStageEstimate(stage);
+        }
+        stage.point = rg::GaussianModel3D{4, .6, .2};
+        entry.SetInitialStageEstimate(stage);
+        const auto replaced = entry.InitialStageGaussianResult();
+        EXPECT_EQ(replaced.mdpde.GetModel().ToVector(), stage.point->ToVector());
+        EXPECT_FALSE(replaced.diagnostics);
+        EXPECT_FALSE(replaced.fit_result);
+        EXPECT_EQ(replaced.mdpde.GetStandardDeviationModel().ToVector(), Eigen::Vector3d::Zero());
+        EXPECT_DOUBLE_EQ(replaced.alpha_r, native.alpha_r);
+        EXPECT_EQ(replaced.ols.GetModel().ToVector(), native.ols.GetModel().ToVector());
+    }
+}
+
 TEST(DataObjectModelAnalysisTest, GroupPotentialEntryKeepsSingleResultPerGroup)
 {
     auto model{ data_test::MakeModelWithBond() };
