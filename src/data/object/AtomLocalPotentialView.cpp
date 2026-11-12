@@ -155,9 +155,9 @@ const GaussianModel3D & AtomLocalPotentialView::GetInitialStageMDPDE() const
     return RequireInitialStageEntry("MDPDE diagnostics unavailable for Joint stage.").InitialStageMDPDEModel();
 }
 
-LocalPotentialSampleList AtomLocalPotentialView::GetRawSamplingEntries() const
+LocalPotentialSampleList AtomLocalPotentialView::GetSelectedSamplingEntries() const
 {
-    const auto & sampling_entries{ RequireEntry("Local raw sampling entries").RawSamplingEntries() };
+    const auto & sampling_entries{ RequireEntry("Local sampling entries").SamplingEntries() };
     LocalPotentialSampleList selected_entries;
     selected_entries.reserve(sampling_entries.size());
     for (const auto & sample : sampling_entries)
@@ -170,14 +170,14 @@ LocalPotentialSampleList AtomLocalPotentialView::GetRawSamplingEntries() const
     return selected_entries;
 }
 
-const LocalPotentialSampleList & AtomLocalPotentialView::GetRawSamplingEntriesView() const
+const LocalPotentialSampleList & AtomLocalPotentialView::GetSamplingEntriesView() const
 {
-    return RequireEntry("Local raw sampling entries").RawSamplingEntries();
+    return RequireEntry("Local sampling entries").SamplingEntries();
 }
 
-LocalPotentialSampleList AtomLocalPotentialView::GetPeelingSamplingEntries() const
+LocalPotentialSampleList AtomLocalPotentialView::GetPeeledObservationEntries() const
 {
-    return RequireEntry("Local peeling sampling entries").PeelingSamplingEntries();
+    return RequireEntry("Local peeled observation entries").PeeledObservationEntries();
 }
 
 PeelingRatioAssessment AtomLocalPotentialView::AssessLocalFittingPeelingRatio(
@@ -190,7 +190,7 @@ PeelingRatioAssessment AtomLocalPotentialView::AssessLocalFittingPeelingRatio(
         "peeling ratio distance range");
 
     PeelingRatioAssessment assessment;
-    const auto & raw = GetRawSamplingEntriesView();
+    const auto & raw = GetSamplingEntriesView();
     if (const auto & peeling = GetPostFitPeeling(); peeling)
     {
         long double raw_sum{};

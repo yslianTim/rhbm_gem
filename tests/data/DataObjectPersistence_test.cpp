@@ -68,7 +68,7 @@ TEST(DataObjectPersistenceTest, StandardQScoresAndReferenceParametersRoundTripTh
     EXPECT_DOUBLE_EQ(loaded_model->GetAtomList().at(1)->GetStandardQScore(), 0.75);
 }
 
-TEST(DataObjectPersistenceTest, RawSamplingEntriesRoundTripPreservesSelection)
+TEST(DataObjectPersistenceTest, SamplingEntriesRoundTripPreservesSelection)
 {
     const command_test::ScopedTempDir temp_dir{ "data_schema_raw_peeling_sampling_roundtrip" };
     const auto database_path{ temp_dir.path() / "raw_peeling_sampling.sqlite" };
@@ -77,7 +77,7 @@ TEST(DataObjectPersistenceTest, RawSamplingEntriesRoundTripPreservesSelection)
     auto model{ data_test::MakeModelWithBond() };
     auto * atom{ model->GetAtomList().at(0).get() };
     auto editor{ model->EditAnalysis() };
-    editor.SetAtomLocalRawSamplingEntries(*atom, {
+    editor.SetAtomLocalSamplingEntries(*atom, {
         LocalPotentialSample{
             6.0, SamplingPoint{ 0.1, { 0.0, 0.0, 0.0 }, true } },
         LocalPotentialSample{
@@ -93,7 +93,7 @@ TEST(DataObjectPersistenceTest, RawSamplingEntriesRoundTripPreservesSelection)
     ASSERT_NE(loaded_model, nullptr);
     const auto view{
         rg::AtomLocalPotentialView::For(*loaded_model->GetAtomList().at(0)) };
-    const auto & raw_entries{ view.GetRawSamplingEntriesView() };
+    const auto & raw_entries{ view.GetSamplingEntriesView() };
 
     ASSERT_EQ(raw_entries.size(), 2u);
     EXPECT_DOUBLE_EQ(raw_entries.at(0).response, 6.0);
@@ -143,7 +143,7 @@ TEST(DataObjectPersistenceTest, DoublePrecisionDomainValuesRoundTripWithoutNarro
             SamplingPoint{ 0.3333333333333333, { 0.0, 0.0, 0.0 }, false } }
     };
     auto editor{ model->EditAnalysis() };
-    editor.SetAtomLocalRawSamplingEntries(*stored_atom, raw_samples);
+    editor.SetAtomLocalSamplingEntries(*stored_atom, raw_samples);
 
     rg::DataRepository repository{ database_path };
     repository.SaveModel(*model, "model");
@@ -168,7 +168,7 @@ TEST(DataObjectPersistenceTest, DoublePrecisionDomainValuesRoundTripWithoutNarro
         123.456789012345);
 
     const auto view{ rg::AtomLocalPotentialView::For(loaded_atom) };
-    const auto & loaded_raw{ view.GetRawSamplingEntriesView() };
+    const auto & loaded_raw{ view.GetSamplingEntriesView() };
     ASSERT_EQ(loaded_raw.size(), raw_samples.size());
     EXPECT_DOUBLE_EQ(loaded_raw.at(0).point.distance, 1.0000000000000002);
     EXPECT_DOUBLE_EQ(loaded_raw.at(0).response, 16777217.125);

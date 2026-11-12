@@ -33,12 +33,13 @@ public:
     const std::optional<GroupGaussianMemberResult> & GetGroupMemberResult() const;
     const GaussianModel3D & GetInitialStageOLS() const;
     const GaussianModel3D & GetInitialStageMDPDE() const;
-    // Returns selected Raw samples as a value.
-    LocalPotentialSampleList GetRawSamplingEntries() const;
-    // Returns all stored Raw samples as a const reference.
-    const LocalPotentialSampleList & GetRawSamplingEntriesView() const;
-    // Returns all available Peeling samples as a value.
-    LocalPotentialSampleList GetPeelingSamplingEntries() const;
+    // Returns selected interpolated sampling entries as a value.
+    LocalPotentialSampleList GetSelectedSamplingEntries() const;
+    // Returns all stored interpolated sampling entries as a const reference.
+    const LocalPotentialSampleList & GetSamplingEntriesView() const;
+    // Projects available Original-grid peeled observations without interpolation.
+    // Use GetPostFitPeeling() for full evidence, unavailable reasons and provenance.
+    LocalPotentialSampleList GetPeeledObservationEntries() const;
     PeelingRatioAssessment AssessLocalFittingPeelingRatio(
         double distance_min, double distance_max) const;
     std::optional<double> GetLocalFittingPeelingRatio(

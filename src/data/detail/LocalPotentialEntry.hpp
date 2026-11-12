@@ -26,7 +26,7 @@ class LocalPotentialEntry
         std::optional<LocalFitDiagnostics> diagnostics;
         std::optional<RHBMBetaEstimateResult> fit_result;
     };
-    LocalPotentialSampleList m_raw_sampling_entries;
+    LocalPotentialSampleList m_sampling_entries;
     InitialStageRecord m_initial_stage;
     LocalStageEstimate m_joint_stage_estimate;
     std::optional<PostFitPeelingResult> m_post_fit_peeling;
@@ -38,7 +38,7 @@ class LocalPotentialEntry
 public:
     void SetInitialStageAlphaR(double value) { m_initial_stage.alpha_r = value; }
     double InitialStageAlphaR() const { return m_initial_stage.alpha_r; }
-    void SetRawSamplingEntries(LocalPotentialSampleList value) { m_raw_sampling_entries = std::move(value); }
+    void SetSamplingEntries(LocalPotentialSampleList value) { m_sampling_entries = std::move(value); }
     void SetInitialStageGaussianResult(LocalGaussianResult value)
     {
         auto & record = m_initial_stage;
@@ -117,12 +117,16 @@ public:
     {
         if (m_post_joint_local_result) m_post_joint_local_result->fit.fit_result.reset();
     }
-    int RawSamplingEntryCount() const { return static_cast<int>(m_raw_sampling_entries.size()); }
+    int SamplingEntryCount() const { return static_cast<int>(m_sampling_entries.size()); }
     int NeighborCountForPeeling() const
     { return m_post_fit_peeling ? static_cast<int>(m_post_fit_peeling->neighbor_count) : 0; }
     const std::optional<GroupGaussianMemberResult> & GroupMemberResult() const { return m_group_member_result; }
-    const LocalPotentialSampleList & RawSamplingEntries() const { return m_raw_sampling_entries; }
-    LocalPotentialSampleList PeelingSamplingEntries() const
+    // All interpolated sampling records, including unselected points, in stored order.
+    const LocalPotentialSampleList & SamplingEntries() const { return m_sampling_entries; }
+    // Projects available Original-grid peeled observations, without interpolation.
+    // The shared container's is_selected=true is a projection convention only;
+    // PostFitPeeling() retains full voxel identity, unavailable reasons and provenance.
+    LocalPotentialSampleList PeeledObservationEntries() const
     {
         LocalPotentialSampleList samples;
         if (!m_post_fit_peeling) return samples;

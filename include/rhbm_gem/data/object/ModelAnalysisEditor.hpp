@@ -41,7 +41,7 @@ public:
     void ClearTransientFitStates();
     void InitializeFromSelection();
     void EnsureSelectedAtomLocalPotentials();
-    void SetAtomLocalRawSamplingEntries(
+    void SetAtomLocalSamplingEntries(
         const AtomObject & atom_object,
         LocalPotentialSampleList value);
     void SetAtomInitialStageGaussianResult(

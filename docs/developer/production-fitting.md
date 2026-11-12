@@ -36,6 +36,16 @@ published points through `GetInitialStageModel()` and `GetJointStageModel()`.
 Native InitialStage diagnostics are available through
 `GetInitialStageGaussianResult()`.
 
+`GetSelectedSamplingEntries()` supplies selected interpolated InitialStage
+samples; `GetSamplingEntriesView()` exposes all stored Sampling Entries by const
+reference, retaining unselected points. `GetPeeledObservationEntries()` instead
+projects available Original-grid peeled observations without interpolation.
+Its shared response container serves plotting and series helpers;
+`GetPostFitPeeling()` retains complete voxel identity, unavailable reasons and
+provenance. Painter's `DistanceResponseSource` selects `SelectedSampling`
+(the default), `AllSampling`, or `PeeledObservation` with distance as X and
+response as Y.
+
 The [command contract](commands/potential_analysis.md) defines input, selection,
 and outcome semantics. [Runtime](joint-component-runtime.md) and
 [Numerics](joint-component-numerics.md) specify the solver and qualification.

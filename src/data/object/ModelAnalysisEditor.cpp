@@ -413,7 +413,7 @@ void ModelAnalysisEditor::EnsureSelectedAtomLocalPotentials()
     }
 }
 
-void ModelAnalysisEditor::SetAtomLocalRawSamplingEntries(
+void ModelAnalysisEditor::SetAtomLocalSamplingEntries(
     const AtomObject & atom_object,
     LocalPotentialSampleList value)
 {
@@ -423,7 +423,7 @@ void ModelAnalysisEditor::SetAtomLocalRawSamplingEntries(
         entry.ClearGroupMemberResult();
         InvalidateGroups(ModelAnalysisData::Of(m_model_object), {atom_object.GetSerialID()});
     }
-    entry.SetRawSamplingEntries(std::move(value));
+    entry.SetSamplingEntries(std::move(value));
 }
 
 void ModelAnalysisEditor::SetAtomInitialStageGaussianResult(

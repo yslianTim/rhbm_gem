@@ -84,21 +84,37 @@ estimate record. Use `HasInitialStageModel()` or `HasJointStageModel()` to
 check for a published point and `GetInitialStageModel()` or
 `GetJointStageModel()` to read it.
 
-Sampling access has fixed data contracts:
+`LocalPotentialEntry::SamplingEntries()` stores the complete interpolated
+sampling records, including unselected points, in their original order.
+`SetSamplingEntries()` moves the records into the entry without filtering;
+`SamplingEntryCount()` counts all stored entries.
+The atom-local view has fixed data contracts:
 
-- `GetRawSamplingEntries()` returns selected Raw samples by value, retaining
+- `GetSelectedSamplingEntries()` returns selected interpolated samples by value, retaining
   only entries whose `SamplingPoint::is_selected` is true.
-- `GetRawSamplingEntriesView()` returns all stored Raw samples as a const
+- `GetSamplingEntriesView()` returns all stored interpolated samples as a const
   reference, including unselected points, without copying or filtering. The
   reference must not outlive its owning model or analysis entry, or be retained
   across replacement or clearing of that entry's samples.
-- `GetPeelingSamplingEntries()` returns all available peeled samples by value,
-  skipping observations without a response. Missing Peeling results produce
-  an empty list without falling back to Raw samples.
+- `GetPeeledObservationEntries()` projects available Original-grid peeled
+  observations into `LocalPotentialSampleList` by value, skipping observations
+  without a response. Positions come from the voxel observations and distances
+  from `sqrt(squared_distance)`, without InitialStage interpolation. Missing
+  Peeling results produce an empty list without falling back to Sampling Entries.
 
 These getters preserve sample order, responses, distances, and positions.
 Sampling-point selection is independent of the model's atom selection.
-Use `GetPostFitPeeling()` for paired Original-grid observations.
+The peeled projection uses the shared response container for existing plotting
+and series helpers. Its `is_selected=true` is a conversion convention, not an
+InitialStage selection decision. It omits row/global voxel identity, unavailable
+reasons and provenance; use `GetPostFitPeeling()` (the entry's `PostFitPeeling()`)
+for that full evidence.
+
+`AssessLocalFittingPeelingRatio()` uses Original-grid `map_value` sums when a
+Peeling result exists. Without one, its diagnostic `raw_response_sum` and sample
+count use all interpolated Sampling Entries in the distance range, including
+unselected points; the ratio remains unavailable. These diagnostic sources are
+different and must not be compared as though both were voxel sums.
 
 Views are lightweight value objects containing a non-owning model or atom reference. Consumers, including painters, store them by value rather than allocating them through `unique_ptr`.
 
@@ -106,7 +122,7 @@ Views are lightweight value objects containing a non-owning model or atom refere
 
 `ModelAnalysisEditor` owns all supported analysis mutation operations. Its direct atom-local setters are:
 
-- `SetAtomLocalRawSamplingEntries(...)`;
+- `SetAtomLocalSamplingEntries(...)`;
 - `SetAtomInitialStageGaussianResult(...)`;
 - `SetAtomInitialStageAlphaR(...)`;
 - `SetAtomInitialStageEstimate(...)`;
@@ -129,10 +145,11 @@ Analysis facades return typed data, not presentation strings. Text that is used 
 This keeps formatting changes out of the object API while preserving command output and numerical behavior.
 
 The private Painter `PotentialPlotBuilder::CreateDistanceToResponseGraph()`
-selects its source with `DistanceSamplingMode`: `SelectedRaw` (the default),
-`AllRaw`, or `Peeling`. It uses the corresponding sampling getter above and
-writes graph points in sample order with distance as X and response as Y.
-The `AllRaw` path reads the stored samples by const reference.
+selects its source with `DistanceResponseSource`: `SelectedSampling` (the default),
+`AllSampling`, or `PeeledObservation`. These map to `GetSelectedSamplingEntries()`,
+`GetSamplingEntriesView()`, and `GetPeeledObservationEntries()`, respectively.
+The graph writes points in sample order with distance as X and response as Y.
+The `AllSampling` path reads the stored samples by const reference.
 
 ## 6. Sampling and Parallelism
 
@@ -155,7 +172,7 @@ range, binning and correlation. Raw sampling entries contain interpolation
 outputs before model subtraction; Original-grid `PostJointGridObservation::map_value`
 contains an unpeeled voxel observation. Peeled responses, Gaussian predictions,
 fixed-charge responses, neighbor contributions and residuals are derived values,
-not Sampling Values. `GetPeelingSamplingEntries()` adapts available Original-grid
+not Sampling Values. `GetPeeledObservationEntries()` adapts available Original-grid
 peeled responses to the same neutral container without interpolation.
 
 The private `MapSampler` computes atom sampling results into an indexed temporary result vector in parallel. After workers finish, it writes results through `ModelAnalysisEditor` in a sequential pass.

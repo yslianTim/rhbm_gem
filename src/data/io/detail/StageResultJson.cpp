@@ -386,7 +386,7 @@ std::string Encode(const ModelObject & model)
         }
         atoms.push_back(O{{"id",atom->GetSerialID()},{"initial",Pack(e->InitialStageEstimate())},{"joint",Pack(e->JointStageEstimate())},
             {"initial_native",InitialNative(*e)},
-            {"geometry",e->SampleGeometryAvailable()},{"raw",Samples(e->RawSamplingEntries(),e->SampleGeometryAvailable())},
+            {"geometry",e->SampleGeometryAvailable()},{"raw",Samples(e->SamplingEntries(),e->SampleGeometryAvailable())},
             {"post_joint_qscore",e->PostJointQScore() ? Pack(*e->PostJointQScore()):V{}},
             {"peeling",peeling},{"post_joint_local",e->PostJointLocalResult() ? Pack(*e->PostJointLocalResult()):V{}},
             {"posterior",e->GroupMemberResult() ? Pack(*e->GroupMemberResult()):V{}}});
@@ -412,7 +412,7 @@ void Decode(ModelObject & model, const std::string & text)
         RestoreInitialNative(entry,o.at("initial_native"),Stage(o.at("initial")));
         entry.SetJointStageEstimate(Stage(o.at("joint")));
         const bool geometry=Read<bool>(o,"geometry"); entry.SetSampleGeometryAvailable(geometry);
-        entry.SetRawSamplingEntries(Samples(o.at("raw"),geometry));
+        entry.SetSamplingEntries(Samples(o.at("raw"),geometry));
         if(!o.at("peeling").is_null())
         {
             const auto & p=o.at("peeling").as_object(); PostFitPeelingResult result;

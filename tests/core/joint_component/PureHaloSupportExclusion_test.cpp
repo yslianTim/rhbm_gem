@@ -555,7 +555,7 @@ TEST(PureHaloSupportExclusionTest, PeelingUsesOriginalRowsAndReconstructedHalo)
     fixture.model.EditAnalysis().ApplyJointStageEstimates(
         data_internal::BuildJointStageEstimates(snapshot, "reconstruction-only-run"));
     const SamplingPointList points{{2.5,{2.5,0,0},true}};
-    fixture.model.EditAnalysis().SetAtomLocalRawSamplingEntries(*fixture.model.FindAtomPtr(1),
+    fixture.model.EditAnalysis().SetAtomLocalSamplingEntries(*fixture.model.FindAtomPtr(1),
         core::detail::BuildInterpolatedSamplingEntries(fixture.map,points));
     const auto context=postprocessing_test::MakeJointPostprocessingContext(
         fixture.map,fixture.model,problem,snapshot);
@@ -588,7 +588,7 @@ TEST(PureHaloSupportExclusionTest, GridPeelingAndOwnChargeMatchIndependentDirect
         {1.6,{1.6,0.0,0.0},true},
         {1.9,{1.9,0.0,0.0},true}};
     const auto raw=core::detail::BuildInterpolatedSamplingEntries(fixture.map,points);
-    fixture.model.EditAnalysis().SetAtomLocalRawSamplingEntries(*fixture.model.FindAtomPtr(1),raw);
+    fixture.model.EditAnalysis().SetAtomLocalSamplingEntries(*fixture.model.FindAtomPtr(1),raw);
 
     core::detail::JointPostprocessingMetrics metrics;
     const auto context=postprocessing_test::MakeJointPostprocessingContext(
@@ -634,7 +634,7 @@ TEST(PureHaloSupportExclusionTest, PeelingIsInvariantToExtraContributorChemicalL
         fixture.model.EditAnalysis().ApplyJointStageEstimates(
             data_internal::BuildJointStageEstimates(snapshot, "reconstruction-only-run"));
         const SamplingPointList points{{1.5,{1.5,0.0,0.0},true},{2.8,{2.8,0.0,0.0},true}};
-        fixture.model.EditAnalysis().SetAtomLocalRawSamplingEntries(*fixture.model.FindAtomPtr(1),
+        fixture.model.EditAnalysis().SetAtomLocalSamplingEntries(*fixture.model.FindAtomPtr(1),
             core::detail::BuildInterpolatedSamplingEntries(fixture.map,points));
         const auto context=postprocessing_test::MakeJointPostprocessingContext(
             fixture.map,fixture.model,problem,snapshot);
@@ -1215,7 +1215,7 @@ TEST(PureHaloSupportExclusionTest, GridEvidenceTracksMapRevisionGeometryAndSnaps
         foreign_metadata.origin[0]+=1.;
         EXPECT_THROW(fixture.model.EditAnalysis().UpdateJointMetadata(foreign_metadata),std::invalid_argument);
         EXPECT_TRUE(view.GetPostFitPeeling());
-        fixture.model.EditAnalysis().SetAtomLocalRawSamplingEntries(*target,{});
+        fixture.model.EditAnalysis().SetAtomLocalSamplingEntries(*target,{});
         EXPECT_EQ(view.GetPostFitPeeling()->samples.size(),count);
         EXPECT_TRUE(view.GetPostJointLocalResult());
         MapObject independent_map(fixture.map);

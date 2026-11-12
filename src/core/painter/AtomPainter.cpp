@@ -112,11 +112,11 @@ void AtomPainter::PaintDemoPlot(const std::string & name)
     auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom_object) };
     auto sampling_value_range{
         local_potential_series::ComputeResponseRange(
-            atom_entry.GetRawSamplingEntries(), 0.3)
+            atom_entry.GetSelectedSamplingEntries(), 0.3)
     };
     auto distance_range{
         local_potential_series::ComputeDistanceRange(
-            atom_entry.GetRawSamplingEntries(), 0.0)
+            atom_entry.GetSelectedSamplingEntries(), 0.0)
     };
 
     auto sampling_value_graph{ atom_plot_builder->CreateDistanceToResponseGraph() };
@@ -206,17 +206,17 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
         if (stage.source.method != EstimateMethod::JointComponents || stage.source.role != FittingRole::Target) continue;
         canvas->Clear(); canvas->cd();
         auto builder=std::make_unique<PotentialPlotBuilder>(atom_object);
-        auto raw_sampling_graph=builder->CreateDistanceToResponseGraph(DistanceSamplingMode::AllRaw);
-        auto peeled_response_graph=builder->CreateDistanceToResponseGraph(DistanceSamplingMode::Peeling);
-        raw_sampling_graph->SetTitle(("Joint components: atom " + std::to_string(atom_object->GetSerialID()) + ";Radial distance (Angstrom);Response").c_str());
-        root_helper::SetMarkerAttribute(raw_sampling_graph.get(),20,0.7f,kGray+1);
-        if (raw_sampling_graph->GetN()>0) raw_sampling_graph->Draw("AP");
+        auto sampling_graph=builder->CreateDistanceToResponseGraph(DistanceResponseSource::AllSampling);
+        auto peeled_response_graph=builder->CreateDistanceToResponseGraph(DistanceResponseSource::PeeledObservation);
+        sampling_graph->SetTitle(("Joint components: atom " + std::to_string(atom_object->GetSerialID()) + ";Radial distance (Angstrom);Response").c_str());
+        root_helper::SetMarkerAttribute(sampling_graph.get(),20,0.7f,kGray+1);
+        if (sampling_graph->GetN()>0) sampling_graph->Draw("AP");
         else canvas->DrawFrame(0,-1,2,1,"Joint samples unavailable;Radial distance (Angstrom);Response");
         root_helper::SetMarkerAttribute(peeled_response_graph.get(),20,0.7f,kBlue);
         peeled_response_graph->Draw("P SAME");
         auto curve=builder->CreateAtomLocalGausFunctionFinal();
         auto legend=root_helper::CreateLegend(0.55,0.68,0.95,0.94,false);
-        if (raw_sampling_graph->GetN()>0) legend->AddEntry(raw_sampling_graph.get(),"Raw sampling values","p");
+        if (sampling_graph->GetN()>0) legend->AddEntry(sampling_graph.get(),"Raw sampling values","p");
         if(entry_view.GetPostFitPeeling()) legend->AddEntry(peeled_response_graph.get(),"Peeled response (individual target charge retained)","p");
         if(curve) {root_helper::SetLineAttribute(curve.get(),1,2,kRed); curve->Draw("SAME"); legend->AddEntry(curve.get(),"Joint Second: Gaussian + charge C","l");}
         else legend->AddEntry(static_cast<TObject *>(nullptr),("Second unavailable: " + entry_view.GetJointStageEstimate().reason).c_str(), "");

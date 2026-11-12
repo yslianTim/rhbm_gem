@@ -6,6 +6,7 @@
 #include <memory>
 #include <string>
 #include <tuple>
+#include <type_traits>
 #include <unordered_map>
 #include <vector>
 
@@ -517,17 +518,25 @@ TEST(DataObjectModelAnalysisTest, LocalPotentialEntryClearTransientFitStateKeeps
     EXPECT_FALSE(entry.InitialStageGaussianResult().fit_result.has_value());
 }
 
-TEST(DataObjectModelAnalysisTest, LocalPotentialEntryStoresRawSamplingEntries)
+TEST(DataObjectModelAnalysisTest, LocalPotentialEntryStoresSamplingEntries)
 {
     rg::LocalPotentialEntry entry;
     EXPECT_EQ(entry.NeighborCountForPeeling(), 0);
-    entry.SetRawSamplingEntries({
+    LocalPotentialSampleList samples{
         LocalPotentialSample{ 6.0, SamplingPoint{ 0.1 } },
-        LocalPotentialSample{ 4.0, SamplingPoint{ 0.2 } }
-    });
-    EXPECT_EQ(entry.RawSamplingEntryCount(), 2);
-    ASSERT_EQ(entry.RawSamplingEntries().size(), 2u);
-    EXPECT_DOUBLE_EQ(entry.RawSamplingEntries().front().response, 6.0);
+        LocalPotentialSample{ 4.0, SamplingPoint{ 0.2, { 1.0, 2.0, 3.0 }, false } }
+    };
+    const auto * stored_data{ samples.data() };
+    entry.SetSamplingEntries(std::move(samples));
+    static_assert(std::is_same_v<decltype(entry.SamplingEntries()), const LocalPotentialSampleList &>);
+    EXPECT_EQ(entry.SamplingEntryCount(), 2);
+    ASSERT_EQ(entry.SamplingEntries().size(), 2u);
+    EXPECT_EQ(entry.SamplingEntries().data(), stored_data);
+    EXPECT_DOUBLE_EQ(entry.SamplingEntries().front().response, 6.0);
+    EXPECT_DOUBLE_EQ(entry.SamplingEntries().back().response, 4.0);
+    EXPECT_DOUBLE_EQ(entry.SamplingEntries().back().point.distance, 0.2);
+    EXPECT_EQ(entry.SamplingEntries().back().point.position, (std::array<double, 3>{1.0, 2.0, 3.0}));
+    EXPECT_FALSE(entry.SamplingEntries().back().point.is_selected);
 }
 
 TEST(DataObjectModelAnalysisTest, LocalPotentialEntryStoresGaussianResult)
@@ -764,7 +773,7 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorSetGaussianResultUpdatesVie
         LocalPotentialSample{ 4.0, SamplingPoint{ 0.5 } },
         LocalPotentialSample{ 2.0, SamplingPoint{ 0.9 } }
     };
-    analysis.SetAtomLocalRawSamplingEntries(*atom, sampling_entries);
+    analysis.SetAtomLocalSamplingEntries(*atom, sampling_entries);
 
     rg::LocalGaussianResult gaussian_result;
     gaussian_result.alpha_r = 0.6;
@@ -791,7 +800,7 @@ TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorSetGaussianResultUpdatesVie
         rg::AtomLocalPotentialView::For(*atom).GetInitialStageMDPDE().GetWidth());
 }
 
-TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewSeparatesSelectedAndAllRawSamples)
+TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewSeparatesSelectedAndAllSamplingEntries)
 {
     auto model{ data_test::MakeModelWithBond() };
     auto * atom{ model->GetAtomList().at(0).get() };
@@ -802,11 +811,13 @@ TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewSeparatesSelectedAndAllR
         LocalPotentialSample{ 4.0, SamplingPoint{ 0.5, { 4.0, 5.0, 6.0 }, false } },
         LocalPotentialSample{ 2.0, SamplingPoint{ 0.9, { 7.0, 8.0, 9.0 }, true } }
     };
-    analysis.SetAtomLocalRawSamplingEntries(*atom, raw_samples);
+    analysis.SetAtomLocalSamplingEntries(*atom, raw_samples);
 
     const auto view{ rg::AtomLocalPotentialView::For(*atom) };
-    const auto & raw_entries_view{ view.GetRawSamplingEntriesView() };
-    const auto raw_selected_entries{ view.GetRawSamplingEntries() };
+    const auto & raw_entries_view{ view.GetSamplingEntriesView() };
+    static_assert(std::is_same_v<decltype(view.GetSamplingEntriesView()), const LocalPotentialSampleList &>);
+    const auto raw_selected_entries{ view.GetSelectedSamplingEntries() };
+    EXPECT_EQ(&raw_entries_view, &view.GetSamplingEntriesView());
 
     ASSERT_EQ(raw_selected_entries.size(), 2u);
     for (std::size_t i = 0; i < raw_selected_entries.size(); ++i)
@@ -870,7 +881,7 @@ TEST(DataObjectModelAnalysisTest, PeelingRatioAssessmentReportsUnavailableCauses
     auto model{ data_test::MakeModelWithBond() };
     auto * atom{ model->GetAtomList().at(0).get() };
     auto analysis{ model->EditAnalysis() };
-    analysis.SetAtomLocalRawSamplingEntries(*atom, {
+    analysis.SetAtomLocalSamplingEntries(*atom, {
         LocalPotentialSample{ 4.0, SamplingPoint{ 1.5 } }
     });
     const auto view{ rg::AtomLocalPotentialView::For(*atom) };
@@ -885,7 +896,7 @@ TEST(DataObjectModelAnalysisTest, PeelingRatioAssessmentReportsUnavailableCauses
     failed_joint.reason = "joint-endpoint-not-qualified";
     failed_joint.convergence = rg::JointCheckStatus::Failed;
     analysis.SetAtomJointStageEstimate(*atom, failed_joint);
-    analysis.SetAtomLocalRawSamplingEntries(*atom, {
+    analysis.SetAtomLocalSamplingEntries(*atom, {
         LocalPotentialSample{ 4.0, SamplingPoint{ 1.5 } }
     });
     assessment = view.AssessLocalFittingPeelingRatio(1.0, 2.0);
@@ -918,21 +929,21 @@ TEST(
         std::invalid_argument);
 }
 
-TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewSeparatesRawAndPeelingSamples)
+TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewSeparatesSamplingAndPeeledObservations)
 {
     auto model{ data_test::MakeModelWithBond() };
     auto * atom{ model->GetAtomList().at(0).get() };
     auto analysis{ model->EditAnalysis() };
 
     const LocalPotentialSampleList raw_samples{
-        LocalPotentialSample{ 6.0, SamplingPoint{ 0.0, { 0.0, 0.0, 0.0 }, true } },
-        LocalPotentialSample{ 4.0, SamplingPoint{ 0.5, { 0.0, 0.0, 0.0 }, false } },
-        LocalPotentialSample{ 2.0, SamplingPoint{ 0.9, { 0.0, 0.0, 0.0 }, true } }
+        LocalPotentialSample{ 6.0, SamplingPoint{ 0.0, { 10.0, 11.0, 12.0 }, true } },
+        LocalPotentialSample{ 4.0, SamplingPoint{ 0.5, { 13.0, 14.0, 15.0 }, false } },
+        LocalPotentialSample{ 2.0, SamplingPoint{ 0.9, { 16.0, 17.0, 18.0 }, true } }
     };
-    analysis.SetAtomLocalRawSamplingEntries(*atom, raw_samples);
+    analysis.SetAtomLocalSamplingEntries(*atom, raw_samples);
     const auto view{ rg::AtomLocalPotentialView::For(*atom) };
-    const auto first_entries{ view.GetRawSamplingEntries() };
-    const auto peeling_entries{ view.GetPeelingSamplingEntries() };
+    const auto first_entries{ view.GetSelectedSamplingEntries() };
+    const auto peeling_entries{ view.GetPeeledObservationEntries() };
 
     ASSERT_EQ(first_entries.size(), 2u);
     EXPECT_DOUBLE_EQ(first_entries.front().response, 6.0);
@@ -940,7 +951,7 @@ TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewSeparatesRawAndPeelingSa
 
 #ifdef HAVE_ROOT
     rg::PotentialPlotBuilder builder(atom);
-    EXPECT_EQ(builder.CreateDistanceToResponseGraph(rg::DistanceSamplingMode::Peeling)->GetN(), 0);
+    EXPECT_EQ(builder.CreateDistanceToResponseGraph(rg::DistanceResponseSource::PeeledObservation)->GetN(), 0);
 #endif
 
     rg::LocalStageEstimate joint;
@@ -955,14 +966,17 @@ TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewSeparatesRawAndPeelingSa
         {.75, {}, MakeGridObservation(2, 2, 1.5, 2, atom->GetPosition())}};
     analysis.SetAtomPostFitPeeling(*atom, peeling);
 
-    const auto available_entries{ view.GetPeelingSamplingEntries() };
+    const auto available_entries{ view.GetPeeledObservationEntries() };
     ASSERT_EQ(available_entries.size(), 2u);
+    EXPECT_DOUBLE_EQ(available_entries[0].response, 1.25);
+    EXPECT_DOUBLE_EQ(available_entries[1].response, 0.75);
     for (std::size_t i = 0; i < available_entries.size(); ++i)
     {
         const auto & expected{ peeling.samples[i * 2] };
         EXPECT_DOUBLE_EQ(available_entries[i].response, *expected.response);
         EXPECT_DOUBLE_EQ(available_entries[i].point.distance, std::sqrt(expected.observation.squared_distance));
         EXPECT_EQ(available_entries[i].point.position, expected.observation.position);
+        EXPECT_NE(available_entries[i].point.position, raw_samples[i * 2].point.position);
         EXPECT_TRUE(available_entries[i].point.is_selected);
     }
 
@@ -977,9 +991,9 @@ TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewSeparatesRawAndPeelingSa
         }
     };
     expect_graph(builder.CreateDistanceToResponseGraph(), first_entries);
-    expect_graph(builder.CreateDistanceToResponseGraph(rg::DistanceSamplingMode::SelectedRaw), first_entries);
-    expect_graph(builder.CreateDistanceToResponseGraph(rg::DistanceSamplingMode::AllRaw), raw_samples);
-    expect_graph(builder.CreateDistanceToResponseGraph(rg::DistanceSamplingMode::Peeling), available_entries);
+    expect_graph(builder.CreateDistanceToResponseGraph(rg::DistanceResponseSource::SelectedSampling), first_entries);
+    expect_graph(builder.CreateDistanceToResponseGraph(rg::DistanceResponseSource::AllSampling), raw_samples);
+    expect_graph(builder.CreateDistanceToResponseGraph(rg::DistanceResponseSource::PeeledObservation), available_entries);
     // Distinct sampling/grid positions and a missing peeled row guard each source.
     const auto expect_binned_graph = [](const auto & graph, const std::array<double, 4> & responses)
     {
@@ -1000,23 +1014,26 @@ TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewSeparatesRawAndPeelingSa
     peeling.samples[2].response.reset();
     peeling.samples[2].reason = "outside-joint-domain";
     analysis.SetAtomPostFitPeeling(*atom, peeling);
-    EXPECT_TRUE(view.GetPeelingSamplingEntries().empty());
+    EXPECT_TRUE(view.GetPeeledObservationEntries().empty());
 #ifdef HAVE_ROOT
-    EXPECT_EQ(builder.CreateDistanceToResponseGraph(rg::DistanceSamplingMode::Peeling)->GetN(), 0);
+    EXPECT_EQ(builder.CreateDistanceToResponseGraph(rg::DistanceResponseSource::PeeledObservation)->GetN(), 0);
 #endif
 }
 
-TEST(DataObjectModelAnalysisTest, EmptyPeelingSamplingEntriesDoNotFallBackToRaw)
+TEST(DataObjectModelAnalysisTest, MissingPeeledObservationEntriesDoNotFallBackToSamplingEntries)
 {
     auto model{ data_test::MakeModelWithBond() };
     auto * atom{ model->GetAtomList().at(0).get() };
-    model->EditAnalysis().SetAtomLocalRawSamplingEntries(*atom, {
+    const auto view{ rg::AtomLocalPotentialView::For(*atom) };
+    EXPECT_THROW(view.GetSelectedSamplingEntries(), std::runtime_error);
+    EXPECT_THROW(view.GetSamplingEntriesView(), std::runtime_error);
+    EXPECT_THROW(view.GetPeeledObservationEntries(), std::runtime_error);
+    model->EditAnalysis().SetAtomLocalSamplingEntries(*atom, {
         LocalPotentialSample{ 6.0, SamplingPoint{ 0.0 } }
     });
 
-    const auto view{ rg::AtomLocalPotentialView::For(*atom) };
-    EXPECT_EQ(view.GetRawSamplingEntriesView().size(), 1u);
-    EXPECT_TRUE(view.GetPeelingSamplingEntries().empty());
+    EXPECT_EQ(view.GetSamplingEntriesView().size(), 1u);
+    EXPECT_TRUE(view.GetPeeledObservationEntries().empty());
 }
 
 TEST(DataObjectModelAnalysisTest, ModelAnalysisEditorAppliesAtomGroupGaussianResultToStatisticsAndPosterior)
@@ -1489,7 +1506,7 @@ TEST(DataObjectModelAnalysisTest, JointUpdatesInvalidateDependentResultsAcrossTh
     editor.ApplyJointStageEstimates(stages);
     for (const auto & atom : model->GetAtomList())
     {
-        editor.SetAtomLocalRawSamplingEntries(*atom, {{2, {.1, {0,0,0}, true}}, {3, {.2, {1,0,0}, true}}});
+        editor.SetAtomLocalSamplingEntries(*atom, {{2, {.1, {0,0,0}, true}}, {3, {.2, {1,0,0}, true}}});
         const auto view = rg::AtomLocalPotentialView::For(*atom);
         auto stage = view.GetJointStageEstimate();
         stage.uncertainty.status = rg::EvidenceStatus::Available;
@@ -1524,12 +1541,12 @@ TEST(DataObjectModelAnalysisTest, JointUpdatesInvalidateDependentResultsAcrossTh
     EXPECT_FALSE(view.GetGroupMemberResult());
     ASSERT_TRUE(view.GetPostFitPeeling());
     const auto point = view.GetJointStageModel().ToVector();
-    auto raw = view.GetRawSamplingEntriesView();
+    auto raw = view.GetSamplingEntriesView();
     std::reverse(raw.begin(), raw.end());
-    editor.SetAtomLocalRawSamplingEntries(*atom, raw);
+    editor.SetAtomLocalSamplingEntries(*atom, raw);
     EXPECT_TRUE(view.GetPostFitPeeling());
     EXPECT_TRUE(view.GetPostJointLocalResult());
-    EXPECT_FALSE(view.GetPeelingSamplingEntries().empty());
+    EXPECT_FALSE(view.GetPeeledObservationEntries().empty());
     EXPECT_EQ(view.GetJointStageModel().ToVector(), point);
     stage.point = stage.point->WithAmplitude(3);
     editor.SetAtomJointStageEstimate(*atom, stage);
@@ -1565,7 +1582,7 @@ TEST(DataObjectModelAnalysisTest, PostJointLocalResultHasIndependentJointEndpoin
     const LocalPotentialSampleList raw{
         {2, {.1, {0,0,0}, true}}, {3, {.2, {1,0,0}, true}},
         {4, {.3, {0,1,0}, true}}, {5, {.4, {0,0,1}, true}}};
-    editor.SetAtomLocalRawSamplingEntries(atom, raw);
+    editor.SetAtomLocalSamplingEntries(atom, raw);
     rg::PostFitPeelingResult peeling;
     peeling.source = rg::AtomLocalPotentialView::For(atom).GetJointStageEstimate().source;
     peeling.samples = {
@@ -1619,13 +1636,13 @@ TEST(DataObjectModelAnalysisTest, PostJointLocalResultHasIndependentJointEndpoin
     EXPECT_DOUBLE_EQ(view.GetJointStageModel().GetAmplitude(), 2);
     EXPECT_DOUBLE_EQ(view.GetPostJointLocalResult()->fit.mdpde.GetModel().GetAmplitude(), 1.8);
 
-    editor.SetAtomLocalRawSamplingEntries(atom, {{3, {.2, {0,0,0}, true}}});
+    editor.SetAtomLocalSamplingEntries(atom, {{3, {.2, {0,0,0}, true}}});
     EXPECT_TRUE(view.GetPostFitPeeling());
     EXPECT_TRUE(view.GetPostJointLocalResult());
     EXPECT_TRUE(model->GetAnalysisView().GetJointResult());
     EXPECT_DOUBLE_EQ(view.GetJointStageModel().GetAmplitude(), 2);
 
-    editor.SetAtomLocalRawSamplingEntries(atom, raw);
+    editor.SetAtomLocalSamplingEntries(atom, raw);
     editor.SetAtomPostFitPeeling(atom, peeling);
     editor.SetAtomPostJointLocalResult(atom, local);
     auto changed = view.GetJointStageEstimate();
@@ -1660,7 +1677,7 @@ TEST(DataObjectModelAnalysisTest, NativeDiagnosticsAndJointSamplesAreIndependent
     stage.source.method = rg::EstimateMethod::JointComponents;
     stage.source.role = rg::FittingRole::Target;
     editor.SetAtomJointStageEstimate(atom, stage);
-    editor.SetAtomLocalRawSamplingEntries(atom, {{2, {.1, {0,0,0}, true}}, {4, {.2, {1,0,0}, true}}});
+    editor.SetAtomLocalSamplingEntries(atom, {{2, {.1, {0,0,0}, true}}, {4, {.2, {1,0,0}, true}}});
     rg::PostFitPeelingResult peeling;
     peeling.source = view.GetJointStageEstimate().source;
     peeling.samples = {
@@ -1669,7 +1686,7 @@ TEST(DataObjectModelAnalysisTest, NativeDiagnosticsAndJointSamplesAreIndependent
     peeling.neighbor_count = 3;
     editor.SetAtomPostFitPeeling(atom, peeling);
     EXPECT_DOUBLE_EQ(*view.GetLocalFittingPeelingRatio(0, 1), .5);
-    EXPECT_EQ(view.GetPeelingSamplingEntries()[1].response, 2);
+    EXPECT_EQ(view.GetPeeledObservationEntries()[1].response, 2);
     EXPECT_EQ(view.GetNeighborCountForPeeling(), 3);
     rg::ModelObject copied(*model);
     EXPECT_DOUBLE_EQ(*rg::AtomLocalPotentialView::For(*copied.FindAtomPtr(atom.GetSerialID())).GetLocalFittingPeelingRatio(0,1), .5);

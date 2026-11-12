@@ -63,7 +63,7 @@ void ApplyJointSeedFallback(JointInitialization & initialization)
 LocalGaussianResult FitInitialStageAtom(const AtomObject & atom, const FitOptions & options)
 {
     const auto view = AtomLocalPotentialView::For(atom);
-    const auto sampling_entries = view.GetRawSamplingEntries();
+    const auto sampling_entries = view.GetSelectedSamplingEntries();
     return EstimateLocalGaussian(sampling_entries, view.GetInitialStageAlphaR(),
         options, view.GetInitialStageMDPDE());
 }
@@ -123,7 +123,7 @@ JointInitialization FitInitialStageFromPreparedSamples(
             try
             {
                 const auto view = AtomLocalPotentialView::For(*atom);
-                const auto sampling_entries = view.GetRawSamplingEntries();
+                const auto sampling_entries = view.GetSelectedSamplingEntries();
                 sample_counts[slot] = sampling_entries.size();
                 alphas[slot] = EstimateInitialStageAlpha(sampling_entries, atom_options);
                 alpha_ready[slot] = 1;

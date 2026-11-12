@@ -191,7 +191,7 @@ void GausPainter::PaintPeeledResponseMainChain(ModelObject * model_object, const
             const auto atom_view{ AtomLocalPotentialView::For(*atom) };
             auto sampling_value_range{
                 local_potential_series::ComputeResponseRange(
-                    atom_view.GetRawSamplingEntries(), 0.0)
+                    atom_view.GetSelectedSamplingEntries(), 0.0)
             };
             y_array.emplace_back(std::get<0>(sampling_value_range));
             y_array.emplace_back(std::get<1>(sampling_value_range));

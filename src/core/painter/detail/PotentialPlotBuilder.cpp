@@ -451,7 +451,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateJointStageParameterSca
 }
 
 std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateDistanceToResponseGraph(
-    DistanceSamplingMode mode)
+    DistanceResponseSource source)
 {
     auto graph{ root_helper::CreateGraphErrors() };
     const auto append_samples = [&](const LocalPotentialSampleList & samples)
@@ -462,16 +462,16 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateDistanceToResponseGrap
         }
     };
     const auto view{ GetLocalEntry() };
-    switch (mode)
+    switch (source)
     {
-    case DistanceSamplingMode::SelectedRaw:
-        append_samples(view.GetRawSamplingEntries());
+    case DistanceResponseSource::SelectedSampling:
+        append_samples(view.GetSelectedSamplingEntries());
         break;
-    case DistanceSamplingMode::AllRaw:
-        append_samples(view.GetRawSamplingEntriesView());
+    case DistanceResponseSource::AllSampling:
+        append_samples(view.GetSamplingEntriesView());
         break;
-    case DistanceSamplingMode::Peeling:
-        append_samples(view.GetPeelingSamplingEntries());
+    case DistanceResponseSource::PeeledObservation:
+        append_samples(view.GetPeeledObservationEntries());
         break;
     }
     return graph;
@@ -482,7 +482,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToSampli
 {
     auto data_array{
         local_potential_series::BuildBinnedDistanceResponseSeries(
-            GetLocalEntry().GetRawSamplingEntries(), bin_size, x_min, x_max)
+            GetLocalEntry().GetSelectedSamplingEntries(), bin_size, x_min, x_max)
     };
     auto graph{ root_helper::CreateGraphErrors(bin_size) };
     auto count{ 0 };
@@ -499,7 +499,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToPeeled
 {
     auto data_array{
         local_potential_series::BuildBinnedDistanceResponseSeries(
-            GetLocalEntry().GetPeelingSamplingEntries(), bin_size, x_min, x_max)
+            GetLocalEntry().GetPeeledObservationEntries(), bin_size, x_min, x_max)
     };
     auto graph{ root_helper::CreateGraphErrors(bin_size) };
     auto count{ 0 };
@@ -668,14 +668,14 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedSamplingValueSca
         auto * atom_object2{ model2_atom_map.at(atom_id) };
         auto data1_array{
             local_potential_series::BuildBinnedDistanceResponseSeries(
-                AtomLocalPotentialView::For(*atom_object1).GetRawSamplingEntries(),
+                AtomLocalPotentialView::For(*atom_object1).GetSelectedSamplingEntries(),
                 bin_size,
                 x_min,
                 x_max)
         };
         auto data2_array{
             local_potential_series::BuildBinnedDistanceResponseSeries(
-                AtomLocalPotentialView::For(*atom_object2).GetRawSamplingEntries(),
+                AtomLocalPotentialView::For(*atom_object2).GetSelectedSamplingEntries(),
                 bin_size,
                 x_min,
                 x_max)
@@ -829,7 +829,7 @@ PotentialPlotBuilder::CreateAtomSamplingValueToSequenceIDGraphMap(
         graph_map[chain_id]->SetPoint(
             count_map[chain_id],
             x_value,
-            local_potential_series::ComputeMeanSamplingValueNearCenter(entry.GetRawSamplingEntries()));
+            local_potential_series::ComputeMeanSamplingValueNearCenter(entry.GetSelectedSamplingEntries()));
         count_map[chain_id]++;
     }
     return graph_map;

@@ -26,8 +26,11 @@ can select `SphereSamplingMethod::SpiralDeterministic`. The default is
 `SphereSamplingMethod::FibonacciDeterministic`. Both methods apply the
 strict Ownership and 30° cone exclusions for non-hydrogen neighbors.
 Tricubic interpolation of stored voxel Map Values produces Sampling Values.
-These raw sampling entries feed alpha training and OLS/MDPDE on selected positive
-responses within 1 Å.
+`GetSelectedSamplingEntries()` supplies only selected interpolated samples to
+alpha training and OLS/MDPDE on positive responses within 1 Å.
+`GetSamplingEntriesView()` exposes all stored samples, including excluded points,
+to EstimatorTester and Joint contributor initialization. The latter copies them
+through `SetAtomLocalSamplingEntries()` without changing order or selection flags.
 The internal `RunInitialStageLocalAlphaTraining` and
 `RunInitialStageLocalFitting` support the current selection or an explicit atom list.
 InitialStage can sample outside the Joint voxel domain. Raw InitialStage records
@@ -135,6 +138,13 @@ interpolated samples and these raw voxel observations have different sources.
 Peeling, charge correction and Gaussian responses are derived quantities;
 they are not Sampling Values. Shared response containers and correlation
 helpers retain neutral names when they accept more than one source.
+
+`GetPeeledObservationEntries()` projects only available Original-grid peeled
+responses into the existing `LocalPotentialSampleList` for plotting and response
+statistics. It preserves observation positions, `sqrt(squared_distance)` and
+ordering without interpolation. The projection's `is_selected=true` is only a
+container convention. Use `GetPostFitPeeling()` for complete observations,
+Original row/global voxel identity, unavailable reasons and provenance.
 
 ## Post-Joint Local and Group Fitting
 

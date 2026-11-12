@@ -115,20 +115,20 @@ TEST(LocalPotentialSeriesTest, PureHelpersWorkWithResolvedEntrySamples)
 
     auto * atom{ model->GetAtomList().front().get() };
     auto analysis{ model->EditAnalysis() };
-    analysis.SetAtomLocalRawSamplingEntries(*atom, {
+    analysis.SetAtomLocalSamplingEntries(*atom, {
         {2.0, SamplingPoint{ 0.1 }},
         {4.0, SamplingPoint{ 0.4 }},
         {6.0, SamplingPoint{ 0.8 }},
     });
 
     const auto view{ rg::AtomLocalPotentialView::For(*atom) };
-    const auto & raw_sampling_entries{ view.GetRawSamplingEntries() };
+    const auto & selected_sampling_entries{ view.GetSelectedSamplingEntries() };
     const auto response_range{
-        lps::ComputeResponseRange(raw_sampling_entries, 0.0)
+        lps::ComputeResponseRange(selected_sampling_entries, 0.0)
     };
     const auto binned{
         lps::BuildBinnedDistanceResponseSeries(
-            raw_sampling_entries, 2, 0.0, 1.0)
+            selected_sampling_entries, 2, 0.0, 1.0)
     };
 
     EXPECT_DOUBLE_EQ(std::get<0>(response_range), 2.0);
@@ -139,7 +139,7 @@ TEST(LocalPotentialSeriesTest, PureHelpersWorkWithResolvedEntrySamples)
 
     const auto fit_dataset_series{
         ls::BuildDatasetSeries(
-            view.GetRawSamplingEntries(),
+            view.GetSelectedSamplingEntries(),
             0.0,
             0.5)
     };

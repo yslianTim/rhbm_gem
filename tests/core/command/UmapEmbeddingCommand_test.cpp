@@ -245,7 +245,7 @@ std::unique_ptr<rg::ModelObject> BuildFeatureModel(
         };
         if (!(options.omit_raw_samples && serial_id == 1))
         {
-            analysis.SetAtomLocalRawSamplingEntries(*atom, {
+            analysis.SetAtomLocalSamplingEntries(*atom, {
                 LocalPotentialSample{ raw_signal, SamplingPoint{ 0.5 } },
                 LocalPotentialSample{ raw_tail, SamplingPoint{ 1.5 } },
             });

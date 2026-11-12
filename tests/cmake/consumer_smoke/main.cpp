@@ -69,6 +69,13 @@ int main()
     ModelObject model(std::move(atoms));
     model.EditAnalysis().ApplyJointResult(result, "consumer-smoke");
     const auto local = AtomLocalPotentialView::For(*model.FindAtomPtr(1));
+    model.EditAnalysis().SetAtomLocalSamplingEntries(*model.FindAtomPtr(1), {
+        {6.0, {0.1, {1.0, 2.0, 3.0}, true}},
+        {4.0, {0.2, {4.0, 5.0, 6.0}, false}}});
+    if (local.GetSelectedSamplingEntries().size() != 1 ||
+        local.GetSamplingEntriesView().size() != 2 ||
+        !local.GetPeeledObservationEntries().empty())
+        return 6;
     const auto & source = local.GetJointStageEstimate().source;
     if (source.method != EstimateMethod::JointComponents || source.atom_id != "1" ||
         source.run_id != "consumer-smoke" || source.role != FittingRole::Target ||
@@ -89,6 +96,11 @@ int main()
         loaded_source.run_id != source.run_id || loaded_source.role != source.role ||
         IsQualifiedJointAnalysisResult(*loaded_result))
         return 4;
+
+    const auto & samples = AtomLocalPotentialView::For(*loaded->FindAtomPtr(1)).GetSamplingEntriesView();
+    if (samples.size() != 2 || samples[1].response != 4.0 || samples[1].point.is_selected ||
+        samples[1].point.position != local.GetSamplingEntriesView()[1].point.position)
+        return 7;
 
     return 0;
 }

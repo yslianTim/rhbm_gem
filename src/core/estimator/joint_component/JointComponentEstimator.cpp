@@ -875,7 +875,7 @@ JointInitialization joint_component::InitializeContributors(MapObject & map,Mode
         const auto * source = workset.contributors[i];
         const auto * target = model.FindAtomPtr(source->GetSerialID());
         const auto view = AtomLocalPotentialView::For(*source);
-        model.EditAnalysis().SetAtomLocalRawSamplingEntries(*target, view.GetRawSamplingEntriesView());
+        model.EditAnalysis().SetAtomLocalSamplingEntries(*target, view.GetSamplingEntriesView());
         model.EditAnalysis().SetAtomInitialStageGaussianResult(*target,
             view.GetInitialStageGaussianResult());
     }

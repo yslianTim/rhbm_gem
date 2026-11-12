@@ -177,7 +177,7 @@ TEST(CommandApiPipelineTest, FittingIgnoresSimulationTruthAndResolutionMetadata)
                 values.push_back(gaussian.GetOffset());
             }
             values.push_back(view.GetInitialStageAlphaR());
-            for (const auto & sample : view.GetRawSamplingEntriesView())
+            for (const auto & sample : view.GetSamplingEntriesView())
             { values.push_back(sample.point.distance); values.push_back(sample.response); }
         }
         if (variant == 0) reference = values;

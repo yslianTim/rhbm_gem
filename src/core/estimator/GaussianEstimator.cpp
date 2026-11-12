@@ -313,7 +313,7 @@ void RunInitialStageLocalAlphaTraining(
     }
     for (auto * atom : atom_list)
     {
-        const auto samples = AtomLocalPotentialView::For(*atom).GetRawSamplingEntries();
+        const auto samples = AtomLocalPotentialView::For(*atom).GetSelectedSamplingEntries();
         analysis.SetAtomInitialStageAlphaR(*atom, detail::EstimateInitialStageAlpha(samples, options));
         count++;
         if (!options.quiet_mode)

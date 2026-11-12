@@ -98,14 +98,14 @@ void RunPotentialSamplingWorkflow(
     if (!quiet_mode) timer.emplace("MapSampler::RunPotentialSamplingWorkflow");
     const std::string progress_message{progress_label};
     size_t atom_count{ 0 };
-    std::vector<LocalPotentialSampleList> raw_sampling_entries_list(atom_list.size());
+    std::vector<LocalPotentialSampleList> sampling_entries_by_atom(atom_list.size());
     std::vector<std::exception_ptr> failures(atom_list.size());
 #ifdef USE_OPENMP
     #pragma omp parallel for num_threads(thread_count)
 #endif
     for (size_t i = 0; i < atom_list.size(); i++)
     {
-        try { raw_sampling_entries_list[i] = BuildAtomInterpolatedMapSamples(map_object, *atom_list[i], sampling_method); }
+        try { sampling_entries_by_atom[i] = BuildAtomInterpolatedMapSamples(map_object, *atom_list[i], sampling_method); }
         catch (...) { failures[i] = std::current_exception(); }
 
 #ifdef USE_OPENMP
@@ -121,8 +121,8 @@ void RunPotentialSamplingWorkflow(
     auto analysis{ model_object.EditAnalysis() };
     for (size_t i = 0; i < atom_list.size(); i++)
     {
-        analysis.SetAtomLocalRawSamplingEntries(
-            *atom_list[i], std::move(raw_sampling_entries_list[i]));
+        analysis.SetAtomLocalSamplingEntries(
+            *atom_list[i], std::move(sampling_entries_by_atom[i]));
     }
 }
 

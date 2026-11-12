@@ -71,8 +71,8 @@ TEST(InitialStageSamplingTest, DefaultExactlyMatchesExplicitInitialStageSampling
     const auto new_init=d::RunInitialStage(map,*current,new_workset,options);
     SameInitialization(explicit_init,new_init);
     for (std::size_t i=0;i<2;++i)
-        SameSamples(AtomLocalPotentialView::For(*explicit_workset.contributors[i]).GetRawSamplingEntriesView(),
-            AtomLocalPotentialView::For(*new_workset.contributors[i]).GetRawSamplingEntriesView());
+        SameSamples(AtomLocalPotentialView::For(*explicit_workset.contributors[i]).GetSamplingEntriesView(),
+            AtomLocalPotentialView::For(*new_workset.contributors[i]).GetSamplingEntriesView());
 }
 
 TEST(InitialStageSamplingTest, DeterministicAcrossWorkersAndRepeatedRuns)
@@ -95,8 +95,8 @@ TEST(InitialStageSamplingTest, DeterministicAcrossWorkersAndRepeatedRuns)
             const auto result=d::RunInitialStage(map,*parallel,pw,options);
             SameInitialization(baseline,result);
             for (std::size_t i=0;i<sw.contributors.size();++i)
-                SameSamples(AtomLocalPotentialView::For(*sw.contributors[i]).GetRawSamplingEntriesView(),
-                    AtomLocalPotentialView::For(*pw.contributors[i]).GetRawSamplingEntriesView());
+                SameSamples(AtomLocalPotentialView::For(*sw.contributors[i]).GetSamplingEntriesView(),
+                    AtomLocalPotentialView::For(*pw.contributors[i]).GetSamplingEntriesView());
         }
     }
 }
@@ -106,7 +106,7 @@ TEST(InitialStageSamplingTest, ParallelSamplingFailurePreservesEveryPreviousRawE
     auto model=Model(); auto map=Map(); const auto atoms=model->GetSelectedAtoms();
     RunPotentialSamplingWorkflow(map,*model,atoms,1,{},true);
     std::vector<LocalPotentialSampleList> before;
-    for(const auto * atom:atoms) before.push_back(AtomLocalPotentialView::For(*atom).GetRawSamplingEntriesView());
+    for(const auto * atom:atoms) before.push_back(AtomLocalPotentialView::For(*atom).GetSamplingEntriesView());
     AtomObject unattached;
     auto batch=atoms; batch.insert(batch.begin()+1,&unattached);
     auto values=std::make_unique<double[]>(32*32*32);
@@ -117,7 +117,7 @@ TEST(InitialStageSamplingTest, ParallelSamplingFailurePreservesEveryPreviousRawE
     {
         EXPECT_THROW(RunPotentialSamplingWorkflow(replacement,*model,batch,4,{},true,method),std::runtime_error);
         for(std::size_t i=0;i<atoms.size();++i)
-            SameSamples(before[i],AtomLocalPotentialView::For(*atoms[i]).GetRawSamplingEntriesView());
+            SameSamples(before[i],AtomLocalPotentialView::For(*atoms[i]).GetSamplingEntriesView());
     }
 }
 
@@ -135,8 +135,8 @@ TEST(InitialStageSamplingTest, SpiralInitializesWidthsAndLeavesQScoreUnchanged)
     EXPECT_EQ(initialization.atoms.front().seed_source,"fitted");
     for (const auto * atom : workset.contributors)
         SameSamples(BuildAtomInterpolatedMapSamples(map,*atom,options.initial_stage_sampling_method),
-            AtomLocalPotentialView::For(*atom).GetRawSamplingEntriesView());
-    const auto & spiral=AtomLocalPotentialView::For(*atoms[0]).GetRawSamplingEntriesView();
+            AtomLocalPotentialView::For(*atom).GetSamplingEntriesView());
+    const auto & spiral=AtomLocalPotentialView::For(*atoms[0]).GetSamplingEntriesView();
     ASSERT_FALSE(spiral.empty());
     ASSERT_FALSE(default_samples.empty());
     EXPECT_NE(spiral.front().point.position,default_samples.front().point.position);

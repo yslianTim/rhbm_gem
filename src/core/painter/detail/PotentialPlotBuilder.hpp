@@ -26,11 +26,11 @@ namespace rhbm_gem {
 class AtomObject;
 class ModelObject;
 
-enum class DistanceSamplingMode
+enum class DistanceResponseSource
 {
-    SelectedRaw,
-    AllRaw,
-    Peeling
+    SelectedSampling,
+    AllSampling,
+    PeeledObservation
 };
 
 enum class QScoreMode { Standard, JointPeeledStandard, JointPeeledModel };
@@ -63,7 +63,7 @@ public:
     std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateScatterGraph(const std::vector<GroupKey> & group_key_list, int par1_id=0, int par2_id=1);
     std::unique_ptr<::TGraphErrors> CreateJointStageParameterScatterGraph(Element element, int choice=0);
     std::unique_ptr<::TGraphErrors> CreateDistanceToResponseGraph(
-        DistanceSamplingMode mode = DistanceSamplingMode::SelectedRaw);
+        DistanceResponseSource source = DistanceResponseSource::SelectedSampling);
     std::unique_ptr<::TGraphErrors> CreateBinnedDistanceToSamplingValueGraph(int bin_size=20, double x_min=0.0, double x_max=2.0);
     std::unique_ptr<::TGraphErrors> CreateBinnedDistanceToPeeledResponseGraph(int bin_size=20, double x_min=0.0, double x_max=2.0);
     std::unique_ptr<::TGraphErrors> CreateBinnedDistanceToNeighborContributionGraph(int bin_size=20, double x_min=0.0, double x_max=2.0);
