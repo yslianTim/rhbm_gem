@@ -30,6 +30,18 @@ namespace rhbm_gem {
 
 namespace {
 
+#ifdef HAVE_ROOT
+std::unique_ptr<TGraphErrors> BuildBinnedGraph(const SeriesPointList & series)
+{
+    auto graph{ root_helper::CreateGraphErrors(static_cast<int>(series.size())) };
+    for (size_t i = 0; i < series.size(); i++)
+    {
+        graph->SetPoint(static_cast<int>(i), series[i].GetBasisValue(0), series[i].response);
+    }
+    return graph;
+}
+#endif
+
 std::vector<GroupKey> CollectComponentAtomGroupKeys(
     const ModelAnalysisView & model_view,
     AtomKey atom_key)
@@ -485,14 +497,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToSampli
         local_potential_series::BuildBinnedDistanceResponseSeries(
             GetLocalEntry().GetSelectedSamplingEntries(), bin_size, x_min, x_max)
     };
-    auto graph{ root_helper::CreateGraphErrors(bin_size) };
-    auto count{ 0 };
-    for (const auto & point : data_array)
-    {
-        graph->SetPoint(count, point.GetBasisValue(0), point.response);
-        count++;
-    }
-    return graph;
+    return BuildBinnedGraph(data_array);
 }
 
 std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToPeeledResponseGraph(
@@ -502,21 +507,14 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToPeeled
         local_potential_series::BuildBinnedDistanceResponseSeries(
             GetLocalEntry().GetPeeledObservationEntries(), bin_size, x_min, x_max)
     };
-    auto graph{ root_helper::CreateGraphErrors(bin_size) };
-    auto count{ 0 };
-    for (const auto & point : data_array)
-    {
-        graph->SetPoint(count, point.GetBasisValue(0), point.response);
-        count++;
-    }
-    return graph;
+    return BuildBinnedGraph(data_array);
 }
 
 std::unique_ptr<TH2D> PotentialPlotBuilder::CreateDistanceToPeeledResponseHistogram(
     GroupKey group_key, int bin_size_x, double x_min, double x_max, int bin_size_y, double y_min, double y_max)
 {
     if (IsModelObjectAvailable() == false) return nullptr;
-    auto atom_list{ GetModelView().GetAtomObjectList(group_key) };
+    const auto & atom_list{ GetModelView().GetAtomObjectList(group_key) };
     auto hist{
         root_helper::CreateHist2D("", "", bin_size_x, x_min, x_max, bin_size_y, y_min, y_max)
     };
@@ -524,9 +522,12 @@ std::unique_ptr<TH2D> PotentialPlotBuilder::CreateDistanceToPeeledResponseHistog
     {
         const auto entry{ AtomLocalPotentialView::For(*atom) };
         if (!entry.IsAvailable()) continue;
-        for (const auto & sample : entry.GetPeeledObservationEntries())
+        const auto & peeling{ entry.GetPostFitPeeling() };
+        if (!peeling) continue;
+        for (const auto & sample : peeling->samples)
         {
-            hist->Fill(sample.point.distance, sample.response);
+            if (!sample.response) continue;
+            hist->Fill(std::sqrt(sample.observation.squared_distance), *sample.response);
         }
     }
     return hist;
@@ -551,14 +552,7 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToNeighb
     auto data_array{
         local_potential_series::BuildBinnedDistanceResponseSeries(neighbor_contribution_entries, bin_size, x_min, x_max)
     };
-    auto graph{ root_helper::CreateGraphErrors(bin_size) };
-    auto count{ 0 };
-    for (const auto & point : data_array)
-    {
-        graph->SetPoint(count, point.GetBasisValue(0), point.response);
-        count++;
-    }
-    return graph;
+    return BuildBinnedGraph(data_array);
 }
 
 std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateInRangeAtomsToGausEstimateGraph(
