@@ -66,6 +66,7 @@ public:
         DistanceResponseSource source = DistanceResponseSource::SelectedSampling);
     std::unique_ptr<::TGraphErrors> CreateBinnedDistanceToSamplingValueGraph(int bin_size=20, double x_min=0.0, double x_max=2.0);
     std::unique_ptr<::TGraphErrors> CreateBinnedDistanceToPeeledResponseGraph(int bin_size=20, double x_min=0.0, double x_max=2.0);
+    std::unique_ptr<::TH2D> CreateDistanceToPeeledResponseHistogram(GroupKey group_key, int bin_size_x=10, double x_min=0.0, double x_max=2.0, int bin_size_y=500, double y_min=-100.0, double y_max=100.0);
     std::unique_ptr<::TGraphErrors> CreateBinnedDistanceToNeighborContributionGraph(int bin_size=20, double x_min=0.0, double x_max=2.0);
     std::unique_ptr<::TGraphErrors> CreateInRangeAtomsToGausEstimateGraph(GroupKey group_key, double range=5.0, int par_id=0);
     std::unique_ptr<::TGraphErrors> CreateCOMDistanceToGausEstimateGraph(GroupKey group_key, int par_id=0);

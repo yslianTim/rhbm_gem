@@ -15,6 +15,7 @@
 #include <TGraphErrors.h>
 #include <TF1.h>
 #include <TH1.h>
+#include <TH2.h>
 #endif
 
 #include <algorithm>
@@ -509,6 +510,26 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToPeeled
         count++;
     }
     return graph;
+}
+
+std::unique_ptr<TH2D> PotentialPlotBuilder::CreateDistanceToPeeledResponseHistogram(
+    GroupKey group_key, int bin_size_x, double x_min, double x_max, int bin_size_y, double y_min, double y_max)
+{
+    if (IsModelObjectAvailable() == false) return nullptr;
+    auto atom_list{ GetModelView().GetAtomObjectList(group_key) };
+    auto hist{
+        root_helper::CreateHist2D("", "", bin_size_x, x_min, x_max, bin_size_y, y_min, y_max)
+    };
+    for (auto atom : atom_list)
+    {
+        const auto entry{ AtomLocalPotentialView::For(*atom) };
+        if (!entry.IsAvailable()) continue;
+        for (const auto & sample : entry.GetPeeledObservationEntries())
+        {
+            hist->Fill(sample.point.distance, sample.response);
+        }
+    }
+    return hist;
 }
 
 std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToNeighborContributionGraph(

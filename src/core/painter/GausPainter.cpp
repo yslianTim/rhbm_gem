@@ -1846,6 +1846,7 @@ void GausPainter::PaintGroupPeeledResponseAminoAcidMainChainComponent(
         }
 
         std::map<Residue, std::vector<std::unique_ptr<TGraphErrors>>> peeled_response_graph_list_map;
+        std::map<Residue, std::unique_ptr<TH2D>> peeled_response_hist_map;
         std::map<Residue, std::unique_ptr<TF1>> gaus_prior_map;
         std::map<Residue, std::unique_ptr<TF1>> gaus_mean_map;
         std::map<Residue, std::string> component_id_map;
@@ -1889,6 +1890,7 @@ void GausPainter::PaintGroupPeeledResponseAminoAcidMainChainComponent(
             }
             global_y_array.insert(global_y_array.end(), y_array.begin(), y_array.end());
             peeled_response_graph_list_map.emplace(residue, std::move(peeled_response_graph_list));
+            peeled_response_hist_map.emplace(residue, plot_builder->CreateDistanceToPeeledResponseHistogram(group_key));
         }
 
         double y_min{ 0.0 };
@@ -1924,12 +1926,11 @@ void GausPainter::PaintGroupPeeledResponseAminoAcidMainChainComponent(
                 frame[i][j]->SetStats(0);
                 frame[i][j]->Draw("");
 
-                if (!peeled_response_graph_list_map.contains(residue)) continue;
-                const auto & peeled_response_graph_list{ peeled_response_graph_list_map.at(residue) };
-                for (auto & graph : peeled_response_graph_list)
-                {
-                    graph->Draw("L X0");
-                }
+                if (!peeled_response_hist_map.contains(residue)) continue;
+                auto & peeled_response_hist{ peeled_response_hist_map.at(residue) };
+                peeled_response_hist->Draw("CANDLE3 SAME");
+                root_helper::SetLineAttribute(peeled_response_hist.get(), 1, 1, kAzure-7, 0.5f);
+                root_helper::SetFillAttribute(peeled_response_hist.get(), 1001, kAzure-7, 0.3f);
 
                 info_text[i][j] = root_helper::CreatePaveText(0.65, 0.80, 0.99, 0.99, "nbNDC ARC", true);
                 root_helper::SetPaveTextDefaultStyle(info_text[i][j].get());
@@ -1996,7 +1997,6 @@ void GausPainter::PaintGroupPeeledResponseAminoAcidMainChainComponent(
         legend->SetMargin(0.25f);
         if (gaus_prior_map.contains(Residue::ALA) && gaus_prior_map.at(Residue::ALA)) legend->AddEntry(gaus_prior_map.at(Residue::ALA).get(),
             has_joint_result ? "Group prior + median Joint charge" : "Group prior (available evidence)", "l");
-            //Form("Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau})} with #alpha_{r} = %.1f, #alpha_{g} = %.1f",
         if (gaus_mean_map.contains(Residue::ALA) && gaus_mean_map.at(Residue::ALA)) legend->AddEntry(gaus_mean_map.at(Residue::ALA).get(),
             has_joint_result ? "Group mean + median Joint charge" : "Group mean", "l");
         if (peeled_response_graph_list_map.contains(Residue::ALA) && !peeled_response_graph_list_map.at(Residue::ALA).empty()) legend->AddEntry(peeled_response_graph_list_map.at(Residue::ALA).front().get(),
