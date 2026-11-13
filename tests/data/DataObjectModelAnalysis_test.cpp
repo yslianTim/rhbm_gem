@@ -25,6 +25,8 @@
 #include "core/painter/detail/PotentialPlotBuilder.hpp"
 #include <TF1.h>
 #include <TGraphErrors.h>
+#include <TH1D.h>
+#include <TH2D.h>
 #endif
 
 namespace rg = rhbm_gem;
@@ -688,6 +690,94 @@ TEST(DataObjectModelAnalysisTest, GroupPotentialEntryKeepsSingleResultPerGroup)
 }
 
 #ifdef HAVE_ROOT
+namespace {
+
+std::unique_ptr<rg::ModelObject> MakePotentialPlotModel()
+{
+    auto model{ data_test::MakeModelWithBond() };
+    for (auto & atom : model->GetAtomList())
+    {
+        atom->SetElement(Element::CARBON);
+        atom->SetComponentKey(1);
+        atom->SetAtomKey(7);
+    }
+    model->SelectAllAtoms();
+    model->EditAnalysis().InitializeFromSelection();
+    return model;
+}
+
+} // namespace
+
+TEST(DataObjectModelAnalysisTest, PotentialPlotHistogramsPreserveAvailableGridBinsAndBoundaries)
+{
+    auto model{ MakePotentialPlotModel() };
+    auto * atom{ model->GetAtomList().front().get() };
+    auto analysis{ model->EditAnalysis() };
+    const auto group_key{ model->GetAnalysisView().CollectAtomGroupKeys().front() };
+    rg::PotentialPlotBuilder plot(model.get());
+    const auto counts{ plot.CreateComponentCountHistogram({group_key}) };
+    ASSERT_TRUE(counts);
+    EXPECT_EQ(counts->GetNbinsX(), 1);
+    EXPECT_DOUBLE_EQ(counts->GetBinContent(1), 2.0);
+    EXPECT_DOUBLE_EQ(counts->GetXaxis()->GetXmin(), -0.5);
+    EXPECT_DOUBLE_EQ(counts->GetXaxis()->GetXmax(), 0.5);
+
+    auto hist{ plot.CreateDistanceToPeeledResponseHistogram(group_key, 4, 0., 2., 4, -2., 2.) };
+    ASSERT_TRUE(hist);
+    EXPECT_DOUBLE_EQ(hist->GetEntries(), 0.0);
+    rg::LocalStageEstimate joint;
+    joint.source = {rg::EstimateMethod::JointComponents, {}, "component", "plot-run", rg::FittingRole::Target};
+    analysis.SetAtomJointStageEstimate(*atom, joint);
+    using joint_component_test::postprocessing::MakeGridObservation;
+    rg::PostFitPeelingResult peeling;
+    peeling.source = rg::AtomLocalPotentialView::For(*atom).GetJointStageEstimate().source;
+    peeling.samples = {
+        {1.25, {}, MakeGridObservation(0, 0, .25, 60., atom->GetPosition())},
+        {std::nullopt, "outside-joint-domain", MakeGridObservation(1, 1, .5, 40., atom->GetPosition())},
+        {-.75, {}, MakeGridObservation(2, 2, 1.5, 20., atom->GetPosition())},
+        {2., {}, MakeGridObservation(3, 3, 2., 10., atom->GetPosition())}};
+    analysis.SetAtomPostFitPeeling(*atom, peeling);
+    analysis.SetAtomLocalSamplingEntries(*atom, {{999., SamplingPoint{.25}}});
+    hist = plot.CreateDistanceToPeeledResponseHistogram(group_key, 4, 0., 2., 4, -2., 2.);
+    ASSERT_TRUE(hist);
+    EXPECT_EQ(hist->GetNbinsX(), 4);
+    EXPECT_EQ(hist->GetNbinsY(), 4);
+    EXPECT_DOUBLE_EQ(hist->GetEntries(), 3.0);
+    EXPECT_DOUBLE_EQ(hist->GetBinContent(1, 4), 1.0);
+    EXPECT_DOUBLE_EQ(hist->GetBinContent(4, 2), 1.0);
+    // ROOT stores the explicit upper endpoints in overflow, independently per axis.
+    EXPECT_DOUBLE_EQ(hist->GetBinContent(5, 5), 1.0);
+    EXPECT_DOUBLE_EQ(hist->Integral(1, 4, 1, 4), 2.0);
+    EXPECT_DOUBLE_EQ(hist->Integral(0, 5, 0, 5), 3.0);
+}
+
+TEST(DataObjectModelAnalysisTest, PotentialPlotEstimateHistogramKeepsFiniteBaseline)
+{
+    auto model{ MakePotentialPlotModel() };
+    const auto group_key{ model->GetAnalysisView().CollectAtomGroupKeys().front() };
+    rg::LocalStageEstimate joint;
+    joint.source.role = rg::FittingRole::Target;
+    joint.point = rg::GaussianModel3D{2., .5, -.25};
+    model->EditAnalysis().SetAtomJointStageEstimate(*model->GetAtomList()[0], joint);
+    rg::PotentialPlotBuilder plot(model.get());
+    auto hist{ plot.CreateAtomGausEstimateHistogram(group_key, 0) };
+    ASSERT_TRUE(hist);
+    EXPECT_DOUBLE_EQ(hist->GetEntries(), 1.0);
+    EXPECT_EQ(hist->GetNbinsX(), 25);
+    EXPECT_DOUBLE_EQ(hist->GetXaxis()->GetXmin(), -.5);
+    EXPECT_DOUBLE_EQ(hist->GetXaxis()->GetXmax(), 4.5);
+    EXPECT_DOUBLE_EQ(hist->GetBinContent(hist->FindBin(2.)), 1.0);
+    joint.point = rg::GaussianModel3D{4., .7, .25};
+    model->EditAnalysis().SetAtomJointStageEstimate(*model->GetAtomList()[1], joint);
+    hist = plot.CreateAtomGausEstimateHistogram(group_key, 0);
+    ASSERT_TRUE(hist);
+    EXPECT_DOUBLE_EQ(hist->GetEntries(), 2.0);
+    EXPECT_DOUBLE_EQ(hist->GetXaxis()->GetXmin(), .5);
+    EXPECT_DOUBLE_EQ(hist->GetXaxis()->GetXmax(), 5.5);
+    EXPECT_DOUBLE_EQ(hist->GetBinContent(hist->FindBin(2.)), 1.0);
+    EXPECT_DOUBLE_EQ(hist->GetBinContent(hist->FindBin(4.)), 1.0);
+}
+
 TEST(DataObjectModelAnalysisTest, ComponentAveragePriorKeepsEqualGroupWeightsAndUnavailableChargeUncertainty)
 {
     std::vector<std::unique_ptr<rg::AtomObject>> atoms;
