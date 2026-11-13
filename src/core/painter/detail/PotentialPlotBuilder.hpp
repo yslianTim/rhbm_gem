@@ -1,18 +1,18 @@
 #pragma once
 
 #include <array>
+#include <cstddef>
 #include <map>
 #include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <rhbm_gem/utils/domain/AtomKeySystem.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
-#include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
-#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 
 #ifdef HAVE_ROOT
 class TH1D;
@@ -25,6 +25,8 @@ namespace rhbm_gem {
 
 class AtomObject;
 class ModelObject;
+class ModelAnalysisView;
+class AtomLocalPotentialView;
 
 enum class DistanceResponseSource
 {
@@ -53,8 +55,8 @@ public:
 #ifdef HAVE_ROOT
     std::unique_ptr<::TH1D> CreateComponentCountHistogram(const std::vector<GroupKey> & group_key_list) const;
     std::unique_ptr<::TH1D> CreateAtomGausEstimateHistogram(GroupKey group_key, int par_id) const;
-    std::vector<std::unique_ptr<::TH1D>> CreateMainChainAtomGausRankHistogram(int par_id, int & chain_size, Residue residue=Residue::UNK, size_t extra_id=0, std::vector<Residue> veto_residues_list={});
-    std::unordered_map<std::string, std::unique_ptr<::TGraphErrors>> CreateAtomGausEstimateToSequenceIDGraphMap(size_t main_chain_element_id, const int par_id=0, Residue residue=Residue::UNK);
+    std::vector<std::unique_ptr<::TH1D>> CreateMainChainAtomGausRankHistogram(int par_id, int & chain_size, Residue residue=Residue::UNK, std::size_t extra_id=0, std::vector<Residue> veto_residues_list={});
+    std::unordered_map<std::string, std::unique_ptr<::TGraphErrors>> CreateAtomGausEstimateToSequenceIDGraphMap(std::size_t main_chain_element_id, const int par_id=0, Residue residue=Residue::UNK);
     std::unordered_map<std::string, std::unique_ptr<::TGraphErrors>> CreateAverageQScoreToSequenceIDGraphMap(QScoreMode mode);
     std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateToResidueGraph(const std::vector<GroupKey> & group_key_list, const int par_id=0);
     std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateToAtomIdGraph(const std::map<std::string, GroupKey> & group_key_map, const std::vector<std::string> & atom_id_list, const int par_id=0);
@@ -87,7 +89,6 @@ public:
     std::unique_ptr<::TF1> CreateAtomGroupGausFunctionMean(GroupKey group_key) const;
     std::unique_ptr<::TF1> CreateAtomGroupGausFunctionPrior(GroupKey group_key) const;
     std::unique_ptr<::TF1> CreateComponentAtomAverageGausFunctionPrior(AtomKey atom_key) const;
-#endif
 
 private:
     ModelAnalysisView GetModelView() const;
@@ -95,6 +96,7 @@ private:
     bool IsModelObjectAvailable() const;
     bool IsAtomLocalEntryAvailable() const;
     bool IsAvailableAtomGroupKey(GroupKey group_key) const;
+#endif
 };
 
 } // namespace rhbm_gem

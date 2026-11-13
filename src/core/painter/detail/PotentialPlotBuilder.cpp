@@ -1,16 +1,17 @@
 #include "painter/detail/PotentialPlotBuilder.hpp"
 
-#include "data/detail/AtomClassifier.hpp"
-#include "data/detail/ModelDerivedState.hpp"
-
+#include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+
+#ifdef HAVE_ROOT
+#include "data/detail/AtomClassifier.hpp"
+#include "data/detail/ModelDerivedState.hpp"
+#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/utils/domain/KeyPacker.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/utils/hrl/LocalPotentialSeries.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
-
-#ifdef HAVE_ROOT
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>
 #include <TGraphErrors.h>
 #include <TF1.h>
@@ -28,9 +29,9 @@
 
 namespace rhbm_gem {
 
+#ifdef HAVE_ROOT
 namespace {
 
-#ifdef HAVE_ROOT
 std::unique_ptr<TGraphErrors> BuildBinnedGraph(const SeriesPointList & series)
 {
     auto graph{ root_helper::CreateGraphErrors(static_cast<int>(series.size())) };
@@ -40,7 +41,6 @@ std::unique_ptr<TGraphErrors> BuildBinnedGraph(const SeriesPointList & series)
     }
     return graph;
 }
-#endif
 
 std::vector<GroupKey> CollectComponentAtomGroupKeys(
     const ModelAnalysisView & model_view,
@@ -60,6 +60,7 @@ std::vector<GroupKey> CollectComponentAtomGroupKeys(
 }
 
 } // namespace
+#endif
 
 ResidueQScoreMap CollectResidueQScores(const ModelObject & model, QScoreMode mode)
 {
@@ -107,6 +108,7 @@ PotentialPlotBuilder::PotentialPlotBuilder(AtomObject * atom_object) :
 {
 }
 
+#ifdef HAVE_ROOT
 ModelAnalysisView PotentialPlotBuilder::GetModelView() const
 {
     if (m_model_object == nullptr)
@@ -145,7 +147,6 @@ bool PotentialPlotBuilder::IsAvailableAtomGroupKey(GroupKey group_key) const
     return GetModelView().HasAtomGroup(group_key);
 }
 
-#ifdef HAVE_ROOT
 std::unique_ptr<TH1D> PotentialPlotBuilder::CreateComponentCountHistogram(
     const std::vector<GroupKey> & group_key_list) const
 {
@@ -836,14 +837,6 @@ std::unique_ptr<TF1> PotentialPlotBuilder::CreateComponentAtomAverageGausFunctio
         model.GetWidth(),
         model.GetOffset());
 }
-
-#endif
-
-} // namespace rhbm_gem
-
-namespace rhbm_gem {
-
-#ifdef HAVE_ROOT
 
 std::unordered_map<std::string, std::unique_ptr<TGraphErrors>>
 PotentialPlotBuilder::CreateAverageQScoreToSequenceIDGraphMap(QScoreMode mode)
