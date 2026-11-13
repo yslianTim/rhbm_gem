@@ -822,41 +822,6 @@ namespace rhbm_gem {
 #ifdef HAVE_ROOT
 
 std::unordered_map<std::string, std::unique_ptr<TGraphErrors>>
-PotentialPlotBuilder::CreateAtomSamplingValueToSequenceIDGraphMap(
-    size_t main_chain_element_id, Residue residue)
-{
-    if (IsModelObjectAvailable() == false) return {};
-    auto model_object{ m_model_object };
-
-    std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> graph_map;
-    std::unordered_map<std::string, int> count_map;
-
-    for (auto & atom : model_object->GetSelectedAtoms())
-    {
-        if (atom->GetElement() != data_internal::GetMainChainElement(main_chain_element_id)) continue;
-        if (atom->GetSpot() != data_internal::GetMainChainSpot(main_chain_element_id)) continue;
-        if (residue != Residue::UNK && atom->GetResidue() != residue) continue;
-        const auto entry{ AtomLocalPotentialView::For(*atom) };
-        if (!entry.IsAvailable() || !entry.HasJointStageModel() || entry.GetJointStageEstimate().source.role == FittingRole::Halo) continue;
-        auto sequence_id{ atom->GetSequenceID() };
-        auto chain_id{ atom->GetChainID() };
-        if (sequence_id < 0) continue;
-        if (graph_map.find(chain_id) == graph_map.end())
-        {
-            graph_map[chain_id] = root_helper::CreateGraphErrors();
-            count_map[chain_id] = 0;
-        }
-        auto x_value{ static_cast<double>(sequence_id) };
-        graph_map[chain_id]->SetPoint(
-            count_map[chain_id],
-            x_value,
-            local_potential_series::ComputeMeanSamplingValueNearCenter(entry.GetSelectedSamplingEntries()));
-        count_map[chain_id]++;
-    }
-    return graph_map;
-}
-
-std::unordered_map<std::string, std::unique_ptr<TGraphErrors>>
 PotentialPlotBuilder::CreateAverageQScoreToSequenceIDGraphMap(QScoreMode mode)
 {
     std::unordered_map<std::string, std::unique_ptr<TGraphErrors>> graphs;

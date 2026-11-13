@@ -2082,8 +2082,6 @@ void GausPainter::PaintLocalGausToSequenceAminoAcidMainChain(
     {
         gaus_graph_map[1][k] = plot_builder->CreateAtomGausEstimateToSequenceIDGraphMap(k, 0);
         gaus_graph_map[0][k] = plot_builder->CreateAtomGausEstimateToSequenceIDGraphMap(k, 1);
-        //gaus_graph_map[0][k] = plot_builder->CreateAtomGausEstimateToSequenceIDGraphMap(k, 2);
-        //gaus_graph_map[0][k] = plot_builder->CreateAtomSamplingValueToSequenceIDGraphMap(k);
     }
 
     for (auto & [chain_id, gaus_graph] : gaus_graph_map[0][0])
