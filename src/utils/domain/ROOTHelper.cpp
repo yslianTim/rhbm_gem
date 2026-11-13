@@ -9,7 +9,7 @@
 #include <TPad.h>
 #include <TF1.h>
 #include <TF2.h>
-#include <TFile.h>
+#include <TDirectory.h>
 #include <TFrame.h>
 #include <TGaxis.h>
 #include <TGraph.h>
@@ -64,6 +64,7 @@ std::unique_ptr<TH1D> CreateHist1D(
     const std::string & name, const std::string & title,
     int x_bin, double x_min, double x_max)
 {
+    TDirectory::TContext context(nullptr);
     return std::make_unique<TH1D>(name.data(), title.data(), x_bin, x_min, x_max);
 }
 
@@ -72,6 +73,7 @@ std::unique_ptr<TH2D> CreateHist2D(
     int x_bin, double x_min, double x_max,
     int y_bin, double y_min, double y_max)
 {
+    TDirectory::TContext context(nullptr);
     return std::make_unique<TH2D>(name.data(), title.data(), x_bin, x_min, x_max, y_bin, y_min, y_max);
 }
 

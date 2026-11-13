@@ -23,6 +23,14 @@
 
 #ifdef HAVE_ROOT
 #include "core/painter/detail/PotentialPlotBuilder.hpp"
+#include "core/painter/detail/PainterModelValidation.hpp"
+#include "support/CommandTestHelpers.hpp"
+#include <rhbm_gem/core/PainterFunctions.hpp>
+#include <rhbm_gem/utils/domain/ROOTHelper.hpp>
+#include <TCanvas.h>
+#include <TLegend.h>
+#include <TLegendEntry.h>
+#include <TROOT.h>
 #include <TF1.h>
 #include <TGraphErrors.h>
 #include <TH1D.h>
@@ -749,6 +757,206 @@ TEST(DataObjectModelAnalysisTest, PotentialPlotHistogramsPreserveAvailableGridBi
     EXPECT_DOUBLE_EQ(hist->GetBinContent(5, 5), 1.0);
     EXPECT_DOUBLE_EQ(hist->Integral(1, 4, 1, 4), 2.0);
     EXPECT_DOUBLE_EQ(hist->Integral(0, 5, 0, 5), 3.0);
+}
+
+TEST(DataObjectModelAnalysisTest, PotentialPlotHistogramsHandleUnavailableEstimates)
+{
+    auto model{ MakePotentialPlotModel() };
+    const auto key{ model->GetAnalysisView().CollectAtomGroupKeys().front() };
+    rg::PotentialPlotBuilder plot(model.get());
+    EXPECT_EQ(plot.CreateAtomGausEstimateHistogram(key, 0), nullptr);
+    EXPECT_EQ(plot.CreateAtomGausEstimateHistogram(std::numeric_limits<GroupKey>::max(), 0), nullptr);
+    EXPECT_EQ(plot.CreateComponentCountHistogram({}), nullptr);
+    const auto empty_key{ static_cast<GroupKey>(key + 1) };
+    rg::ModelAnalysisData::Of(*model).AtomGroupEntry().ReserveMembers(empty_key, 0);
+    EXPECT_EQ(plot.CreateAtomGausEstimateHistogram(empty_key, 0), nullptr);
+    EXPECT_DOUBLE_EQ(plot.CreateDistanceToPeeledResponseHistogram(empty_key)->GetEntries(), 0.);
+    EXPECT_EQ(plot.CreateDistanceToPeeledResponseHistogram(std::numeric_limits<GroupKey>::max()), nullptr);
+    rg::PotentialPlotBuilder missing(static_cast<rg::ModelObject *>(nullptr));
+    EXPECT_EQ(missing.CreateComponentCountHistogram({key}), nullptr);
+    EXPECT_EQ(missing.CreateDistanceToPeeledResponseHistogram(key), nullptr);
+
+    rg::LocalStageEstimate joint;
+    joint.source.role = rg::FittingRole::Halo;
+    joint.point = rg::GaussianModel3D{2., .5, 0.};
+    model->EditAnalysis().SetAtomJointStageEstimate(*model->GetAtomList()[0], joint);
+    EXPECT_EQ(plot.CreateAtomGausEstimateHistogram(key, 0), nullptr);
+    joint.source.role = rg::FittingRole::Target;
+    joint.point = rg::GaussianModel3D{std::numeric_limits<double>::quiet_NaN(), .5, 0.};
+    model->EditAnalysis().SetAtomJointStageEstimate(*model->GetAtomList()[0], joint);
+    EXPECT_EQ(plot.CreateAtomGausEstimateHistogram(key, 0), nullptr);
+    joint.point = rg::GaussianModel3D{-2., .5, 0.};
+    model->EditAnalysis().SetAtomJointStageEstimate(*model->GetAtomList()[1], joint);
+    auto hist{ plot.CreateAtomGausEstimateHistogram(key, 0) };
+    ASSERT_TRUE(hist);
+    EXPECT_DOUBLE_EQ(hist->GetEntries(), 1.0);
+    EXPECT_LT(hist->GetXaxis()->GetXmin(), -2.);
+    EXPECT_GT(hist->GetXaxis()->GetXmax(), -2.);
+    EXPECT_DOUBLE_EQ(hist->Integral(), 1.0);
+    // Constant display intensity also needs a non-degenerate axis (par_id=2).
+    joint.point = rg::GaussianModel3D{2., .5, 0.};
+    for (const auto & atom : model->GetAtomList())
+        model->EditAnalysis().SetAtomJointStageEstimate(*atom, joint);
+    hist = plot.CreateAtomGausEstimateHistogram(key, 2);
+    ASSERT_TRUE(hist);
+    EXPECT_DOUBLE_EQ(hist->Integral(), 2.0);
+    EXPECT_GT(hist->GetXaxis()->GetXmax(), hist->GetXaxis()->GetXmin());
+    EXPECT_THROW(plot.CreateAtomGausEstimateHistogram(key, 3), std::out_of_range);
+}
+
+TEST(DataObjectModelAnalysisTest, PotentialPlotHistogramRejectsInvalidBinning)
+{
+    auto model{ MakePotentialPlotModel() };
+    const auto key{ model->GetAnalysisView().CollectAtomGroupKeys().front() };
+    rg::PotentialPlotBuilder plot(model.get());
+    for (const int bins : {0, -1})
+    {
+        EXPECT_THROW(plot.CreateDistanceToPeeledResponseHistogram(key, bins), std::invalid_argument);
+        EXPECT_THROW(plot.CreateDistanceToPeeledResponseHistogram(key, 4, 0., 2., bins), std::invalid_argument);
+    }
+    EXPECT_THROW(plot.CreateDistanceToPeeledResponseHistogram(key, 4, 2., 2.), std::invalid_argument);
+    EXPECT_THROW(plot.CreateDistanceToPeeledResponseHistogram(key, 4, 2., 0.), std::invalid_argument);
+    EXPECT_THROW(plot.CreateDistanceToPeeledResponseHistogram(key, 4, 0., 2., 4, 1., 1.), std::invalid_argument);
+    EXPECT_THROW(plot.CreateDistanceToPeeledResponseHistogram(key, 4, 0., 2., 4, 1., -1.), std::invalid_argument);
+    EXPECT_THROW(plot.CreateDistanceToPeeledResponseHistogram(key, 4, 0., std::numeric_limits<double>::infinity()), std::invalid_argument);
+    EXPECT_THROW(plot.CreateDistanceToPeeledResponseHistogram(key, 4, 0., 2., 4, std::numeric_limits<double>::quiet_NaN(), 1.), std::invalid_argument);
+    EXPECT_THROW(plot.CreateDistanceToPeeledResponseHistogram(key, std::numeric_limits<int>::max()), std::invalid_argument);
+}
+
+TEST(DataObjectModelAnalysisTest, PotentialPlotGraphsSkipNonfiniteSamplingCoordinates)
+{
+    auto model{ MakePotentialPlotModel() };
+    auto * atom{ model->GetAtomList().front().get() };
+    const double nan{ std::numeric_limits<double>::quiet_NaN() };
+    model->EditAnalysis().SetAtomLocalSamplingEntries(*atom, {
+        {2., SamplingPoint{.1}}, {nan, SamplingPoint{.1}}, {4., SamplingPoint{nan}}});
+    rg::PotentialPlotBuilder plot(atom);
+    const auto graph{ plot.CreateDistanceToResponseGraph() };
+    ASSERT_TRUE(graph);
+    ASSERT_EQ(graph->GetN(), 1);
+    EXPECT_DOUBLE_EQ(graph->GetPointX(0), .1);
+    EXPECT_DOUBLE_EQ(graph->GetPointY(0), 2.);
+    const auto binned{ plot.CreateBinnedDistanceToSamplingValueGraph(2, 0., 1.) };
+    ASSERT_TRUE(binned);
+    EXPECT_DOUBLE_EQ(binned->GetPointY(0), 2.);
+    EXPECT_DOUBLE_EQ(binned->GetPointY(1), 0.);
+}
+
+TEST(DataObjectModelAnalysisTest, PotentialPlotCandleSharesRawRangeWithoutLosingExtremes)
+{
+    gROOT->SetBatch(kTRUE);
+    auto model{ MakePotentialPlotModel() };
+    const auto view{ model->GetAnalysisView() };
+    const auto keys{ view.CollectAtomGroupKeys() };
+    auto * atom{ model->GetAtomList().front().get() };
+    auto analysis{ model->EditAnalysis() };
+    EXPECT_EQ(rg::painter_internal::ComputePeeledResponsePlotRange(view, keys, 0., 2.), std::make_tuple(-.5, .5));
+    rg::LocalStageEstimate joint;
+    joint.source = {rg::EstimateMethod::JointComponents, {}, "component", "plot-run", rg::FittingRole::Target};
+    analysis.SetAtomJointStageEstimate(*atom, joint);
+    using joint_component_test::postprocessing::MakeGridObservation;
+    rg::PostFitPeelingResult peeling;
+    peeling.source = rg::AtomLocalPotentialView::For(*atom).GetJointStageEstimate().source;
+    peeling.samples = {
+        {-250., {}, MakeGridObservation(0, 0, .25, 10., atom->GetPosition())},
+        {1., {}, MakeGridObservation(1, 1, .25, 10., atom->GetPosition())},
+        {400., {}, MakeGridObservation(2, 2, .25, 10., atom->GetPosition())},
+        {std::nullopt, "outside-joint-domain", MakeGridObservation(3, 3, .5, 10., atom->GetPosition())},
+        {900., {}, MakeGridObservation(4, 4, 2., 10., atom->GetPosition())}};
+    analysis.SetAtomPostFitPeeling(*atom, peeling);
+    rg::PotentialPlotBuilder plot(model.get());
+    const auto legacy{ plot.CreateDistanceToPeeledResponseHistogram(keys.front()) };
+    EXPECT_DOUBLE_EQ(legacy->Integral(1, 10, 1, 500), 1.);
+    EXPECT_DOUBLE_EQ(legacy->GetBinContent(2, 0), 1.);
+    EXPECT_DOUBLE_EQ(legacy->GetBinContent(2, 501), 1.);
+    // The old per-atom median extrema were [0,1], giving display [-.2,1.2].
+    const auto medians{ rg::PotentialPlotBuilder(atom).CreateBinnedDistanceToPeeledResponseGraph() };
+    EXPECT_DOUBLE_EQ(medians->GetPointY(2), 1.);
+    const auto [low, high]{ rg::painter_internal::ComputePeeledResponsePlotRange(view, keys, 0., 2.) };
+    EXPECT_DOUBLE_EQ(low, -380.);
+    EXPECT_DOUBLE_EQ(high, 530.);
+    const auto hist{ plot.CreateDistanceToPeeledResponseHistogram(keys.front(), 10, 0., 2., 500, low, high) };
+    ASSERT_TRUE(hist);
+    EXPECT_DOUBLE_EQ(hist->GetEntries(), 4.);
+    EXPECT_DOUBLE_EQ(hist->Integral(1, 10, 1, 500), 3.);
+    EXPECT_DOUBLE_EQ(hist->Integral(1, 10, 0, 0), 0.);
+    EXPECT_DOUBLE_EQ(hist->Integral(1, 10, 501, 501), 0.);
+    EXPECT_DOUBLE_EQ(hist->Integral(11, 11, 0, 501), 1.); // x_max stays excluded.
+    for (const double value : {-250., 1., 400.})
+        EXPECT_DOUBLE_EQ(hist->GetBinContent(hist->FindBin(.25, value)), 1.);
+    const auto projection{ std::unique_ptr<TH1D>(hist->ProjectionY("candle_distribution", 2, 2)) };
+    EXPECT_DOUBLE_EQ(projection->Integral(), 3.);
+    const auto canvas{ rg::root_helper::CreateCanvas("peeled_candle_test", "", 600, 400) };
+    hist->Draw("CANDLE3");
+    const auto legend{ rg::root_helper::CreateLegend(.5, .7, .9, .9) };
+    const auto entry{ legend->AddEntry(hist.get(), "Peeled responses", "l") };
+    legend->Draw();
+    canvas->Update();
+    EXPECT_EQ(entry->GetObject(), hist.get());
+    EXPECT_STREQ(entry->GetLabel(), "Peeled responses");
+    EXPECT_TRUE(canvas->GetListOfPrimitives()->FindObject(hist.get()));
+    EXPECT_EQ(hist->GetDirectory(), nullptr);
+    // Constant and wholly unavailable observations keep distinct, valid empty/range semantics.
+    peeling.samples.resize(1);
+    peeling.samples[0].response = 7.;
+    analysis.SetAtomPostFitPeeling(*atom, peeling);
+    const auto constant{ rg::painter_internal::ComputePeeledResponsePlotRange(view, keys, 0., 2.) };
+    EXPECT_LT(std::get<0>(constant), 7.);
+    EXPECT_GT(std::get<1>(constant), 7.);
+    peeling.samples[0].response.reset();
+    peeling.samples[0].reason = "outside-joint-domain";
+    analysis.SetAtomPostFitPeeling(*atom, peeling);
+    EXPECT_EQ(rg::painter_internal::ComputePeeledResponsePlotRange(view, keys, 0., 2.), std::make_tuple(-.5, .5));
+    const auto empty{ plot.CreateDistanceToPeeledResponseHistogram(keys.front()) };
+    EXPECT_DOUBLE_EQ(empty->GetEntries(), 0.);
+}
+
+TEST(DataObjectModelAnalysisTest, PotentialPlotGausPainterWritesCandleForExtremeGridResponses)
+{
+    gROOT->SetBatch(kTRUE);
+    command_test::ScopedTempDir output("potential_plot_candle");
+    auto model{ rg::ReadModel(command_test::TestDataPath("test_model.cif")) };
+    model->SetKeyTag("candle");
+    ASSERT_NE(model->FindChemicalComponentEntry(model->GetAtomList().front()->GetComponentKey()), nullptr);
+    ASSERT_EQ(model->GetAtomList().front()->GetSpot(), Spot::CA);
+    model->SelectAllAtoms();
+    auto analysis{ model->EditAnalysis() };
+    analysis.InitializeFromSelection();
+    auto * atom{ model->GetAtomList().front().get() };
+    rg::LocalStageEstimate joint;
+    joint.source = {rg::EstimateMethod::JointComponents, {}, "component", "plot-run", rg::FittingRole::Target};
+    joint.point = rg::GaussianModel3D{2., .5, -.25};
+    analysis.SetAtomJointStageEstimate(*atom, joint);
+    analysis.SetAtomLocalSamplingEntries(*atom, {{2., SamplingPoint{.25}}});
+    using joint_component_test::postprocessing::MakeGridObservation;
+    rg::PostFitPeelingResult peeling;
+    peeling.source = rg::AtomLocalPotentialView::For(*atom).GetJointStageEstimate().source;
+    peeling.samples = {
+        {-250., {}, MakeGridObservation(0, 0, .25, 10., atom->GetPosition())},
+        {400., {}, MakeGridObservation(1, 1, .5, 10., atom->GetPosition())}};
+    analysis.SetAtomPostFitPeeling(*atom, peeling);
+    const auto key{ model->GetAnalysisView().CollectAtomGroupKeys().front() };
+    rg::GroupGaussianResult group;
+    group.mean = *joint.point;
+    group.mdpde = *joint.point;
+    group.prior = {*joint.point, rg::GaussianModel3DUncertainty{.1, .02, .01}};
+    group.member_results.emplace_back();
+    analysis.ApplyAtomGroupGaussianResult(key, group);
+    EXPECT_NO_THROW(rg::core::PaintGaus({model.get()}, output.path().string()));
+    std::size_t candle_files{};
+    for (const auto & file : std::filesystem::directory_iterator(output.path()))
+    {
+        if (file.path().filename().string().find("group_peeled_response_amino_acid_main_chain_component_") == 0)
+        {
+            EXPECT_GT(file.file_size(), 0u);
+            ++candle_files;
+        }
+    }
+    EXPECT_EQ(candle_files, 1u);
+    const auto curve{ rg::PotentialPlotBuilder(atom).CreateAtomLocalGausFunctionFinal() };
+    ASSERT_TRUE(curve);
+    for (int i = 0; i < 3; ++i) EXPECT_DOUBLE_EQ(curve->GetParameter(i), joint.point->GetModelParameter(i));
+    EXPECT_DOUBLE_EQ(curve->Eval(.75), joint.point->ResponseAtDistance(.75));
 }
 
 TEST(DataObjectModelAnalysisTest, PotentialPlotEstimateHistogramKeepsFiniteBaseline)

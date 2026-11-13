@@ -7,9 +7,29 @@
 
 #ifdef HAVE_ROOT
 #include <TF1.h>
+#include <TH1D.h>
+#include <TH2D.h>
+#include <TDirectoryFile.h>
 #include <TLegend.h>
 #include <TPaveText.h>
 #include <TROOT.h>
+
+TEST(ROOTHelperTest, HistogramsAreOwnedByTheirCallers)
+{
+    TDirectoryFile directory("histogram_owner_test", "");
+    TDirectory::TContext context(&directory);
+    TH1D existing("repeated", "", 4, 0., 2.);
+    const auto one{ rhbm_gem::root_helper::CreateHist1D("repeated", "", 4, 0., 2.) };
+    ASSERT_EQ(one->GetDirectory(), nullptr);
+    const auto two{ rhbm_gem::root_helper::CreateHist2D("repeated", "", 4, 0., 2., 4, -2., 2.) };
+    ASSERT_EQ(two->GetDirectory(), nullptr);
+    one->Fill(.25);
+    two->Fill(.25, 1.25);
+    EXPECT_DOUBLE_EQ(one->GetBinContent(1), 1.);
+    EXPECT_DOUBLE_EQ(two->GetBinContent(1, 4), 1.);
+    EXPECT_EQ(directory.GetList()->GetSize(), 1);
+    EXPECT_EQ(directory.GetList()->FindObject("repeated"), &existing);
+}
 
 TEST(ROOTHelperTest, CreateGaus3DFunctionIn1DIncludesOffset)
 {

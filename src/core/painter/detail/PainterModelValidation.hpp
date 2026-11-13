@@ -2,6 +2,7 @@
 
 #include <stdexcept>
 #include <cmath>
+#include <limits>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <string>
 #include <string_view>
@@ -19,6 +20,35 @@ inline auto ComputePlotRange(const std::vector<double> & values, double margin, 
     if (!std::isfinite(low) || !std::isfinite(high)) return decltype(range){0.0,1.0};
     if (!(high>low)) {const double pad=std::max(0.5,std::abs(low)*0.05); low-=pad; high+=pad;}
     return range;
+}
+
+// Candle distributions use available Original-grid responses in the histogram's
+// [x_min, x_max) domain, not per-atom binned medians (or synthetic empty-bin zeros).
+inline auto ComputePeeledResponsePlotRange(
+    const ModelAnalysisView & view, const std::vector<GroupKey> & group_keys,
+    double x_min, double x_max)
+{
+    double low{ std::numeric_limits<double>::infinity() };
+    double high{ -std::numeric_limits<double>::infinity() };
+    for (const auto key : group_keys)
+    {
+        for (const auto * atom : view.GetAtomObjectList(key))
+        {
+            const auto entry{ AtomLocalPotentialView::For(*atom) };
+            if (!entry.IsAvailable()) continue;
+            const auto & peeling{ entry.GetPostFitPeeling() };
+            if (!peeling) continue;
+            for (const auto & sample : peeling->samples)
+            {
+                if (!sample.response) continue;
+                const auto distance{ std::sqrt(sample.observation.squared_distance) };
+                if (distance < x_min || distance >= x_max) continue;
+                low = std::min(low, *sample.response);
+                high = std::max(high, *sample.response);
+            }
+        }
+    }
+    return ComputePlotRange(low <= high ? std::vector<double>{low, high} : std::vector<double>{}, 0.20);
 }
 
 inline void RequireLocalAnalyzedModel(

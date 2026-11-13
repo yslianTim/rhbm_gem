@@ -153,6 +153,11 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateComponentCountHistogram(
     {
         return nullptr;
     }
+    if (group_key_list.empty()) return nullptr;
+    for (const auto group_key : group_key_list)
+    {
+        if (!IsAvailableAtomGroupKey(group_key)) return nullptr;
+    }
     auto component_size{ static_cast<int>(group_key_list.size()) };
     auto hist{
         root_helper::CreateHist1D(
@@ -179,6 +184,9 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateAtomGausEstimateHistogram(
         return nullptr;
     }
 
+    if (par_id < 0 || par_id >= GaussianModel3D::ParameterSize())
+        throw std::out_of_range("Gaussian display parameter index is out of range.");
+
     const auto & atom_list{
         GetModelView().GetAtomObjectList(group_key)
     };
@@ -188,10 +196,11 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateAtomGausEstimateHistogram(
     {
         const auto local_entry{ AtomLocalPotentialView::For(*atom) };
         if (!local_entry.IsAvailable() || !local_entry.HasJointStageModel() || local_entry.GetJointStageEstimate().source.role == FittingRole::Halo) continue;
-        gaus_estimate_list.emplace_back(
-            local_entry.GetJointStageModel()
-                .GetDisplayParameter(par_id));
+        const auto value{ local_entry.GetJointStageModel().GetDisplayParameter(par_id) };
+        if (std::isfinite(value)) gaus_estimate_list.emplace_back(value);
     }
+
+    if (gaus_estimate_list.empty()) return nullptr;
 
     double x_min{ 0.0 };
     double x_max{ 1.0 };
@@ -214,7 +223,14 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateAtomGausEstimateHistogram(
         x_max = 1.0;
     }
 
-    auto estimate_average{ 0.5 * (x_max + x_min) };
+    if (!(x_max > x_min))
+    {
+        const auto center{ gaus_estimate_list.front() };
+        const auto padding{ std::max(0.5, std::abs(center) * 0.05) };
+        x_min = center - padding;
+        x_max = center + padding;
+    }
+    auto estimate_average{ 0.5 * x_max + 0.5 * x_min };
     if (par_id == 0 && (x_max - x_min) < 5.0)
     {
         x_max = estimate_average + 2.5;
@@ -225,6 +241,9 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateAtomGausEstimateHistogram(
         x_max = estimate_average + 0.05;
         x_min = estimate_average - 0.05;
     }
+
+    if (!std::isfinite(x_min) || !std::isfinite(x_max) ||
+        !std::isfinite(x_max - x_min) || !((x_max - x_min) / 25.0 > 0.0)) return nullptr;
 
     auto hist_name{ std::to_string(group_key) + "_par" + std::to_string(par_id) };
     auto hist{ root_helper::CreateHist1D(hist_name.data(), "", 25, x_min, x_max) };
@@ -471,7 +490,8 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateDistanceToResponseGrap
     {
         for (const auto & sample : samples)
         {
-            graph->SetPoint(graph->GetN(), sample.point.distance, sample.response);
+            if (std::isfinite(sample.point.distance) && std::isfinite(sample.response))
+                graph->SetPoint(graph->GetN(), sample.point.distance, sample.response);
         }
     };
     const auto view{ GetLocalEntry() };
@@ -514,6 +534,16 @@ std::unique_ptr<TH2D> PotentialPlotBuilder::CreateDistanceToPeeledResponseHistog
     GroupKey group_key, int bin_size_x, double x_min, double x_max, int bin_size_y, double y_min, double y_max)
 {
     if (IsModelObjectAvailable() == false) return nullptr;
+    if (!IsAvailableAtomGroupKey(group_key)) return nullptr;
+    if (bin_size_x <= 0 || bin_size_y <= 0 ||
+        !std::isfinite(x_min) || !std::isfinite(x_max) ||
+        !std::isfinite(y_min) || !std::isfinite(y_max) ||
+        !std::isfinite(x_max - x_min) || !std::isfinite(y_max - y_min) ||
+        !((x_max - x_min) / bin_size_x > 0.0) ||
+        !((y_max - y_min) / bin_size_y > 0.0) ||
+        (static_cast<double>(bin_size_x) + 2.0) * (static_cast<double>(bin_size_y) + 2.0) >
+            std::numeric_limits<int>::max())
+        throw std::invalid_argument("Invalid peeled response histogram binning.");
     const auto & atom_list{ GetModelView().GetAtomObjectList(group_key) };
     auto hist{
         root_helper::CreateHist2D("", "", bin_size_x, x_min, x_max, bin_size_y, y_min, y_max)

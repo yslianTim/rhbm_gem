@@ -2,6 +2,8 @@
 
 #include <cmath>
 #include <memory>
+#include <limits>
+#include <stdexcept>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -170,4 +172,25 @@ TEST(LocalPotentialSeriesTest, MeanSamplingValueNearCenterPreservesThresholdAndE
     EXPECT_DOUBLE_EQ(lps::ComputeMeanSamplingValueNearCenter(sampling_entries), 4.0);
     EXPECT_DOUBLE_EQ(lps::ComputeMeanSamplingValueNearCenter({}), 0.0);
     EXPECT_DOUBLE_EQ(lps::ComputeMeanSamplingValueNearCenter({{100.0, SamplingPoint{ 0.1 }}}), 0.0);
+}
+
+TEST(LocalPotentialSeriesTest, BinningRejectsInvalidRangesAndBinCounts)
+{
+    for (int bins : {0, -1})
+        EXPECT_THROW(lps::BuildBinnedDistanceResponseSeries({}, bins, 0., 1.), std::invalid_argument);
+    EXPECT_THROW(lps::BuildBinnedDistanceResponseSeries({}, 2, 1., 1.), std::invalid_argument);
+    EXPECT_THROW(lps::BuildBinnedDistanceResponseSeries({}, 2, 2., 1.), std::invalid_argument);
+    EXPECT_THROW(lps::BuildBinnedDistanceResponseSeries({}, 2, 0., std::numeric_limits<double>::infinity()), std::invalid_argument);
+}
+
+TEST(LocalPotentialSeriesTest, BinningSkipsNonfiniteSamplesWithoutChangingEmptyBins)
+{
+    const double nan{ std::numeric_limits<double>::quiet_NaN() };
+    const auto series{ lps::BuildBinnedDistanceResponseSeries({
+        {2., SamplingPoint{.1}}, {nan, SamplingPoint{.1}}, {4., SamplingPoint{nan}}}, 2, 0., 1.) };
+    ASSERT_EQ(series.size(), 2u);
+    EXPECT_DOUBLE_EQ(series[0].GetBasisValue(0), .25);
+    EXPECT_DOUBLE_EQ(series[0].response, 2.);
+    EXPECT_DOUBLE_EQ(series[1].GetBasisValue(0), .75);
+    EXPECT_DOUBLE_EQ(series[1].response, 0.);
 }

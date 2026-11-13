@@ -931,6 +931,7 @@ void GausPainter::PaintLocalGausSummary(ModelObject * model_object, const std::s
 
             auto amplitude_hist{ plot_builder->CreateAtomGausEstimateHistogram(group_key, 0) };
             auto width_hist{ plot_builder->CreateAtomGausEstimateHistogram(group_key, 1) };
+            if (!amplitude_hist || !width_hist) continue;
 
             canvas->cd();
             for (int i = 0; i < pad_size; i++)
@@ -1811,9 +1812,7 @@ void GausPainter::PaintGroupPeeledResponseAminoAcidMainChainComponent(
     const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N, Spot::O };
     const auto & standard_residue_list{ ChemicalDataHelper::GetStandardAminoAcidList() };
     const bool has_joint_result{ entry_iter.GetJointResult().has_value() };
-    bool show_outlier{ false };
     (void)standard_residue_list;
-    (void)show_outlier;
 
     #ifdef HAVE_ROOT
 
@@ -1835,7 +1834,8 @@ void GausPainter::PaintGroupPeeledResponseAminoAcidMainChainComponent(
         auto group_key_list{ data_internal::GetMainChainGroupKeyList(k) };
         for (auto it = group_key_list.begin(); it != group_key_list.end(); )
         {
-            if (!entry_iter.HasAtomGroup(*it))
+            if (!entry_iter.HasAtomGroup(*it) || model_object->FindChemicalComponentEntry(
+                    static_cast<ComponentKey>(data_internal::GetResidueFromGroupKey(*it))) == nullptr)
             {
                 it = group_key_list.erase(it);
             }
@@ -1845,12 +1845,13 @@ void GausPainter::PaintGroupPeeledResponseAminoAcidMainChainComponent(
             }
         }
 
-        std::map<Residue, std::vector<std::unique_ptr<TGraphErrors>>> peeled_response_graph_list_map;
         std::map<Residue, std::unique_ptr<TH2D>> peeled_response_hist_map;
         std::map<Residue, std::unique_ptr<TF1>> gaus_prior_map;
         std::map<Residue, std::unique_ptr<TF1>> gaus_mean_map;
         std::map<Residue, std::string> component_id_map;
-        std::vector<double> global_y_array;
+        const auto [y_min, y_max]{
+            painter_internal::ComputePeeledResponsePlotRange(entry_iter, group_key_list, 0.0, 2.0)
+        };
         for (auto & group_key : group_key_list)
         {
             auto residue{ data_internal::GetResidueFromGroupKey(group_key) };
@@ -1867,37 +1868,9 @@ void GausPainter::PaintGroupPeeledResponseAminoAcidMainChainComponent(
             gaus_mean_map.emplace(residue, std::move(gaus_mean));
             gaus_prior_map.emplace(residue, std::move(gaus_prior));
 
-            auto member_size{ entry_iter.GetAtomObjectList(group_key).size() };
-            std::vector<std::unique_ptr<TGraphErrors>> peeled_response_graph_list;
-            std::vector<double> y_array;
-            peeled_response_graph_list.reserve(member_size);
-            y_array.reserve(member_size * 2);
-            for (auto atom : entry_iter.GetAtomObjectList(group_key))
-            {
-                auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
-                auto graph{ atom_plot_builder->CreateBinnedDistanceToPeeledResponseGraph() };
-                const auto & result{
-                    AtomLocalPotentialView::For(*atom).GetGroupMemberResult()
-                };
-                auto is_outlier{ result.has_value() && result->is_outlier };
-                auto line_color{ kAzure-7 };
-                if (show_outlier == true && is_outlier == true) line_color = kRed+1;
-                root_helper::SetLineAttribute(graph.get(), 1, 3, static_cast<short>(line_color), 0.3f);
-                auto range_in_graph{ root_helper::GetRangeInGraph(graph.get()) };
-                y_array.emplace_back(std::get<0>(range_in_graph));
-                y_array.emplace_back(std::get<1>(range_in_graph));
-                peeled_response_graph_list.emplace_back(std::move(graph));
-            }
-            global_y_array.insert(global_y_array.end(), y_array.begin(), y_array.end());
-            peeled_response_graph_list_map.emplace(residue, std::move(peeled_response_graph_list));
-            peeled_response_hist_map.emplace(residue, plot_builder->CreateDistanceToPeeledResponseHistogram(group_key));
+            peeled_response_hist_map.emplace(residue,
+                plot_builder->CreateDistanceToPeeledResponseHistogram(group_key, 10, 0.0, 2.0, 500, y_min, y_max));
         }
-
-        double y_min{ 0.0 };
-        double y_max{ 0.0 };
-        auto y_range{ painter_internal::ComputePlotRange(global_y_array, 0.20) };
-        y_min = std::get<0>(y_range);
-        y_max = std::get<1>(y_range);
 
         std::unique_ptr<TH2> frame[col_size][row_size];
         std::unique_ptr<TPaveText> info_text[col_size][row_size];
@@ -1999,7 +1972,7 @@ void GausPainter::PaintGroupPeeledResponseAminoAcidMainChainComponent(
             has_joint_result ? "Group prior + median Joint charge" : "Group prior (available evidence)", "l");
         if (gaus_mean_map.contains(Residue::ALA) && gaus_mean_map.at(Residue::ALA)) legend->AddEntry(gaus_mean_map.at(Residue::ALA).get(),
             has_joint_result ? "Group mean + median Joint charge" : "Group mean", "l");
-        if (peeled_response_graph_list_map.contains(Residue::ALA) && !peeled_response_graph_list_map.at(Residue::ALA).empty()) legend->AddEntry(peeled_response_graph_list_map.at(Residue::ALA).front().get(),
+        if (peeled_response_hist_map.contains(Residue::ALA) && peeled_response_hist_map.at(Residue::ALA)) legend->AddEntry(peeled_response_hist_map.at(Residue::ALA).get(),
             has_joint_result
                 ? "Peeled response (individual target charge retained)"
                 : "Peeled responses", "l");
@@ -2540,14 +2513,17 @@ void GausPainter::PaintGroupGausAminoAcidMainChainComponent(
     root_helper::SetAxisLabelAttribute(frame[6]->GetYaxis(), 0.0f);
     root_helper::SetAxisTickAttribute(frame[6]->GetYaxis(), 0.0f, 504);
     frame[6]->GetYaxis()->SetTitle("#splitline{Member}{Counts}");
-    frame[6]->GetYaxis()->SetLimits(0.5, count_hist->GetMaximum()*1.1);
+    frame[6]->GetYaxis()->SetLimits(0.5, count_hist ? std::max(1.0, count_hist->GetMaximum()*1.1) : 1.0);
     frame[6]->GetYaxis()->CenterTitle();
     frame[6]->Draw();
     gStyle->SetTextFont(132);
-    root_helper::SetFillAttribute(count_hist.get(), 1001, kAzure-7, 0.5f);
-    root_helper::SetLineAttribute(count_hist.get(), 0, 0);
-    root_helper::SetMarkerAttribute(count_hist.get(), 20, 7.0f, kAzure);
-    count_hist->Draw("BAR TEXT0 SAME");
+    if (count_hist)
+    {
+        root_helper::SetFillAttribute(count_hist.get(), 1001, kAzure-7, 0.5f);
+        root_helper::SetLineAttribute(count_hist.get(), 0, 0);
+        root_helper::SetMarkerAttribute(count_hist.get(), 20, 7.0f, kAzure);
+        count_hist->Draw("BAR TEXT0 SAME");
+    }
     root_helper::PrintCanvasPad(canvas.get(), file_path);
 
     root_helper::PrintCanvasClose(canvas.get(), file_path);

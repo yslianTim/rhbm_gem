@@ -5,6 +5,7 @@
 
 #include <cmath>
 #include <vector>
+#include <stdexcept>
 
 namespace rhbm_gem::local_potential_series
 {
@@ -43,12 +44,16 @@ SeriesPointList BuildBinnedDistanceResponseSeries(
     double x_min,
     double x_max)
 {
+    if (bin_size <= 0 || !std::isfinite(x_min) || !std::isfinite(x_max) ||
+        !std::isfinite(x_max - x_min) || !((x_max - x_min) / bin_size > 0.0))
+        throw std::invalid_argument("Invalid distance response binning.");
     const auto bin_spacing{ (x_max - x_min) / static_cast<double>(bin_size) };
     std::vector<std::vector<double>> bin_map(static_cast<size_t>(bin_size));
     for (const auto & sample : sampling_entries)
     {
         const auto distance{ sample.point.distance };
-        if (distance < x_min || distance >= x_max)
+        if (!std::isfinite(distance) || !std::isfinite(sample.response) ||
+            distance < x_min || distance >= x_max)
         {
             continue;
         }
