@@ -40,6 +40,8 @@
 #include <TH1.h>
 #endif
 
+#include <algorithm>
+#include <limits>
 #include <set>
 #include <iomanip>
 #include <map>
@@ -1381,8 +1383,6 @@ void GausPainter::PaintGroupSamplingAndPeelingComparison(
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N, Spot::O };
     const auto & standard_residue_list{ ChemicalDataHelper::GetStandardAminoAcidList() };
-    const bool has_joint_result{ entry_iter.GetJointResult().has_value() };
-    bool show_outlier{ false };
 
     #ifdef HAVE_ROOT
 
@@ -1391,6 +1391,8 @@ void GausPainter::PaintGroupSamplingAndPeelingComparison(
 
     const int col_size{ 4 };
     const int row_size{ 3 };
+    const double x_min{ 0.0 };
+    const double x_max{ 2.0 };
 
     auto canvas{ root_helper::CreateCanvas("test","", 2000, 1500) };
     root_helper::SetCanvasDefaultStyle(canvas.get());
@@ -1406,70 +1408,58 @@ void GausPainter::PaintGroupSamplingAndPeelingComparison(
         if (component_entry == nullptr) continue;
         auto component_id{ component_entry->GetComponentId() };
 
-        std::map<Spot, std::vector<std::unique_ptr<TGraphErrors>>> response_graph_list_map[row_size];
-        std::map<Spot, std::unique_ptr<TF1>> gaus_prior_map;
-        std::vector<double> global_y_array;
-        std::vector<double> neighbor_y_array;
-        for (auto & spot : spot_list)
+        std::vector<AtomObject *> atom_list[col_size];
+        std::unique_ptr<TH2D> response_hist[col_size][row_size];
+        std::unique_ptr<TF1> gaus_prior[col_size];
+        double response_min{ std::numeric_limits<double>::infinity() };
+        double response_max{ -std::numeric_limits<double>::infinity() };
+        double neighbor_min{ std::numeric_limits<double>::infinity() };
+        double neighbor_max{ -std::numeric_limits<double>::infinity() };
+        for (int i = 0; i < col_size; i++)
         {
+            const auto spot{ spot_list.at(static_cast<size_t>(i)) };
             size_t member_id;
             if (!data_internal::IsMainChainMember(spot, member_id)) continue;
             auto group_key{ data_internal::GetMainChainGroupKey(member_id, residue) };
-            gaus_prior_map[spot]=nullptr;
-            for (auto & map : response_graph_list_map) map[spot].clear();
             if (!entry_iter.HasAtomGroup(group_key)) continue;
-            auto gaus_prior{ plot_builder->CreateAtomGroupGausFunctionPrior(group_key) };
-            gaus_prior_map[spot]=std::move(gaus_prior);
-
-            auto member_size{ entry_iter.GetAtomObjectList(group_key).size() };
-            std::vector<std::unique_ptr<TGraphErrors>> raw_sampling_graph_list;
-            std::vector<std::unique_ptr<TGraphErrors>> peeled_response_graph_list;
-            std::vector<std::unique_ptr<TGraphErrors>> neighbor_contribution_graph_list;
-            raw_sampling_graph_list.reserve(member_size);
-            peeled_response_graph_list.reserve(member_size);
-            neighbor_contribution_graph_list.reserve(member_size);
-            for (auto atom : entry_iter.GetAtomObjectList(group_key))
+            for (auto * atom : entry_iter.GetAtomObjectList(group_key))
             {
-                auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
-                auto raw_sampling_graph{ atom_plot_builder->CreateBinnedDistanceToSamplingValueGraph() };
-                auto peeled_response_graph{ atom_plot_builder->CreateBinnedDistanceToPeeledResponseGraph() };
-                auto neighbor_contribution_graph{ atom_plot_builder->CreateBinnedDistanceToNeighborContributionGraph() };
-                const auto & result{
-                    AtomLocalPotentialView::For(*atom).GetGroupMemberResult()
-                };
-                auto is_outlier{ result.has_value() && result->is_outlier };
-                auto line_color{ kAzure-7 };
-                if (show_outlier == true && is_outlier == true) line_color = kRed+1;
-                root_helper::SetLineAttribute(raw_sampling_graph.get(), 1, 3, static_cast<short>(line_color), 0.3f);
-                root_helper::SetLineAttribute(peeled_response_graph.get(), 1, 3, static_cast<short>(line_color), 0.3f);
-                root_helper::SetLineAttribute(neighbor_contribution_graph.get(), 1, 3, static_cast<short>(line_color), 0.3f);
-                auto range_in_raw_graph{ root_helper::GetRangeInGraph(raw_sampling_graph.get()) };
-                auto range_in_peeling_graph{ root_helper::GetRangeInGraph(peeled_response_graph.get()) };
-                auto range_in_neighbor_graph{ root_helper::GetRangeInGraph(neighbor_contribution_graph.get()) };
-
-                global_y_array.emplace_back(std::get<0>(range_in_raw_graph));
-                global_y_array.emplace_back(std::get<1>(range_in_raw_graph));
-                global_y_array.emplace_back(std::get<0>(range_in_peeling_graph));
-                global_y_array.emplace_back(std::get<1>(range_in_peeling_graph));
-                neighbor_y_array.emplace_back(std::get<0>(range_in_neighbor_graph));
-                neighbor_y_array.emplace_back(std::get<1>(range_in_neighbor_graph));
-                raw_sampling_graph_list.emplace_back(std::move(raw_sampling_graph));
-                peeled_response_graph_list.emplace_back(std::move(peeled_response_graph));
-                neighbor_contribution_graph_list.emplace_back(std::move(neighbor_contribution_graph));
+                if (!atom->GetSpecialAtomFlag()) atom_list[i].emplace_back(atom);
             }
-            response_graph_list_map[0].emplace(spot, std::move(raw_sampling_graph_list));
-            response_graph_list_map[1].emplace(spot, std::move(peeled_response_graph_list));
-            response_graph_list_map[2].emplace(spot, std::move(neighbor_contribution_graph_list));
+            if (atom_list[i].empty()) continue;
+            gaus_prior[i] = plot_builder->CreateAtomGroupGausFunctionPrior(group_key);
+            for (const auto * atom : atom_list[i])
+            {
+                const auto entry{ AtomLocalPotentialView::For(*atom) };
+                if (!entry.IsAvailable()) continue;
+                const auto & peeling{ entry.GetPostFitPeeling() };
+                if (!peeling) continue;
+                for (const auto & sample : peeling->samples)
+                {
+                    const auto distance{ std::sqrt(sample.observation.squared_distance) };
+                    if (distance < x_min || distance >= x_max) continue;
+                    response_min = std::min(response_min, sample.observation.map_value);
+                    response_max = std::max(response_max, sample.observation.map_value);
+                    if (!sample.response) continue;
+                    response_min = std::min(response_min, *sample.response);
+                    response_max = std::max(response_max, *sample.response);
+                    const auto neighbor{ sample.observation.map_value - *sample.response };
+                    neighbor_min = std::min(neighbor_min, neighbor);
+                    neighbor_max = std::max(neighbor_max, neighbor);
+                }
+            }
         }
 
         double y_min[row_size]{ 0.0 };
         double y_max[row_size]{ 0.0 };
-        auto y_range{ painter_internal::ComputePlotRange(global_y_array, 0.20) };
+        auto y_range{ painter_internal::ComputePlotRange(
+            response_min <= response_max ? std::vector<double>{response_min, response_max} : std::vector<double>{}, 0.20) };
         y_min[0] = std::get<0>(y_range);
         y_max[0] = std::get<1>(y_range);
         y_min[1] = std::get<0>(y_range);
         y_max[1] = std::get<1>(y_range);
-        auto neighbor_y_range{ painter_internal::ComputePlotRange(neighbor_y_array, 0.20) };
+        auto neighbor_y_range{ painter_internal::ComputePlotRange(
+            neighbor_min <= neighbor_max ? std::vector<double>{neighbor_min, neighbor_max} : std::vector<double>{}, 0.20) };
         y_min[2] = std::get<0>(neighbor_y_range);
         y_max[2] = std::get<1>(neighbor_y_range);
 
@@ -1479,6 +1469,12 @@ void GausPainter::PaintGroupSamplingAndPeelingComparison(
         for (int i = 0; i < col_size; i++)
         {
             auto spot{ spot_list.at(static_cast<size_t>(i)) };
+            response_hist[i][0] = plot_builder->CreateDistanceToOriginalMapValueHistogram(
+                atom_list[i], 10, x_min, x_max, 500, y_min[0], y_max[0]);
+            response_hist[i][1] = plot_builder->CreateDistanceToPeeledResponseHistogram(
+                atom_list[i], 10, x_min, x_max, 500, y_min[1], y_max[1]);
+            response_hist[i][2] = plot_builder->CreateDistanceToNeighborContributionHistogram(
+                atom_list[i], 10, x_min, x_max, 500, y_min[2], y_max[2]);
             for (int j = 0; j < row_size; j++)
             {
                 root_helper::FindPadInCanvasPartition(canvas.get(), i, j);
@@ -1486,7 +1482,7 @@ void GausPainter::PaintGroupSamplingAndPeelingComparison(
                 root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
                 auto x_factor{ root_helper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
                 auto y_factor{ root_helper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
-                frame[i][j] = root_helper::CreateHist2D(Form("frame_%d_%d", i, j),"", 500, 0.01, 1.99, 500, y_min[row_size-j-1], y_max[row_size-j-1]);
+                frame[i][j] = root_helper::CreateHist2D(Form("frame_%d_%d", i, j),"", 500, x_min + 0.01, x_max - 0.01, 500, y_min[row_size-j-1], y_max[row_size-j-1]);
                 root_helper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 60.0f, 0.01f, 133);
                 root_helper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.08/x_factor), 505);
                 root_helper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 60.0f, 0.01f, 133);
@@ -1497,8 +1493,10 @@ void GausPainter::PaintGroupSamplingAndPeelingComparison(
                 frame[i][j]->SetStats(0);
                 frame[i][j]->Draw("");
 
-                const auto & response_graph_list{ response_graph_list_map[row_size-j-1].at(spot) };
-                for (auto & graph : response_graph_list) graph->Draw("L X0");
+                const auto & hist{ response_hist[i][row_size-j-1] };
+                root_helper::SetLineAttribute(hist.get(), 1, 1, kAzure-7, 0.5f);
+                root_helper::SetFillAttribute(hist.get(), 1001, kAzure-7, 0.3f);
+                if (hist->GetEntries() > 0.0) hist->Draw("CANDLE3 SAME");
 
                 if (j == row_size - 1)
                 {
@@ -1513,11 +1511,9 @@ void GausPainter::PaintGroupSamplingAndPeelingComparison(
                     info_text[i][j]->Draw();
                 }
 
-                auto & gaus_prior{ gaus_prior_map.at(spot) };
-                if (gaus_prior) root_helper::SetLineAttribute(gaus_prior.get(), 2, 3, kRed);
-                if (j != 0 && gaus_prior) gaus_prior->Draw("SAME");
-
-                if (j != 0 && gaus_prior)
+                auto & prior{ gaus_prior[i] };
+                if (prior) root_helper::SetLineAttribute(prior.get(), 2, 3, kRed);
+                if (j == 1 && prior)
                 {
                     result_text[i][j] = root_helper::CreatePaveText(0.11, 0.10, 0.95, 0.20, "nbNDC", true);
                     root_helper::SetPaveTextDefaultStyle(result_text[i][j].get());
@@ -1526,9 +1522,10 @@ void GausPainter::PaintGroupSamplingAndPeelingComparison(
                     root_helper::SetFillAttribute(result_text[i][j].get(), 4000);
                     result_text[i][j]->AddText(
                         Form("A = %.2f,   #tau = %.2f,   C = %.2f",
-                            gaus_prior->GetParameter(0), gaus_prior->GetParameter(1), gaus_prior->GetParameter(2))
+                            prior->GetParameter(0), prior->GetParameter(1), prior->GetParameter(2))
                     );
                     result_text[i][j]->Draw();
+                    prior->Draw("SAME");
                 }
             }
         }
@@ -1565,19 +1562,26 @@ void GausPainter::PaintGroupSamplingAndPeelingComparison(
         root_helper::SetFillAttribute(legend.get(), 4000);
         root_helper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
         legend->SetMargin(0.25f);
-        if (gaus_prior_map.contains(Spot::CA) && gaus_prior_map.at(Spot::CA)) legend->AddEntry(gaus_prior_map.at(Spot::CA).get(),
-            has_joint_result ? "Group prior + median Joint charge" : "Final group prior #color[633]{#phi (#font[1]{A},#font[1]{#tau},#font[1]{C})}", "l");
-        if (has_joint_result)
+        for (const auto & prior : gaus_prior)
         {
-            if (!response_graph_list_map[0].at(Spot::CA).empty()) legend->AddEntry(response_graph_list_map[0].at(Spot::CA).front().get(),
-                "Raw sampling values (all contributors)", "l");
-            if (!response_graph_list_map[1].at(Spot::CA).empty()) legend->AddEntry(response_graph_list_map[1].at(Spot::CA).front().get(),
-                "Peeled response (individual target charge retained)", "l");
-            if (!response_graph_list_map[2].at(Spot::CA).empty()) legend->AddEntry(response_graph_list_map[2].at(Spot::CA).front().get(),
-                "Neighbor contribution (voxel minus peeled)", "l");
+            if (!prior) continue;
+            legend->AddEntry(prior.get(),"Group Prior", "l");
+            break;
         }
-        else if (!response_graph_list_map[0].at(Spot::CA).empty()) legend->AddEntry(response_graph_list_map[0].at(Spot::CA).front().get(),
-            "Raw sampling values", "l");
+        const char * response_label[row_size]{
+            "Original map values (all contributors)",
+            "Peeled response (individual target charge retained)",
+            "Neighbor contribution (voxel minus peeled)"
+        };
+        for (int row = 0; row < row_size; row++)
+        {
+            for (const auto & column : response_hist)
+            {
+                if (column[row]->GetEntries() == 0.0) continue;
+                legend->AddEntry(column[row].get(), response_label[row], "l");
+                break;
+            }
+        }
         legend->Draw();
 
         canvas->cd();

@@ -42,6 +42,40 @@ std::unique_ptr<TGraphErrors> BuildBinnedGraph(const SeriesPointList & series)
     return graph;
 }
 
+template <typename ResponseSelector>
+std::unique_ptr<TH2D> BuildOriginalGridResponseHistogram(
+    const std::vector<AtomObject *> & atom_list,
+    int bin_size_x, double x_min, double x_max, int bin_size_y, double y_min, double y_max,
+    ResponseSelector select_response)
+{
+    if (bin_size_x <= 0 || bin_size_y <= 0 ||
+        !std::isfinite(x_min) || !std::isfinite(x_max) ||
+        !std::isfinite(y_min) || !std::isfinite(y_max) ||
+        !std::isfinite(x_max - x_min) || !std::isfinite(y_max - y_min) ||
+        !((x_max - x_min) / bin_size_x > 0.0) ||
+        !((y_max - y_min) / bin_size_y > 0.0) ||
+        (static_cast<double>(bin_size_x) + 2.0) * (static_cast<double>(bin_size_y) + 2.0) >
+            std::numeric_limits<int>::max())
+        throw std::invalid_argument("Invalid Original-grid response histogram binning.");
+    auto hist{
+        root_helper::CreateHist2D("", "", bin_size_x, x_min, x_max, bin_size_y, y_min, y_max)
+    };
+    for (auto * atom : atom_list)
+    {
+        const auto entry{ AtomLocalPotentialView::For(*atom) };
+        if (!entry.IsAvailable()) continue;
+        const auto & peeling{ entry.GetPostFitPeeling() };
+        if (!peeling) continue;
+        for (const auto & sample : peeling->samples)
+        {
+            const auto response{ select_response(sample) };
+            if (!response) continue;
+            hist->Fill(std::sqrt(sample.observation.squared_distance), *response);
+        }
+    }
+    return hist;
+}
+
 std::vector<GroupKey> CollectComponentAtomGroupKeys(
     const ModelAnalysisView & model_view,
     AtomKey atom_key)
@@ -545,31 +579,32 @@ std::unique_ptr<TH2D> PotentialPlotBuilder::CreateDistanceToPeeledResponseHistog
     const std::vector<AtomObject *> & atom_list,
     int bin_size_x, double x_min, double x_max, int bin_size_y, double y_min, double y_max)
 {
-    if (bin_size_x <= 0 || bin_size_y <= 0 ||
-        !std::isfinite(x_min) || !std::isfinite(x_max) ||
-        !std::isfinite(y_min) || !std::isfinite(y_max) ||
-        !std::isfinite(x_max - x_min) || !std::isfinite(y_max - y_min) ||
-        !((x_max - x_min) / bin_size_x > 0.0) ||
-        !((y_max - y_min) / bin_size_y > 0.0) ||
-        (static_cast<double>(bin_size_x) + 2.0) * (static_cast<double>(bin_size_y) + 2.0) >
-            std::numeric_limits<int>::max())
-        throw std::invalid_argument("Invalid peeled response histogram binning.");
-    auto hist{
-        root_helper::CreateHist2D("", "", bin_size_x, x_min, x_max, bin_size_y, y_min, y_max)
-    };
-    for (auto atom : atom_list)
-    {
-        const auto entry{ AtomLocalPotentialView::For(*atom) };
-        if (!entry.IsAvailable()) continue;
-        const auto & peeling{ entry.GetPostFitPeeling() };
-        if (!peeling) continue;
-        for (const auto & sample : peeling->samples)
-        {
-            if (!sample.response) continue;
-            hist->Fill(std::sqrt(sample.observation.squared_distance), *sample.response);
-        }
-    }
-    return hist;
+    return BuildOriginalGridResponseHistogram(
+        atom_list, bin_size_x, x_min, x_max, bin_size_y, y_min, y_max,
+        [](const PeelingSampleEstimate & sample) { return sample.response; });
+}
+
+std::unique_ptr<TH2D> PotentialPlotBuilder::CreateDistanceToOriginalMapValueHistogram(
+    const std::vector<AtomObject *> & atom_list,
+    int bin_size_x, double x_min, double x_max, int bin_size_y, double y_min, double y_max)
+{
+    return BuildOriginalGridResponseHistogram(
+        atom_list, bin_size_x, x_min, x_max, bin_size_y, y_min, y_max,
+        [](const PeelingSampleEstimate & sample) {
+            return std::optional<double>{ sample.observation.map_value };
+        });
+}
+
+std::unique_ptr<TH2D> PotentialPlotBuilder::CreateDistanceToNeighborContributionHistogram(
+    const std::vector<AtomObject *> & atom_list,
+    int bin_size_x, double x_min, double x_max, int bin_size_y, double y_min, double y_max)
+{
+    return BuildOriginalGridResponseHistogram(
+        atom_list, bin_size_x, x_min, x_max, bin_size_y, y_min, y_max,
+        [](const PeelingSampleEstimate & sample) -> std::optional<double> {
+            if (!sample.response) return std::nullopt;
+            return sample.observation.map_value - *sample.response;
+        });
 }
 
 std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToNeighborContributionGraph(
