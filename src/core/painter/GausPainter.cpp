@@ -87,7 +87,6 @@ private:
     void PaintAtomXYPosition(ModelObject * model_object, const std::string & name);
     void PaintGausScatterPlot(ModelObject * model_object, const std::string & name);
     void PaintGroupGausScatterPlot(ModelObject * model_object, const std::string & name);
-    void PaintGausRankMainChain(ModelObject * model_object, const std::string & name);
     void PaintLocalGausSummary(ModelObject * model_object, const std::string & name);
     void PaintGroupGausSummary(ModelObject * model_object, const std::string & name);
     void PaintAverageQScoreToSequenceSummary(ModelObject * model_object, const std::string & name);
@@ -135,7 +134,6 @@ void GausPainter::Run()
         PaintGausScatterPlot(model_object, "gaus_scatter_"+ label);
         PaintGroupGausScatterPlot(model_object, "group_gaus_scatter_"+ label);
         PaintPeeledResponseMainChain(model_object, "peeled_response_main_chain_"+ label);
-        PaintGausRankMainChain(model_object, "gaus_rank_main_chain_"+ label);
         PaintLocalGausSummary(model_object, "local_gaus_summary_"+ label);
         PaintGroupGausSummary(model_object, "group_gaus_summary_"+ label);
         PaintAverageQScoreToSequenceSummary(model_object, "average_qscore_to_sequence_summary_" + label);
@@ -154,7 +152,6 @@ void GausPainter::PaintPeeledResponseMainChain(ModelObject * model_object, const
     #ifdef HAVE_ROOT
     auto entry_iter{ model_object->GetAnalysisView() };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
-    const bool has_joint_result{ entry_iter.GetJointResult().has_value() };
     const int col_size{ 4 };
     const int row_size{ 1 };
     gStyle->SetLineScalePS(1.5);
@@ -262,8 +259,7 @@ void GausPainter::PaintPeeledResponseMainChain(ModelObject * model_object, const
             root_helper::SetTextAttribute(result_text[i].get(), 20.0f, 133, 22, 0.0, kRed);
             root_helper::SetFillAttribute(result_text[i].get(), 4000);
             if (gaus_function[i]) result_text[i]->AddText(
-                Form(has_joint_result ? "#font[2]{A} = %.2f ; #tau = %.2f ; mean C_{med} = %.2f" :
-                    "#font[2]{A} = %.2f  ;  #tau = %.2f  ;  c = %.2f",
+                Form("#font[2]{A} = %.2f ; #tau = %.2f ; C = %.2f",
                     amplitude_prior[i], width_prior[i], offset_prior[i]));
             else result_text[i]->AddText("Group prior unavailable");
             result_text[i]->Draw();
@@ -305,14 +301,8 @@ void GausPainter::PaintPeeledResponseMainChain(ModelObject * model_object, const
     root_helper::SetFillAttribute(legend.get(), 4000);
     root_helper::SetTextAttribute(legend.get(), 25.0f, 133, 12, 0.0);
     legend->SetMargin(0.15f);
-    legend->AddEntry(gaus_function[0].get(),
-        has_joint_result
-            ? "Mean prior + mean Joint C medians"
-            : "Gaussian Model #color[633]{#phi (#font[1]{A},#font[1]{#tau},#font[1]{c})}", "l");
-    legend->AddEntry(peeled_response_graph_list[0].at(0).get(),
-        has_joint_result
-            ? "Peeled response (individual target charge retained)"
-            : "Peeled Response", "l");
+    legend->AddEntry(gaus_function[0].get(),"Mean Group Prior", "l");
+    legend->AddEntry(peeled_response_graph_list[0].at(0).get(),"Peeled response ", "l");
     legend->Draw();
 
     canvas->cd();
@@ -746,146 +736,6 @@ void GausPainter::PaintGroupGausScatterPlot(ModelObject * model_object, const st
     #endif
 }
 
-void GausPainter::PaintGausRankMainChain(ModelObject * model_object, const std::string & name)
-{
-    auto file_path{ m_folder_path + name };
-    Logger::Log(LogLevel::Info, "GausPainter::PaintGausRankMainChain");
-    auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
-
-    #ifdef HAVE_ROOT
-
-    gStyle->SetLineScalePS(1.5);
-    gStyle->SetGridColor(kGray);
-    const int col_size{ 4 };
-    const int row_size{ 3 };
-    auto canvas{ root_helper::CreateCanvas("test","", 1000, 800) };
-    root_helper::SetCanvasDefaultStyle(canvas.get());
-    root_helper::SetCanvasPartition(
-        canvas.get(), col_size, row_size, 0.08f, 0.05f, 0.10f, 0.10f, 0.02f, 0.01f);
-    root_helper::PrintCanvasOpen(canvas.get(), file_path);
-
-    const std::string y_title[row_size]
-    {
-        "Intensity",
-        "Width",
-        "Amplitude"
-    };
-
-    int chain_size;
-    std::unique_ptr<TH2> frame[col_size][row_size];
-    std::vector<std::unique_ptr<TH1D>> rank_hist_list[row_size][3];
-    std::unique_ptr<TH1D> rank_reference[row_size];
-    std::vector<Residue> veto_residues_list{  };
-    rank_hist_list[2][0] = plot_builder->CreateMainChainAtomGausRankHistogram(0, chain_size, Residue::UNK, 2, veto_residues_list);
-    rank_hist_list[1][0] = plot_builder->CreateMainChainAtomGausRankHistogram(1, chain_size, Residue::UNK, 1, veto_residues_list);
-    rank_hist_list[0][0] = plot_builder->CreateMainChainAtomGausRankHistogram(2, chain_size, Residue::UNK, 0, veto_residues_list);
-    rank_hist_list[2][1] = plot_builder->CreateMainChainAtomGausRankHistogram(0, chain_size, Residue::GLY);
-    rank_hist_list[1][1] = plot_builder->CreateMainChainAtomGausRankHistogram(1, chain_size, Residue::GLY);
-    rank_hist_list[0][1] = plot_builder->CreateMainChainAtomGausRankHistogram(2, chain_size, Residue::GLY);
-    rank_hist_list[2][2] = plot_builder->CreateMainChainAtomGausRankHistogram(0, chain_size, Residue::PRO);
-    rank_hist_list[1][2] = plot_builder->CreateMainChainAtomGausRankHistogram(1, chain_size, Residue::PRO);
-    rank_hist_list[0][2] = plot_builder->CreateMainChainAtomGausRankHistogram(2, chain_size, Residue::PRO);
-
-    for (int j = 0; j < row_size; j++)
-    {
-        for (auto & hist : rank_hist_list[j][0]) hist->Scale(100.0 / hist->GetEntries());
-        for (auto & hist : rank_hist_list[j][1]) hist->Scale(100.0 / hist->GetEntries());
-        for (auto & hist : rank_hist_list[j][2]) hist->Scale(100.0 / hist->GetEntries());
-        rank_reference[j] = root_helper::CreateHist1D(Form("rank_reference_%d", j),"", 4, 0.5, 4.5);
-        for (int p = 1; p <= rank_reference[j]->GetNbinsX(); p++)
-        {
-            rank_reference[j]->SetBinContent(p, 150.0);
-        }
-    }
-
-    gStyle->SetTextFont(22);
-    gStyle->SetPaintTextFormat(".1f");
-    std::unique_ptr<TPaveText> element_text[col_size];
-    std::unique_ptr<TPaveText> par_text[row_size];
-    std::unique_ptr<TLegend> legend;
-    for (int i = 0; i < col_size; i++)
-    {
-        auto element_color{ painter_internal::GetMainChainElementColor(static_cast<size_t>(i)) };
-        for (int j = 0; j < row_size; j++)
-        {
-            root_helper::FindPadInCanvasPartition(canvas.get(), i, j);
-            root_helper::SetPadLayout(gPad, 1, 0, 0, 0, 0, 0);
-            root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0, 0);
-            auto x_factor{ root_helper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
-            auto y_factor{ root_helper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
-            frame[i][j] = root_helper::CreateHist2D(Form("frame_%d_%d", i, j),"", 100, 0.1, 4.9, 100, 0.01, 110.0);
-            root_helper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 45.0f, 0.8f, 133);
-            root_helper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 40.0f, 0.01f, 103, kCyan+3);
-            root_helper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.05/x_factor), 5);
-            root_helper::SetAxisTitleAttribute(frame[i][j]->GetYaxis(), 28.0f, 1.3f, 133);
-            root_helper::SetAxisLabelAttribute(frame[i][j]->GetYaxis(), 25.0f, 0.005f, 133);
-            root_helper::SetAxisTickAttribute(frame[i][j]->GetYaxis(), static_cast<float>(x_factor*0.05/y_factor), 505);
-            root_helper::SetLineAttribute(frame[i][j].get(), 1, 0);
-            frame[i][j]->GetXaxis()->SetTitle("Rank");
-            frame[i][j]->GetYaxis()->SetTitle("Count Ratio (%)");
-            frame[i][j]->GetXaxis()->CenterTitle();
-            frame[i][j]->GetYaxis()->CenterTitle();
-            frame[i][j]->SetStats(0);
-            frame[i][j]->Draw();
-
-            root_helper::SetFillAttribute(rank_reference[j].get(), 1001, kGray, 0.2f);
-            rank_reference[j]->SetBarWidth(0.9f);
-            rank_reference[j]->SetBarOffset(0.05f);
-            rank_reference[j]->Draw("BAR SAME");
-
-            auto text_size{ 0.2f * 4.0f/static_cast<float>(gPad->GetAbsHNDC()) };
-            root_helper::SetFillAttribute(rank_hist_list[j][0].at(static_cast<size_t>(i)).get(), 1001, kAzure-7, 0.5f);
-            root_helper::SetLineAttribute(rank_hist_list[j][0].at(static_cast<size_t>(i)).get(), 1, 0);
-            root_helper::SetMarkerAttribute(rank_hist_list[j][0].at(static_cast<size_t>(i)).get(), 1, text_size, kAzure-7);
-            rank_hist_list[j][0].at(static_cast<size_t>(i))->SetBarWidth(0.25f);
-            rank_hist_list[j][0].at(static_cast<size_t>(i))->SetBarOffset(0.125f);
-            rank_hist_list[j][0].at(static_cast<size_t>(i))->Draw("BAR TEXT0 SAME");
-
-            root_helper::SetFillAttribute(rank_hist_list[j][1].at(static_cast<size_t>(i)).get(), 1001, kOrange-6, 0.5f);
-            root_helper::SetLineAttribute(rank_hist_list[j][1].at(static_cast<size_t>(i)).get(), 1, 0);
-            root_helper::SetMarkerAttribute(rank_hist_list[j][1].at(static_cast<size_t>(i)).get(), 1, text_size, kOrange-6);
-            rank_hist_list[j][1].at(static_cast<size_t>(i))->SetBarWidth(0.25f);
-            rank_hist_list[j][1].at(static_cast<size_t>(i))->SetBarOffset(0.375f);
-            rank_hist_list[j][1].at(static_cast<size_t>(i))->Draw("BAR TEXT0 SAME");
-
-            root_helper::SetFillAttribute(rank_hist_list[j][2].at(static_cast<size_t>(i)).get(), 1001, kMagenta-2, 0.5f);
-            root_helper::SetLineAttribute(rank_hist_list[j][2].at(static_cast<size_t>(i)).get(), 1, 0);
-            root_helper::SetMarkerAttribute(rank_hist_list[j][2].at(static_cast<size_t>(i)).get(), 1, text_size, kMagenta-2);
-            rank_hist_list[j][2].at(static_cast<size_t>(i))->SetBarWidth(0.25f);
-            rank_hist_list[j][2].at(static_cast<size_t>(i))->SetBarOffset(0.625f);
-            rank_hist_list[j][2].at(static_cast<size_t>(i))->Draw("BAR TEXT0 SAME");
-
-            if (j == row_size - 1)
-            {
-                element_text[i] = root_helper::CreatePaveText(0.01, 1.01, 0.99, 1.20, "nbNDC ARC", true);
-                root_helper::SetPaveTextDefaultStyle(element_text[i].get());
-                root_helper::SetPaveAttribute(element_text[i].get(), 0, 0.2);
-                root_helper::SetTextAttribute(element_text[i].get(), 30.0f, 133, 22);
-                root_helper::SetFillAttribute(element_text[i].get(), 1001, element_color, 0.5f);
-                element_text[i]->AddText(painter_internal::GetMainChainElementLabel(static_cast<size_t>(i)).data());
-                element_text[i]->Draw();
-            }
-            if (i == col_size - 1)
-            {
-                par_text[j] = root_helper::CreatePaveText(1.01, 0.01, 1.22, 0.99, "nbNDC ARC", true);
-                root_helper::SetPaveTextDefaultStyle(par_text[j].get());
-                root_helper::SetPaveAttribute(par_text[j].get(), 0, 0.2);
-                root_helper::SetTextAttribute(par_text[j].get(), 30.0f, 133, 22, 0.0f, kYellow-10);
-                root_helper::SetLineAttribute(par_text[j].get(), 1, 0);
-                root_helper::SetFillAttribute(par_text[j].get(), 1001, kAzure-7);
-                par_text[j]->AddText(y_title[j].data());
-                auto text{ par_text[j]->GetLineWith(y_title[j].data()) };
-                text->SetTextAngle(90.0f);
-                par_text[j]->Draw();
-            }
-        }
-    }
-    root_helper::PrintCanvasPad(canvas.get(), file_path);
-    root_helper::PrintCanvasClose(canvas.get(), file_path);
-    Logger::Log(LogLevel::Info, " Output file: " + file_path);
-    #endif
-}
-
 void GausPainter::PaintLocalGausSummary(ModelObject * model_object, const std::string & name)
 {
     auto file_path{ m_folder_path + name };
@@ -894,9 +744,7 @@ void GausPainter::PaintLocalGausSummary(ModelObject * model_object, const std::s
     auto entry_iter{ model_object->GetAnalysisView() };
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     const auto component_key_list{ model_object->GetComponentKeyList() };
-    const bool has_joint_result{ entry_iter.GetJointResult().has_value() };
-    auto show_outlier{ false };
-    (void)show_outlier;
+    auto show_outlier{ true };
 
     #ifdef HAVE_ROOT
 
@@ -959,36 +807,23 @@ void GausPainter::PaintLocalGausSummary(ModelObject * model_object, const std::s
             component_text->AddText((component_id + "/" + atom_entry.atom_id).data());
             component_text->Draw();
 
-            auto result_text{ root_helper::CreatePaveText(0.26, 0.10, 0.55, 0.90, "nbNDC", false) };
-            root_helper::SetPaveTextDefaultStyle(result_text.get());
-            root_helper::SetTextAttribute(result_text.get(), 50.0f, 133, 12, 0.0, kRed);
-            root_helper::SetFillAttribute(result_text.get(), 4000);
-            auto amplitude_prior{
-                entry_iter.GetAtomGroupPrior(group_key).GetDisplayParameter(0)
+            const auto [y_min, y_max]{
+                painter_internal::ComputePeeledResponsePlotRange(entry_iter, {group_key}, 0.0, 2.0)
             };
-            auto amplitude_error{
-                entry_iter.GetAtomGroupPriorWithUncertainty(group_key)
-                    .GetDisplayStandardDeviation(0)
+            auto peeled_response_hist{
+                plot_builder->CreateDistanceToPeeledResponseHistogram(group_key, 10, 0.0, 2.0, 500, y_min, y_max)
             };
-            auto width_prior{
-                entry_iter.GetAtomGroupPrior(group_key).GetDisplayParameter(1)
-            };
-            auto width_error{
-                entry_iter.GetAtomGroupPriorWithUncertainty(group_key)
-                    .GetDisplayStandardDeviation(1)
-            };
-            auto offset_prior{
-                entry_iter.GetAtomGroupPrior(group_key).GetOffset()
-            };
-            auto offset_error{
-                entry_iter.GetAtomGroupPriorWithUncertainty(group_key)
-                    .GetStandardDeviationModel().GetOffset()
-            };
-            result_text->AddText(Form("#font[2]{#hat{A}} = %.2f #pm %.2f", amplitude_prior, amplitude_error));
-            result_text->AddText(Form("#hat{#tau} = %.2f #pm %.2f", width_prior, width_error));
-            if (std::isfinite(offset_error)) result_text->AddText(Form("#hat{c} = %.2f #pm %.2f", offset_prior, offset_error));
-            else result_text->AddText(Form("C median = %.2f (descriptive)", offset_prior));
-            result_text->Draw();
+            auto gaus_mean{ plot_builder->CreateAtomGroupGausFunctionMean(group_key) };
+            auto gaus_prior{ plot_builder->CreateAtomGroupGausFunctionPrior(group_key) };
+            auto legend{ root_helper::CreateLegend(0.26, 0.10, 0.55, 0.90, false) };
+            root_helper::SetLegendDefaultStyle(legend.get());
+            root_helper::SetFillAttribute(legend.get(), 4000);
+            root_helper::SetTextAttribute(legend.get(), 35.0f, 133, 12, 0.0);
+            legend->SetMargin(0.15f);
+            if (gaus_prior) legend->AddEntry(gaus_prior.get(),"Group prior + Joint charge", "l");
+            if (gaus_mean) legend->AddEntry(gaus_mean.get(),"Group mean + Joint charge", "l");
+            legend->AddEntry(peeled_response_hist.get(),"Peeled response", "l");
+            legend->Draw();
 
             pad[2]->cd();
             root_helper::SetPadMarginInCanvas(gPad, 0.09, 0.01, 0.12, 0.02);
@@ -1060,26 +895,6 @@ void GausPainter::PaintLocalGausSummary(ModelObject * model_object, const std::s
             root_helper::SetPadMarginInCanvas(gPad, 0.10, 0.00, 0.12, 0.10);
             auto member_size{ entry_iter.GetAtomObjectList(group_key).size() };
             auto outlier_size{ CountOutlierAtoms(entry_iter, group_key) };
-            std::vector<std::unique_ptr<TGraphErrors>> peeled_response_graph_list;
-            std::vector<double> y_array;
-            peeled_response_graph_list.reserve(member_size);
-            y_array.reserve(member_size * 2);
-            for (auto atom : entry_iter.GetAtomObjectList(group_key))
-            {
-                auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
-                auto graph{ atom_plot_builder->CreateBinnedDistanceToPeeledResponseGraph() };
-                const auto & result{
-                    AtomLocalPotentialView::For(*atom).GetGroupMemberResult()
-                };
-                auto is_outlier{ result.has_value() && result->is_outlier };
-                auto line_color{ kAzure-7 };
-                if (show_outlier == true && is_outlier == true) line_color = kRed+1;
-                root_helper::SetLineAttribute(graph.get(), 1, 3, static_cast<short>(line_color), 0.3f);
-                auto range_in_graph{ root_helper::GetRangeInGraph(graph.get()) };
-                y_array.emplace_back(std::get<0>(range_in_graph));
-                y_array.emplace_back(std::get<1>(range_in_graph));
-                peeled_response_graph_list.emplace_back(std::move(graph));
-            }
 
             auto frame{ root_helper::CreateHist2D("hist_0","", 100, 0.0, 1.0, 100, 0.0, 1.0) };
             root_helper::SetPadLayout(gPad, 1, 1, 0, 0, 0, 0);
@@ -1095,46 +910,48 @@ void GausPainter::PaintLocalGausSummary(ModelObject * model_object, const std::s
             frame->GetYaxis()->CenterTitle();
             frame->GetXaxis()->SetTitle("Radial Distance #[]{#AA}");
             frame->GetYaxis()->SetTitle("Peeled Response");
-            auto y_range{ painter_internal::ComputePlotRange(y_array, 0.1) };
             auto x_min_tmp{ 0.01 };
-            auto x_max_tmp{ 1.49 };
-            auto y_min_tmp{ std::get<0>(y_range) };
-            auto y_max_tmp{ std::get<1>(y_range) };
+            auto x_max_tmp{ 1.99 };
             frame->GetXaxis()->SetLimits(x_min_tmp, x_max_tmp);
-            frame->GetYaxis()->SetLimits(y_min_tmp, y_max_tmp);
+            frame->GetYaxis()->SetLimits(y_min, y_max);
             frame->SetStats(0);
             frame->Draw();
-            for (auto & graph : peeled_response_graph_list)
+
+            root_helper::SetLineAttribute(peeled_response_hist.get(), 1, 1, kAzure-7, 0.5f);
+            root_helper::SetFillAttribute(peeled_response_hist.get(), 1001, kAzure-7, 0.3f);
+            peeled_response_hist->Draw("CANDLE3 SAME");
+            if (gaus_prior)
             {
-                graph->Draw("L X0");
+                root_helper::SetLineAttribute(gaus_prior.get(), 2, 3, kRed);
+                gaus_prior->Draw("SAME");
+            }
+            if (gaus_mean)
+            {
+                root_helper::SetLineAttribute(gaus_mean.get(), 3, 3, kBlue);
+                gaus_mean->Draw("SAME");
             }
 
-            auto gaus_mean{
-                plot_builder->CreateAtomGroupGausFunctionMean(group_key)
+            auto result_text{ root_helper::CreatePaveText(0.02, 0.90, 1.00, 1.00, "nbNDC", false) };
+            root_helper::SetPaveTextDefaultStyle(result_text.get());
+            root_helper::SetTextAttribute(result_text.get(), 40.0f, 133, 12, 0.0, kRed);
+            root_helper::SetFillAttribute(result_text.get(), 4000);
+            auto amplitude_prior{
+                entry_iter.GetAtomGroupPrior(group_key).GetDisplayParameter(0)
             };
-            auto gaus_prior{ plot_builder->CreateAtomGroupGausFunctionPrior(group_key) };
-            if (gaus_prior) root_helper::SetLineAttribute(gaus_prior.get(), 2, 3, kRed);
-            if (gaus_mean) root_helper::SetLineAttribute(gaus_mean.get(), 3, 3, kBlue);
-            if (gaus_prior) gaus_prior->Draw("SAME");
-            if (gaus_mean) gaus_mean->Draw("SAME");
-
-            auto legend{ root_helper::CreateLegend(0.02, 0.90, 1.00, 1.00, false) };
-            root_helper::SetLegendDefaultStyle(legend.get());
-            root_helper::SetFillAttribute(legend.get(), 4000);
-            root_helper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
-            legend->SetMargin(0.15f);
-            legend->SetNColumns(3);
-            if (gaus_prior) legend->AddEntry(gaus_prior.get(),
-                has_joint_result
-                    ? "Group prior + median Joint charge"
-                    : Form("Group prior, #alpha_{g} = %.1f", entry_iter.GetAtomAlphaG(group_key)), "l");
-            if (gaus_mean) legend->AddEntry(gaus_mean.get(),
-                has_joint_result ? "Group mean + median Joint charge" : "Group mean", "l");
-            legend->AddEntry(peeled_response_graph_list.at(0).get(),
-                has_joint_result
-                    ? "Peeled response (individual target charge retained)"
-                    : "Peeled Response", "l");
-            legend->Draw();
+            auto amplitude_error{
+                entry_iter.GetAtomGroupPriorWithUncertainty(group_key).GetDisplayStandardDeviation(0)
+            };
+            auto width_prior{
+                entry_iter.GetAtomGroupPrior(group_key).GetDisplayParameter(1)
+            };
+            auto width_error{
+                entry_iter.GetAtomGroupPriorWithUncertainty(group_key).GetDisplayStandardDeviation(1)
+            };
+            auto offset_prior{ entry_iter.GetAtomGroupPrior(group_key).GetOffset() };
+            result_text->AddText(Form(
+                "#font[2]{#hat{A}} = %.2f #pm %.2f,  #hat{#tau} = %.2f #pm %.2f,  #hat{C}_{med} = %.2f",
+                amplitude_prior, amplitude_error, width_prior, width_error, offset_prior));
+            result_text->Draw();
 
             auto count_text{ root_helper::CreatePaveText(0.45, 0.75, 1.00, 0.90, "nbNDC", false) };
             root_helper::SetPaveTextDefaultStyle(count_text.get());
@@ -1153,7 +970,7 @@ void GausPainter::PaintLocalGausSummary(ModelObject * model_object, const std::s
             root_helper::SetFillAttribute(alpha_text.get(), 4000);
             auto alpha_g{ entry_iter.GetAtomAlphaG(group_key) };
             alpha_text->AddText(Form("#alpha_{g} = %.1f", alpha_g));
-            //alpha_text->Draw();
+            alpha_text->Draw();
             
             root_helper::PrintCanvasPad(canvas.get(), file_path);
         }
@@ -1811,8 +1628,6 @@ void GausPainter::PaintGroupPeeledResponseAminoAcidMainChainComponent(
     auto plot_builder{ std::make_unique<PotentialPlotBuilder>(model_object) };
     const std::vector<Spot> spot_list{ Spot::CA, Spot::C, Spot::N, Spot::O };
     const auto & standard_residue_list{ ChemicalDataHelper::GetStandardAminoAcidList() };
-    const bool has_joint_result{ entry_iter.GetJointResult().has_value() };
-    (void)standard_residue_list;
 
     #ifdef HAVE_ROOT
 
@@ -1916,18 +1731,24 @@ void GausPainter::PaintGroupPeeledResponseAminoAcidMainChainComponent(
 
                 auto & gaus_mean{ gaus_mean_map.at(residue) };
                 auto & gaus_prior{ gaus_prior_map.at(residue) };
-                if (gaus_mean) root_helper::SetLineAttribute(gaus_mean.get(), 3, 3, kBlue);
-                if (gaus_prior) root_helper::SetLineAttribute(gaus_prior.get(), 2, 3, kRed);
-                if (gaus_prior) gaus_prior->Draw("SAME");
-                if (gaus_mean) gaus_mean->Draw("SAME");
+                if (gaus_mean)
+                {
+                    root_helper::SetLineAttribute(gaus_mean.get(), 3, 3, kBlue);
+                    gaus_mean->Draw("SAME");
+                }
+                if (gaus_prior)
+                {
+                    root_helper::SetLineAttribute(gaus_prior.get(), 2, 3, kRed);
+                    gaus_prior->Draw("SAME");
+                }
 
                 result_text[i][j] = root_helper::CreatePaveText(0.11, 0.10, 0.95, 0.20, "nbNDC", true);
                 root_helper::SetPaveTextDefaultStyle(result_text[i][j].get());
                 root_helper::SetLineAttribute(result_text[i][j].get(), 1, 0);
-                root_helper::SetTextAttribute(result_text[i][j].get(), 30.0f, 133, 22, 0.0f, kRed);
+                root_helper::SetTextAttribute(result_text[i][j].get(), 25.0f, 133, 22, 0.0f, kRed);
                 root_helper::SetFillAttribute(result_text[i][j].get(), 4000);
                 if (gaus_prior) result_text[i][j]->AddText(
-                    Form("A = %.2f,   #tau = %.2f,   c = %.2f",
+                    Form("A = %.2f,   #tau = %.2f,   C = %.2f",
                         gaus_prior->GetParameter(0), gaus_prior->GetParameter(1), gaus_prior->GetParameter(2))
                 );
                 result_text[i][j]->Draw();
@@ -1967,15 +1788,10 @@ void GausPainter::PaintGroupPeeledResponseAminoAcidMainChainComponent(
         root_helper::SetLegendDefaultStyle(legend.get());
         root_helper::SetFillAttribute(legend.get(), 4000);
         root_helper::SetTextAttribute(legend.get(), 40.0f, 133, 12, 0.0);
-        legend->SetMargin(0.25f);
-        if (gaus_prior_map.contains(Residue::ALA) && gaus_prior_map.at(Residue::ALA)) legend->AddEntry(gaus_prior_map.at(Residue::ALA).get(),
-            has_joint_result ? "Group prior + median Joint charge" : "Group prior (available evidence)", "l");
-        if (gaus_mean_map.contains(Residue::ALA) && gaus_mean_map.at(Residue::ALA)) legend->AddEntry(gaus_mean_map.at(Residue::ALA).get(),
-            has_joint_result ? "Group mean + median Joint charge" : "Group mean", "l");
-        if (peeled_response_hist_map.contains(Residue::ALA) && peeled_response_hist_map.at(Residue::ALA)) legend->AddEntry(peeled_response_hist_map.at(Residue::ALA).get(),
-            has_joint_result
-                ? "Peeled response (individual target charge retained)"
-                : "Peeled responses", "l");
+        legend->SetMargin(0.15f);
+        if (gaus_prior_map.contains(Residue::ALA) && gaus_prior_map.at(Residue::ALA)) legend->AddEntry(gaus_prior_map.at(Residue::ALA).get(),"Group prior", "l");
+        if (gaus_mean_map.contains(Residue::ALA) && gaus_mean_map.at(Residue::ALA)) legend->AddEntry(gaus_mean_map.at(Residue::ALA).get(),"Group mean", "l");
+        if (peeled_response_hist_map.contains(Residue::ALA) && peeled_response_hist_map.at(Residue::ALA)) legend->AddEntry(peeled_response_hist_map.at(Residue::ALA).get(),"Peeled responses", "l");
         legend->Draw();
 
         canvas->cd();
