@@ -289,80 +289,6 @@ std::unique_ptr<TH1D> PotentialPlotBuilder::CreateAtomGausEstimateHistogram(
     return hist;
 }
 
-std::vector<std::unique_ptr<TH1D>> PotentialPlotBuilder::CreateMainChainAtomGausRankHistogram(
-    int par_id, int & chain_size, Residue residue,
-    size_t extra_id, std::vector<Residue> veto_residues_list)
-{
-    if (IsModelObjectAvailable() == false)
-    {
-        return {};
-    }
-
-    auto model_object{ m_model_object };
-    std::unordered_map<std::string, std::unordered_map<int, std::array<double, 4>>> values_map;
-    for (auto & atom : model_object->GetSelectedAtoms())
-    {
-        size_t id;
-        if (data_internal::IsMainChainMember(atom->GetSpot(), id) == false)
-        {
-            continue;
-        }
-        if (residue != Residue::UNK && atom->GetResidue() != residue)
-        {
-            continue;
-        }
-        if (atom->GetSpecialAtomFlag() == true)
-        {
-            continue;
-        }
-        bool is_veto_residue{ false };
-        for (auto & veto_residue : veto_residues_list)
-        {
-            if (atom->GetResidue() == veto_residue)
-            {
-                is_veto_residue = true;
-            }
-        }
-        if (is_veto_residue == true)
-        {
-            continue;
-        }
-        auto sequence_id{ atom->GetSequenceID() };
-        auto chain_id{ atom->GetChainID() };
-        const auto entry{ AtomLocalPotentialView::For(*atom) };
-        if (!entry.IsAvailable() || !entry.HasJointStageModel() || entry.GetJointStageEstimate().source.role == FittingRole::Halo) continue;
-        auto gaus_value{
-            entry.GetJointStageModel()
-                .GetDisplayParameter(par_id)
-        };
-        auto & sequence_values=values_map[chain_id];
-        if (!sequence_values.contains(sequence_id))
-        { std::array<double,4> missing; missing.fill(std::numeric_limits<double>::quiet_NaN()); sequence_values.emplace(sequence_id,missing); }
-        sequence_values.at(sequence_id).at(id) = gaus_value;
-    }
-    chain_size = static_cast<int>(values_map.size());
-
-    std::vector<std::unique_ptr<TH1D>> hist_list;
-    for (size_t i = 0; i < 4; i++)
-    {
-        auto name{
-            Form("h%d_%d_%d_%d", static_cast<int>(extra_id), static_cast<int>(i),
-                static_cast<int>(residue), par_id)
-        };
-        auto hist{ root_helper::CreateHist1D(name, "", 4, 0.5, 4.5) };
-        for (auto & [chain_id, values_map_tmp] : values_map)
-        {
-            for (auto & [sequence_id, values] : values_map_tmp)
-            {
-                if (std::all_of(values.begin(),values.end(),[](double value) { return std::isfinite(value); }))
-                    hist->Fill(array_helper::ComputeRank(values, i));
-            }
-        }
-        hist_list.emplace_back(std::move(hist));
-    }
-    return hist_list;
-}
-
 std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateAtomGausEstimateToResidueGraph(
     const std::vector<GroupKey> & group_key_list, const int par_id)
 {
@@ -555,16 +481,6 @@ std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToSampli
     return BuildBinnedGraph(data_array);
 }
 
-std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToPeeledResponseGraph(
-    int bin_size, double x_min, double x_max)
-{
-    auto data_array{
-        local_potential_series::BuildBinnedDistanceResponseSeries(
-            GetLocalEntry().GetPeeledObservationEntries(), bin_size, x_min, x_max)
-    };
-    return BuildBinnedGraph(data_array);
-}
-
 std::unique_ptr<TH2D> PotentialPlotBuilder::CreateDistanceToPeeledResponseHistogram(
     GroupKey group_key, int bin_size_x, double x_min, double x_max, int bin_size_y, double y_min, double y_max)
 {
@@ -605,28 +521,6 @@ std::unique_ptr<TH2D> PotentialPlotBuilder::CreateDistanceToNeighborContribution
             if (!sample.response) return std::nullopt;
             return sample.observation.map_value - *sample.response;
         });
-}
-
-std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateBinnedDistanceToNeighborContributionGraph(
-    int bin_size, double x_min, double x_max)
-{
-    LocalPotentialSampleList neighbor_contribution_entries;
-    if (const auto & postfit = GetLocalEntry().GetPostFitPeeling(); postfit)
-    {
-        for (const auto & sample : postfit->samples)
-        {
-            if (!sample.response) continue;
-            const auto & observation = sample.observation;
-            neighbor_contribution_entries.push_back({
-                observation.map_value - *sample.response,
-                {std::sqrt(observation.squared_distance), observation.position, true}
-            });
-        }
-    }
-    auto data_array{
-        local_potential_series::BuildBinnedDistanceResponseSeries(neighbor_contribution_entries, bin_size, x_min, x_max)
-    };
-    return BuildBinnedGraph(data_array);
 }
 
 std::unique_ptr<TGraphErrors> PotentialPlotBuilder::CreateInRangeAtomsToGausEstimateGraph(

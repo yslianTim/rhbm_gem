@@ -55,7 +55,6 @@ public:
 #ifdef HAVE_ROOT
     std::unique_ptr<::TH1D> CreateComponentCountHistogram(const std::vector<GroupKey> & group_key_list) const;
     std::unique_ptr<::TH1D> CreateAtomGausEstimateHistogram(GroupKey group_key, int par_id) const;
-    std::vector<std::unique_ptr<::TH1D>> CreateMainChainAtomGausRankHistogram(int par_id, int & chain_size, Residue residue=Residue::UNK, std::size_t extra_id=0, std::vector<Residue> veto_residues_list={});
     std::unordered_map<std::string, std::unique_ptr<::TGraphErrors>> CreateAtomGausEstimateToSequenceIDGraphMap(std::size_t main_chain_element_id, const int par_id=0, Residue residue=Residue::UNK);
     std::unordered_map<std::string, std::unique_ptr<::TGraphErrors>> CreateAverageQScoreToSequenceIDGraphMap(QScoreMode mode);
     std::unique_ptr<::TGraphErrors> CreateAtomGausEstimateToResidueGraph(const std::vector<GroupKey> & group_key_list, const int par_id=0);
@@ -66,12 +65,10 @@ public:
     std::unique_ptr<::TGraphErrors> CreateDistanceToResponseGraph(
         DistanceResponseSource source = DistanceResponseSource::SelectedSampling);
     std::unique_ptr<::TGraphErrors> CreateBinnedDistanceToSamplingValueGraph(int bin_size=20, double x_min=0.0, double x_max=2.0);
-    std::unique_ptr<::TGraphErrors> CreateBinnedDistanceToPeeledResponseGraph(int bin_size=20, double x_min=0.0, double x_max=2.0);
     std::unique_ptr<::TH2D> CreateDistanceToPeeledResponseHistogram(GroupKey group_key, int bin_size_x=10, double x_min=0.0, double x_max=2.0, int bin_size_y=500, double y_min=-100.0, double y_max=100.0);
     std::unique_ptr<::TH2D> CreateDistanceToPeeledResponseHistogram(const std::vector<AtomObject *> & atom_list, int bin_size_x=10, double x_min=0.0, double x_max=2.0, int bin_size_y=500, double y_min=-100.0, double y_max=100.0);
     std::unique_ptr<::TH2D> CreateDistanceToOriginalMapValueHistogram(const std::vector<AtomObject *> & atom_list, int bin_size_x=10, double x_min=0.0, double x_max=2.0, int bin_size_y=500, double y_min=-100.0, double y_max=100.0);
     std::unique_ptr<::TH2D> CreateDistanceToNeighborContributionHistogram(const std::vector<AtomObject *> & atom_list, int bin_size_x=10, double x_min=0.0, double x_max=2.0, int bin_size_y=500, double y_min=-100.0, double y_max=100.0);
-    std::unique_ptr<::TGraphErrors> CreateBinnedDistanceToNeighborContributionGraph(int bin_size=20, double x_min=0.0, double x_max=2.0);
     std::unique_ptr<::TGraphErrors> CreateInRangeAtomsToGausEstimateGraph(GroupKey group_key, double range=5.0, int par_id=0);
     std::unique_ptr<::TGraphErrors> CreateCOMDistanceToGausEstimateGraph(GroupKey group_key, int par_id=0);
     std::unique_ptr<::TGraphErrors> CreateAtomXYPositionTomographyGraph(double normalized_z_pos=0.5, double z_ratio_window=0.1, bool com_center=false);

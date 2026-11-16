@@ -869,9 +869,6 @@ TEST(DataObjectModelAnalysisTest, PotentialPlotCandleSharesRawRangeWithoutLosing
     EXPECT_DOUBLE_EQ(legacy->Integral(1, 10, 1, 500), 1.);
     EXPECT_DOUBLE_EQ(legacy->GetBinContent(2, 0), 1.);
     EXPECT_DOUBLE_EQ(legacy->GetBinContent(2, 501), 1.);
-    // The old per-atom median extrema were [0,1], giving display [-.2,1.2].
-    const auto medians{ rg::PotentialPlotBuilder(atom).CreateBinnedDistanceToPeeledResponseGraph() };
-    EXPECT_DOUBLE_EQ(medians->GetPointY(2), 1.);
     const auto [low, high]{ rg::painter_internal::ComputePeeledResponsePlotRange(view, keys, 0., 2.) };
     EXPECT_DOUBLE_EQ(low, -380.);
     EXPECT_DOUBLE_EQ(high, 530.);
@@ -1343,8 +1340,6 @@ TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewSeparatesSamplingAndPeel
         }
     };
     expect_binned_graph(builder.CreateBinnedDistanceToSamplingValueGraph(4, 0.0, 2.0), {6.0, 2.0, 0.0, 0.0});
-    expect_binned_graph(builder.CreateBinnedDistanceToPeeledResponseGraph(4, 0.0, 2.0), {1.25, 0.0, 0.0, 0.75});
-    expect_binned_graph(builder.CreateBinnedDistanceToNeighborContributionGraph(4, 0.0, 2.0), {4.75, 0.0, 0.0, 1.25});
 #endif
 
     peeling.samples[0].response.reset();
