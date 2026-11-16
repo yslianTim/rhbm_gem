@@ -164,35 +164,22 @@ void GausPainter::PaintPeeledResponseMainChain(ModelObject * model_object, const
 
     const size_t main_chain_element_size{ 4 };
 
-    std::vector<std::unique_ptr<TGraphErrors>> peeled_response_graph_list[main_chain_element_size];
+    std::vector<AtomObject *> atom_list[main_chain_element_size];
+    std::unique_ptr<TH2D> peeled_response_hist[main_chain_element_size];
     std::unique_ptr<TF1> gaus_function[main_chain_element_size];
     double amplitude_prior[main_chain_element_size];
     double width_prior[main_chain_element_size];
     double offset_prior[main_chain_element_size];
-    std::vector<double> y_array;
-    y_array.reserve(model_object->GetSelectedAtomCount());
+    std::vector<AtomObject *> range_atom_list;
+    range_atom_list.reserve(model_object->GetSelectedAtomCount());
     for (size_t k = 0; k < main_chain_element_size; k++)
     {
         const auto atom_key{ static_cast<AtomKey>(data_internal::GetMainChainSpot(k)) };
-        const auto atom_list{ PotentialPlotBuilder::CollectComponentAtomMembers(entry_iter, atom_key) };
+        atom_list[k] = PotentialPlotBuilder::CollectComponentAtomMembers(entry_iter, atom_key);
+        range_atom_list.insert(range_atom_list.end(), atom_list[k].begin(), atom_list[k].end());
         const auto average_prior{
             PotentialPlotBuilder::ComputeComponentAtomAveragePrior(entry_iter, atom_key)
         };
-        if (atom_list.empty()) continue;
-        for (auto atom : atom_list)
-        {
-            auto atom_plot_builder{ std::make_unique<PotentialPlotBuilder>(atom) };
-            auto graph{ atom_plot_builder->CreateBinnedDistanceToPeeledResponseGraph() };
-            root_helper::SetLineAttribute(graph.get(), 1, 2, static_cast<short>(kAzure-7), 0.3f);
-            peeled_response_graph_list[k].emplace_back(std::move(graph));
-            const auto atom_view{ AtomLocalPotentialView::For(*atom) };
-            auto sampling_value_range{
-                local_potential_series::ComputeResponseRange(
-                    atom_view.GetSelectedSamplingEntries(), 0.0)
-            };
-            y_array.emplace_back(std::get<0>(sampling_value_range));
-            y_array.emplace_back(std::get<1>(sampling_value_range));
-        }
         if (!average_prior) continue;
         gaus_function[k] = plot_builder->CreateComponentAtomAverageGausFunctionPrior(atom_key);
         amplitude_prior[k] = average_prior->GetDisplayParameter(0);
@@ -200,12 +187,12 @@ void GausPainter::PaintPeeledResponseMainChain(ModelObject * model_object, const
         offset_prior[k] = average_prior->GetModel().GetOffset();
     }
 
-    auto y_range{ painter_internal::ComputePlotRange(y_array, 0.15) };
-    auto x_min{ 0.01 };
-    auto x_max{ 1.49 };
-    auto y_min{ std::get<0>(y_range) };
-    auto y_max{ std::get<1>(y_range) };
-    auto line_ref{ root_helper::CreateLine(x_min, 0.0, x_max, 0.0) };
+    auto x_min{ 0.0 };
+    auto x_max{ 2.0 };
+    const auto [y_min, y_max]{
+        painter_internal::ComputePeeledResponsePlotRange(range_atom_list, x_min, x_max)
+    };
+    auto line_ref{ root_helper::CreateLine(x_min + 0.01, 0.0, x_max - 0.01, 0.0) };
 
     std::unique_ptr<TH2> frame[col_size][row_size];
     std::unique_ptr<TPaveText> element_text[col_size];
@@ -219,7 +206,7 @@ void GausPainter::PaintPeeledResponseMainChain(ModelObject * model_object, const
             root_helper::SetPadFrameAttribute(gPad, 0, 0, 4000, 0, 0, 0);
             auto x_factor{ root_helper::GetPadXfactorInCanvasPartition(canvas.get(), gPad) };
             auto y_factor{ root_helper::GetPadYfactorInCanvasPartition(canvas.get(), gPad) };
-            frame[i][j] = root_helper::CreateHist2D(Form("hist_%d_%d", i, j),"", 100, x_min, x_max, 100, y_min, y_max);
+            frame[i][j] = root_helper::CreateHist2D(Form("hist_%d_%d", i, j),"", 100, x_min + 0.01, x_max - 0.01, 100, y_min, y_max);
             root_helper::SetAxisTitleAttribute(frame[i][j]->GetXaxis(), 0.0f);
             root_helper::SetAxisLabelAttribute(frame[i][j]->GetXaxis(), 35.0f, 0.005f, 133);
             root_helper::SetAxisTickAttribute(frame[i][j]->GetXaxis(), static_cast<float>(y_factor*0.05/x_factor), 505);
@@ -232,10 +219,11 @@ void GausPainter::PaintPeeledResponseMainChain(ModelObject * model_object, const
             frame[i][j]->GetYaxis()->SetTitle("Peeled Response");
             frame[i][j]->Draw();
 
-            for (auto & graph : peeled_response_graph_list[i])
-            {
-                graph->Draw("L X0");
-            }
+            peeled_response_hist[i] = plot_builder->CreateDistanceToPeeledResponseHistogram(
+                atom_list[i], 10, x_min, x_max, 500, y_min, y_max);
+            root_helper::SetLineAttribute(peeled_response_hist[i].get(), 1, 1, kAzure-7, 0.5f);
+            root_helper::SetFillAttribute(peeled_response_hist[i].get(), 1001, kAzure-7, 0.3f);
+            peeled_response_hist[i]->Draw("CANDLE3 SAME");
 
             root_helper::SetLineAttribute(line_ref.get(), 2, 1, kBlack);
             line_ref->Draw();
@@ -256,7 +244,7 @@ void GausPainter::PaintPeeledResponseMainChain(ModelObject * model_object, const
 
             result_text[i] = root_helper::CreatePaveText(0.05, 0.08, 0.95, 0.25, "nbNDC", true);
             root_helper::SetPaveTextDefaultStyle(result_text[i].get());
-            root_helper::SetTextAttribute(result_text[i].get(), 20.0f, 133, 22, 0.0, kRed);
+            root_helper::SetTextAttribute(result_text[i].get(), 14.0f, 133, 22, 0.0, kRed);
             root_helper::SetFillAttribute(result_text[i].get(), 4000);
             if (gaus_function[i]) result_text[i]->AddText(
                 Form("#font[2]{A} = %.2f ; #tau = %.2f ; C = %.2f",
@@ -301,8 +289,18 @@ void GausPainter::PaintPeeledResponseMainChain(ModelObject * model_object, const
     root_helper::SetFillAttribute(legend.get(), 4000);
     root_helper::SetTextAttribute(legend.get(), 25.0f, 133, 12, 0.0);
     legend->SetMargin(0.15f);
-    legend->AddEntry(gaus_function[0].get(),"Mean Group Prior", "l");
-    legend->AddEntry(peeled_response_graph_list[0].at(0).get(),"Peeled response ", "l");
+    for (const auto & prior : gaus_function)
+    {
+        if (!prior) continue;
+        legend->AddEntry(prior.get(),"Mean Group Prior", "l");
+        break;
+    }
+    for (const auto & hist : peeled_response_hist)
+    {
+        if (hist->GetEntries() == 0.0) continue;
+        legend->AddEntry(hist.get(),"Peeled responses", "l");
+        break;
+    }
     legend->Draw();
 
     canvas->cd();

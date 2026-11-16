@@ -536,6 +536,15 @@ std::unique_ptr<TH2D> PotentialPlotBuilder::CreateDistanceToPeeledResponseHistog
 {
     if (IsModelObjectAvailable() == false) return nullptr;
     if (!IsAvailableAtomGroupKey(group_key)) return nullptr;
+    return CreateDistanceToPeeledResponseHistogram(
+        GetModelView().GetAtomObjectList(group_key),
+        bin_size_x, x_min, x_max, bin_size_y, y_min, y_max);
+}
+
+std::unique_ptr<TH2D> PotentialPlotBuilder::CreateDistanceToPeeledResponseHistogram(
+    const std::vector<AtomObject *> & atom_list,
+    int bin_size_x, double x_min, double x_max, int bin_size_y, double y_min, double y_max)
+{
     if (bin_size_x <= 0 || bin_size_y <= 0 ||
         !std::isfinite(x_min) || !std::isfinite(x_max) ||
         !std::isfinite(y_min) || !std::isfinite(y_max) ||
@@ -545,7 +554,6 @@ std::unique_ptr<TH2D> PotentialPlotBuilder::CreateDistanceToPeeledResponseHistog
         (static_cast<double>(bin_size_x) + 2.0) * (static_cast<double>(bin_size_y) + 2.0) >
             std::numeric_limits<int>::max())
         throw std::invalid_argument("Invalid peeled response histogram binning.");
-    const auto & atom_list{ GetModelView().GetAtomObjectList(group_key) };
     auto hist{
         root_helper::CreateHist2D("", "", bin_size_x, x_min, x_max, bin_size_y, y_min, y_max)
     };
@@ -743,7 +751,10 @@ std::vector<AtomObject *> PotentialPlotBuilder::CollectComponentAtomMembers(
     for (const auto group_key : CollectComponentAtomGroupKeys(model_view, atom_key))
     {
         const auto & members{ model_view.GetAtomObjectList(group_key) };
-        result.insert(result.end(), members.begin(), members.end());
+        for (auto * atom : members)
+        {
+            if (!atom->GetSpecialAtomFlag()) result.emplace_back(atom);
+        }
     }
     return result;
 }
@@ -764,6 +775,10 @@ std::optional<GaussianModel3DWithUncertainty> PotentialPlotBuilder::ComputeCompo
     for (const auto group_key : CollectComponentAtomGroupKeys(model_view, atom_key))
     {
         if (!model_view.HasAtomGroupPrior(group_key)) continue;
+        const auto & members{ model_view.GetAtomObjectList(group_key) };
+        // Mixed groups retain their stored prior; special-only groups do not contribute.
+        if (std::none_of(members.begin(), members.end(),
+                [](const auto * atom) { return !atom->GetSpecialAtomFlag(); })) continue;
         const auto prior{ model_view.GetAtomGroupPriorWithUncertainty(group_key) };
         const auto & model{ prior.GetModel() };
         const auto & uncertainty{ prior.GetStandardDeviationModel() };

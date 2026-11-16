@@ -25,30 +25,40 @@ inline auto ComputePlotRange(const std::vector<double> & values, double margin, 
 // Candle distributions use available Original-grid responses in the histogram's
 // [x_min, x_max) domain, not per-atom binned medians (or synthetic empty-bin zeros).
 inline auto ComputePeeledResponsePlotRange(
-    const ModelAnalysisView & view, const std::vector<GroupKey> & group_keys,
+    const std::vector<AtomObject *> & atoms,
     double x_min, double x_max)
 {
     double low{ std::numeric_limits<double>::infinity() };
     double high{ -std::numeric_limits<double>::infinity() };
-    for (const auto key : group_keys)
+    for (const auto * atom : atoms)
     {
-        for (const auto * atom : view.GetAtomObjectList(key))
+        const auto entry{ AtomLocalPotentialView::For(*atom) };
+        if (!entry.IsAvailable()) continue;
+        const auto & peeling{ entry.GetPostFitPeeling() };
+        if (!peeling) continue;
+        for (const auto & sample : peeling->samples)
         {
-            const auto entry{ AtomLocalPotentialView::For(*atom) };
-            if (!entry.IsAvailable()) continue;
-            const auto & peeling{ entry.GetPostFitPeeling() };
-            if (!peeling) continue;
-            for (const auto & sample : peeling->samples)
-            {
-                if (!sample.response) continue;
-                const auto distance{ std::sqrt(sample.observation.squared_distance) };
-                if (distance < x_min || distance >= x_max) continue;
-                low = std::min(low, *sample.response);
-                high = std::max(high, *sample.response);
-            }
+            if (!sample.response) continue;
+            const auto distance{ std::sqrt(sample.observation.squared_distance) };
+            if (distance < x_min || distance >= x_max) continue;
+            low = std::min(low, *sample.response);
+            high = std::max(high, *sample.response);
         }
     }
     return ComputePlotRange(low <= high ? std::vector<double>{low, high} : std::vector<double>{}, 0.20);
+}
+
+inline auto ComputePeeledResponsePlotRange(
+    const ModelAnalysisView & view, const std::vector<GroupKey> & group_keys,
+    double x_min, double x_max)
+{
+    std::vector<AtomObject *> atoms;
+    for (const auto key : group_keys)
+    {
+        const auto & members{ view.GetAtomObjectList(key) };
+        atoms.insert(atoms.end(), members.begin(), members.end());
+    }
+    return ComputePeeledResponsePlotRange(atoms, x_min, x_max);
 }
 
 inline void RequireLocalAnalyzedModel(
