@@ -88,10 +88,10 @@ to UMAP:
 - tail peeling ratio.
 
 The remaining features stay in the CSV but are not passed to UMAP.
-With the default internal setting
-`kFilterUmapInputBySpot = false`,
-all selected atoms are retained. Developers can enable the filter and rebuild to
-retain only `C`, `CA`, `N`, `O`, and residue `HOH` with spot `O`.
+Input rows are not filtered by spot or residue name. Selected Joint Targets with
+all required features are retained; rows with missing required features are
+excluded as described above. Spot and residue names remain available for plot
+classification.
 
 ## CLI Usage
 

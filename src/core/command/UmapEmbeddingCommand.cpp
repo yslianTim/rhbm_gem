@@ -74,10 +74,6 @@ static_assert(
     kSelectedFeatureCount > 0,
     "At least one feature must be selected in kFeatureDefinitions for UMAP.");
 
-// Toggle this internal switch to restrict UMAP input to the configured spots,
-// then rebuild the project.
-constexpr bool kFilterUmapInputBySpot{ false };
-
 struct ConfiguredUmapSpot
 {
     std::string_view label;
@@ -223,8 +219,6 @@ std::optional<PreparedUmapInput> BuildAndStandardizeInput(
         const auto configured_spot_index{
             FindConfiguredUmapSpotIndex(row.residue, row.spot)
         };
-        if (kFilterUmapInputBySpot && !configured_spot_index) continue;
-
         bool valid=true;
         for (std::size_t feature = 0; feature < kInputFeatureCount; ++feature)
         {
@@ -256,16 +250,8 @@ std::optional<PreparedUmapInput> BuildAndStandardizeInput(
     }
     if (feature_rows.size() < 3)
     {
-        if constexpr (kFilterUmapInputBySpot)
-        {
-            error_message = "UMAP embedding requires at least 3 data rows after spot "
-                "filtering; found " + std::to_string(feature_rows.size()) + ".";
-        }
-        else
-        {
-            error_message = "UMAP embedding requires at least 3 data rows; found "
-                + std::to_string(feature_rows.size()) + ".";
-        }
+        error_message = "UMAP embedding requires at least 3 data rows; found "
+            + std::to_string(feature_rows.size()) + ".";
         return std::nullopt;
     }
     if (feature_rows.size() > static_cast<std::size_t>(std::numeric_limits<int>::max()))
