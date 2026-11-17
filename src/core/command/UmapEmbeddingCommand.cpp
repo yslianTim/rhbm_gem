@@ -139,7 +139,6 @@ int GetOtherElementColor(Element element)
 {
     switch (element)
     {
-    case Element::HYDROGEN:   return kGray+2;
     case Element::CARBON:     return kRed+1;
     case Element::NITROGEN:   return kGreen+2;
     case Element::OXYGEN:     return kAzure+2;
@@ -153,6 +152,19 @@ int GetOtherElementColor(Element element)
     float red{}, green{}, blue{};
     TColor::HSV2RGB(hue, 0.65f, 0.75f, red, green, blue);
     return TColor::GetColor(red, green, blue);
+}
+
+short GetOtherElementMarker(Element element)
+{
+    switch (element)
+    {
+    case Element::CARBON:     return 2;
+    case Element::NITROGEN:   return 5;
+    case Element::OXYGEN:     return 27;
+    case Element::SULFUR:     return 30;
+    default: break;
+    }
+    return 5; // Default marker for other elements.
 }
 #endif
 
@@ -625,7 +637,7 @@ bool WriteEmbeddingPlot(
         {
             auto graph{ root_helper::CreateGraphErrors() };
             root_helper::SetMarkerAttribute(
-                graph.get(), 5, 1.5f,
+                graph.get(), GetOtherElementMarker(element), 1.5f,
                 static_cast<short>(GetOtherElementColor(element)), 0.75f);
             graphs.emplace_back(std::move(graph));
             labels.emplace_back(element == Element::UNK
