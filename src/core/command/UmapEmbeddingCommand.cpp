@@ -90,7 +90,7 @@ constexpr std::array<ConfiguredUmapSpot, 5> kConfiguredUmapSpots{
     ConfiguredUmapSpot{ "CA", "CA", std::nullopt },
     ConfiguredUmapSpot{ "N", "N", std::nullopt },
     ConfiguredUmapSpot{ "O", "O", std::nullopt },
-    ConfiguredUmapSpot{ "HOH", "O", "HOH" },
+    ConfiguredUmapSpot{ "O (Water)", "O", "HOH" },
 };
 
 std::optional<std::size_t> FindConfiguredUmapSpotIndex(
@@ -143,7 +143,7 @@ int GetOtherElementColor(Element element)
     case Element::NITROGEN:   return kGreen+2;
     case Element::OXYGEN:     return kAzure+2;
     case Element::PHOSPHORUS: return kOrange+7;
-    case Element::SULFUR:     return kAzure;
+    case Element::SULFUR:     return kMagenta;
     case Element::UNK:        return kBlack;
     default: break;
     }
@@ -564,12 +564,12 @@ bool WriteEmbeddingPlot(
         {
             auto graph{ root_helper::CreateGraphErrors() };
             root_helper::SetMarkerAttribute(
-                graph.get(), 5, 0.8f,
+                graph.get(), 5, 1.2f,
                 static_cast<short>(GetOtherElementColor(element)), 0.75f);
             graphs.emplace_back(std::move(graph));
             labels.emplace_back(element == Element::UNK
                 ? "Other Unknown"
-                : "Other " + std::string(ChemicalDataHelper::GetLabel(element)));
+                : "Side-Chain " + std::string(ChemicalDataHelper::GetLabel(element)));
         }
 
         for (std::size_t observation = 0;
@@ -619,15 +619,11 @@ bool WriteEmbeddingPlot(
         root_helper::SetPadLayout(canvas.get(), 1, 1, 0, 0, 1, 1);
         canvas->cd();
 
-        auto frame{ root_helper::CreateHist2D(
-            "umap_embedding_frame",
-            "UMAP embedding by spot and element",
-            100,
-            std::get<0>(x_range),
-            std::get<1>(x_range),
-            100,
-            std::get<0>(y_range),
-            std::get<1>(y_range)) };
+        auto frame{
+            root_helper::CreateHist2D("umap_embedding_frame","",
+                100, std::get<0>(x_range), std::get<1>(x_range),
+                100, std::get<0>(y_range), std::get<1>(y_range))
+        };
         frame->SetStats(0);
         frame->GetXaxis()->SetTitle("umap x");
         frame->GetYaxis()->SetTitle("umap y");
