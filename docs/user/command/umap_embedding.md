@@ -115,7 +115,7 @@ RHBM-GEM umap_embedding \
 | `--min-dist` | `0.1` | Minimum embedding distance in the inclusive range `[0, 1]`. |
 | `--epochs` | `0` | Optimization epochs; `0` selects the umappp automatic value. |
 | `--seed` | `42` | Seed used for initialization and layout optimization. |
-| `-j, --jobs` | `1` | Threads for neighbor search, fuzzy-set work, and spectral initialization. Layout optimization remains single-threaded. |
+| `-j, --jobs` | `1` | Threads for neighbor search, fuzzy-set work, spectral initialization, and mean shift when OpenMP is available. Layout optimization remains single-threaded. |
 | `-o, --folder` | current directory | Output directory. |
 | `-v, --verbose` | `3` | Standard RHBM-GEM verbosity level. |
 
@@ -135,19 +135,42 @@ uses round-trip-safe floating-point precision for continuous features and UMAP
 coordinates.
 
 The CSV contains the identifiers `serial id,residue,spot`, all 7 reconstructed
-features, and `umap x,umap y`: 12 columns in total. The three rank columns are no
-longer emitted; consumers must account for their removal. Its name is
+features, the original `umap x,umap y`, and the appended `mean shift x,mean shift y`:
+14 columns in total. The original 12 columns keep their order. The three rank
+columns are no longer emitted; consumers must account for their removal. Its name is
 `<folder>/umap_embedding_<sanitized-model-key>.csv`. ASCII letters, digits,
 `.`, `_`, and `-` are retained in the key; other bytes become `_`.
 
-When ROOT support is available, the command also writes a PDF with the same
-stem. Categories `C`, `CA`, `N`, and `O` retain their existing colors;
-residue `HOH` with spot `O` is plotted separately as `HOH`; unmatched atoms
-are plotted in the gray `Other` category. Empty categories are omitted from
-the legend. Builds without ROOT skip the PDF and report a warning.
+Mean shift starts from the original two-dimensional UMAP coordinates and runs
+15 iterations with 20 nearest neighbors, limited to the number of retained rows.
+Each query searches the fixed original point set, allowing its own source point,
+then moves to the weighted mean of those neighbors' original coordinates.
+Weights are recomputed for each query at every iteration with the Gaussian kernel
+`exp(-alpha * distance_squared / (2 * sigma * sigma))`. The distance is between
+the query's current position and the neighbor's original position, using both
+UMAP coordinates at their original scale. The internal constants in
+`RunUmapMeanShift` are `alpha = 2.0` and `sigma = 2.0`, giving the default kernel
+`exp(-distance_squared / 4.0)`; changing either constant requires rebuilding.
+Joint width remains in the CSV but does not affect the kernel weights.
+If a neighborhood has zero total weight, the query keeps its current position
+and a warning is reported. Non-finite updates fail the command before CSV output.
+There is no early stopping or deduplication; row count and atom association are
+preserved. Even when all rows fit within the neighbor limit, each query has its
+own distance-based weights and need not move to the same global center.
+Mean shift uses all retained rows regardless of plot visibility.
+
+When ROOT support is available, the command writes the original scatter plot
+as `umap_embedding_<sanitized-model-key>.pdf` and the updated scatter plot as
+`umap_embedding_<sanitized-model-key>_mean_shift.pdf`. Both use the original
+plot's axis ranges, including its 10% margins and minimum-range handling, and
+the same category colors, markers, legend, and layout. Categories are `C`, `CA`,
+`N`, `O`, and `O (Water)` for residue `HOH` with spot `O`; unmatched atoms are
+grouped by element as `Side-Chain <element>` or `Other Unknown`. Empty categories
+are omitted from the legend. Builds without ROOT still write both coordinate
+pairs to CSV, skip both PDFs, and report a warning.
 
 The database and model are fully validated, features are reconstructed and
-standardized, and UMAP completes before the CSV is opened. Database path,
+standardized, and both UMAP and mean shift complete before the CSV is opened. Database path,
 opening, and schema failures are attributed to `--database`; missing keys and
 incomplete model features to `--model-key`; output failures to `--folder`.
 UMAP coordinates are meaningful relative to other rows in the same run; their

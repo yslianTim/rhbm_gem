@@ -12,6 +12,7 @@
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <umappp/umappp.hpp>
+#include <knncolle/knncolle.hpp>
 
 #ifdef HAVE_ROOT
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>
@@ -26,6 +27,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <cstddef>
 #include <exception>
@@ -35,9 +37,11 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <tuple>
 #include <vector>
 
 namespace rhbm_gem::core {
@@ -117,16 +121,17 @@ struct UmapSpotPlotStyle
 {
     std::string_view label;
     short color;
+    short marker;
 };
 
 // Toggle this internal switch to omit all Other element graphs, then rebuild the project.
 constexpr bool kDrawOtherUmapSpotGraph{ true };
 constexpr std::array kUmapSpotPlotStyles{
-    UmapSpotPlotStyle{ kConfiguredUmapSpots[0].label, kViolet + 1 },
-    UmapSpotPlotStyle{ kConfiguredUmapSpots[1].label, kRed + 1 },
-    UmapSpotPlotStyle{ kConfiguredUmapSpots[2].label, kGreen + 2 },
-    UmapSpotPlotStyle{ kConfiguredUmapSpots[3].label, kAzure + 2 },
-    UmapSpotPlotStyle{ kConfiguredUmapSpots[4].label, kOrange + 7 },
+    UmapSpotPlotStyle{ kConfiguredUmapSpots[0].label, kViolet + 1, 24 },
+    UmapSpotPlotStyle{ kConfiguredUmapSpots[1].label, kRed + 1,    25 },
+    UmapSpotPlotStyle{ kConfiguredUmapSpots[2].label, kGreen + 2,  26 },
+    UmapSpotPlotStyle{ kConfiguredUmapSpots[3].label, kAzure + 2,  32 },
+    UmapSpotPlotStyle{ kConfiguredUmapSpots[4].label, kOrange + 7, 28 },
 };
 static_assert(kUmapSpotPlotStyles.size() == kConfiguredUmapSpots.size());
 
@@ -381,9 +386,96 @@ void NormalizeAndValidateRequest(
     }
 }
 
+std::vector<double> RunUmapMeanShift(
+    const std::vector<double> & embedding,
+    const std::vector<detail::LocalFittingFeatureRow> & feature_rows,
+    [[maybe_unused]] int thread_size)
+{
+    constexpr int iteration_count{ 100 };
+    constexpr int requested_neighbors{ 200 };
+    constexpr double alpha{ 2.0 };
+    constexpr double sigma{ 1.5 };
+    const int point_count{ static_cast<int>(embedding.size() / kOutputDimensionCount) };
+    const int neighbors{ std::min(requested_neighbors, point_count) };
+    if (neighbors != requested_neighbors)
+    {
+        Logger::Log(LogLevel::Warning,
+            "UMAP mean shift neighbor count was limited to "
+                + std::to_string(neighbors) + " for " + std::to_string(point_count)
+                + " data rows.");
+    }
+
+    knncolle::VptreeBuilder<int, double, double> builder(
+        std::make_shared<knncolle::EuclideanDistance<double, double>>());
+    const auto index{ builder.build_unique(knncolle::SimpleMatrix<int, double>(
+        kOutputDimensionCount, point_count, embedding.data())) };
+    auto shifted{ embedding };
+    std::atomic<bool> nonfinite_update{ false };
+#ifdef USE_OPENMP
+    #pragma omp parallel num_threads(thread_size)
+#endif
+    {
+        auto searcher{ index->initialize() };
+        std::vector<int> nearest;
+        for (int iteration = 0; iteration < iteration_count; ++iteration)
+        {
+#ifdef USE_OPENMP
+            #pragma omp for schedule(static)
+#endif
+            for (int point = 0; point < point_count; ++point)
+            {
+                const auto offset{ static_cast<std::size_t>(point) * kOutputDimensionCount };
+                // Coordinate queries include coincident source points, including self.
+                searcher->search(shifted.data() + offset, neighbors, &nearest, nullptr);
+                std::array<double, kOutputDimensionCount> mean{};
+                double weight_sum{};
+                for (const int neighbor : nearest)
+                {
+                    const auto source{ static_cast<std::size_t>(neighbor) * kOutputDimensionCount };
+                    const double dx{ shifted[offset] - embedding[source] };
+                    const double dy{ shifted[offset + 1] - embedding[source + 1] };
+                    const double distance_squared{ dx * dx + dy * dy };
+                    const double weight{ std::exp(-alpha * distance_squared / (2.0 * sigma * sigma)) };
+                    weight_sum += weight;
+                    for (std::size_t dimension = 0; dimension < kOutputDimensionCount; ++dimension)
+                    {
+                        mean[dimension] += weight * embedding[source + dimension];
+                    }
+                }
+                if (weight_sum == 0.0)
+                {
+                    Logger::Log(LogLevel::Warning,
+                        "UMAP mean shift has zero total neighbor weight for atom serial "
+                            + std::to_string(feature_rows[static_cast<std::size_t>(point)].serial_id)
+                            + "; keeping its current position.");
+                    continue;
+                }
+                for (auto & coordinate : mean) coordinate /= weight_sum;
+                if (!std::isfinite(weight_sum)
+                    || !std::all_of(mean.begin(), mean.end(),
+                        [](double coordinate) { return std::isfinite(coordinate); }))
+                {
+                    nonfinite_update.store(true, std::memory_order_relaxed);
+                    continue;
+                }
+                for (std::size_t dimension = 0; dimension < kOutputDimensionCount; ++dimension)
+                {
+                    shifted[offset + dimension] = mean[dimension];
+                }
+            }
+        }
+    }
+    if (nonfinite_update.load(std::memory_order_relaxed))
+    {
+        throw std::runtime_error("Weighted mean shift produced a non-finite update.");
+    }
+    return shifted;
+}
+
 bool WriteEmbedding(
     const PreparedUmapInput & prepared,
     const std::vector<double> & embedding,
+    const std::vector<double> & mean_shift_embedding,
     std::string & error_message)
 {
     std::ofstream output{ prepared.output_path, std::ios::out | std::ios::trunc };
@@ -394,7 +486,8 @@ bool WriteEmbedding(
         return false;
     }
 
-    output << detail::BuildLocalFittingCsvHeader() << ",umap x,umap y\n";
+    output << detail::BuildLocalFittingCsvHeader()
+        << ",umap x,umap y,mean shift x,mean shift y\n";
     output << std::setprecision(std::numeric_limits<double>::max_digits10);
     for (std::size_t observation = 0;
         observation < prepared.feature_rows.size();
@@ -412,6 +505,8 @@ bool WriteEmbedding(
         }
         output << ',' << embedding[observation * kOutputDimensionCount]
             << ',' << embedding[observation * kOutputDimensionCount + 1]
+            << ',' << mean_shift_embedding[observation * kOutputDimensionCount]
+            << ',' << mean_shift_embedding[observation * kOutputDimensionCount + 1]
             << '\n';
     }
     output.close();
@@ -439,6 +534,12 @@ bool WriteEmbedding(
 }
 
 #ifdef HAVE_ROOT
+struct UmapPlotRanges
+{
+    std::tuple<double, double> x;
+    std::tuple<double, double> y;
+};
+
 bool PreparePlotOutputPath(
     const std::filesystem::path & plot_path,
     std::string & error_message)
@@ -481,23 +582,13 @@ void RemoveStalePlotOutput(const std::filesystem::path & plot_path)
     }
 }
 
-#endif
-
 bool WriteEmbeddingPlot(
     const PreparedUmapInput & prepared,
     const std::vector<double> & embedding,
+    const std::filesystem::path & plot_path,
+    const UmapPlotRanges & ranges,
     std::string & error_message)
 {
-#ifndef HAVE_ROOT
-    (void)prepared;
-    (void)embedding;
-    (void)error_message;
-    Logger::Log(LogLevel::Warning,
-        "UMAP scatter plot skipped because ROOT support is unavailable.");
-    return true;
-#else
-    auto plot_path{ prepared.output_path };
-    plot_path.replace_extension(".pdf");
     try
     {
         std::vector<Element> other_elements;
@@ -522,15 +613,11 @@ bool WriteEmbeddingPlot(
         }
         std::vector<std::unique_ptr<TGraphErrors>> graphs;
         std::vector<std::string> labels;
-        std::vector<double> plotted_x;
-        std::vector<double> plotted_y;
-        plotted_x.reserve(prepared.feature_rows.size());
-        plotted_y.reserve(prepared.feature_rows.size());
 
         for (const auto & style : kUmapSpotPlotStyles)
         {
             auto graph{ root_helper::CreateGraphErrors() };
-            root_helper::SetMarkerAttribute(graph.get(), 24, 0.8f, style.color, 0.75f);
+            root_helper::SetMarkerAttribute(graph.get(), style.marker, 1.5f, style.color, 0.75f);
             graphs.emplace_back(std::move(graph));
             labels.emplace_back(style.label);
         }
@@ -538,7 +625,7 @@ bool WriteEmbeddingPlot(
         {
             auto graph{ root_helper::CreateGraphErrors() };
             root_helper::SetMarkerAttribute(
-                graph.get(), 5, 1.2f,
+                graph.get(), 5, 1.5f,
                 static_cast<short>(GetOtherElementColor(element)), 0.75f);
             graphs.emplace_back(std::move(graph));
             labels.emplace_back(element == Element::UNK
@@ -565,20 +652,9 @@ bool WriteEmbeddingPlot(
             const int point{ graph->GetN() };
             graph->SetPoint(point, x, y);
             graph->SetPointError(point, 0.0, 0.0);
-            plotted_x.push_back(x);
-            plotted_y.push_back(y);
-        }
-        if (plotted_x.empty())
-        {
-            RemoveStalePlotOutput(plot_path);
-            Logger::Log(LogLevel::Warning,
-                "UMAP scatter plot skipped because no configured spot categories were found.");
-            return true;
         }
         if (!PreparePlotOutputPath(plot_path, error_message)) return false;
 
-        const auto x_range{ array_helper::ComputeScalingRangeTuple(plotted_x, 0.1) };
-        const auto y_range{ array_helper::ComputeScalingRangeTuple(plotted_y, 0.1) };
         const auto visible_categories{ static_cast<int>(std::count_if(
             graphs.begin(), graphs.end(), [](const auto & graph) { return graph->GetN() > 0; })) };
         const int legend_columns{ (visible_categories + 19) / 20 };
@@ -595,8 +671,8 @@ bool WriteEmbeddingPlot(
 
         auto frame{
             root_helper::CreateHist2D("umap_embedding_frame","",
-                100, std::get<0>(x_range), std::get<1>(x_range),
-                100, std::get<0>(y_range), std::get<1>(y_range))
+                100, std::get<0>(ranges.x), std::get<1>(ranges.x),
+                100, std::get<0>(ranges.y), std::get<1>(ranges.y))
         };
         frame->SetStats(0);
         frame->GetXaxis()->SetTitle("umap x");
@@ -652,6 +728,52 @@ bool WriteEmbeddingPlot(
             + plot_path.string() + "': " + error.what();
         return false;
     }
+}
+#endif
+
+bool WriteEmbeddingPlots(
+    const PreparedUmapInput & prepared,
+    const std::vector<double> & embedding,
+    const std::vector<double> & mean_shift_embedding,
+    std::string & error_message)
+{
+#ifndef HAVE_ROOT
+    (void)prepared;
+    (void)embedding;
+    (void)mean_shift_embedding;
+    (void)error_message;
+    Logger::Log(LogLevel::Warning,
+        "UMAP scatter plots skipped because ROOT support is unavailable.");
+    return true;
+#else
+    auto plot_path{ prepared.output_path };
+    plot_path.replace_extension(".pdf");
+    const auto mean_shift_path{ prepared.output_path.parent_path()
+        / (prepared.output_path.stem().string() + "_mean_shift.pdf") };
+    std::vector<double> plotted_x;
+    std::vector<double> plotted_y;
+    plotted_x.reserve(prepared.feature_rows.size());
+    plotted_y.reserve(prepared.feature_rows.size());
+    for (std::size_t observation = 0; observation < prepared.feature_rows.size(); ++observation)
+    {
+        if (!prepared.configured_spot_indices[observation] && !kDrawOtherUmapSpotGraph) continue;
+        plotted_x.push_back(embedding[observation * kOutputDimensionCount]);
+        plotted_y.push_back(embedding[observation * kOutputDimensionCount + 1]);
+    }
+    if (plotted_x.empty())
+    {
+        RemoveStalePlotOutput(plot_path);
+        RemoveStalePlotOutput(mean_shift_path);
+        Logger::Log(LogLevel::Warning,
+            "UMAP scatter plots skipped because no configured spot categories were found.");
+        return true;
+    }
+    const UmapPlotRanges ranges{
+        array_helper::ComputeScalingRangeTuple(plotted_x, 0.1),
+        array_helper::ComputeScalingRangeTuple(plotted_y, 0.1)
+    };
+    return WriteEmbeddingPlot(prepared, embedding, plot_path, ranges, error_message)
+        && WriteEmbeddingPlot(prepared, mean_shift_embedding, mean_shift_path, ranges, error_message);
 #endif
 }
 
@@ -709,8 +831,31 @@ bool ExecutePreparedRequest(
         return false;
     }
 
+    std::vector<double> mean_shift_embedding;
+    try
+    {
+        mean_shift_embedding = RunUmapMeanShift(embedding, prepared.feature_rows, request.job_count);
+    }
+    catch (const std::exception & error)
+    {
+        runner.RequirePrepareCondition(false,
+            "UMAP mean shift failed for model key '" + request.model_key_tag
+                + "' in database '" + request.database_path.string()
+                + "': " + error.what());
+        return false;
+    }
+    if (!std::all_of(mean_shift_embedding.begin(), mean_shift_embedding.end(),
+        [](double coordinate) { return std::isfinite(coordinate); }))
+    {
+        runner.RequirePrepareCondition(false,
+            "UMAP mean shift produced a non-finite coordinate for model key '"
+                + request.model_key_tag + "' in database '"
+                + request.database_path.string() + "'.");
+        return false;
+    }
+
     std::string write_error;
-    if (!WriteEmbedding(prepared, embedding, write_error))
+    if (!WriteEmbedding(prepared, embedding, mean_shift_embedding, write_error))
     {
         runner.AddFieldValidationError(&CommandRequestBase::output_dir, write_error);
         return false;
@@ -719,7 +864,7 @@ bool ExecutePreparedRequest(
         "UMAP embedding written to: " + prepared.output_path.string());
 
     std::string plot_error;
-    if (!WriteEmbeddingPlot(prepared, embedding, plot_error))
+    if (!WriteEmbeddingPlots(prepared, embedding, mean_shift_embedding, plot_error))
     {
         runner.AddFieldValidationError(&CommandRequestBase::output_dir, plot_error);
         return false;

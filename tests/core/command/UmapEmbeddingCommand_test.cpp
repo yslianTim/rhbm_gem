@@ -41,7 +41,7 @@ namespace {
 namespace rg = rhbm_gem;
 
 constexpr std::size_t kOutputColumnCount{
-    rg::core::detail::kLocalFittingColumnCount + 2
+    rg::core::detail::kLocalFittingColumnCount + 4
 };
 constexpr double kAmplitudeBase{ 1.123456789012345 };
 
@@ -56,6 +56,7 @@ struct FeatureModelOptions
     bool omit_peeling_samples{ false };
     bool invalid_signal_ratio{ false };
     bool infinite_first_amplitude{ false };
+    bool vary_joint_widths{ false };
     std::string atom_id{ "CA" };
 };
 
@@ -121,25 +122,35 @@ rg::LocalGaussianResult MakeGaussianResult(
     return result;
 }
 
-JointInitialization MakeFeatureInitialization(const JointProblemInput & input, std::size_t donor_count)
+double FeatureJointWidth(int serial_id, bool vary_joint_widths)
+{
+    return vary_joint_widths ? 0.35 + 0.05 * (serial_id % 7) : 0.5;
+}
+
+JointInitialization MakeFeatureInitialization(
+    const JointProblemInput & input,
+    std::size_t donor_count,
+    bool vary_joint_widths = false)
 {
     JointInitialization initialization;
     initialization.valid = true;
     initialization.reason = "valid-widths";
-    initialization.tau.assign(input.atom_ids.size(), 0.5);
+    initialization.tau.resize(input.atom_ids.size());
     for (std::size_t index = 0; index < input.atom_ids.size(); ++index)
     {
+        const double width{ FeatureJointWidth(std::stoi(input.atom_ids[index]), vary_joint_widths) };
+        initialization.tau[index] = width;
         JointInitializationAtom atom;
         atom.id = input.atom_ids[index];
         atom.target = true;
-        atom.mdpde[1] = 0.5;
-        atom.ols[1] = 0.5;
+        atom.mdpde[1] = width;
+        atom.ols[1] = width;
         atom.alpha = 0.5;
         atom.sample_count = 12;
         const bool donor = index < donor_count;
         atom.reason = donor ? "valid-width" : "median-fallback";
-        if (donor) atom.original_tau = 0.5;
-        atom.used_tau = 0.5;
+        if (donor) atom.original_tau = width;
+        atom.used_tau = width;
         atom.seed_source = donor ? "fitted" : "median-fallback";
         atom.donor_count = donor ? 0 : donor_count;
         atom.initial_stage_fit_qualified = donor;
@@ -192,10 +203,11 @@ std::unique_ptr<rg::ModelObject> BuildFeatureModel(
         input.atom_ids.push_back(std::to_string(atom->GetSerialID()));
         auto & support = input.support.emplace_back();
         const double amplitude = MakeGaussianResult(atom->GetSerialID(), 1, options).mdpde.GetModel().GetAmplitude();
+        const double width{ FeatureJointWidth(atom->GetSerialID(), options.vary_joint_widths) };
         for (int k = 0; k < 12; ++k)
         {
             const double distance = k == 0 ? 0.5 : k == 1 ? 1.5 : 0.125 * (k - 2);
-            const auto kernel = joint_component::EvaluateKernel(distance * distance, 0.5, 2.5);
+            const auto kernel = joint_component::EvaluateKernel(distance * distance, width, 2.5);
             const auto row = input.row_ids.size();
             input.row_ids.push_back(std::to_string(row));
             input.observations.push_back(amplitude * kernel.gaussian - 0.1 * kernel.charge);
@@ -205,7 +217,7 @@ std::unique_ptr<rg::ModelObject> BuildFeatureModel(
     const auto row_count = input.row_ids.size();
     input.selection_domain->pure_halo_support_exclusion =
         rg::JointPureHaloSupportExclusionProvenance{row_count, row_count, 0, 0, 0, 0};
-    const auto initialization = MakeFeatureInitialization(input, count);
+    const auto initialization = MakeFeatureInitialization(input, count, options.vary_joint_widths);
     const JointProblem problem(std::move(input));
     auto snapshot = CaptureJointAnalysisResult(FitJointComponentsInitialized(problem, initialization));
     if (!IsQualifiedJointAnalysisResult(snapshot))
@@ -343,7 +355,8 @@ bool HasIssue(
 }
 
 std::vector<std::array<double, 2>> ReadCoordinates(
-    const std::filesystem::path & output_path)
+    const std::filesystem::path & output_path,
+    std::size_t coordinate_column = rg::core::detail::kLocalFittingColumnCount)
 {
     const auto lines{ ReadLines(output_path) };
     std::vector<std::array<double, 2>> coordinates;
@@ -352,11 +365,56 @@ std::vector<std::array<double, 2>> ReadCoordinates(
         const auto fields{ SplitFields(lines[line]) };
         if (fields.size() != kOutputColumnCount) return {};
         coordinates.push_back({
-            std::stod(fields[rg::core::detail::kLocalFittingColumnCount]),
-            std::stod(fields[rg::core::detail::kLocalFittingColumnCount + 1])
+            std::stod(fields[coordinate_column]),
+            std::stod(fields[coordinate_column + 1])
         });
     }
     return coordinates;
+}
+
+std::vector<std::array<double, 2>> ReferenceMeanShift(
+    const std::vector<std::array<double, 2>> & original,
+    double alpha = 2.0)
+{
+    auto queries{ original };
+    const auto neighbor_count{ std::min(std::size_t{ 20 }, original.size()) };
+    for (int iteration = 0; iteration < 15; ++iteration)
+    {
+        for (auto & query : queries)
+        {
+            std::vector<std::pair<double, std::size_t>> distances;
+            for (std::size_t point = 0; point < original.size(); ++point)
+            {
+                const double dx{ original[point][0] - query[0] };
+                const double dy{ original[point][1] - query[1] };
+                distances.emplace_back(dx * dx + dy * dy, point);
+            }
+            std::sort(distances.begin(), distances.end());
+            if (neighbor_count < distances.size())
+            {
+                EXPECT_LT(distances[neighbor_count - 1].first, distances[neighbor_count].first)
+                    << "The reference fixture must not tie at the neighbor cutoff.";
+            }
+            std::array<double, 2> weighted_sum{};
+            double weight_sum{};
+            for (std::size_t neighbor = 0; neighbor < neighbor_count; ++neighbor)
+            {
+                const auto source{ distances[neighbor].second };
+                const double weight{ std::exp(-alpha * distances[neighbor].first / 8.0) };
+                weight_sum += weight;
+                for (std::size_t dimension = 0; dimension < query.size(); ++dimension)
+                {
+                    weighted_sum[dimension] += original[source][dimension] * weight;
+                }
+            }
+            if (weight_sum > 0)
+            {
+                query[0] = weighted_sum[0] / weight_sum;
+                query[1] = weighted_sum[1] / weight_sum;
+            }
+        }
+    }
+    return queries;
 }
 
 int RunCli(std::vector<std::string> arguments)
@@ -411,8 +469,8 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
         "serial id,residue,spot,"
         "neighbor distance sum in 2A,distance to closest neighbor,"
         "signal peeling ratio,tail peeling ratio,"
-        "amplitude joint,width joint,offset joint,umap x,umap y");
-    EXPECT_EQ(kOutputColumnCount, 12u);
+        "amplitude joint,width joint,offset joint,umap x,umap y,mean shift x,mean shift y");
+    EXPECT_EQ(kOutputColumnCount, 14u);
     const auto metadata_lines{ ReadLines(output_path.string() + ".metadata.json") };
     const auto metadata{ boost::json::parse(metadata_lines.at(0)) };
     const auto & column_semantics{ metadata.at("column_semantics").as_object() };
@@ -434,10 +492,11 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
         EXPECT_EQ(std::stoi(fields[0]), static_cast<int>(row));
         EXPECT_EQ(fields[1], "ALA");
         EXPECT_EQ(fields[2], "CA");
-        EXPECT_TRUE(std::isfinite(
-            std::stod(fields[rg::core::detail::kLocalFittingColumnCount])));
-        EXPECT_TRUE(std::isfinite(
-            std::stod(fields[rg::core::detail::kLocalFittingColumnCount + 1])));
+        for (std::size_t column = rg::core::detail::kLocalFittingColumnCount;
+            column < kOutputColumnCount; ++column)
+        {
+            EXPECT_TRUE(std::isfinite(std::stod(fields[column])));
+        }
     }
 
     const auto first_fields{ SplitFields(output_lines[1]) };
@@ -517,9 +576,13 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
 #ifdef HAVE_ROOT
     EXPECT_TRUE(std::filesystem::is_regular_file(
         output_dir / "umap_embedding_model_key_weird.pdf"));
+    EXPECT_TRUE(std::filesystem::is_regular_file(
+        output_dir / "umap_embedding_model_key_weird_mean_shift.pdf"));
 #else
     EXPECT_FALSE(std::filesystem::exists(
         output_dir / "umap_embedding_model_key_weird.pdf"));
+    EXPECT_FALSE(std::filesystem::exists(
+        output_dir / "umap_embedding_model_key_weird_mean_shift.pdf"));
 #endif
 }
 
@@ -574,22 +637,29 @@ TEST(UmapEmbeddingCommandTest, ClassifiesUnconfiguredSpotsAsOtherInRootPlot)
         ASSERT_TRUE(result.succeeded);
         const auto lines{ ReadLines(output_dir / ("umap_embedding_" + model_key + ".csv")) };
         ASSERT_EQ(lines.size(), options.atom_count + 1);
-        EXPECT_EQ(lines[0], rg::core::detail::BuildLocalFittingCsvHeader() + ",umap x,umap y");
+        EXPECT_EQ(lines[0], rg::core::detail::BuildLocalFittingCsvHeader()
+            + ",umap x,umap y,mean shift x,mean shift y");
         for (std::size_t row = 1; row < lines.size(); ++row)
         {
             const auto fields{ SplitFields(lines[row]) };
             ASSERT_EQ(fields.size(), kOutputColumnCount);
             EXPECT_EQ(std::stoi(fields[0]), static_cast<int>(row));
-            EXPECT_TRUE(std::isfinite(std::stod(fields[kOutputColumnCount - 2])));
-            EXPECT_TRUE(std::isfinite(std::stod(fields[kOutputColumnCount - 1])));
+            for (std::size_t column = rg::core::detail::kLocalFittingColumnCount;
+                column < kOutputColumnCount; ++column)
+            {
+                EXPECT_TRUE(std::isfinite(std::stod(fields[column])));
+            }
         }
-        const auto plot_path{ output_dir / ("umap_embedding_" + model_key + ".pdf") };
+        for (const auto suffix : { "", "_mean_shift" })
+        {
+            const auto plot_path{ output_dir / ("umap_embedding_" + model_key + suffix + ".pdf") };
 #ifdef HAVE_ROOT
-        ASSERT_TRUE(std::filesystem::is_regular_file(plot_path));
-        EXPECT_GT(std::filesystem::file_size(plot_path), 0u);
+            ASSERT_TRUE(std::filesystem::is_regular_file(plot_path));
+            EXPECT_GT(std::filesystem::file_size(plot_path), 0u);
 #else
-        EXPECT_FALSE(std::filesystem::exists(plot_path));
+            EXPECT_FALSE(std::filesystem::exists(plot_path));
 #endif
+        }
     }
 }
 
@@ -752,6 +822,79 @@ TEST(UmapEmbeddingCommandTest, AcceptsDocumentedOptionBoundaries)
     EXPECT_TRUE(RunCommand(request).succeeded);
 }
 
+TEST(UmapEmbeddingCommandTest, MeanShiftUsesFixedOriginalPointsAndClampsNeighborCount)
+{
+    command_test::ScopedTempDir temp_dir{ "umap_mean_shift" };
+    for (const bool vary_joint_widths : { false, true })
+    {
+        SCOPED_TRACE(vary_joint_widths);
+        for (const std::size_t point_count : { 8u, 20u, 32u })
+        {
+            SCOPED_TRACE(point_count);
+            const auto case_dir{ temp_dir.path()
+                / (std::to_string(point_count) + (vary_joint_widths ? "_varied" : "_equal")) };
+            const auto database_path{ case_dir / "analysis.sqlite" };
+            FeatureModelOptions options;
+            options.atom_count = point_count;
+            options.vary_joint_widths = vary_joint_widths;
+            SeedFeatureDatabase(database_path, "model", options);
+            auto request{ MakeRequest(database_path, case_dir / "output") };
+            request.job_count = point_count > 20 ? 2 : 1;
+            ASSERT_TRUE(RunCommand(request).succeeded);
+
+            const auto csv_path{ request.output_dir / "umap_embedding_model.csv" };
+            const auto original{ ReadCoordinates(csv_path) };
+            const auto shifted{ ReadCoordinates(csv_path, rg::core::detail::kLocalFittingColumnCount + 2) };
+            ASSERT_EQ(original.size(), point_count);
+            ASSERT_EQ(shifted.size(), point_count);
+            const auto lines{ ReadLines(csv_path) };
+            const auto header{ SplitFields(lines.front()) };
+            const auto width_column{ static_cast<std::size_t>(std::distance(
+                header.begin(), std::find(header.begin(), header.end(), "width joint"))) };
+            ASSERT_LT(width_column, header.size());
+            std::vector<double> widths;
+            for (std::size_t point = 0; point < point_count; ++point)
+            {
+                const auto fields{ SplitFields(lines[point + 1]) };
+                EXPECT_EQ(std::stoi(fields[0]), static_cast<int>(point + 1));
+                const double width{ std::stod(fields[width_column]) };
+                ASSERT_TRUE(std::isfinite(width));
+                ASSERT_GT(width, 0.0);
+                widths.push_back(width);
+            }
+            if (vary_joint_widths)
+            {
+                EXPECT_GT(*std::max_element(widths.begin(), widths.end())
+                    - *std::min_element(widths.begin(), widths.end()), 0.05);
+                const auto equal_width_csv{ temp_dir.path() / (std::to_string(point_count) + "_equal")
+                    / "output" / "umap_embedding_model.csv" };
+                EXPECT_EQ(original, ReadCoordinates(equal_width_csv));
+                EXPECT_EQ(shifted, ReadCoordinates(equal_width_csv,
+                    rg::core::detail::kLocalFittingColumnCount + 2));
+            }
+            else
+            {
+                EXPECT_NEAR(*std::max_element(widths.begin(), widths.end()),
+                    *std::min_element(widths.begin(), widths.end()), 1e-10);
+            }
+            const auto expected{ ReferenceMeanShift(original) };
+            const auto without_alpha{ ReferenceMeanShift(original, 1.0) };
+            bool alpha_changes_result{ false };
+            for (std::size_t point = 0; point < point_count; ++point)
+            {
+                alpha_changes_result |= std::hypot(expected[point][0] - without_alpha[point][0],
+                    expected[point][1] - without_alpha[point][1]) > 1e-6;
+                for (std::size_t dimension = 0; dimension < 2; ++dimension)
+                {
+                    EXPECT_TRUE(std::isfinite(shifted[point][dimension]));
+                    EXPECT_NEAR(shifted[point][dimension], expected[point][dimension], 1e-10);
+                }
+            }
+            EXPECT_TRUE(alpha_changes_result) << "The fixture must detect a missing alpha coefficient.";
+        }
+    }
+}
+
 TEST(UmapEmbeddingCommandTest, SameSeedAndSettingsProduceIdenticalOutput)
 {
     command_test::ScopedTempDir temp_dir{ "umap_embedding_determinism" };
@@ -825,6 +968,26 @@ TEST(UmapEmbeddingCommandTest, ReportsOutputWriteFailuresOnFolderOption)
     EXPECT_TRUE(HasIssue(
         result, "-o,--folder", "Failed to open UMAP output file"));
 }
+
+#ifdef HAVE_ROOT
+TEST(UmapEmbeddingCommandTest, ReportsMeanShiftPlotWriteFailuresOnFolderOption)
+{
+    command_test::ScopedTempDir temp_dir{ "umap_mean_shift_write_failure" };
+    const auto database_path{ temp_dir.path() / "analysis.sqlite" };
+    SeedFeatureDatabase(database_path, "blocked");
+    const auto output_dir{ temp_dir.path() / "output" };
+    const auto blocked_path{ output_dir / "umap_embedding_blocked_mean_shift.pdf" };
+    std::filesystem::create_directories(blocked_path);
+
+    const auto result{ RunCommand(MakeRequest(database_path, output_dir, "blocked")) };
+
+    EXPECT_FALSE(result.succeeded);
+    EXPECT_TRUE(HasIssue(result, "-o,--folder", "UMAP plot output path is not a regular file"));
+    EXPECT_TRUE(HasIssue(result, "-o,--folder", blocked_path.string()));
+    EXPECT_TRUE(std::filesystem::is_directory(blocked_path));
+    EXPECT_TRUE(std::filesystem::is_regular_file(output_dir / "umap_embedding_blocked.pdf"));
+}
+#endif
 
 TEST(UmapEmbeddingCommandTest, CliUsesDatabaseAndModelKeyAndRejectsOldInputFlag)
 {
