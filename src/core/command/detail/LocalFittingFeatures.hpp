@@ -34,9 +34,9 @@ inline constexpr std::array<std::string_view, kLocalFittingFeatureCount>
         "distance to closest neighbor",
         "signal peeling ratio",
         "tail peeling ratio",
-        "amplitude 2nd",
-        "width 2nd",
-        "offset 2nd",
+        "amplitude joint",
+        "width joint",
+        "offset joint",
     };
 
 struct LocalFittingFeatureRow

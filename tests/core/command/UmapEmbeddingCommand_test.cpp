@@ -411,12 +411,22 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
         "serial id,residue,spot,"
         "neighbor distance sum in 2A,distance to closest neighbor,"
         "signal peeling ratio,tail peeling ratio,"
-        "amplitude 2nd,width 2nd,offset 2nd,umap x,umap y");
+        "amplitude joint,width joint,offset joint,umap x,umap y");
     EXPECT_EQ(kOutputColumnCount, 12u);
     const auto metadata_lines{ ReadLines(output_path.string() + ".metadata.json") };
     const auto metadata{ boost::json::parse(metadata_lines.at(0)) };
-    EXPECT_EQ(metadata.at("column_semantics").at("offset 2nd").as_string(),
+    const auto & column_semantics{ metadata.at("column_semantics").as_object() };
+    EXPECT_EQ(column_semantics.size(), 3u);
+    EXPECT_EQ(column_semantics.at("amplitude joint").as_string(),
+        "Joint Gaussian amplitude A");
+    EXPECT_EQ(column_semantics.at("width joint").as_string(),
+        "Joint shared Gaussian/charge-kernel width tau");
+    EXPECT_EQ(column_semantics.at("offset joint").as_string(),
         "Joint charge-kernel coefficient C");
+    EXPECT_FALSE(column_semantics.contains("amplitude 2nd"));
+    EXPECT_FALSE(column_semantics.contains("width 2nd"));
+    EXPECT_FALSE(column_semantics.contains("offset 2nd"));
+    EXPECT_TRUE(metadata.at("map_normalization").is_null());
     for (std::size_t row = 1; row < output_lines.size(); ++row)
     {
         const auto fields{ SplitFields(output_lines[row]) };
@@ -975,8 +985,13 @@ TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNo
     const auto metadata=boost::json::parse(metadata_lines.at(0));
     EXPECT_EQ(metadata.at("estimator").as_string(),"joint-components");
     EXPECT_EQ(metadata.at("peeling_mode").as_string(),"original-grid-v1");
-    EXPECT_NE(metadata.at("column_semantics").at("offset 2nd").as_string().find("charge-kernel coefficient C"),
+    EXPECT_NE(metadata.at("column_semantics").at("offset joint").as_string().find("charge-kernel coefficient C"),
         std::string::npos);
+    const auto & map_normalization{ metadata.at("map_normalization").as_object() };
+    EXPECT_EQ(map_normalization.size(), 3u);
+    EXPECT_FALSE(map_normalization.at("requested").as_bool());
+    EXPECT_FALSE(map_normalization.at("applied").as_bool());
+    EXPECT_DOUBLE_EQ(map_normalization.at("divisor").as_double(), 1.0);
     EXPECT_EQ(metadata.at("included_rows").as_int64(),20);
     EXPECT_EQ(metadata.at("features").as_array().size(),3);
     EXPECT_FALSE(metadata.at("exclusions").as_object().empty());

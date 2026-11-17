@@ -165,7 +165,7 @@ struct PreparedUmapInput
     int effective_neighbors{ 0 };
     std::filesystem::path output_path;
     std::map<std::string, std::size_t> exclusions;
-    std::string map_normalization;
+    boost::json::value map_normalization;
     std::size_t excluded_rows{};
 };
 
@@ -177,12 +177,6 @@ std::string FormatFeatureLocation(
     return "model key '" + std::string(model_key_tag)
         + "', atom serial " + std::to_string(serial_id)
         + ", column '" + std::string(column_name) + "'";
-}
-
-std::filesystem::path BuildOutputPath(const UmapEmbeddingRequest & request)
-{
-    const std::string suffix{ path_helper::EnsureSanitizedTag(request.model_key_tag) };
-    return request.output_dir / ("umap_embedding_" + suffix + ".csv");
 }
 
 std::string JoinFeatureNames(const std::vector<std::string_view> & names)
@@ -350,15 +344,15 @@ std::optional<PreparedUmapInput> BuildAndStandardizeInput(
     prepared.effective_neighbors = std::min(
         request.num_neighbors,
         static_cast<int>(prepared.feature_rows.size() - 1));
-    prepared.output_path = BuildOutputPath(request);
+    prepared.output_path = request.output_dir
+        / ("umap_embedding_" + path_helper::EnsureSanitizedTag(request.model_key_tag) + ".csv");
     prepared.exclusions = std::move(exclusions);
     prepared.excluded_rows=excluded_rows;
     const auto & joint=model_object.GetAnalysisView().GetJointResult();
-    prepared.map_normalization="unavailable";
     if(joint && joint->metadata.map_normalization)
     {
         const auto & n=*joint->metadata.map_normalization;
-        prepared.map_normalization=boost::json::serialize(boost::json::object{{"requested",n.requested},{"applied",n.applied},{"divisor",n.divisor}});
+        prepared.map_normalization=boost::json::object{{"requested",n.requested},{"applied",n.applied},{"divisor",n.divisor}};
     }
     return prepared;
 }
@@ -441,11 +435,11 @@ bool WriteEmbedding(
     for(const auto & [reason,count]:prepared.exclusions) exclusions[reason]=count;
     std::ofstream metadata(prepared.output_path.string()+".metadata.json");
     metadata << boost::json::serialize(boost::json::object{{"estimator","joint-components"},{"features",features},
-        {"peeling_mode","original-grid-v1"},{"map_normalization",prepared.map_normalization=="unavailable" ? boost::json::value{}:boost::json::parse(prepared.map_normalization)},
+        {"peeling_mode","original-grid-v1"},{"map_normalization",prepared.map_normalization},
         {"column_semantics",boost::json::object{
-            {"amplitude 2nd","Joint Gaussian amplitude A"},
-            {"width 2nd","Joint shared Gaussian/charge-kernel width tau"},
-            {"offset 2nd","Joint charge-kernel coefficient C"}}},
+            {detail::kLocalFittingFeatureNames[4],"Joint Gaussian amplitude A"},
+            {detail::kLocalFittingFeatureNames[5],"Joint shared Gaussian/charge-kernel width tau"},
+            {detail::kLocalFittingFeatureNames[6],"Joint charge-kernel coefficient C"}}},
         {"standardization","sample-z-score; constant columns zero"},{"included_rows",prepared.feature_rows.size()},{"excluded_rows",prepared.excluded_rows},{"exclusions",exclusions}});
     metadata.close();
     if(!metadata) { error_message="Failed to write UMAP metadata."; return false; }
@@ -459,13 +453,6 @@ bool WriteEmbedding(
 }
 
 #ifdef HAVE_ROOT
-std::filesystem::path BuildPlotOutputPath(const PreparedUmapInput & prepared)
-{
-    auto plot_path{ prepared.output_path };
-    plot_path.replace_extension(".pdf");
-    return plot_path;
-}
-
 bool PreparePlotOutputPath(
     const std::filesystem::path & plot_path,
     std::string & error_message)
@@ -523,7 +510,8 @@ bool WriteEmbeddingPlot(
         "UMAP scatter plot skipped because ROOT support is unavailable.");
     return true;
 #else
-    const auto plot_path{ BuildPlotOutputPath(prepared) };
+    auto plot_path{ prepared.output_path };
+    plot_path.replace_extension(".pdf");
     try
     {
         std::vector<Element> other_elements;
@@ -794,15 +782,6 @@ CommandResult ExecuteUmapEmbeddingCommand(const UmapEmbeddingRequest & request)
                 return;
             }
 
-            if (!model_object)
-            {
-                validation_runner.AddFieldValidationError(
-                    &UmapEmbeddingRequest::model_key_tag,
-                    "Loaded model key '" + prepared_request.model_key_tag
-                        + "' did not produce a model object.");
-                return;
-            }
-
             std::string preparation_error;
             prepared_input = BuildAndStandardizeInput(
                 *model_object,
@@ -835,7 +814,6 @@ CommandResult ExecuteUmapEmbeddingCommand(const UmapEmbeddingRequest & request)
         },
         [&runner, &prepared_input](const UmapEmbeddingRequest & prepared_request)
         {
-            if (!prepared_input) return false;
             return ExecutePreparedRequest(runner, prepared_request, *prepared_input);
         });
 }

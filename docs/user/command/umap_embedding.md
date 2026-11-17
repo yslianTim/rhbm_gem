@@ -40,15 +40,15 @@ original-grid coverage makes a peeling ratio unavailable, not zero.
 The adjacent `.csv.metadata.json` records estimator, feature names, peeling mode,
 map normalization (null when unknown), standardization, included/excluded row
 counts and exclusions by reason. Its `column_semantics`
-field identifies `amplitude 2nd` as Gaussian amplitude A, `width 2nd` as the
-shared Gaussian/charge-kernel width tau, and `offset 2nd` as the charge-kernel
+field identifies `amplitude joint` as Gaussian amplitude A, `width joint` as the
+shared Gaussian/charge-kernel width tau, and `offset joint` as the charge-kernel
 coefficient C. Standardization uses the retained rows and assigns zero to
 constant columns.
 
 For each selected atom, the command reconstructs these 7 local-fitting features:
 
 ```text
-neighbor distance sum in 2A,distance to closest neighbor,signal peeling ratio,tail peeling ratio,amplitude 2nd,width 2nd,offset 2nd
+neighbor distance sum in 2A,distance to closest neighbor,signal peeling ratio,tail peeling ratio,amplitude joint,width joint,offset joint
 ```
 
 `neighbor distance sum in 2A` sums the Euclidean distances to non-hydrogen
@@ -76,7 +76,7 @@ label-free peeled samples. Halo reconstruction uses qualified Target points
 selected by geometry; residue, element, atom name, and group labels do not
 enter that ratio. Those labels remain available for CSV and plot annotations.
 
-`amplitude 2nd`, `width 2nd`, and `offset 2nd` read the saved `Second.point`.
+`amplitude joint`, `width joint`, and `offset joint` read the saved `Second.point`.
 These are Joint A/tau/C values with tau in angstroms. Post-Joint Local and
 Group Fitting results occupy separate records.
 
