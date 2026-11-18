@@ -629,7 +629,7 @@ UmapBinning BinMeanShiftEmbedding(
     const PreparedUmapInput & prepared,
     const std::vector<double> & mean_shift_embedding)
 {
-    constexpr double bin_width{ 0.01 };
+    constexpr double bin_width{ 0.5 };
     constexpr double min_bin_index{ static_cast<double>(std::numeric_limits<std::int64_t>::min()) };
     UmapBinning result;
     result.point_bin_numbers.resize(prepared.feature_rows.size());
@@ -736,10 +736,9 @@ std::vector<double> BuildSecondUmapFeatures(
 bool WriteMeanShiftBins(
     const PreparedUmapInput & prepared,
     const UmapBinning & binning,
+    const std::filesystem::path & output_path,
     std::string & error_message)
 {
-    const auto output_path{ prepared.output_path.parent_path()
-        / (prepared.output_path.stem().string() + "_mean_shift_bins.csv") };
     std::ofstream output{ output_path };
     if (!output.is_open())
     {
@@ -800,7 +799,6 @@ bool WriteMeanShiftBins(
         error_message = "Failed while writing UMAP mean shift bin output file '" + output_path.string() + "'.";
         return false;
     }
-    Logger::Log(LogLevel::Info, "UMAP mean shift bin count: " + std::to_string(binning.bins.size()));
     return true;
 }
 
@@ -1026,6 +1024,7 @@ bool WriteEmbeddingPlots(
     const std::vector<double> & embedding,
     const std::vector<double> & mean_shift_embedding,
     const std::vector<double> & second_embedding,
+    const std::vector<double> & second_mean_shift_embedding,
     std::string & error_message)
 {
 #ifndef HAVE_ROOT
@@ -1033,6 +1032,7 @@ bool WriteEmbeddingPlots(
     (void)embedding;
     (void)mean_shift_embedding;
     (void)second_embedding;
+    (void)second_mean_shift_embedding;
     (void)error_message;
     Logger::Log(LogLevel::Warning,
         "UMAP scatter plots skipped because ROOT support is unavailable.");
@@ -1044,17 +1044,24 @@ bool WriteEmbeddingPlots(
         / (prepared.output_path.stem().string() + "_mean_shift.pdf") };
     const auto second_path{ prepared.output_path.parent_path()
         / (prepared.output_path.stem().string() + "_second_umap.pdf") };
+    const auto second_mean_shift_path{ prepared.output_path.parent_path()
+        / (prepared.output_path.stem().string() + "_second_umap_mean_shift.pdf") };
     const auto ranges{ ComputeUmapPlotRanges(prepared, embedding) };
     if (!ranges)
     {
         RemoveStalePlotOutput(plot_path);
         RemoveStalePlotOutput(mean_shift_path);
         RemoveStalePlotOutput(second_path);
+        RemoveStalePlotOutput(second_mean_shift_path);
         Logger::Log(LogLevel::Warning,
             "UMAP scatter plots skipped because no configured spot categories were found.");
         return true;
     }
-    if (second_embedding.empty()) RemoveStalePlotOutput(second_path);
+    if (second_embedding.empty())
+    {
+        RemoveStalePlotOutput(second_path);
+        RemoveStalePlotOutput(second_mean_shift_path);
+    }
     if (!WriteEmbeddingPlot(prepared, embedding, plot_path, *ranges, error_message)
         || !WriteEmbeddingPlot(prepared, mean_shift_embedding, mean_shift_path, *ranges, error_message))
     {
@@ -1063,7 +1070,9 @@ bool WriteEmbeddingPlots(
     if (second_embedding.empty()) return true;
 
     const auto second_ranges{ ComputeUmapPlotRanges(prepared, second_embedding) };
-    return WriteEmbeddingPlot(prepared, second_embedding, second_path, *second_ranges, error_message);
+    return WriteEmbeddingPlot(prepared, second_embedding, second_path, *second_ranges, error_message)
+        && WriteEmbeddingPlot(prepared, second_mean_shift_embedding, second_mean_shift_path,
+            *second_ranges, error_message);
 #endif
 }
 
@@ -1151,6 +1160,30 @@ bool ExecutePreparedRequest(
         return false;
     }
 
+    std::vector<double> second_mean_shift_embedding;
+    UmapBinning second_binning;
+    if (!second_embedding.empty())
+    {
+        try
+        {
+            second_mean_shift_embedding = RunUmapMeanShift(
+                second_embedding, prepared.feature_rows, request.job_count);
+            if (!std::all_of(second_mean_shift_embedding.begin(), second_mean_shift_embedding.end(),
+                [](double coordinate) { return std::isfinite(coordinate); }))
+            {
+                throw std::runtime_error("Mean shift produced a non-finite coordinate.");
+            }
+            second_binning = BinMeanShiftEmbedding(prepared, second_mean_shift_embedding);
+        }
+        catch (const std::exception & error)
+        {
+            runner.RequirePrepareCondition(false,
+                "Second UMAP mean shift or binning failed for model key '" + request.model_key_tag
+                    + "' in database '" + request.database_path.string() + "': " + error.what());
+            return false;
+        }
+    }
+
     std::string write_error;
     if (!WriteEmbedding(prepared, embedding, mean_shift_embedding, binning.point_bin_numbers,
         second_embedding, write_error))
@@ -1161,14 +1194,26 @@ bool ExecutePreparedRequest(
     Logger::Log(LogLevel::Info,
         "UMAP embedding written to: " + prepared.output_path.string());
 
-    if (!WriteMeanShiftBins(prepared, binning, write_error))
+    const auto output_stem{ prepared.output_path.parent_path() / prepared.output_path.stem() };
+    if (!WriteMeanShiftBins(prepared, binning, output_stem.string() + "_mean_shift_bins.csv", write_error))
     {
         runner.AddFieldValidationError(&CommandRequestBase::output_dir, write_error);
         return false;
     }
+    Logger::Log(LogLevel::Info, "UMAP mean shift bin count: " + std::to_string(binning.bins.size()));
+
+    if (!WriteMeanShiftBins(prepared, second_binning,
+        output_stem.string() + "_second_umap_mean_shift_bins.csv", write_error))
+    {
+        runner.AddFieldValidationError(&CommandRequestBase::output_dir, write_error);
+        return false;
+    }
+    Logger::Log(LogLevel::Info,
+        "Second UMAP mean shift bin count: " + std::to_string(second_binning.bins.size()));
 
     std::string plot_error;
-    if (!WriteEmbeddingPlots(prepared, embedding, mean_shift_embedding, second_embedding, plot_error))
+    if (!WriteEmbeddingPlots(prepared, embedding, mean_shift_embedding, second_embedding,
+        second_mean_shift_embedding, plot_error))
     {
         runner.AddFieldValidationError(&CommandRequestBase::output_dir, plot_error);
         return false;

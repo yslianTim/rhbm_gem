@@ -141,15 +141,15 @@ reconstructed features, `umap x,umap y`, `mean shift x,mean shift y`, then
 `.`, `_`, and `-` are retained in the key; other bytes become `_`.
 
 Mean shift starts from the original two-dimensional UMAP coordinates and runs
-15 iterations with 20 nearest neighbors, limited to the number of retained rows.
+100 iterations with up to 200 nearest neighbors, limited to the number of retained rows.
 Each query searches the fixed original point set, allowing its own source point,
 then moves to the weighted mean of those neighbors' original coordinates.
 Weights are recomputed for each query at every iteration with the Gaussian kernel
 `exp(-alpha * distance_squared / (2 * sigma * sigma))`. The distance is between
 the query's current position and the neighbor's original position, using both
 UMAP coordinates at their original scale. The internal constants in
-`RunUmapMeanShift` are `alpha = 2.0` and `sigma = 2.0`, giving the default kernel
-`exp(-distance_squared / 4.0)`; changing either constant requires rebuilding.
+`RunUmapMeanShift` are `alpha = 2.0` and `sigma = 1.5`, giving the default kernel
+`exp(-distance_squared / 2.25)`. Changing either constant requires rebuilding.
 Joint width remains in the CSV but does not affect the kernel weights.
 If a neighborhood has zero total weight, the query keeps its current position
 and a warning is reported. Non-finite updates fail the command before CSV output.
@@ -166,8 +166,8 @@ CSV. It assigns each final mean shift position to a square of width `0.01` in
 UMAP coordinates, with indices `floor(x / 0.01)` and `floor(y / 0.01)`. Each
 occupied square gets one row, sorted by `bin x` and then `bin y`. The first
 column, `bin number`, numbers the rows consecutively from 1 in that order. The
-per-atom CSV uses the same number for each point in the bin. Overlapping points
-count individually.
+per-atom CSV uses the first summary's bin numbers. Overlapping points count
+individually.
 
 Each row records `point count`, the three Joint parameter medians, and
 `spot class count`. Each median uses the finite values for its column. An even
@@ -175,8 +175,7 @@ sample count uses the average of the two middle values, and a column with no
 finite values is blank. The spot classes match the plot legend and include all
 points in the bin. The three most frequent classes are listed with their names,
 counts, and count divided by `point count`. Ties are ordered by class name.
-Absent ranks have a blank name and zero count and ratio. The summary is also
-written in builds without ROOT.
+Absent ranks have a blank name and zero count and ratio.
 
 ### Second UMAP
 
@@ -192,12 +191,20 @@ When enabled, differences between bin numbers enter the distance calculation
 as numeric differences. For each enabled column, the command fills missing
 values with the median of the finite inputs and uses zeros for an entirely
 missing column. It then applies a population Z-score and sets constant columns
-to zero. The CSV and per-bin summary report the original Joint values. Both UMAP
-runs use the same request settings.
+to zero. The per-atom CSV and both bin summaries report the original Joint
+values. Both UMAP runs use the same request settings. The command then applies
+the same mean shift algorithm and parameters to the second embedding. The
+updated coordinates are used for the fourth scatter plot and binned by the same
+rules. The command writes
+`umap_embedding_<sanitized-model-key>_second_umap_mean_shift_bins.csv` with the
+same columns and its own bin numbering starting at 1, and reports
+`Second UMAP mean shift bin count: N` at Info level. Both summaries are written
+in builds without ROOT.
 
 When all enabled features are constant, the command reports a warning, leaves
-`second umap x` and `second umap y` blank, and writes the earlier results and
-bin numbers.
+`second umap x` and `second umap y` blank, and writes only the header to the
+second bin summary with a reported bin count of zero. This replaces any earlier
+second summary at the same path.
 
 ### Scatter plots
 
@@ -205,8 +212,10 @@ When ROOT support is available, the command writes the original scatter plot
 as `umap_embedding_<sanitized-model-key>.pdf` and the updated scatter plot as
 `umap_embedding_<sanitized-model-key>_mean_shift.pdf`. Both use the original
 plot's axis ranges. When the second embedding is available, the command writes
-`umap_embedding_<sanitized-model-key>_second_umap.pdf`, with axis ranges based on
-its own displayed points. All plots use the same 10% margins, minimum-range
+`umap_embedding_<sanitized-model-key>_second_umap.pdf` and
+`umap_embedding_<sanitized-model-key>_second_umap_mean_shift.pdf`. Both use axis
+ranges based on the displayed points from the second embedding before mean shift.
+All plots use the same 10% margins, minimum-range
 handling, category colors, markers, legend, and layout. Categories are `C`, `CA`,
 `N`, `O`, and `O (Water)` for residue `HOH` with spot `O`; unmatched atoms are
 grouped by element as `Side-Chain <element>` or `Other Unknown`. Empty categories

@@ -380,8 +380,9 @@ std::vector<std::array<double, 2>> ReferenceMeanShift(
     double alpha = 2.0)
 {
     auto queries{ original };
-    const auto neighbor_count{ std::min(std::size_t{ 20 }, original.size()) };
-    for (int iteration = 0; iteration < 15; ++iteration)
+    constexpr double sigma{ 1.5 };
+    const auto neighbor_count{ std::min(std::size_t{ 200 }, original.size()) };
+    for (int iteration = 0; iteration < 100; ++iteration)
     {
         for (auto & query : queries)
         {
@@ -403,7 +404,7 @@ std::vector<std::array<double, 2>> ReferenceMeanShift(
             for (std::size_t neighbor = 0; neighbor < neighbor_count; ++neighbor)
             {
                 const auto source{ distances[neighbor].second };
-                const double weight{ std::exp(-alpha * distances[neighbor].first / 8.0) };
+                const double weight{ std::exp(-alpha * distances[neighbor].first / (2.0 * sigma * sigma)) };
                 weight_sum += weight;
                 for (std::size_t dimension = 0; dimension < query.size(); ++dimension)
                 {
@@ -657,11 +658,12 @@ TEST(UmapEmbeddingCommandTest, ClassifiesUnconfiguredSpotsAsOtherInRootPlot)
         const auto result{ RunCommand(MakeRequest(database_path, output_dir, model_key)) };
         const auto log{ testing::internal::GetCapturedStdout() };
         ASSERT_TRUE(result.succeeded);
-        const auto lines{ ReadLines(output_dir / ("umap_embedding_" + model_key + ".csv")) };
+        const auto csv_path{ output_dir / ("umap_embedding_" + model_key + ".csv") };
+        const auto lines{ ReadLines(csv_path) };
         ASSERT_EQ(lines.size(), options.atom_count + 1);
         EXPECT_EQ(lines[0], rg::core::detail::BuildLocalFittingCsvHeader()
             + ",umap x,umap y,mean shift x,mean shift y,bin number,second umap x,second umap y");
-        std::map<std::array<long long, 2>, std::vector<std::vector<std::string>>> expected_bins;
+        std::vector<std::vector<std::string>> point_rows;
         for (std::size_t row = 1; row < lines.size(); ++row)
         {
             auto fields{ SplitFields(lines[row]) };
@@ -672,84 +674,105 @@ TEST(UmapEmbeddingCommandTest, ClassifiesUnconfiguredSpotsAsOtherInRootPlot)
             {
                 EXPECT_TRUE(std::isfinite(std::stod(fields[column])));
             }
-            const std::array key{
-                static_cast<long long>(std::floor(std::stod(fields[12]) / 0.01)),
-                static_cast<long long>(std::floor(std::stod(fields[13]) / 0.01))
-            };
-            expected_bins[key].push_back(std::move(fields));
+            point_rows.push_back(std::move(fields));
         }
-        const auto bin_lines{ ReadLines(output_dir
-            / ("umap_embedding_" + model_key + "_mean_shift_bins.csv")) };
-        ASSERT_EQ(bin_lines.size(), expected_bins.size() + 1);
-        EXPECT_EQ(bin_lines.front(),
+        const auto first_shifted{ ReadCoordinates(csv_path, kBinNumberColumn - 2) };
+        const auto second_shifted{ ReferenceMeanShift(ReadCoordinates(csv_path, kBinNumberColumn + 1)) };
+        constexpr std::string_view bin_header{
             "bin number,bin x,bin y,point count,amplitude joint median,width joint median,offset joint median,"
             "spot class count,1st dominate spot,1st dominate spot count,1st dominate spot count ratio,"
             "2nd dominate spot,2nd dominate spot count,2nd dominate spot count ratio,"
-            "3rd dominate spot,3rd dominate spot count,3rd dominate spot count ratio");
-        EXPECT_NE(log.find("UMAP mean shift bin count: " + std::to_string(expected_bins.size()) + '\n'),
-            std::string::npos);
+            "3rd dominate spot,3rd dominate spot count,3rd dominate spot count ratio"
+        };
         constexpr std::array<std::string_view, 5> configured_labels{ "C", "CA", "N", "O", "O (Water)" };
-        std::size_t bin_line{ 1 };
-        for (const auto & [key, rows] : expected_bins)
+        for (const bool second : { false, true })
         {
-            const auto fields{ SplitFields(bin_lines[bin_line]) };
-            ASSERT_EQ(fields.size(), 17u);
-            EXPECT_EQ(std::stoull(fields[0]), bin_line);
-            for (const auto & row : rows)
+            const auto suffix{ second ? "_second_umap_mean_shift_bins.csv" : "_mean_shift_bins.csv" };
+            SCOPED_TRACE(suffix);
+            const auto & coordinates{ second ? second_shifted : first_shifted };
+            ASSERT_EQ(coordinates.size(), point_rows.size());
+            std::map<std::array<long long, 2>, std::vector<std::size_t>> expected_bins;
+            for (std::size_t point = 0; point < coordinates.size(); ++point)
             {
-                EXPECT_EQ(std::stoull(row[kBinNumberColumn]), bin_line);
+                const auto & [x, y]{ coordinates[point] };
+                const std::array key{
+                    static_cast<long long>(std::floor(x / 0.01)),
+                    static_cast<long long>(std::floor(y / 0.01))
+                };
+                expected_bins[key].push_back(point);
             }
-            ++bin_line;
-            EXPECT_EQ(std::stoll(fields[1]), key[0]);
-            EXPECT_EQ(std::stoll(fields[2]), key[1]);
-            EXPECT_EQ(std::stoull(fields[3]), rows.size());
-            for (std::size_t feature = 0; feature < 3; ++feature)
+            const auto bin_lines{ ReadLines(output_dir / ("umap_embedding_" + model_key + suffix)) };
+            ASSERT_EQ(bin_lines.size(), expected_bins.size() + 1);
+            EXPECT_EQ(bin_lines.front(), bin_header);
+            const std::string log_prefix{ second
+                ? "\nSecond UMAP mean shift bin count: " : "\nUMAP mean shift bin count: " };
+            EXPECT_NE(log.find(log_prefix + std::to_string(expected_bins.size()) + '\n'), std::string::npos);
+            std::size_t bin_line{ 1 };
+            for (const auto & [key, points] : expected_bins)
             {
-                std::vector<double> values;
-                for (const auto & row : rows)
+                const auto fields{ SplitFields(bin_lines[bin_line]) };
+                ASSERT_EQ(fields.size(), 17u);
+                EXPECT_EQ(std::stoull(fields[0]), bin_line);
+                if (!second)
                 {
-                    if (!row[7 + feature].empty()) values.push_back(std::stod(row[7 + feature]));
+                    for (const auto point : points)
+                    {
+                        EXPECT_EQ(std::stoull(point_rows[point][kBinNumberColumn]), bin_line);
+                    }
                 }
-                if (values.empty())
+                ++bin_line;
+                EXPECT_EQ(std::stoll(fields[1]), key[0]);
+                EXPECT_EQ(std::stoll(fields[2]), key[1]);
+                EXPECT_EQ(std::stoull(fields[3]), points.size());
+                for (std::size_t feature = 0; feature < 3; ++feature)
                 {
-                    EXPECT_TRUE(fields[4 + feature].empty());
-                    continue;
+                    std::vector<double> values;
+                    for (const auto point : points)
+                    {
+                        const auto & value{ point_rows[point][7 + feature] };
+                        if (!value.empty()) values.push_back(std::stod(value));
+                    }
+                    if (values.empty())
+                    {
+                        EXPECT_TRUE(fields[4 + feature].empty());
+                        continue;
+                    }
+                    std::sort(values.begin(), values.end());
+                    EXPECT_DOUBLE_EQ(std::stod(fields[4 + feature]),
+                        (values[(values.size() - 1) / 2] + values[values.size() / 2]) / 2.0);
                 }
-                std::sort(values.begin(), values.end());
-                EXPECT_DOUBLE_EQ(std::stod(fields[4 + feature]),
-                    (values[(values.size() - 1) / 2] + values[values.size() / 2]) / 2.0);
-            }
-            std::map<std::string, std::size_t> counts;
-            for (const auto & row : rows)
-            {
-                const auto index{ static_cast<std::size_t>(std::stoul(row[0]) - 1) };
-                if (index < configured_labels.size())
+                std::map<std::string, std::size_t> counts;
+                for (const auto point : points)
                 {
-                    ++counts[std::string(configured_labels[index])];
-                    continue;
+                    const auto index{ static_cast<std::size_t>(std::stoul(point_rows[point][0]) - 1) };
+                    if (index < configured_labels.size())
+                    {
+                        ++counts[std::string(configured_labels[index])];
+                        continue;
+                    }
+                    const auto element{ elements[index - configured_labels.size()] };
+                    ++counts[element == Element::UNK ? "Other Unknown"
+                        : "Side-Chain " + ChemicalDataHelper::GetLabel(element)];
                 }
-                const auto element{ elements[index - configured_labels.size()] };
-                ++counts[element == Element::UNK ? "Other Unknown"
-                    : "Side-Chain " + ChemicalDataHelper::GetLabel(element)];
-            }
-            std::vector<std::pair<std::string, std::size_t>> ranking(counts.begin(), counts.end());
-            std::stable_sort(ranking.begin(), ranking.end(), [](const auto & lhs, const auto & rhs)
-            {
-                return lhs.second > rhs.second;
-            });
-            EXPECT_EQ(std::stoull(fields[7]), ranking.size());
-            for (std::size_t rank = 0; rank < 3; ++rank)
-            {
-                const auto column{ 8 + 3 * rank };
-                const auto expected{ rank < ranking.size() ? ranking[rank]
-                    : std::pair<std::string, std::size_t>{} };
-                EXPECT_EQ(fields[column], expected.first);
-                EXPECT_EQ(std::stoull(fields[column + 1]), expected.second);
-                EXPECT_DOUBLE_EQ(std::stod(fields[column + 2]),
-                    static_cast<double>(expected.second) / static_cast<double>(rows.size()));
+                std::vector<std::pair<std::string, std::size_t>> ranking(counts.begin(), counts.end());
+                std::stable_sort(ranking.begin(), ranking.end(), [](const auto & lhs, const auto & rhs)
+                {
+                    return lhs.second > rhs.second;
+                });
+                EXPECT_EQ(std::stoull(fields[7]), ranking.size());
+                for (std::size_t rank = 0; rank < 3; ++rank)
+                {
+                    const auto column{ 8 + 3 * rank };
+                    const auto expected{ rank < ranking.size() ? ranking[rank]
+                        : std::pair<std::string, std::size_t>{} };
+                    EXPECT_EQ(fields[column], expected.first);
+                    EXPECT_EQ(std::stoull(fields[column + 1]), expected.second);
+                    EXPECT_DOUBLE_EQ(std::stod(fields[column + 2]),
+                        static_cast<double>(expected.second) / static_cast<double>(points.size()));
+                }
             }
         }
-        for (const auto suffix : { "", "_mean_shift", "_second_umap" })
+        for (const auto suffix : { "", "_mean_shift", "_second_umap", "_second_umap_mean_shift" })
         {
             const auto plot_path{ output_dir / ("umap_embedding_" + model_key + suffix + ".pdf") };
 #ifdef HAVE_ROOT
@@ -927,7 +950,7 @@ TEST(UmapEmbeddingCommandTest, MeanShiftUsesFixedOriginalPointsAndClampsNeighbor
     for (const bool vary_joint_widths : { false, true })
     {
         SCOPED_TRACE(vary_joint_widths);
-        for (const std::size_t point_count : { 8u, 20u, 32u })
+        for (const std::size_t point_count : { 8u, 200u, 208u })
         {
             SCOPED_TRACE(point_count);
             const auto case_dir{ temp_dir.path()
@@ -938,7 +961,8 @@ TEST(UmapEmbeddingCommandTest, MeanShiftUsesFixedOriginalPointsAndClampsNeighbor
             options.vary_joint_widths = vary_joint_widths;
             SeedFeatureDatabase(database_path, "model", options);
             auto request{ MakeRequest(database_path, case_dir / "output") };
-            request.job_count = point_count > 20 ? 2 : 1;
+            request.num_epochs = 75;
+            request.job_count = point_count > 200 ? 2 : 1;
             ASSERT_TRUE(RunCommand(request).succeeded);
 
             const auto csv_path{ request.output_dir / "umap_embedding_model.csv" };
@@ -1009,9 +1033,12 @@ TEST(UmapEmbeddingCommandTest, SameSeedAndSettingsProduceIdenticalOutput)
     ASSERT_TRUE(RunCommand(first_request).succeeded);
     ASSERT_TRUE(RunCommand(second_request).succeeded);
 
-    EXPECT_EQ(
-        ReadLines(first_request.output_dir / "umap_embedding_repeat.csv"),
-        ReadLines(second_request.output_dir / "umap_embedding_repeat.csv"));
+    for (const std::string suffix : { ".csv", "_second_umap_mean_shift_bins.csv" })
+    {
+        const auto file_name{ "umap_embedding_repeat" + suffix };
+        EXPECT_EQ(ReadLines(first_request.output_dir / file_name),
+            ReadLines(second_request.output_dir / file_name)) << file_name;
+    }
 }
 
 TEST(UmapEmbeddingCommandTest, ZScoreMakesPositiveAffineFeatureChangesInvariant)
@@ -1067,13 +1094,16 @@ TEST(UmapEmbeddingCommandTest, ReportsOutputWriteFailuresOnFolderOption)
     EXPECT_TRUE(HasIssue(
         result, "-o,--folder", "Failed to open UMAP output file"));
 
-    const auto bin_output_dir{ temp_dir.path() / "bin_output" };
-    const auto blocked_bin_path{ bin_output_dir / "umap_embedding_blocked_mean_shift_bins.csv" };
-    std::filesystem::create_directories(blocked_bin_path);
-    const auto bin_result{ RunCommand(MakeRequest(database_path, bin_output_dir, "blocked")) };
-    EXPECT_FALSE(bin_result.succeeded);
-    EXPECT_TRUE(HasIssue(bin_result, "-o,--folder", blocked_bin_path.string()));
-    EXPECT_TRUE(std::filesystem::is_directory(blocked_bin_path));
+    for (const std::string suffix : { "mean_shift_bins.csv", "second_umap_mean_shift_bins.csv" })
+    {
+        const auto bin_output_dir{ temp_dir.path() / (suffix + "_blocked") };
+        const auto blocked_bin_path{ bin_output_dir / ("umap_embedding_blocked_" + suffix) };
+        std::filesystem::create_directories(blocked_bin_path);
+        const auto bin_result{ RunCommand(MakeRequest(database_path, bin_output_dir, "blocked")) };
+        EXPECT_FALSE(bin_result.succeeded);
+        EXPECT_TRUE(HasIssue(bin_result, "-o,--folder", blocked_bin_path.string()));
+        EXPECT_TRUE(std::filesystem::is_directory(blocked_bin_path));
+    }
 }
 
 #ifdef HAVE_ROOT
@@ -1082,7 +1112,7 @@ TEST(UmapEmbeddingCommandTest, ReportsDerivedPlotWriteFailuresOnFolderOption)
     command_test::ScopedTempDir temp_dir{ "umap_mean_shift_write_failure" };
     const auto database_path{ temp_dir.path() / "analysis.sqlite" };
     SeedFeatureDatabase(database_path, "blocked");
-    for (const std::string suffix : { "mean_shift", "second_umap" })
+    for (const std::string suffix : { "mean_shift", "second_umap", "second_umap_mean_shift" })
     {
         SCOPED_TRACE(suffix);
         const auto output_dir{ temp_dir.path() / suffix };
