@@ -43,8 +43,9 @@ namespace {
 namespace rg = rhbm_gem;
 
 constexpr std::size_t kOutputColumnCount{
-    rg::core::detail::kLocalFittingColumnCount + 4
+    rg::core::detail::kLocalFittingColumnCount + 7
 };
+constexpr std::size_t kBinNumberColumn{ rg::core::detail::kLocalFittingColumnCount + 4 };
 constexpr double kAmplitudeBase{ 1.123456789012345 };
 
 struct FeatureModelOptions
@@ -471,10 +472,26 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
         "serial id,residue,spot,"
         "neighbor distance sum in 2A,distance to closest neighbor,"
         "signal peeling ratio,tail peeling ratio,"
-        "amplitude joint,width joint,offset joint,umap x,umap y,mean shift x,mean shift y");
-    EXPECT_EQ(kOutputColumnCount, 14u);
+        "amplitude joint,width joint,offset joint,umap x,umap y,mean shift x,mean shift y,"
+        "bin number,second umap x,second umap y");
+    EXPECT_EQ(kOutputColumnCount, 17u);
     const auto metadata_lines{ ReadLines(output_path.string() + ".metadata.json") };
     const auto metadata{ boost::json::parse(metadata_lines.at(0)) };
+    const auto & second_features{ metadata.at("second_umap_features").as_array() };
+    ASSERT_FALSE(second_features.empty());
+    std::vector<std::string_view> available_features{ "bin number" };
+    available_features.insert(available_features.end(),
+        rg::core::detail::kLocalFittingFeatureNames.begin(),
+        rg::core::detail::kLocalFittingFeatureNames.end());
+    auto next_feature{ available_features.begin() };
+    for (const auto & feature : second_features)
+    {
+        const auto & name{ feature.as_string() };
+        next_feature = std::find(next_feature, available_features.end(),
+            std::string_view{ name.data(), name.size() });
+        ASSERT_NE(next_feature, available_features.end()) << name;
+        ++next_feature;
+    }
     const auto & column_semantics{ metadata.at("column_semantics").as_object() };
     EXPECT_EQ(column_semantics.size(), 3u);
     EXPECT_EQ(column_semantics.at("amplitude joint").as_string(),
@@ -494,6 +511,7 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
         EXPECT_EQ(std::stoi(fields[0]), static_cast<int>(row));
         EXPECT_EQ(fields[1], "ALA");
         EXPECT_EQ(fields[2], "CA");
+        EXPECT_GT(std::stoull(fields[kBinNumberColumn]), 0u);
         for (std::size_t column = rg::core::detail::kLocalFittingColumnCount;
             column < kOutputColumnCount; ++column)
         {
@@ -642,7 +660,7 @@ TEST(UmapEmbeddingCommandTest, ClassifiesUnconfiguredSpotsAsOtherInRootPlot)
         const auto lines{ ReadLines(output_dir / ("umap_embedding_" + model_key + ".csv")) };
         ASSERT_EQ(lines.size(), options.atom_count + 1);
         EXPECT_EQ(lines[0], rg::core::detail::BuildLocalFittingCsvHeader()
-            + ",umap x,umap y,mean shift x,mean shift y");
+            + ",umap x,umap y,mean shift x,mean shift y,bin number,second umap x,second umap y");
         std::map<std::array<long long, 2>, std::vector<std::vector<std::string>>> expected_bins;
         for (std::size_t row = 1; row < lines.size(); ++row)
         {
@@ -677,6 +695,10 @@ TEST(UmapEmbeddingCommandTest, ClassifiesUnconfiguredSpotsAsOtherInRootPlot)
             const auto fields{ SplitFields(bin_lines[bin_line]) };
             ASSERT_EQ(fields.size(), 17u);
             EXPECT_EQ(std::stoull(fields[0]), bin_line);
+            for (const auto & row : rows)
+            {
+                EXPECT_EQ(std::stoull(row[kBinNumberColumn]), bin_line);
+            }
             ++bin_line;
             EXPECT_EQ(std::stoll(fields[1]), key[0]);
             EXPECT_EQ(std::stoll(fields[2]), key[1]);
@@ -727,7 +749,7 @@ TEST(UmapEmbeddingCommandTest, ClassifiesUnconfiguredSpotsAsOtherInRootPlot)
                     static_cast<double>(expected.second) / static_cast<double>(rows.size()));
             }
         }
-        for (const auto suffix : { "", "_mean_shift" })
+        for (const auto suffix : { "", "_mean_shift", "_second_umap" })
         {
             const auto plot_path{ output_dir / ("umap_embedding_" + model_key + suffix + ".pdf") };
 #ifdef HAVE_ROOT
@@ -1055,22 +1077,26 @@ TEST(UmapEmbeddingCommandTest, ReportsOutputWriteFailuresOnFolderOption)
 }
 
 #ifdef HAVE_ROOT
-TEST(UmapEmbeddingCommandTest, ReportsMeanShiftPlotWriteFailuresOnFolderOption)
+TEST(UmapEmbeddingCommandTest, ReportsDerivedPlotWriteFailuresOnFolderOption)
 {
     command_test::ScopedTempDir temp_dir{ "umap_mean_shift_write_failure" };
     const auto database_path{ temp_dir.path() / "analysis.sqlite" };
     SeedFeatureDatabase(database_path, "blocked");
-    const auto output_dir{ temp_dir.path() / "output" };
-    const auto blocked_path{ output_dir / "umap_embedding_blocked_mean_shift.pdf" };
-    std::filesystem::create_directories(blocked_path);
+    for (const std::string suffix : { "mean_shift", "second_umap" })
+    {
+        SCOPED_TRACE(suffix);
+        const auto output_dir{ temp_dir.path() / suffix };
+        const auto blocked_path{ output_dir / ("umap_embedding_blocked_" + suffix + ".pdf") };
+        std::filesystem::create_directories(blocked_path);
 
-    const auto result{ RunCommand(MakeRequest(database_path, output_dir, "blocked")) };
+        const auto result{ RunCommand(MakeRequest(database_path, output_dir, "blocked")) };
 
-    EXPECT_FALSE(result.succeeded);
-    EXPECT_TRUE(HasIssue(result, "-o,--folder", "UMAP plot output path is not a regular file"));
-    EXPECT_TRUE(HasIssue(result, "-o,--folder", blocked_path.string()));
-    EXPECT_TRUE(std::filesystem::is_directory(blocked_path));
-    EXPECT_TRUE(std::filesystem::is_regular_file(output_dir / "umap_embedding_blocked.pdf"));
+        EXPECT_FALSE(result.succeeded);
+        EXPECT_TRUE(HasIssue(result, "-o,--folder", "UMAP plot output path is not a regular file"));
+        EXPECT_TRUE(HasIssue(result, "-o,--folder", blocked_path.string()));
+        EXPECT_TRUE(std::filesystem::is_directory(blocked_path));
+        EXPECT_TRUE(std::filesystem::is_regular_file(output_dir / "umap_embedding_blocked.pdf"));
+    }
 }
 #endif
 

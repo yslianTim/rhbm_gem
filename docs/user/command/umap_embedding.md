@@ -134,10 +134,9 @@ full `double` values and are not quantized to two decimal places. The output
 uses round-trip-safe floating-point precision for continuous features and UMAP
 coordinates.
 
-The CSV contains the identifiers `serial id,residue,spot`, all 7 reconstructed
-features, the original `umap x,umap y`, and the appended `mean shift x,mean shift y`:
-14 columns in total. The original 12 columns keep their order. The three rank
-columns are no longer emitted; consumers must account for their removal. Its name is
+The per-atom CSV has 17 columns in order: `serial id,residue,spot`, the seven
+reconstructed features, `umap x,umap y`, `mean shift x,mean shift y`, then
+`bin number,second umap x,second umap y`. Its name is
 `<folder>/umap_embedding_<sanitized-model-key>.csv`. ASCII letters, digits,
 `.`, `_`, and `-` are retained in the key; other bytes become `_`.
 
@@ -166,8 +165,9 @@ The command reports `UMAP mean shift bin count: N` at Info level and writes
 CSV. It assigns each final mean shift position to a square of width `0.01` in
 UMAP coordinates, with indices `floor(x / 0.01)` and `floor(y / 0.01)`. Each
 occupied square gets one row, sorted by `bin x` and then `bin y`. The first
-column, `bin number`, numbers the rows consecutively from 1 in that order.
-Overlapping points count individually.
+column, `bin number`, numbers the rows consecutively from 1 in that order. The
+per-atom CSV uses the same number for each point in the bin. Overlapping points
+count individually.
 
 Each row records `point count`, the three Joint parameter medians, and
 `spot class count`. Each median uses the finite values for its column. An even
@@ -178,20 +178,44 @@ counts, and count divided by `point count`. Ties are ordered by class name.
 Absent ranks have a blank name and zero count and ratio. The summary is also
 written in builds without ROOT.
 
+### Second UMAP
+
+After binning, the command runs another 2D UMAP on the retained atoms. The
+available features are numeric `bin number` and all seven local fitting
+features. To choose a combination, set `include_in_umap` to `true` or
+`false` for each entry in `kSecondUmapFeatureDefinitions` in
+`src/core/command/UmapEmbeddingCommand.cpp`, then rebuild. At least one feature
+must be enabled to compile. The `.metadata.json` field `second_umap_features`
+lists the enabled features in input order.
+
+When enabled, differences between bin numbers enter the distance calculation
+as numeric differences. For each enabled column, the command fills missing
+values with the median of the finite inputs and uses zeros for an entirely
+missing column. It then applies a population Z-score and sets constant columns
+to zero. The CSV and per-bin summary report the original Joint values. Both UMAP
+runs use the same request settings.
+
+When all enabled features are constant, the command reports a warning, leaves
+`second umap x` and `second umap y` blank, and writes the earlier results and
+bin numbers.
+
 ### Scatter plots
 
 When ROOT support is available, the command writes the original scatter plot
 as `umap_embedding_<sanitized-model-key>.pdf` and the updated scatter plot as
 `umap_embedding_<sanitized-model-key>_mean_shift.pdf`. Both use the original
-plot's axis ranges, including its 10% margins and minimum-range handling, and
-the same category colors, markers, legend, and layout. Categories are `C`, `CA`,
+plot's axis ranges. When the second embedding is available, the command writes
+`umap_embedding_<sanitized-model-key>_second_umap.pdf`, with axis ranges based on
+its own displayed points. All plots use the same 10% margins, minimum-range
+handling, category colors, markers, legend, and layout. Categories are `C`, `CA`,
 `N`, `O`, and `O (Water)` for residue `HOH` with spot `O`; unmatched atoms are
 grouped by element as `Side-Chain <element>` or `Other Unknown`. Empty categories
-are omitted from the legend. Builds without ROOT still write both coordinate
-pairs to CSV, skip both PDFs, and report a warning.
+are omitted from the legend. Builds without ROOT write the coordinate pairs to
+CSV and report that plotting is unavailable.
 
 The database and model are fully validated, features are reconstructed and
-standardized, and both UMAP and mean shift complete before the CSV is opened. Database path,
+standardized, and the embeddings, mean shift, and binning are computed before the
+CSV is opened. Database path,
 opening, and schema failures are attributed to `--database`; missing keys and
 incomplete model features to `--model-key`; output failures to `--folder`.
 UMAP coordinates are meaningful relative to other rows in the same run; their

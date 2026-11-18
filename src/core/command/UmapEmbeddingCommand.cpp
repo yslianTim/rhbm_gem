@@ -80,6 +80,27 @@ static_assert(
     kSelectedFeatureCount > 0,
     "At least one feature must be selected in kFeatureDefinitions for UMAP.");
 
+// Keep bin number first, then the local fitting features.
+// Toggle include_in_umap to select features for the second UMAP, then rebuild.
+constexpr std::array kSecondUmapFeatureDefinitions{
+    UmapFeatureDefinition{ "bin number", true },
+    UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[0], true },
+    UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[1], false },
+    UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[2], true },
+    UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[3], false },
+    UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[4], false },
+    UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[5], true },
+    UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[6], true },
+};
+constexpr std::size_t kSecondSelectedFeatureCount{ static_cast<std::size_t>(std::count_if(
+    kSecondUmapFeatureDefinitions.begin(),
+    kSecondUmapFeatureDefinitions.end(),
+    [](const UmapFeatureDefinition & feature) { return feature.include_in_umap; }))
+};
+static_assert(
+    kSecondSelectedFeatureCount > 0,
+    "At least one feature must be selected in kSecondUmapFeatureDefinitions for the second UMAP.");
+
 struct ConfiguredUmapSpot
 {
     std::string_view label;
@@ -407,6 +428,34 @@ void NormalizeAndValidateRequest(
     }
 }
 
+std::vector<double> RunUmap(
+    const std::vector<double> & features,
+    std::size_t feature_count,
+    int effective_neighbors,
+    const UmapEmbeddingRequest & request)
+{
+    const auto point_count{ static_cast<int>(features.size() / feature_count) };
+    std::vector<double> embedding(static_cast<std::size_t>(point_count) * kOutputDimensionCount);
+    knncolle::VptreeBuilder<int, double, double> neighbor_builder(
+        std::make_shared<knncolle::EuclideanDistance<double, double>>());
+    umappp::Options options;
+    options.num_neighbors = effective_neighbors;
+    options.min_dist = request.min_dist;
+    if (request.num_epochs > 0) options.num_epochs = request.num_epochs;
+    const auto seed{ static_cast<umappp::RngEngine::result_type>(request.random_seed) };
+    options.initialize_seed = seed;
+    options.initialize_spectral_irlba_options.seed = seed;
+    options.optimize_seed = seed;
+    options.num_threads = request.job_count;
+    options.num_threads_spectral = request.job_count;
+    options.num_threads_optimize = 1;
+
+    auto status{ umappp::initialize(feature_count, point_count, features.data(), neighbor_builder,
+        kOutputDimensionCount, embedding.data(), options) };
+    status.run(embedding.data());
+    return embedding;
+}
+
 std::vector<double> RunUmapMeanShift(
     const std::vector<double> & embedding,
     const std::vector<detail::LocalFittingFeatureRow> & feature_rows,
@@ -497,6 +546,8 @@ bool WriteEmbedding(
     const PreparedUmapInput & prepared,
     const std::vector<double> & embedding,
     const std::vector<double> & mean_shift_embedding,
+    const std::vector<std::size_t> & bin_numbers,
+    const std::vector<double> & second_embedding,
     std::string & error_message)
 {
     std::ofstream output{ prepared.output_path, std::ios::out | std::ios::trunc };
@@ -508,7 +559,7 @@ bool WriteEmbedding(
     }
 
     output << detail::BuildLocalFittingCsvHeader()
-        << ",umap x,umap y,mean shift x,mean shift y\n";
+        << ",umap x,umap y,mean shift x,mean shift y,bin number,second umap x,second umap y\n";
     output << std::setprecision(std::numeric_limits<double>::max_digits10);
     for (std::size_t observation = 0;
         observation < prepared.feature_rows.size();
@@ -524,19 +575,27 @@ bool WriteEmbedding(
             if (!std::isfinite(row.features[feature])) continue;
             output << row.features[feature];
         }
-        output << ',' << embedding[observation * kOutputDimensionCount]
-            << ',' << embedding[observation * kOutputDimensionCount + 1]
-            << ',' << mean_shift_embedding[observation * kOutputDimensionCount]
-            << ',' << mean_shift_embedding[observation * kOutputDimensionCount + 1]
-            << '\n';
+        const auto offset{ observation * kOutputDimensionCount };
+        output << ',' << embedding[offset] << ',' << embedding[offset + 1]
+            << ',' << mean_shift_embedding[offset] << ',' << mean_shift_embedding[offset + 1]
+            << ',' << bin_numbers[observation];
+        if (second_embedding.empty()) output << ",,";
+        else output << ',' << second_embedding[offset] << ',' << second_embedding[offset + 1];
+        output << '\n';
     }
     output.close();
     boost::json::array features;
     for(const auto & feature:kFeatureDefinitions) if(feature.include_in_umap) features.push_back(boost::json::value(feature.name));
+    boost::json::array second_umap_features;
+    for (const auto & feature : kSecondUmapFeatureDefinitions)
+    {
+        if (feature.include_in_umap) second_umap_features.push_back(boost::json::value(feature.name));
+    }
     boost::json::object exclusions;
     for(const auto & [reason,count]:prepared.exclusions) exclusions[reason]=count;
     std::ofstream metadata(prepared.output_path.string()+".metadata.json");
     metadata << boost::json::serialize(boost::json::object{{"estimator","joint-components"},{"features",features},
+        {"second_umap_features",second_umap_features},
         {"peeling_mode","original-grid-v1"},{"map_normalization",prepared.map_normalization},
         {"column_semantics",boost::json::object{
             {detail::kLocalFittingFeatureNames[4],"Joint Gaussian amplitude A"},
@@ -554,51 +613,133 @@ bool WriteEmbedding(
     return true;
 }
 
-struct UmapBinStatistics
+struct UmapBin
 {
-    std::size_t point_count{};
-    std::array<std::vector<double>, 3> joint_values;
-    std::map<std::string, std::size_t> spot_counts;
+    std::vector<std::size_t> points;
+    std::size_t number{};
 };
 
-bool WriteMeanShiftBins(
-    const PreparedUmapInput & prepared,
-    const std::vector<double> & mean_shift_embedding,
-    std::string & error_message)
+struct UmapBinning
 {
-    const auto output_path{ prepared.output_path.parent_path()
-        / (prepared.output_path.stem().string() + "_mean_shift_bins.csv") };
+    std::map<std::array<std::int64_t, kOutputDimensionCount>, UmapBin> bins;
+    std::vector<std::size_t> point_bin_numbers;
+};
+
+UmapBinning BinMeanShiftEmbedding(
+    const PreparedUmapInput & prepared,
+    const std::vector<double> & mean_shift_embedding)
+{
     constexpr double bin_width{ 0.01 };
     constexpr double min_bin_index{ static_cast<double>(std::numeric_limits<std::int64_t>::min()) };
-    std::map<std::array<std::int64_t, kOutputDimensionCount>, UmapBinStatistics> bins;
+    UmapBinning result;
+    result.point_bin_numbers.resize(prepared.feature_rows.size());
     for (std::size_t point = 0; point < prepared.feature_rows.size(); ++point)
     {
         std::array<std::int64_t, kOutputDimensionCount> bin_index{};
-        const auto & row{ prepared.feature_rows[point] };
         for (std::size_t axis = 0; axis < kOutputDimensionCount; ++axis)
         {
             const double index{ std::floor(mean_shift_embedding[point * kOutputDimensionCount + axis] / bin_width) };
             if (index < min_bin_index || index >= -min_bin_index)
             {
-                error_message = "UMAP mean shift bin index is out of range for atom serial "
-                    + std::to_string(row.serial_id) + ".";
-                return false;
+                throw std::runtime_error("Mean shift bin index is out of range for atom serial "
+                    + std::to_string(prepared.feature_rows[point].serial_id) + ".");
             }
             bin_index[axis] = static_cast<std::int64_t>(index);
         }
-        auto & bin{ bins[bin_index] };
-        ++bin.point_count;
-        for (std::size_t feature = 0; feature < bin.joint_values.size(); ++feature)
-        {
-            const double value{ row.features[4 + feature] }; // Joint amplitude, width, and offset.
-            if (std::isfinite(value)) bin.joint_values[feature].push_back(value);
-        }
-        const auto spot_index{ prepared.configured_spot_indices[point] };
-        const auto label{ spot_index ? std::string(kConfiguredUmapSpots[*spot_index].label)
-            : GetOtherUmapSpotLabel(prepared.elements[point]) };
-        ++bin.spot_counts[label];
+        result.bins[bin_index].points.push_back(point);
     }
+    std::size_t bin_number{};
+    for (auto & [index, bin] : result.bins)
+    {
+        bin.number = ++bin_number;
+        for (const auto point : bin.points) result.point_bin_numbers[point] = bin.number;
+    }
+    return result;
+}
 
+double MedianOfValues(std::vector<double> & values)
+{
+    std::sort(values.begin(), values.end());
+    const auto middle{ values.size() / 2 };
+    return std::midpoint(values[(values.size() - 1) / 2], values[middle]);
+}
+
+std::vector<double> BuildSecondUmapFeatures(
+    const std::vector<detail::LocalFittingFeatureRow> & rows,
+    const std::vector<std::size_t> & bin_numbers)
+{
+    constexpr auto feature_count{ kSecondSelectedFeatureCount };
+    std::vector<double> features(rows.size() * feature_count);
+    std::vector<double> finite_values;
+    finite_values.reserve(rows.size());
+    bool has_variable_feature{};
+    std::size_t selected_feature{};
+    for (std::size_t feature = 0; feature < kSecondUmapFeatureDefinitions.size(); ++feature)
+    {
+        const auto & definition{ kSecondUmapFeatureDefinitions[feature] };
+        if (!definition.include_in_umap) continue;
+        const auto column{ selected_feature++ };
+        const std::string name{ definition.name };
+        finite_values.clear();
+        for (std::size_t point = 0; point < rows.size(); ++point)
+        {
+            const double value{ feature == 0
+                ? static_cast<double>(bin_numbers[point])
+                : rows[point].features[feature - 1] };
+            features[point * feature_count + column] = value;
+            if (std::isfinite(value)) finite_values.push_back(value);
+        }
+        double fill{};
+        if (finite_values.empty())
+        {
+            Logger::Log(LogLevel::Warning,
+                "Second UMAP feature '" + name + "' has no finite values. Using a zero column.");
+        }
+        else if (finite_values.size() < rows.size())
+        {
+            fill = MedianOfValues(finite_values);
+            Logger::Log(LogLevel::Warning, "Second UMAP feature '" + name + "' filled "
+                + std::to_string(rows.size() - finite_values.size()) + " missing values with its median.");
+        }
+
+        long double mean{};
+        long double sum_squared_differences{};
+        for (std::size_t point = 0; point < rows.size(); ++point)
+        {
+            auto & value{ features[point * feature_count + column] };
+            if (!std::isfinite(value)) value = fill;
+            const long double delta{ value - mean };
+            mean += delta / static_cast<long double>(point + 1);
+            sum_squared_differences += delta * (value - mean);
+        }
+        const auto variance{ sum_squared_differences / static_cast<long double>(rows.size()) };
+        if (!std::isfinite(variance) || variance < 0)
+        {
+            throw std::runtime_error("Column '" + name + "' could not be standardized to finite values.");
+        }
+        const auto deviation{ std::sqrt(variance) };
+        has_variable_feature |= deviation > 0;
+        for (std::size_t point = 0; point < rows.size(); ++point)
+        {
+            auto & value{ features[point * feature_count + column] };
+            value = deviation > 0 ? static_cast<double>((value - mean) / deviation) : 0.0;
+            if (!std::isfinite(value))
+            {
+                throw std::runtime_error("Column '" + name + "' has a non-finite Z-score.");
+            }
+        }
+    }
+    if (!has_variable_feature) features.clear();
+    return features;
+}
+
+bool WriteMeanShiftBins(
+    const PreparedUmapInput & prepared,
+    const UmapBinning & binning,
+    std::string & error_message)
+{
+    const auto output_path{ prepared.output_path.parent_path()
+        / (prepared.output_path.stem().string() + "_mean_shift_bins.csv") };
     std::ofstream output{ output_path };
     if (!output.is_open())
     {
@@ -610,21 +751,30 @@ bool WriteMeanShiftBins(
         "2nd dominate spot,2nd dominate spot count,2nd dominate spot count ratio,"
         "3rd dominate spot,3rd dominate spot count,3rd dominate spot count ratio\n"
         << std::setprecision(std::numeric_limits<double>::max_digits10);
-    std::size_t bin_number{ 1 };
-    for (auto & [index, bin] : bins)
+    for (const auto & [index, bin] : binning.bins)
     {
-        output << bin_number++ << ',' << index[0] << ',' << index[1] << ',' << bin.point_count;
-        for (auto & values : bin.joint_values)
+        std::array<std::vector<double>, 3> joint_values;
+        std::map<std::string, std::size_t> spot_counts;
+        for (const auto point : bin.points)
+        {
+            for (std::size_t feature = 0; feature < joint_values.size(); ++feature)
+            {
+                const double value{ prepared.feature_rows[point].features[4 + feature] };
+                if (std::isfinite(value)) joint_values[feature].push_back(value);
+            }
+            const auto spot_index{ prepared.configured_spot_indices[point] };
+            const auto label{ spot_index ? std::string(kConfiguredUmapSpots[*spot_index].label)
+                : GetOtherUmapSpotLabel(prepared.elements[point]) };
+            ++spot_counts[label];
+        }
+        output << bin.number << ',' << index[0] << ',' << index[1] << ',' << bin.points.size();
+        for (auto & values : joint_values)
         {
             output << ',';
-            if (values.empty()) continue;
-            std::sort(values.begin(), values.end());
-            const auto middle{ values.size() / 2 };
-            output << (values.size() % 2 == 0 ? std::midpoint(values[middle - 1], values[middle])
-                : values[middle]);
+            if (!values.empty()) output << MedianOfValues(values);
         }
         std::vector<std::pair<std::string_view, std::size_t>> ranked_spots(
-            bin.spot_counts.begin(), bin.spot_counts.end());
+            spot_counts.begin(), spot_counts.end());
         std::sort(ranked_spots.begin(), ranked_spots.end(), [](const auto & lhs, const auto & rhs)
         {
             if (lhs.second != rhs.second) return lhs.second > rhs.second;
@@ -640,7 +790,7 @@ bool WriteMeanShiftBins(
             }
             const auto & [label, count]{ ranked_spots[rank] };
             output << ',' << label << ',' << count << ','
-                << static_cast<double>(count) / static_cast<double>(bin.point_count);
+                << static_cast<double>(count) / static_cast<double>(bin.points.size());
         }
         output << '\n';
     }
@@ -650,7 +800,7 @@ bool WriteMeanShiftBins(
         error_message = "Failed while writing UMAP mean shift bin output file '" + output_path.string() + "'.";
         return false;
     }
-    Logger::Log(LogLevel::Info, "UMAP mean shift bin count: " + std::to_string(bins.size()));
+    Logger::Log(LogLevel::Info, "UMAP mean shift bin count: " + std::to_string(binning.bins.size()));
     return true;
 }
 
@@ -660,6 +810,27 @@ struct UmapPlotRanges
     std::tuple<double, double> x;
     std::tuple<double, double> y;
 };
+
+std::optional<UmapPlotRanges> ComputeUmapPlotRanges(
+    const PreparedUmapInput & prepared,
+    const std::vector<double> & embedding)
+{
+    std::vector<double> plotted_x;
+    std::vector<double> plotted_y;
+    plotted_x.reserve(prepared.feature_rows.size());
+    plotted_y.reserve(prepared.feature_rows.size());
+    for (std::size_t point = 0; point < prepared.feature_rows.size(); ++point)
+    {
+        if (!prepared.configured_spot_indices[point] && !kDrawOtherUmapSpotGraph) continue;
+        plotted_x.push_back(embedding[point * kOutputDimensionCount]);
+        plotted_y.push_back(embedding[point * kOutputDimensionCount + 1]);
+    }
+    if (plotted_x.empty()) return std::nullopt;
+    return UmapPlotRanges{
+        array_helper::ComputeScalingRangeTuple(plotted_x, 0.1),
+        array_helper::ComputeScalingRangeTuple(plotted_y, 0.1)
+    };
+}
 
 bool PreparePlotOutputPath(
     const std::filesystem::path & plot_path,
@@ -854,12 +1025,14 @@ bool WriteEmbeddingPlots(
     const PreparedUmapInput & prepared,
     const std::vector<double> & embedding,
     const std::vector<double> & mean_shift_embedding,
+    const std::vector<double> & second_embedding,
     std::string & error_message)
 {
 #ifndef HAVE_ROOT
     (void)prepared;
     (void)embedding;
     (void)mean_shift_embedding;
+    (void)second_embedding;
     (void)error_message;
     Logger::Log(LogLevel::Warning,
         "UMAP scatter plots skipped because ROOT support is unavailable.");
@@ -869,30 +1042,28 @@ bool WriteEmbeddingPlots(
     plot_path.replace_extension(".pdf");
     const auto mean_shift_path{ prepared.output_path.parent_path()
         / (prepared.output_path.stem().string() + "_mean_shift.pdf") };
-    std::vector<double> plotted_x;
-    std::vector<double> plotted_y;
-    plotted_x.reserve(prepared.feature_rows.size());
-    plotted_y.reserve(prepared.feature_rows.size());
-    for (std::size_t observation = 0; observation < prepared.feature_rows.size(); ++observation)
-    {
-        if (!prepared.configured_spot_indices[observation] && !kDrawOtherUmapSpotGraph) continue;
-        plotted_x.push_back(embedding[observation * kOutputDimensionCount]);
-        plotted_y.push_back(embedding[observation * kOutputDimensionCount + 1]);
-    }
-    if (plotted_x.empty())
+    const auto second_path{ prepared.output_path.parent_path()
+        / (prepared.output_path.stem().string() + "_second_umap.pdf") };
+    const auto ranges{ ComputeUmapPlotRanges(prepared, embedding) };
+    if (!ranges)
     {
         RemoveStalePlotOutput(plot_path);
         RemoveStalePlotOutput(mean_shift_path);
+        RemoveStalePlotOutput(second_path);
         Logger::Log(LogLevel::Warning,
             "UMAP scatter plots skipped because no configured spot categories were found.");
         return true;
     }
-    const UmapPlotRanges ranges{
-        array_helper::ComputeScalingRangeTuple(plotted_x, 0.1),
-        array_helper::ComputeScalingRangeTuple(plotted_y, 0.1)
-    };
-    return WriteEmbeddingPlot(prepared, embedding, plot_path, ranges, error_message)
-        && WriteEmbeddingPlot(prepared, mean_shift_embedding, mean_shift_path, ranges, error_message);
+    if (second_embedding.empty()) RemoveStalePlotOutput(second_path);
+    if (!WriteEmbeddingPlot(prepared, embedding, plot_path, *ranges, error_message)
+        || !WriteEmbeddingPlot(prepared, mean_shift_embedding, mean_shift_path, *ranges, error_message))
+    {
+        return false;
+    }
+    if (second_embedding.empty()) return true;
+
+    const auto second_ranges{ ComputeUmapPlotRanges(prepared, second_embedding) };
+    return WriteEmbeddingPlot(prepared, second_embedding, second_path, *second_ranges, error_message);
 #endif
 }
 
@@ -901,35 +1072,11 @@ bool ExecutePreparedRequest(
     const UmapEmbeddingRequest & request,
     const PreparedUmapInput & prepared)
 {
-    std::vector<double> embedding(
-        prepared.feature_rows.size() * kOutputDimensionCount);
+    std::vector<double> embedding;
     try
     {
-        knncolle::VptreeBuilder<int, double, double> neighbor_builder(
-            std::make_shared<knncolle::EuclideanDistance<double, double>>());
-        umappp::Options options;
-        options.num_neighbors = prepared.effective_neighbors;
-        options.min_dist = request.min_dist;
-        if (request.num_epochs > 0) options.num_epochs = request.num_epochs;
-        const auto seed{
-            static_cast<umappp::RngEngine::result_type>(request.random_seed)
-        };
-        options.initialize_seed = seed;
-        options.initialize_spectral_irlba_options.seed = seed;
-        options.optimize_seed = seed;
-        options.num_threads = request.job_count;
-        options.num_threads_spectral = request.job_count;
-        options.num_threads_optimize = 1;
-
-        auto status{ umappp::initialize(
-            static_cast<int>(kSelectedFeatureCount),
-            static_cast<int>(prepared.feature_rows.size()),
-            prepared.standardized_features.data(),
-            neighbor_builder,
-            kOutputDimensionCount,
-            embedding.data(),
-            options) };
-        status.run(embedding.data());
+        embedding = RunUmap(prepared.standardized_features, kSelectedFeatureCount,
+            prepared.effective_neighbors, request);
     }
     catch (const std::exception & error)
     {
@@ -973,8 +1120,40 @@ bool ExecutePreparedRequest(
         return false;
     }
 
+    UmapBinning binning;
+    std::vector<double> second_embedding;
+    try
+    {
+        binning = BinMeanShiftEmbedding(prepared, mean_shift_embedding);
+        const auto features{ BuildSecondUmapFeatures(
+            prepared.feature_rows, binning.point_bin_numbers) };
+        if (features.empty())
+        {
+            Logger::Log(LogLevel::Warning,
+                "Second UMAP skipped because all selected feature columns are constant.");
+        }
+        else
+        {
+            second_embedding = RunUmap(features, kSecondSelectedFeatureCount,
+                prepared.effective_neighbors, request);
+            if (!std::all_of(second_embedding.begin(), second_embedding.end(),
+                [](double coordinate) { return std::isfinite(coordinate); }))
+            {
+                throw std::runtime_error("Second UMAP produced a non-finite embedding coordinate.");
+            }
+        }
+    }
+    catch (const std::exception & error)
+    {
+        runner.RequirePrepareCondition(false,
+            "UMAP binning or second embedding failed for model key '" + request.model_key_tag
+                + "' in database '" + request.database_path.string() + "': " + error.what());
+        return false;
+    }
+
     std::string write_error;
-    if (!WriteEmbedding(prepared, embedding, mean_shift_embedding, write_error))
+    if (!WriteEmbedding(prepared, embedding, mean_shift_embedding, binning.point_bin_numbers,
+        second_embedding, write_error))
     {
         runner.AddFieldValidationError(&CommandRequestBase::output_dir, write_error);
         return false;
@@ -982,14 +1161,14 @@ bool ExecutePreparedRequest(
     Logger::Log(LogLevel::Info,
         "UMAP embedding written to: " + prepared.output_path.string());
 
-    if (!WriteMeanShiftBins(prepared, mean_shift_embedding, write_error))
+    if (!WriteMeanShiftBins(prepared, binning, write_error))
     {
         runner.AddFieldValidationError(&CommandRequestBase::output_dir, write_error);
         return false;
     }
 
     std::string plot_error;
-    if (!WriteEmbeddingPlots(prepared, embedding, mean_shift_embedding, plot_error))
+    if (!WriteEmbeddingPlots(prepared, embedding, mean_shift_embedding, second_embedding, plot_error))
     {
         runner.AddFieldValidationError(&CommandRequestBase::output_dir, plot_error);
         return false;
