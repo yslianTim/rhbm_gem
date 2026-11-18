@@ -6,6 +6,7 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/SamplingTypes.hpp>
 #include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
 #include <rhbm_gem/utils/math/GaussianModel3D.hpp>
@@ -28,6 +29,7 @@
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <map>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -633,21 +635,96 @@ TEST(UmapEmbeddingCommandTest, ClassifiesUnconfiguredSpotsAsOtherInRootPlot)
             repository.SaveModel(*model, model_key);
         }
         const auto output_dir{ temp_dir.path() / model_key };
+        testing::internal::CaptureStdout();
         const auto result{ RunCommand(MakeRequest(database_path, output_dir, model_key)) };
+        const auto log{ testing::internal::GetCapturedStdout() };
         ASSERT_TRUE(result.succeeded);
         const auto lines{ ReadLines(output_dir / ("umap_embedding_" + model_key + ".csv")) };
         ASSERT_EQ(lines.size(), options.atom_count + 1);
         EXPECT_EQ(lines[0], rg::core::detail::BuildLocalFittingCsvHeader()
             + ",umap x,umap y,mean shift x,mean shift y");
+        std::map<std::array<long long, 2>, std::vector<std::vector<std::string>>> expected_bins;
         for (std::size_t row = 1; row < lines.size(); ++row)
         {
-            const auto fields{ SplitFields(lines[row]) };
+            auto fields{ SplitFields(lines[row]) };
             ASSERT_EQ(fields.size(), kOutputColumnCount);
             EXPECT_EQ(std::stoi(fields[0]), static_cast<int>(row));
             for (std::size_t column = rg::core::detail::kLocalFittingColumnCount;
                 column < kOutputColumnCount; ++column)
             {
                 EXPECT_TRUE(std::isfinite(std::stod(fields[column])));
+            }
+            const std::array key{
+                static_cast<long long>(std::floor(std::stod(fields[12]) / 0.01)),
+                static_cast<long long>(std::floor(std::stod(fields[13]) / 0.01))
+            };
+            expected_bins[key].push_back(std::move(fields));
+        }
+        const auto bin_lines{ ReadLines(output_dir
+            / ("umap_embedding_" + model_key + "_mean_shift_bins.csv")) };
+        ASSERT_EQ(bin_lines.size(), expected_bins.size() + 1);
+        EXPECT_EQ(bin_lines.front(),
+            "bin number,bin x,bin y,point count,amplitude joint median,width joint median,offset joint median,"
+            "spot class count,1st dominate spot,1st dominate spot count,1st dominate spot count ratio,"
+            "2nd dominate spot,2nd dominate spot count,2nd dominate spot count ratio,"
+            "3rd dominate spot,3rd dominate spot count,3rd dominate spot count ratio");
+        EXPECT_NE(log.find("UMAP mean shift bin count: " + std::to_string(expected_bins.size()) + '\n'),
+            std::string::npos);
+        constexpr std::array<std::string_view, 5> configured_labels{ "C", "CA", "N", "O", "O (Water)" };
+        std::size_t bin_line{ 1 };
+        for (const auto & [key, rows] : expected_bins)
+        {
+            const auto fields{ SplitFields(bin_lines[bin_line]) };
+            ASSERT_EQ(fields.size(), 17u);
+            EXPECT_EQ(std::stoull(fields[0]), bin_line);
+            ++bin_line;
+            EXPECT_EQ(std::stoll(fields[1]), key[0]);
+            EXPECT_EQ(std::stoll(fields[2]), key[1]);
+            EXPECT_EQ(std::stoull(fields[3]), rows.size());
+            for (std::size_t feature = 0; feature < 3; ++feature)
+            {
+                std::vector<double> values;
+                for (const auto & row : rows)
+                {
+                    if (!row[7 + feature].empty()) values.push_back(std::stod(row[7 + feature]));
+                }
+                if (values.empty())
+                {
+                    EXPECT_TRUE(fields[4 + feature].empty());
+                    continue;
+                }
+                std::sort(values.begin(), values.end());
+                EXPECT_DOUBLE_EQ(std::stod(fields[4 + feature]),
+                    (values[(values.size() - 1) / 2] + values[values.size() / 2]) / 2.0);
+            }
+            std::map<std::string, std::size_t> counts;
+            for (const auto & row : rows)
+            {
+                const auto index{ static_cast<std::size_t>(std::stoul(row[0]) - 1) };
+                if (index < configured_labels.size())
+                {
+                    ++counts[std::string(configured_labels[index])];
+                    continue;
+                }
+                const auto element{ elements[index - configured_labels.size()] };
+                ++counts[element == Element::UNK ? "Other Unknown"
+                    : "Side-Chain " + ChemicalDataHelper::GetLabel(element)];
+            }
+            std::vector<std::pair<std::string, std::size_t>> ranking(counts.begin(), counts.end());
+            std::stable_sort(ranking.begin(), ranking.end(), [](const auto & lhs, const auto & rhs)
+            {
+                return lhs.second > rhs.second;
+            });
+            EXPECT_EQ(std::stoull(fields[7]), ranking.size());
+            for (std::size_t rank = 0; rank < 3; ++rank)
+            {
+                const auto column{ 8 + 3 * rank };
+                const auto expected{ rank < ranking.size() ? ranking[rank]
+                    : std::pair<std::string, std::size_t>{} };
+                EXPECT_EQ(fields[column], expected.first);
+                EXPECT_EQ(std::stoull(fields[column + 1]), expected.second);
+                EXPECT_DOUBLE_EQ(std::stod(fields[column + 2]),
+                    static_cast<double>(expected.second) / static_cast<double>(rows.size()));
             }
         }
         for (const auto suffix : { "", "_mean_shift" })
@@ -967,6 +1044,14 @@ TEST(UmapEmbeddingCommandTest, ReportsOutputWriteFailuresOnFolderOption)
     EXPECT_FALSE(result.succeeded);
     EXPECT_TRUE(HasIssue(
         result, "-o,--folder", "Failed to open UMAP output file"));
+
+    const auto bin_output_dir{ temp_dir.path() / "bin_output" };
+    const auto blocked_bin_path{ bin_output_dir / "umap_embedding_blocked_mean_shift_bins.csv" };
+    std::filesystem::create_directories(blocked_bin_path);
+    const auto bin_result{ RunCommand(MakeRequest(database_path, bin_output_dir, "blocked")) };
+    EXPECT_FALSE(bin_result.succeeded);
+    EXPECT_TRUE(HasIssue(bin_result, "-o,--folder", blocked_bin_path.string()));
+    EXPECT_TRUE(std::filesystem::is_directory(blocked_bin_path));
 }
 
 #ifdef HAVE_ROOT

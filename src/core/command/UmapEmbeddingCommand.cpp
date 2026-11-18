@@ -30,12 +30,14 @@
 #include <atomic>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <exception>
 #include <fstream>
 #include <iomanip>
 #include <iterator>
 #include <limits>
 #include <memory>
+#include <numeric>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -114,6 +116,13 @@ std::optional<std::size_t> FindConfiguredUmapSpotIndex(
         if (!configured_spot.residue && spot == configured_spot.spot) return index;
     }
     return std::nullopt;
+}
+
+std::string GetOtherUmapSpotLabel(Element element)
+{
+    return element == Element::UNK
+        ? "Other Unknown"
+        : "Side-Chain " + std::string(ChemicalDataHelper::GetLabel(element));
 }
 
 #ifdef HAVE_ROOT
@@ -545,6 +554,106 @@ bool WriteEmbedding(
     return true;
 }
 
+struct UmapBinStatistics
+{
+    std::size_t point_count{};
+    std::array<std::vector<double>, 3> joint_values;
+    std::map<std::string, std::size_t> spot_counts;
+};
+
+bool WriteMeanShiftBins(
+    const PreparedUmapInput & prepared,
+    const std::vector<double> & mean_shift_embedding,
+    std::string & error_message)
+{
+    const auto output_path{ prepared.output_path.parent_path()
+        / (prepared.output_path.stem().string() + "_mean_shift_bins.csv") };
+    constexpr double bin_width{ 0.01 };
+    constexpr double min_bin_index{ static_cast<double>(std::numeric_limits<std::int64_t>::min()) };
+    std::map<std::array<std::int64_t, kOutputDimensionCount>, UmapBinStatistics> bins;
+    for (std::size_t point = 0; point < prepared.feature_rows.size(); ++point)
+    {
+        std::array<std::int64_t, kOutputDimensionCount> bin_index{};
+        const auto & row{ prepared.feature_rows[point] };
+        for (std::size_t axis = 0; axis < kOutputDimensionCount; ++axis)
+        {
+            const double index{ std::floor(mean_shift_embedding[point * kOutputDimensionCount + axis] / bin_width) };
+            if (index < min_bin_index || index >= -min_bin_index)
+            {
+                error_message = "UMAP mean shift bin index is out of range for atom serial "
+                    + std::to_string(row.serial_id) + ".";
+                return false;
+            }
+            bin_index[axis] = static_cast<std::int64_t>(index);
+        }
+        auto & bin{ bins[bin_index] };
+        ++bin.point_count;
+        for (std::size_t feature = 0; feature < bin.joint_values.size(); ++feature)
+        {
+            const double value{ row.features[4 + feature] }; // Joint amplitude, width, and offset.
+            if (std::isfinite(value)) bin.joint_values[feature].push_back(value);
+        }
+        const auto spot_index{ prepared.configured_spot_indices[point] };
+        const auto label{ spot_index ? std::string(kConfiguredUmapSpots[*spot_index].label)
+            : GetOtherUmapSpotLabel(prepared.elements[point]) };
+        ++bin.spot_counts[label];
+    }
+
+    std::ofstream output{ output_path };
+    if (!output.is_open())
+    {
+        error_message = "Failed to open UMAP mean shift bin output file '" + output_path.string() + "'.";
+        return false;
+    }
+    output << "bin number,bin x,bin y,point count,amplitude joint median,width joint median,offset joint median,"
+        "spot class count,1st dominate spot,1st dominate spot count,1st dominate spot count ratio,"
+        "2nd dominate spot,2nd dominate spot count,2nd dominate spot count ratio,"
+        "3rd dominate spot,3rd dominate spot count,3rd dominate spot count ratio\n"
+        << std::setprecision(std::numeric_limits<double>::max_digits10);
+    std::size_t bin_number{ 1 };
+    for (auto & [index, bin] : bins)
+    {
+        output << bin_number++ << ',' << index[0] << ',' << index[1] << ',' << bin.point_count;
+        for (auto & values : bin.joint_values)
+        {
+            output << ',';
+            if (values.empty()) continue;
+            std::sort(values.begin(), values.end());
+            const auto middle{ values.size() / 2 };
+            output << (values.size() % 2 == 0 ? std::midpoint(values[middle - 1], values[middle])
+                : values[middle]);
+        }
+        std::vector<std::pair<std::string_view, std::size_t>> ranked_spots(
+            bin.spot_counts.begin(), bin.spot_counts.end());
+        std::sort(ranked_spots.begin(), ranked_spots.end(), [](const auto & lhs, const auto & rhs)
+        {
+            if (lhs.second != rhs.second) return lhs.second > rhs.second;
+            return lhs.first < rhs.first;
+        });
+        output << ',' << ranked_spots.size();
+        for (std::size_t rank = 0; rank < 3; ++rank)
+        {
+            if (rank >= ranked_spots.size())
+            {
+                output << ",,0,0";
+                continue;
+            }
+            const auto & [label, count]{ ranked_spots[rank] };
+            output << ',' << label << ',' << count << ','
+                << static_cast<double>(count) / static_cast<double>(bin.point_count);
+        }
+        output << '\n';
+    }
+    output.close();
+    if (!output)
+    {
+        error_message = "Failed while writing UMAP mean shift bin output file '" + output_path.string() + "'.";
+        return false;
+    }
+    Logger::Log(LogLevel::Info, "UMAP mean shift bin count: " + std::to_string(bins.size()));
+    return true;
+}
+
 #ifdef HAVE_ROOT
 struct UmapPlotRanges
 {
@@ -640,9 +749,7 @@ bool WriteEmbeddingPlot(
                 graph.get(), GetOtherElementMarker(element), 1.5f,
                 static_cast<short>(GetOtherElementColor(element)), 0.75f);
             graphs.emplace_back(std::move(graph));
-            labels.emplace_back(element == Element::UNK
-                ? "Other Unknown"
-                : "Side-Chain " + std::string(ChemicalDataHelper::GetLabel(element)));
+            labels.emplace_back(GetOtherUmapSpotLabel(element));
         }
 
         for (std::size_t observation = 0;
@@ -874,6 +981,12 @@ bool ExecutePreparedRequest(
     }
     Logger::Log(LogLevel::Info,
         "UMAP embedding written to: " + prepared.output_path.string());
+
+    if (!WriteMeanShiftBins(prepared, mean_shift_embedding, write_error))
+    {
+        runner.AddFieldValidationError(&CommandRequestBase::output_dir, write_error);
+        return false;
+    }
 
     std::string plot_error;
     if (!WriteEmbeddingPlots(prepared, embedding, mean_shift_embedding, plot_error))

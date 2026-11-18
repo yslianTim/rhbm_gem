@@ -159,6 +159,27 @@ preserved. Even when all rows fit within the neighbor limit, each query has its
 own distance-based weights and need not move to the same global center.
 Mean shift uses all retained rows regardless of plot visibility.
 
+### Mean shift bin summary
+
+The command reports `UMAP mean shift bin count: N` at Info level and writes
+`umap_embedding_<sanitized-model-key>_mean_shift_bins.csv` alongside the per-atom
+CSV. It assigns each final mean shift position to a square of width `0.01` in
+UMAP coordinates, with indices `floor(x / 0.01)` and `floor(y / 0.01)`. Each
+occupied square gets one row, sorted by `bin x` and then `bin y`. The first
+column, `bin number`, numbers the rows consecutively from 1 in that order.
+Overlapping points count individually.
+
+Each row records `point count`, the three Joint parameter medians, and
+`spot class count`. Each median uses the finite values for its column. An even
+sample count uses the average of the two middle values, and a column with no
+finite values is blank. The spot classes match the plot legend and include all
+points in the bin. The three most frequent classes are listed with their names,
+counts, and count divided by `point count`. Ties are ordered by class name.
+Absent ranks have a blank name and zero count and ratio. The summary is also
+written in builds without ROOT.
+
+### Scatter plots
+
 When ROOT support is available, the command writes the original scatter plot
 as `umap_embedding_<sanitized-model-key>.pdf` and the updated scatter plot as
 `umap_embedding_<sanitized-model-key>_mean_shift.pdf`. Both use the original
