@@ -25,7 +25,8 @@ namespace rhbm_gem::core {
 
 namespace {
 
-using namespace classifier;
+using classifier::PreparedUmapInput;
+using classifier::UmapEmbeddingResult;
 
 std::string JoinFeatureNames(const std::vector<std::string_view> & names)
 {
@@ -76,6 +77,84 @@ void NormalizeAndValidateRequest(
     }
 }
 
+void ValidatePreparedRequest(
+    CommandRunner<UmapEmbeddingRequest> & runner,
+    const UmapEmbeddingRequest & request,
+    std::optional<PreparedUmapInput> & prepared_input,
+    std::filesystem::path & output_path)
+{
+    std::unique_ptr<ModelObject> model_object;
+    try
+    {
+        DataRepository repository{ request.database_path };
+        try
+        {
+            model_object = repository.LoadModel(request.model_key_tag);
+        }
+        catch (const std::exception & error)
+        {
+            runner.AddFieldValidationError(
+                &UmapEmbeddingRequest::model_key_tag,
+                "Failed to load model key '" + request.model_key_tag
+                    + "': " + error.what());
+            return;
+        }
+    }
+    catch (const std::exception & error)
+    {
+        runner.AddFieldValidationError(
+            &UmapEmbeddingRequest::database_path,
+            "Failed to open or validate database '"
+                + request.database_path.string() + "': " + error.what());
+        return;
+    }
+
+    std::vector<classifier::LocalFittingFeatureRow> source_rows;
+    try
+    {
+        source_rows = classifier::BuildLocalFittingFeatureRows(*model_object);
+    }
+    catch (const std::exception & error)
+    {
+        runner.AddFieldValidationError(
+            &UmapEmbeddingRequest::model_key_tag,
+            "Failed to build local fitting features for model key '"
+                + request.model_key_tag + "': " + error.what());
+        return;
+    }
+
+    std::string preparation_error;
+    prepared_input = classifier::BuildAndStandardizeInput(
+        *model_object, std::move(source_rows), request.model_key_tag,
+        request.num_neighbors, preparation_error);
+    if (!prepared_input)
+    {
+        runner.AddFieldValidationError(
+            &UmapEmbeddingRequest::model_key_tag,
+            preparation_error);
+        return;
+    }
+
+    output_path = classifier::GetEmbeddingOutputPath(request.output_dir, request.model_key_tag);
+
+    if (!prepared_input->constant_features.empty())
+    {
+        runner.AddFieldNormalizationWarning(
+            &UmapEmbeddingRequest::model_key_tag,
+            "Constant feature columns were standardized to zero: "
+                + JoinFeatureNames(prepared_input->constant_features) + ".");
+    }
+    if (prepared_input->effective_neighbors != request.num_neighbors)
+    {
+        runner.AddFieldNormalizationWarning(
+            &UmapEmbeddingRequest::num_neighbors,
+            "num_neighbors was limited to "
+                + std::to_string(prepared_input->effective_neighbors)
+                + " for " + std::to_string(prepared_input->feature_rows.size())
+                + " data rows.");
+    }
+}
+
 bool ExecutePreparedRequest(
     CommandRunner<UmapEmbeddingRequest> & runner,
     const UmapEmbeddingRequest & request,
@@ -85,7 +164,7 @@ bool ExecutePreparedRequest(
     UmapEmbeddingResult first;
     try
     {
-        first.coordinates = RunUmap(prepared.features, prepared.effective_neighbors,
+        first.coordinates = classifier::RunUmap(prepared.features, prepared.effective_neighbors,
             request.min_dist, request.num_epochs, request.random_seed, request.job_count);
     }
     catch (const std::exception & error)
@@ -97,7 +176,7 @@ bool ExecutePreparedRequest(
         return false;
     }
 
-    if (!HasFiniteCoordinates(first.coordinates))
+    if (!classifier::HasFiniteCoordinates(first.coordinates))
     {
         runner.RequirePrepareCondition(false,
             "UMAP produced a non-finite embedding coordinate for model key '"
@@ -108,7 +187,7 @@ bool ExecutePreparedRequest(
 
     try
     {
-        first.mean_shift_coordinates = RunUmapMeanShift(
+        first.mean_shift_coordinates = classifier::RunUmapMeanShift(
             first.coordinates, prepared.feature_rows, request.job_count);
     }
     catch (const std::exception & error)
@@ -119,7 +198,7 @@ bool ExecutePreparedRequest(
                 + "': " + error.what());
         return false;
     }
-    if (!HasFiniteCoordinates(first.mean_shift_coordinates))
+    if (!classifier::HasFiniteCoordinates(first.mean_shift_coordinates))
     {
         runner.RequirePrepareCondition(false,
             "UMAP mean shift produced a non-finite coordinate for model key '"
@@ -131,8 +210,8 @@ bool ExecutePreparedRequest(
     UmapEmbeddingResult second;
     try
     {
-        first.binning = BinMeanShiftEmbedding(prepared.feature_rows, first.mean_shift_coordinates);
-        const auto second_features{ BuildSecondUmapFeatures(
+        first.binning = classifier::BinMeanShiftEmbedding(prepared.feature_rows, first.mean_shift_coordinates);
+        const auto second_features{ classifier::BuildSecondUmapFeatures(
             prepared.feature_rows, first.binning.point_bin_numbers) };
         if (second_features.values.empty())
         {
@@ -141,9 +220,9 @@ bool ExecutePreparedRequest(
         }
         else
         {
-            second.coordinates = RunUmap(second_features, prepared.effective_neighbors,
+            second.coordinates = classifier::RunUmap(second_features, prepared.effective_neighbors,
                 request.min_dist, request.num_epochs, request.random_seed, request.job_count);
-            if (!HasFiniteCoordinates(second.coordinates))
+            if (!classifier::HasFiniteCoordinates(second.coordinates))
             {
                 throw std::runtime_error("Second UMAP produced a non-finite embedding coordinate.");
             }
@@ -161,13 +240,13 @@ bool ExecutePreparedRequest(
     {
         try
         {
-            second.mean_shift_coordinates = RunUmapMeanShift(
+            second.mean_shift_coordinates = classifier::RunUmapMeanShift(
                 second.coordinates, prepared.feature_rows, request.job_count);
-            if (!HasFiniteCoordinates(second.mean_shift_coordinates))
+            if (!classifier::HasFiniteCoordinates(second.mean_shift_coordinates))
             {
                 throw std::runtime_error("Mean shift produced a non-finite coordinate.");
             }
-            second.binning = BinMeanShiftEmbedding(
+            second.binning = classifier::BinMeanShiftEmbedding(
                 prepared.feature_rows, second.mean_shift_coordinates);
         }
         catch (const std::exception & error)
@@ -180,8 +259,8 @@ bool ExecutePreparedRequest(
     }
 
     std::string write_error;
-    if (!WriteEmbeddingOutputs(output_path, prepared, first, second, write_error)
-        || !WriteEmbeddingPlots(output_path, prepared, first, second, write_error))
+    if (!classifier::WriteEmbeddingOutputs(output_path, prepared, first, second, write_error)
+        || !classifier::WriteEmbeddingPlots(output_path, prepared, first, second, write_error))
     {
         runner.AddFieldValidationError(&CommandRequestBase::output_dir, write_error);
         return false;
@@ -202,81 +281,11 @@ CommandResult ExecuteUmapEmbeddingCommand(const UmapEmbeddingRequest & request)
         request,
         NormalizeAndValidateRequest,
         [&prepared_input, &output_path](
-            CommandRunner<UmapEmbeddingRequest> & validation_runner,
-            const UmapEmbeddingRequest & prepared_request)
+            auto & validation_runner, const auto & prepared_request)
         {
-            std::unique_ptr<ModelObject> model_object;
-            try
-            {
-                DataRepository repository{ prepared_request.database_path };
-                try
-                {
-                    model_object = repository.LoadModel(prepared_request.model_key_tag);
-                }
-                catch (const std::exception & error)
-                {
-                    validation_runner.AddFieldValidationError(
-                        &UmapEmbeddingRequest::model_key_tag,
-                        "Failed to load model key '" + prepared_request.model_key_tag
-                            + "': " + error.what());
-                    return;
-                }
-            }
-            catch (const std::exception & error)
-            {
-                validation_runner.AddFieldValidationError(
-                    &UmapEmbeddingRequest::database_path,
-                    "Failed to open or validate database '"
-                        + prepared_request.database_path.string() + "': " + error.what());
-                return;
-            }
-
-            std::vector<LocalFittingFeatureRow> source_rows;
-            try
-            {
-                source_rows = BuildLocalFittingFeatureRows(*model_object);
-            }
-            catch (const std::exception & error)
-            {
-                validation_runner.AddFieldValidationError(
-                    &UmapEmbeddingRequest::model_key_tag,
-                    "Failed to build local fitting features for model key '"
-                        + prepared_request.model_key_tag + "': " + error.what());
-                return;
-            }
-
-            std::string preparation_error;
-            prepared_input = BuildAndStandardizeInput(
-                *model_object, std::move(source_rows), prepared_request.model_key_tag,
-                prepared_request.num_neighbors, preparation_error);
-            if (!prepared_input)
-            {
-                validation_runner.AddFieldValidationError(
-                    &UmapEmbeddingRequest::model_key_tag,
-                    preparation_error);
-                return;
-            }
-
-            output_path = GetEmbeddingOutputPath(prepared_request.output_dir, prepared_request.model_key_tag);
-
-            if (!prepared_input->constant_features.empty())
-            {
-                validation_runner.AddFieldNormalizationWarning(
-                    &UmapEmbeddingRequest::model_key_tag,
-                    "Constant feature columns were standardized to zero: "
-                        + JoinFeatureNames(prepared_input->constant_features) + ".");
-            }
-            if (prepared_input->effective_neighbors != prepared_request.num_neighbors)
-            {
-                validation_runner.AddFieldNormalizationWarning(
-                    &UmapEmbeddingRequest::num_neighbors,
-                    "num_neighbors was limited to "
-                        + std::to_string(prepared_input->effective_neighbors)
-                        + " for " + std::to_string(prepared_input->feature_rows.size())
-                        + " data rows.");
-            }
+            ValidatePreparedRequest(validation_runner, prepared_request, prepared_input, output_path);
         },
-        [&runner, &prepared_input, &output_path](const UmapEmbeddingRequest & prepared_request)
+        [&runner, &prepared_input, &output_path](const auto & prepared_request)
         {
             return ExecutePreparedRequest(runner, prepared_request, *prepared_input, output_path);
         });
