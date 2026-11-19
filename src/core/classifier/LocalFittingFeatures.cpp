@@ -1,4 +1,4 @@
-#include "core/command/detail/LocalFittingFeatures.hpp"
+#include "core/classifier/LocalFittingFeatures.hpp"
 
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -16,7 +16,7 @@
 #include <utility>
 #include <vector>
 
-namespace rhbm_gem::core::detail {
+namespace rhbm_gem::core::classifier {
 
 namespace {
 
@@ -141,4 +141,4 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(const ModelObje
     return rows;
 }
 
-} // namespace rhbm_gem::core::detail
+} // namespace rhbm_gem::core::classifier

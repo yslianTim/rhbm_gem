@@ -13,7 +13,7 @@ class ModelObject;
 
 } // namespace rhbm_gem
 
-namespace rhbm_gem::core::detail {
+namespace rhbm_gem::core::classifier {
 
 inline constexpr std::size_t kLocalFittingIdentifierColumnCount{ 3 };
 inline constexpr std::size_t kLocalFittingFeatureCount{ 7 };
@@ -53,4 +53,4 @@ std::string BuildLocalFittingCsvHeader();
 std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(
     const ModelObject & model_object);
 
-} // namespace rhbm_gem::core::detail
+} // namespace rhbm_gem::core::classifier

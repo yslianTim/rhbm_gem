@@ -1,5 +1,5 @@
 #include "detail/CommandRunner.hpp"
-#include "core/command/detail/LocalFittingFeatures.hpp"
+#include "core/classifier/LocalFittingFeatures.hpp"
 #include <boost/json.hpp>
 #include <map>
 
@@ -60,15 +60,15 @@ struct UmapFeatureDefinition
 
 // Keep these entries in local fitting feature order. Toggle include_in_umap to
 // choose the features that are standardized and passed to UMAP, then rebuild.
-constexpr std::array<UmapFeatureDefinition, detail::kLocalFittingFeatureCount>
+constexpr std::array<UmapFeatureDefinition, classifier::kLocalFittingFeatureCount>
     kFeatureDefinitions{
-        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[0], true },
-        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[1], true },
-        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[2], false },
-        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[3], true },
-        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[4], false },
-        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[5], false },
-        UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[6], false },
+        UmapFeatureDefinition{ classifier::kLocalFittingFeatureNames[0], true },
+        UmapFeatureDefinition{ classifier::kLocalFittingFeatureNames[1], true },
+        UmapFeatureDefinition{ classifier::kLocalFittingFeatureNames[2], false },
+        UmapFeatureDefinition{ classifier::kLocalFittingFeatureNames[3], true },
+        UmapFeatureDefinition{ classifier::kLocalFittingFeatureNames[4], false },
+        UmapFeatureDefinition{ classifier::kLocalFittingFeatureNames[5], false },
+        UmapFeatureDefinition{ classifier::kLocalFittingFeatureNames[6], false },
     };
 constexpr std::size_t kInputFeatureCount{ kFeatureDefinitions.size() };
 constexpr std::size_t kSelectedFeatureCount{ static_cast<std::size_t>(std::count_if(
@@ -84,13 +84,13 @@ static_assert(
 // Toggle include_in_umap to select features for the second UMAP, then rebuild.
 constexpr std::array kSecondUmapFeatureDefinitions{
     UmapFeatureDefinition{ "bin number", true },
-    UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[0], true },
-    UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[1], false },
-    UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[2], true },
-    UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[3], false },
-    UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[4], true },
-    UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[5], true },
-    UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[6], true },
+    UmapFeatureDefinition{ classifier::kLocalFittingFeatureNames[0], true },
+    UmapFeatureDefinition{ classifier::kLocalFittingFeatureNames[1], false },
+    UmapFeatureDefinition{ classifier::kLocalFittingFeatureNames[2], true },
+    UmapFeatureDefinition{ classifier::kLocalFittingFeatureNames[3], false },
+    UmapFeatureDefinition{ classifier::kLocalFittingFeatureNames[4], true },
+    UmapFeatureDefinition{ classifier::kLocalFittingFeatureNames[5], true },
+    UmapFeatureDefinition{ classifier::kLocalFittingFeatureNames[6], true },
 };
 constexpr std::size_t kSecondSelectedFeatureCount{ static_cast<std::size_t>(std::count_if(
     kSecondUmapFeatureDefinitions.begin(),
@@ -200,7 +200,7 @@ short GetOtherElementMarker(Element element)
 
 struct PreparedUmapInput
 {
-    std::vector<detail::LocalFittingFeatureRow> feature_rows;
+    std::vector<classifier::LocalFittingFeatureRow> feature_rows;
     std::vector<std::optional<std::size_t>> configured_spot_indices;
     std::vector<Element> elements;
     std::vector<double> standardized_features;
@@ -238,10 +238,10 @@ std::optional<PreparedUmapInput> BuildAndStandardizeInput(
     const UmapEmbeddingRequest & request,
     std::string & error_message)
 {
-    std::vector<detail::LocalFittingFeatureRow> source_rows;
+    std::vector<classifier::LocalFittingFeatureRow> source_rows;
     try
     {
-        source_rows = detail::BuildLocalFittingFeatureRows(model_object);
+        source_rows = classifier::BuildLocalFittingFeatureRows(model_object);
     }
     catch (const std::exception & error)
     {
@@ -250,7 +250,7 @@ std::optional<PreparedUmapInput> BuildAndStandardizeInput(
         return std::nullopt;
     }
 
-    std::vector<detail::LocalFittingFeatureRow> feature_rows;
+    std::vector<classifier::LocalFittingFeatureRow> feature_rows;
     std::vector<std::optional<std::size_t>> configured_spot_indices;
     std::vector<Element> elements;
     feature_rows.reserve(source_rows.size());
@@ -458,7 +458,7 @@ std::vector<double> RunUmap(
 
 std::vector<double> RunUmapMeanShift(
     const std::vector<double> & embedding,
-    const std::vector<detail::LocalFittingFeatureRow> & feature_rows,
+    const std::vector<classifier::LocalFittingFeatureRow> & feature_rows,
     [[maybe_unused]] int thread_size)
 {
     constexpr int iteration_count{ 100 };
@@ -558,7 +558,7 @@ bool WriteEmbedding(
         return false;
     }
 
-    output << detail::BuildLocalFittingCsvHeader()
+    output << classifier::BuildLocalFittingCsvHeader()
         << ",umap x,umap y,mean shift x,mean shift y,bin number,second umap x,second umap y\n";
     output << std::setprecision(std::numeric_limits<double>::max_digits10);
     for (std::size_t observation = 0;
@@ -568,7 +568,7 @@ bool WriteEmbedding(
         const auto & row{ prepared.feature_rows[observation] };
         output << row.serial_id << ',' << row.residue << ',' << row.spot;
         for (std::size_t feature = 0;
-            feature < detail::kLocalFittingFeatureCount;
+            feature < classifier::kLocalFittingFeatureCount;
             ++feature)
         {
             output << ',';
@@ -598,9 +598,9 @@ bool WriteEmbedding(
         {"second_umap_features",second_umap_features},
         {"peeling_mode","original-grid-v1"},{"map_normalization",prepared.map_normalization},
         {"column_semantics",boost::json::object{
-            {detail::kLocalFittingFeatureNames[4],"Joint Gaussian amplitude A"},
-            {detail::kLocalFittingFeatureNames[5],"Joint shared Gaussian/charge-kernel width tau"},
-            {detail::kLocalFittingFeatureNames[6],"Joint charge-kernel coefficient C"}}},
+            {classifier::kLocalFittingFeatureNames[4],"Joint Gaussian amplitude A"},
+            {classifier::kLocalFittingFeatureNames[5],"Joint shared Gaussian/charge-kernel width tau"},
+            {classifier::kLocalFittingFeatureNames[6],"Joint charge-kernel coefficient C"}}},
         {"standardization","sample-z-score; constant columns zero"},{"included_rows",prepared.feature_rows.size()},{"excluded_rows",prepared.excluded_rows},{"exclusions",exclusions}});
     metadata.close();
     if(!metadata) { error_message="Failed to write UMAP metadata."; return false; }
@@ -665,7 +665,7 @@ double MedianOfValues(std::vector<double> & values)
 }
 
 std::vector<double> BuildSecondUmapFeatures(
-    const std::vector<detail::LocalFittingFeatureRow> & rows,
+    const std::vector<classifier::LocalFittingFeatureRow> & rows,
     const std::vector<std::size_t> & bin_numbers)
 {
     constexpr auto feature_count{ kSecondSelectedFeatureCount };

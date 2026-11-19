@@ -18,7 +18,7 @@
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include "core/estimator/joint_component/HaloMedianReconstruction.hpp"
 #include "support/JointPostprocessingTestHelpers.hpp"
-#include "core/command/detail/LocalFittingFeatures.hpp"
+#include "core/classifier/LocalFittingFeatures.hpp"
 #include "io/sqlite/SQLiteWrapper.hpp"
 #include "support/CommandTestHelpers.hpp"
 
@@ -43,9 +43,9 @@ namespace {
 namespace rg = rhbm_gem;
 
 constexpr std::size_t kOutputColumnCount{
-    rg::core::detail::kLocalFittingColumnCount + 7
+    rg::core::classifier::kLocalFittingColumnCount + 7
 };
-constexpr std::size_t kBinNumberColumn{ rg::core::detail::kLocalFittingColumnCount + 4 };
+constexpr std::size_t kBinNumberColumn{ rg::core::classifier::kLocalFittingColumnCount + 4 };
 constexpr double kAmplitudeBase{ 1.123456789012345 };
 
 struct FeatureModelOptions
@@ -359,7 +359,7 @@ bool HasIssue(
 
 std::vector<std::array<double, 2>> ReadCoordinates(
     const std::filesystem::path & output_path,
-    std::size_t coordinate_column = rg::core::detail::kLocalFittingColumnCount)
+    std::size_t coordinate_column = rg::core::classifier::kLocalFittingColumnCount)
 {
     const auto lines{ ReadLines(output_path) };
     std::vector<std::array<double, 2>> coordinates;
@@ -482,8 +482,8 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
     ASSERT_FALSE(second_features.empty());
     std::vector<std::string_view> available_features{ "bin number" };
     available_features.insert(available_features.end(),
-        rg::core::detail::kLocalFittingFeatureNames.begin(),
-        rg::core::detail::kLocalFittingFeatureNames.end());
+        rg::core::classifier::kLocalFittingFeatureNames.begin(),
+        rg::core::classifier::kLocalFittingFeatureNames.end());
     auto next_feature{ available_features.begin() };
     for (const auto & feature : second_features)
     {
@@ -513,7 +513,7 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
         EXPECT_EQ(fields[1], "ALA");
         EXPECT_EQ(fields[2], "CA");
         EXPECT_GT(std::stoull(fields[kBinNumberColumn]), 0u);
-        for (std::size_t column = rg::core::detail::kLocalFittingColumnCount;
+        for (std::size_t column = rg::core::classifier::kLocalFittingColumnCount;
             column < kOutputColumnCount; ++column)
         {
             EXPECT_TRUE(std::isfinite(std::stod(fields[column])));
@@ -552,7 +552,7 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
         return atom.GetSerialID() == 1 || atom.GetSerialID() == 7;
     });
     const auto geometry_rows{
-        rg::core::detail::BuildLocalFittingFeatureRows(*geometry_model)
+        rg::core::classifier::BuildLocalFittingFeatureRows(*geometry_model)
     };
     ASSERT_EQ(geometry_rows.size(), 2u);
     EXPECT_EQ(geometry_rows[0].serial_id, 1);
@@ -569,7 +569,7 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
         }
     }
     const auto hydrogen_rows{
-        rg::core::detail::BuildLocalFittingFeatureRows(*geometry_model)
+        rg::core::classifier::BuildLocalFittingFeatureRows(*geometry_model)
     };
     ASSERT_EQ(hydrogen_rows.size(), geometry_rows.size());
     EXPECT_DOUBLE_EQ(hydrogen_rows[0].features[0], 3.5);
@@ -661,7 +661,7 @@ TEST(UmapEmbeddingCommandTest, ClassifiesUnconfiguredSpotsAsOtherInRootPlot)
         const auto csv_path{ output_dir / ("umap_embedding_" + model_key + ".csv") };
         const auto lines{ ReadLines(csv_path) };
         ASSERT_EQ(lines.size(), options.atom_count + 1);
-        EXPECT_EQ(lines[0], rg::core::detail::BuildLocalFittingCsvHeader()
+        EXPECT_EQ(lines[0], rg::core::classifier::BuildLocalFittingCsvHeader()
             + ",umap x,umap y,mean shift x,mean shift y,bin number,second umap x,second umap y");
         std::vector<std::vector<std::string>> point_rows;
         for (std::size_t row = 1; row < lines.size(); ++row)
@@ -669,7 +669,7 @@ TEST(UmapEmbeddingCommandTest, ClassifiesUnconfiguredSpotsAsOtherInRootPlot)
             auto fields{ SplitFields(lines[row]) };
             ASSERT_EQ(fields.size(), kOutputColumnCount);
             EXPECT_EQ(std::stoi(fields[0]), static_cast<int>(row));
-            for (std::size_t column = rg::core::detail::kLocalFittingColumnCount;
+            for (std::size_t column = rg::core::classifier::kLocalFittingColumnCount;
                 column < kOutputColumnCount; ++column)
             {
                 EXPECT_TRUE(std::isfinite(std::stod(fields[column])));
@@ -878,7 +878,7 @@ TEST(UmapEmbeddingCommandTest, RejectsAllConstantSelectedFeatures)
     options.constant_features = true;
     SeedFeatureDatabase(database_path, "constant", options);
     const auto feature_rows{
-        rg::core::detail::BuildLocalFittingFeatureRows(*BuildFeatureModel(options))
+        rg::core::classifier::BuildLocalFittingFeatureRows(*BuildFeatureModel(options))
     };
     ASSERT_EQ(feature_rows.size(), options.atom_count);
     for (const auto & row : feature_rows)
@@ -967,7 +967,7 @@ TEST(UmapEmbeddingCommandTest, MeanShiftUsesFixedOriginalPointsAndClampsNeighbor
 
             const auto csv_path{ request.output_dir / "umap_embedding_model.csv" };
             const auto original{ ReadCoordinates(csv_path) };
-            const auto shifted{ ReadCoordinates(csv_path, rg::core::detail::kLocalFittingColumnCount + 2) };
+            const auto shifted{ ReadCoordinates(csv_path, rg::core::classifier::kLocalFittingColumnCount + 2) };
             ASSERT_EQ(original.size(), point_count);
             ASSERT_EQ(shifted.size(), point_count);
             const auto lines{ ReadLines(csv_path) };
@@ -993,7 +993,7 @@ TEST(UmapEmbeddingCommandTest, MeanShiftUsesFixedOriginalPointsAndClampsNeighbor
                     / "output" / "umap_embedding_model.csv" };
                 EXPECT_EQ(original, ReadCoordinates(equal_width_csv));
                 EXPECT_EQ(shifted, ReadCoordinates(equal_width_csv,
-                    rg::core::detail::kLocalFittingColumnCount + 2));
+                    rg::core::classifier::kLocalFittingColumnCount + 2));
             }
             else
             {

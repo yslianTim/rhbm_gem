@@ -2,7 +2,6 @@ add_library(rhbm_gem)
 target_compile_features(rhbm_gem PUBLIC cxx_std_20)
 
 set(RHBM_GEM_COMMAND_SOURCES
-    core/command/detail/LocalFittingFeatures.cpp
     core/command/RHBMTestCommand.cpp
     core/command/detail/RHBMTestPlotting.cpp
     core/command/MapSimulationCommand.cpp
@@ -118,6 +117,7 @@ endif()
 if(RHBM_GEM_ENABLE_UMAP)
     target_sources(rhbm_gem PRIVATE
         core/command/UmapEmbeddingCommand.cpp
+        core/classifier/LocalFittingFeatures.cpp
     )
 endif()
 
