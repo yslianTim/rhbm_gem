@@ -88,7 +88,7 @@ constexpr std::array kSecondUmapFeatureDefinitions{
     UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[1], false },
     UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[2], true },
     UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[3], false },
-    UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[4], false },
+    UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[4], true },
     UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[5], true },
     UmapFeatureDefinition{ detail::kLocalFittingFeatureNames[6], true },
 };
