@@ -282,6 +282,10 @@ target_include_directories(rhbm_tests PRIVATE
 
 add_dependencies(tests_all rhbm_tests)
 
+add_executable(joint_ac_compensation EXCLUDE_FROM_ALL research/JointAcCompensation.cpp)
+target_link_libraries(joint_ac_compensation PRIVATE rhbm_gem CompilerFlags)
+target_include_directories(joint_ac_compensation PRIVATE "${PROJECT_SOURCE_DIR}/src")
+
 # Private header checks and shared test-only helpers compile into the test executable.
 target_sources(rhbm_tests PRIVATE
     core/GaussianEstimatorHeaderSmoke.cpp

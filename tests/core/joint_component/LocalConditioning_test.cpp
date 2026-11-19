@@ -7,7 +7,9 @@
 #include "support/JointSyntheticWorkload.hpp"
 #include "support/JointTestContext.hpp"
 #include <cmath>
+#include <iomanip>
 #include <limits>
+#include <sstream>
 
 namespace {
 namespace c=rhbm_gem::core;
@@ -248,12 +250,194 @@ TEST(JointLocalConditioningTest, MultiBlockDiagnosticsLeaveTheAcceptedFitUnchang
     const auto with_diagnostics=run(true),without_diagnostics=run(false);
     ASSERT_EQ(with_diagnostics.local_conditioning.size(),2u);
     EXPECT_EQ(without_diagnostics.local_conditioning.size(),2u);
+    auto context=data.context;
+    context.eta_upper_bound=std::log(2.2);
+    const auto compensation=n::AssessAcCompensation(data.domain,data.y,with_diagnostics.state.eta,
+        with_diagnostics.state.beta,context,0);
+    EXPECT_TRUE(compensation.raw_correlation)<<compensation.reason;
     EXPECT_FALSE(with_diagnostics.blocks.empty());
     EXPECT_TRUE(without_diagnostics.blocks.empty());
     EXPECT_EQ(with_diagnostics.state.eta,without_diagnostics.state.eta);
     EXPECT_EQ(with_diagnostics.state.beta,without_diagnostics.state.beta);
+    EXPECT_EQ(with_diagnostics.state.prediction,without_diagnostics.state.prediction);
+    EXPECT_EQ(with_diagnostics.state.residual,without_diagnostics.state.residual);
     EXPECT_DOUBLE_EQ(with_diagnostics.state.objective,without_diagnostics.state.objective);
     EXPECT_EQ(with_diagnostics.search_converged,without_diagnostics.search_converged);
     EXPECT_EQ(with_diagnostics.reason,without_diagnostics.reason);
+}
+
+n::Domain CompensationDomain(double spacing,bool neighbor=false)
+{
+    std::vector<std::vector<n::Support>> supports(neighbor ? 2 : 1);
+    for(Eigen::Index i=0;i<24;++i)
+    {
+        const double radius=static_cast<double>(i)*spacing;
+        supports[0].push_back({i,radius*radius});
+        if(neighbor) supports[1].push_back({i,std::pow(radius-.003,2)});
+    }
+    return n::Domain(24,std::move(supports));
+}
+
+void CheckCompensationPerturbation(const n::Domain & domain,const n::Vector & eta,n::Vector beta,
+    const std::string & label)
+{
+    n::Vector y=n::Vector::Zero(domain.rows);
+    auto context=tc::MakeContext(y,eta.size());
+    const auto geometry=n::EvaluateState(domain,y,eta,beta,context);
+    ASSERT_TRUE(geometry.valid);
+    if(label=="collinear")
+        beta(1)=-beta(0)*geometry.x.col(0).norm()/geometry.x.col(1).norm();
+    y=geometry.x*beta;
+    context=tc::MakeContext(y,eta.size());
+    const auto endpoint=n::EvaluateState(domain,y,eta,beta,context);
+    const auto d=n::AssessAcCompensation(domain,y,eta,beta,context,0);
+    ASSERT_TRUE(d.reason.empty())<<d.reason;
+    ASSERT_TRUE(d.raw_correlation && d.conditional_correlation && d.cancellation_ratio);
+    ASSERT_TRUE(d.residualized_gaussian_norm && d.residualized_charge_norm);
+    ASSERT_EQ(d.physical_weak_direction.size(),beta.size());
+    const n::Vector delta=.01*d.physical_weak_direction;
+    for(Eigen::Index j=0;j<beta.size();j+=2) ASSERT_GT(beta(j)+delta(j),0);
+    const auto perturbed=n::EvaluateState(domain,y,eta,beta+delta,context);
+    ASSERT_TRUE(perturbed.valid);
+    const double sensitivity=(endpoint.x*delta).norm();
+    const auto before=n::NormalizedProfileObjective(endpoint,context.scale);
+    const auto after=n::NormalizedProfileObjective(perturbed,context.scale);
+    ASSERT_TRUE(before && after);
+    EXPECT_NEAR(sensitivity,.01*d.singular_values.tail(1)(0),3e-16);
+    EXPECT_NEAR(*after-*before,.5*std::pow(sensitivity/context.scale,2),3e-16);
+    if(label=="collinear")
+    {
+        EXPECT_GT(*d.raw_correlation,.99999);
+        EXPECT_GT(*d.cancellation_ratio,1e3);
+        EXPECT_GT(d.weak_cancellation_alignment.value_or(0),.999);
+        EXPECT_GT(std::abs(delta(0)),.1);
+        EXPECT_LT(sensitivity,3e-5);
+    }
+    else
+    {
+        EXPECT_LT(*d.raw_correlation,.9);
+        EXPECT_LT(*d.cancellation_ratio,1.3);
+        if(label=="isolated")
+        {
+            EXPECT_GT(sensitivity,.003);
+            EXPECT_NEAR(*d.raw_correlation,*d.conditional_correlation,1e-15);
+            EXPECT_NEAR(*d.residualized_gaussian_norm,*d.gaussian_norm,1e-14);
+            EXPECT_NEAR(*d.residualized_charge_norm,*d.charge_norm,1e-14);
+        }
+        else
+        {
+            EXPECT_LT(sensitivity,5e-5);
+            ASSERT_EQ(d.nuisance_rank,2);
+            EXPECT_LT(*d.residualized_gaussian_norm,*d.gaussian_norm*.03);
+            EXPECT_LT(*d.residualized_charge_norm,*d.charge_norm*.03);
+            EXPECT_GT(d.weak_atom_shares.minCoeff(),.4);
+            const n::Matrix x(endpoint.x);
+            const Eigen::HouseholderQR<n::Matrix> qr(x.rightCols(2));
+            const n::Matrix orthogonal=qr.householderQ().adjoint()*x.leftCols(2);
+            const auto projected=orthogonal.bottomRows(domain.rows-2);
+            EXPECT_NEAR(projected.col(0).norm(),*d.residualized_gaussian_norm,1e-13);
+            EXPECT_NEAR(projected.col(1).norm(),*d.residualized_charge_norm,1e-13);
+            EXPECT_NEAR(projected.col(0).normalized().dot(projected.col(1).normalized()),
+                *d.conditional_correlation,1e-10);
+        }
+    }
+    std::ostringstream metrics;
+    metrics<<std::setprecision(12)<<"beta "<<beta.transpose()<<" rho "<<*d.raw_correlation
+        <<" conditional "<<*d.conditional_correlation<<" residual norms "<<*d.residualized_gaussian_norm
+        <<" "<<*d.residualized_charge_norm<<" cancellation "<<*d.cancellation_ratio
+        <<" singular values "<<d.singular_values.transpose()<<" delta beta "<<delta.transpose()
+        <<" delta prediction "<<sensitivity<<" delta objective "<<*after-*before;
+    ::testing::Test::RecordProperty(label,metrics.str());
+}
+
+TEST(JointLocalConditioningTest, CompensationSeparatesStrongSignalFromCollinearityAndConfounding)
+{
+    const n::Vector isolated_eta=n::Vector::Constant(1,std::log(.4));
+    n::Vector beta(2); beta<<120.,.35;
+    CheckCompensationPerturbation(CompensationDomain(.1),isolated_eta,beta,"isolated");
+    CheckCompensationPerturbation(CompensationDomain(.01),n::Vector::Constant(1,std::log(2.2)),beta,"collinear");
+    n::Vector paired(4); paired<<120.,.35,50.,.2;
+    CheckCompensationPerturbation(CompensationDomain(.1,true),n::Vector::Constant(2,std::log(.4)),paired,"neighbor");
+}
+
+TEST(JointLocalConditioningTest, CompensationRespectsActiveAmplitudeAndWidthFaces)
+{
+    const auto domain=CompensationDomain(.1);
+    const n::Vector y=n::Vector::Zero(domain.rows),eta=n::Vector::Constant(1,std::log(2.2));
+    auto context=tc::MakeContext(y,1); context.eta_upper_bound=eta(0);
+    n::Vector beta(2); beta<<0.,-.3;
+    const auto active=n::AssessAcCompensation(domain,y,eta,beta,context,0);
+    EXPECT_TRUE(active.amplitude_active && active.width_upper_bound_active && active.conditional_on_active_face);
+    EXPECT_TRUE(active.raw_correlation);
+    EXPECT_FALSE(active.conditional_correlation || active.residualized_gaussian_norm);
+    EXPECT_EQ(active.conditional_reason,"conditional-on-active-amplitude-face");
+    EXPECT_EQ(active.residualized_charge_norm,active.charge_norm);
+    EXPECT_EQ(active.cancellation_ratio,1.);
+    ASSERT_EQ(active.physical_weak_direction.size(),2);
+    EXPECT_EQ(active.physical_weak_direction(0),0.);
+    beta<<120.,0.;
+    const auto zero_charge=n::AssessAcCompensation(domain,y,eta,beta,context,0);
+    EXPECT_FALSE(zero_charge.amplitude_active || zero_charge.conditional_on_active_face);
+    EXPECT_TRUE(zero_charge.width_upper_bound_active);
+    EXPECT_EQ(zero_charge.free_rank,2);
+    EXPECT_EQ(zero_charge.cancellation_ratio,1.);
+}
+
+TEST(JointLocalConditioningTest, CompensationUsesTruncatedNuisanceSpanAndPreservesTheWeakSubspace)
+{
+    const std::vector<n::Support> support{{0,0.},{1,.5},{2,1.5}};
+    const n::Domain domain(3,{support,support,support});
+    const n::Vector y=n::Vector::Zero(3),eta=n::Vector::Constant(3,std::log(.7)),beta=n::Vector::Ones(6);
+    const auto d=n::AssessAcCompensation(domain,y,eta,beta,tc::MakeContext(y,3),0);
+    EXPECT_EQ(d.nuisance_rank,2);
+    EXPECT_EQ(d.free_rank,2);
+    EXPECT_EQ(d.weak_dimension,4);
+    EXPECT_EQ(d.physical_weak_direction.size(),0);
+    EXPECT_NEAR(d.weak_atom_shares.sum(),1.,1e-14);
+    EXPECT_EQ(d.conditional_reason,"residualized-column-at-roundoff");
+    EXPECT_FALSE(d.conditional_correlation);
+    ASSERT_TRUE(d.residualized_gaussian_norm && d.residualized_charge_norm);
+    EXPECT_LT(*d.residualized_gaussian_norm,1e-14);
+    EXPECT_LT(*d.residualized_charge_norm,1e-14);
+}
+
+TEST(JointLocalConditioningTest, CompensationReportsZeroTinyAndInvalidEvidence)
+{
+    const n::Vector y=n::Vector::Zero(2),eta=n::Vector::Zero(1);
+    const auto context=tc::MakeContext(y,1);
+    n::Vector beta(2); beta<<1.,0.;
+    const auto empty=n::AssessAcCompensation(n::Domain(2,{{}}),y,eta,beta,context,0);
+    EXPECT_EQ(empty.reason,"empty-target-support");
+    const auto zero=n::AssessAcCompensation(n::Domain(2,{{{0,9.},{1,10.}}}),y,eta,beta,context,0);
+    EXPECT_EQ(zero.gaussian_norm,0.);
+    EXPECT_FALSE(zero.raw_correlation || zero.cancellation_ratio);
+    EXPECT_EQ(zero.free_rank,0);
+    EXPECT_FALSE(zero.weak_reason.empty());
+    const n::Domain domain(2,{{{0,0.},{1,0.}}});
+    const auto tiny=n::AssessAcCompensation(domain,y,n::Vector::Constant(1,std::log(1e103)),beta,context,0);
+    ASSERT_TRUE(tiny.gaussian_norm);
+    EXPECT_GT(*tiny.gaussian_norm,0.);
+    EXPECT_LT(*tiny.gaussian_norm,std::numeric_limits<double>::min());
+    EXPECT_FALSE(tiny.raw_correlation || tiny.cancellation_ratio);
+    EXPECT_TRUE(tiny.residualized_charge_norm);
+    const auto kernel=n::EvaluateKernel(0.,1.,2.5);
+    beta(1)=-kernel.gaussian/kernel.charge;
+    for(double c:{beta(1),std::nextafter(beta(1),0.)})
+    {
+        beta(1)=c;
+        const auto near_zero=n::AssessAcCompensation(domain,y,eta,beta,context,0);
+        EXPECT_FALSE(near_zero.cancellation_ratio);
+        EXPECT_EQ(near_zero.cancellation_reason,"net-prediction-at-roundoff");
+        EXPECT_EQ(near_zero.free_rank,1);
+        EXPECT_EQ(near_zero.weak_dimension,1);
+    }
+    const auto refused=n::AssessAcCompensation(domain,y,eta,beta,context,0,n::JointMemoryHardLimitBytes);
+    EXPECT_EQ(refused.reason,"resource-limit:local-conditioning");
+    EXPECT_FALSE(refused.raw_correlation);
+    beta(0)=std::numeric_limits<double>::infinity();
+    EXPECT_EQ(n::AssessAcCompensation(domain,y,eta,beta,context,0).reason,"invalid-local-state");
+    beta(0)=1.;
+    const n::Domain bad(2,{{{0,std::numeric_limits<double>::quiet_NaN()},{1,0.}}});
+    EXPECT_EQ(n::AssessAcCompensation(bad,y,eta,beta,context,0).reason,"nonfinite-basis");
 }
 }
