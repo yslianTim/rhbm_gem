@@ -676,8 +676,8 @@ JointFitResult detail::FitJointComponentsInitializedWithProgress(
     auto out=n::FitBcdComponents(problem,bounded.tau_values,solver_policy,observer);
     out.initialization=initialization;
     out.evidence.push_back({"global-width-calibration",JointCheckStatus::Passed,
-        JointEvidenceScope::AssembledGlobal,calibration.p95,bounded.tau_max,
-        "global-initial-stage-p95-k4; qualified-donors="+
+        JointEvidenceScope::AssembledGlobal,calibration.median_width,bounded.tau_max,
+        "global-initial-stage-q50-k4; qualified-donors="+
             std::to_string(calibration.qualified_donor_count)+"/"+std::to_string(calibration.target_count)});
     out.evidence.push_back({"qualified-initial-stage-donor-coverage",JointCheckStatus::Passed,
         JointEvidenceScope::AssembledGlobal,calibration.qualified_donor_coverage,0.95,

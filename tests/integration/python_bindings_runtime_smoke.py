@@ -278,7 +278,7 @@ def assert_joint_workflow() -> None:
         assert saved["metadata"]["solver"]["bcd_local_search"] == "active-set-lm"
         calibration = next(item for item in saved["evidence"] if item["name"] == "global-width-calibration")
         assert calibration["status"] == "passed"
-        assert "global-initial-stage-p95-k4" in calibration["reason"]
+        assert "global-initial-stage-q50-k4" in calibration["reason"]
 
 
 def main() -> int:

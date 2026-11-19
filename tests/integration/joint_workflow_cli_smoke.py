@@ -123,7 +123,7 @@ def main() -> int:
         assert csv_rows["target"]["TargetRuntimeConvergence"] == "passed"
         calibration = next(item for item in saved["evidence"] if item["name"] == "global-width-calibration")
         assert calibration["status"] == "passed"
-        assert "global-initial-stage-p95-k4" in calibration["reason"]
+        assert "global-initial-stage-q50-k4" in calibration["reason"]
         assert abs(calibration["threshold"] - 4.0 * calibration["value"]) <= 1e-12
         assert 'target_runtime_convergence' in saved
         metadata = saved["metadata"]

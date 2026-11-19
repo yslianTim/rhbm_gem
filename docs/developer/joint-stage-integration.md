@@ -240,7 +240,11 @@ diagnostics use `candidate_eta_gradient_inf_norm` and
 
 Every saved Joint result, including pre-search failures, requires the
 configured solver identity. The reader rejects missing, unknown or mixed
-solver fields.
+solver fields. Results that reach the solver require passing
+`global-width-calibration` evidence with policy `global-initial-stage-q50-k4`,
+the qualified Target donor count in the reason, the donor median as the
+value and `4 × q50` as the threshold. The codec validates the policy and
+threshold and checks each saved endpoint and candidate against that bound.
 
 ```json
 {

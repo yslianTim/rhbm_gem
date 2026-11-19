@@ -14,6 +14,7 @@
 #include "core/estimator/joint_component/TiledDerivative.hpp"
 #include "support/JointSyntheticWorkload.hpp"
 #include <cmath>
+#include <numeric>
 #include <string_view>
 #include "data/io/detail/JointResultJson.hpp"
 #include <rhbm_gem/utils/math/EigenHelper.hpp>
@@ -303,6 +304,114 @@ TEST(JointComponentRuntimeTest, HistoricalLmFailureDoesNotVetoAVerifiedRecovered
     EXPECT_EQ(missing.RuntimeConvergence(),Status::Unavailable);
     component.state->tau[0]=std::numeric_limits<double>::quiet_NaN();
     EXPECT_NE(component.RuntimeConvergence(),Status::Passed);
+}
+
+TEST(JointComponentRuntimeTest, MedianWidthBoundProjectsAndCertifiesAllComponents)
+{
+    using namespace rhbm_gem;
+    constexpr std::size_t targets=24;
+    constexpr std::size_t narrow_targets=20;
+    constexpr double upper=2.0;
+    core::JointProblemInput input;
+    JointInitialization init;
+    init.valid=true;
+    for(std::size_t i=0;i<targets;++i)
+    {
+        const bool narrow=i<narrow_targets;
+        const double width=narrow ? .5 : 3.5;
+        const double amplitude=narrow ? 2.0 : 100.0;
+        const double charge=narrow ? .2 : -.1;
+        input.atom_ids.push_back(std::to_string(i+1));
+        auto & support=input.support.emplace_back();
+        for(int k=0;k<=25;++k)
+        {
+            const double radius=.1*k;
+            const auto basis=n::EvaluateKernel(radius*radius,width,2.5);
+            support.push_back({input.observations.size(),radius*radius});
+            input.row_ids.push_back(std::to_string(input.observations.size()));
+            input.observations.push_back(amplitude*basis.gaussian+charge*basis.charge);
+        }
+        auto & donor=init.atoms.emplace_back();
+        donor.id=input.atom_ids.back(); donor.target=true;
+        donor.mdpde={amplitude,width,charge};
+        donor.original_tau=width; donor.used_tau=width; donor.seed_source="fitted";
+        donor.native_status=static_cast<int>(RHBMEstimationStatus::SUCCESS);
+        donor.initial_stage_fit_qualified=true;
+        donor.initial_stage_qualification=RHBMSolveQualification::NativeSuccess;
+        init.tau.push_back(width);
+    }
+    auto & selection=input.selection_domain.emplace();
+    selection.target_indices.resize(targets);
+    std::iota(selection.target_indices.begin(),selection.target_indices.end(),0);
+    selection.contributor_policy=std::string(PureHaloSupportExclusionContributorPolicy);
+    selection.pure_halo_support_exclusion=JointPureHaloSupportExclusionProvenance{
+        input.observations.size(),input.observations.size(),0,0,0,0};
+    const core::JointProblem problem(std::move(input));
+
+    const auto fit=core::FitJointComponentsInitialized(problem,init);
+    const auto evidence=[&](const std::vector<JointCheck> & checks,std::string_view name) {
+        return std::find_if(checks.begin(),checks.end(),[&](const auto & check) {return check.name==name;});
+    };
+    const auto calibration=evidence(fit.evidence,"global-width-calibration");
+    ASSERT_NE(calibration,fit.evidence.end());
+    EXPECT_EQ(calibration->status,JointCheckStatus::Passed);
+    EXPECT_EQ(calibration->value,.5);
+    EXPECT_EQ(calibration->threshold,upper);
+    EXPECT_EQ(calibration->reason,"global-initial-stage-q50-k4; qualified-donors=24/24");
+    const auto projection=evidence(fit.evidence,"bounded-initialization-projection");
+    ASSERT_NE(projection,fit.evidence.end());
+    EXPECT_EQ(projection->status,JointCheckStatus::Passed);
+    EXPECT_EQ(projection->value,4.);
+    EXPECT_EQ(projection->reason,"projected-target-widths=4; maximum-projection-angstroms=1.500000");
+    EXPECT_EQ(fit.initialization.tau,init.tau);
+    EXPECT_EQ(fit.initialization.atoms.back().mdpde,init.atoms.back().mdpde);
+    EXPECT_EQ(fit.initialization.atoms.back().original_tau,3.5);
+    EXPECT_EQ(fit.initialization.atoms.back().used_tau,3.5);
+    EXPECT_EQ(init.tau.back(),3.5);
+
+    const auto expect_certified=[&](const std::vector<JointCheck> & checks) {
+        for(const auto * name:{"conditional-ac-optimality","width-stationarity","width-bound-feasibility",
+            "endpoint-verification","independent-replay"})
+        {
+            const auto check=evidence(checks,name);
+            ASSERT_NE(check,checks.end())<<name;
+            EXPECT_EQ(check->status,JointCheckStatus::Passed)<<name<<": "<<check->reason;
+        }
+    };
+    ASSERT_TRUE(fit.assembled_state);
+    EXPECT_EQ(fit.TargetRuntimeConvergence(),JointCheckStatus::Passed);
+    expect_certified(fit.evidence);
+    ASSERT_EQ(fit.assembled_state->tau.size(),targets);
+    ASSERT_EQ(fit.components.size(),targets);
+    for(const auto & component:fit.components)
+    {
+        SCOPED_TRACE(component.id);
+        expect_certified(component.evidence);
+        ASSERT_TRUE(component.state);
+        ASSERT_EQ(component.atoms.size(),1u);
+        const auto i=component.atoms.front();
+        EXPECT_LE(component.state->log_tau.front(),std::log(upper));
+        EXPECT_LE(fit.assembled_state->tau[i],upper);
+        if(i<narrow_targets) EXPECT_LT(fit.assembled_state->tau[i],upper);
+        else
+        {
+            EXPECT_DOUBLE_EQ(fit.assembled_state->tau[i],upper);
+            EXPECT_LT(fit.assembled_state->eta_gradient[i],-n::PracticalJointConvergenceCriteria.global_eta_gradient);
+        }
+    }
+
+    for(std::size_t i=0;i<2;++i) init.atoms[i].initial_stage_fit_qualified=false;
+    bool solver_started=false;
+    const auto rejected=core::detail::FitJointComponentsInitializedWithProgress(problem,init,
+        [&](const auto &) {solver_started=true;});
+    EXPECT_FALSE(solver_started);
+    EXPECT_FALSE(rejected.search_completed);
+    EXPECT_TRUE(rejected.components.empty());
+    EXPECT_FALSE(rejected.assembled_state);
+    const auto unavailable=evidence(rejected.evidence,"global-width-calibration");
+    ASSERT_NE(unavailable,rejected.evidence.end());
+    EXPECT_EQ(unavailable->status,JointCheckStatus::Unavailable);
+    EXPECT_EQ(unavailable->reason,"calibration-unavailable:qualified-initial-stage-target-coverage-below-0.95");
 }
 
 namespace {

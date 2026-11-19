@@ -8,6 +8,7 @@
 #include "support/CommandTestHelpers.hpp"
 #include "core/command/detail/SimulationGeometry.hpp"
 #include <rhbm_gem/utils/math/ElectricPotential.hpp>
+#include <limits>
 
 namespace {
 namespace m=joint_component_test::matched;
@@ -413,11 +414,17 @@ TEST(JointComponentSearchTest, ProfileSearchRequiresFiniteWidthUpperBound)
 {
     Sample sample;
     const p::Domain domain(sample.grid,sample.atoms);
-    const auto context=p::MakeContext(sample.y,static_cast<Eigen::Index>(sample.atoms.size()));
-    const auto search=joint::SearchProfile(domain,sample.y,Vector::Constant(2,.5),context);
-    EXPECT_TRUE(search.stopped);
-    EXPECT_TRUE(search.trials.empty());
-    EXPECT_EQ(search.stop_reason,"invalid-width-upper-bound");
+    auto context=p::MakeContext(sample.y,static_cast<Eigen::Index>(sample.atoms.size()));
+    for(const auto bound:{std::optional<double>{},
+        std::optional{std::numeric_limits<double>::infinity()},
+        std::optional{std::numeric_limits<double>::quiet_NaN()}})
+    {
+        context.eta_upper_bound=bound;
+        const auto search=joint::SearchProfile(domain,sample.y,Vector::Constant(2,.5),context);
+        EXPECT_TRUE(search.stopped);
+        EXPECT_TRUE(search.trials.empty());
+        EXPECT_EQ(search.stop_reason,"invalid-width-upper-bound");
+    }
 }
 
 TEST(JointComponentSearchTest, InfeasibleRoundedTrialKeepsInitialAcceptanceEvidence)

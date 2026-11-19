@@ -736,7 +736,7 @@ TEST(PureHaloSupportExclusionTest, PersistsVersionedDualDomainAndMedianProvenanc
     solver.bcd_order="forward";
     solver.bcd_local_search=std::string(BcdBoundedLocalSearchName);
     snapshot.evidence.push_back({"global-width-calibration",JointCheckStatus::Passed,
-        JointEvidenceScope::AssembledGlobal,.65,2.6,"global-initial-stage-p95-k4; qualified-donors=1/1"});
+        JointEvidenceScope::AssembledGlobal,.65,2.6,"global-initial-stage-q50-k4; qualified-donors=1/1"});
     snapshot.evidence.push_back({"qualified-initial-stage-donor-coverage",JointCheckStatus::Passed,
         JointEvidenceScope::AssembledGlobal,1.0,.95,"target-only-qualified-initial-stage-widths"});
     const auto encoded=joint_result_io::Encode(snapshot);

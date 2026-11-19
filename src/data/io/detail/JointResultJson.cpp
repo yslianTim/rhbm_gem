@@ -816,7 +816,7 @@ void Validate(const JointAnalysisResult & x)
         Require(calibration && calibration->status==JointCheckStatus::Passed && calibration->value &&
             calibration->threshold && *calibration->value>0 &&
             *calibration->threshold==4.0*(*calibration->value) &&
-            calibration->reason.find("global-initial-stage-p95-k4")!=std::string::npos,
+            calibration->reason.find("global-initial-stage-q50-k4")!=std::string::npos,
             "missing global width bound provenance");
         Require(coverage && coverage->status==JointCheckStatus::Passed && coverage->value &&
             coverage->threshold && *coverage->threshold==0.95 &&

@@ -75,11 +75,13 @@ records. Per-atom qualification and recovery accompany the Joint snapshot.
 Calibration uses finite positive native-qualified or recovered-qualified
 Target MDPDE widths, excluding median fallbacks and initialization exceptions.
 It requires at least 20 qualified donors and at least 95% Target coverage.
-The sole upper bound is `tau_max = 4 × Q0.95(donor widths)`, using
-Hyndman–Fan Type 7 quantiles. All components receive the same
-`eta_max = log(tau_max)`. Seeds above the bound are projected for the working
-initialization, with original and used widths retained. An invalid, overflowing
-or unavailable bound prevents Joint search.
+The donor median is `q50 = Q0.50(donor widths)` using Hyndman–Fan Type 7
+interpolation. The sole upper bound is `tau_max = 4 × q50`. All components
+use the same `eta_max = log(tau_max)` for bounded LM, projected Width KKT,
+Endpoint Verification and Independent Replay. Each working seed is
+`min(initial_tau, tau_max)`. The original Joint initialization and
+InitialStage estimates and qualification evidence are retained. An invalid,
+overflowing or unavailable bound prevents Joint search.
 
 ## Gauss–Seidel BCD
 

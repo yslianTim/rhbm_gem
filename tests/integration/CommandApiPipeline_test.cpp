@@ -699,7 +699,7 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
     });
     ASSERT_NE(calibration,stored.evidence.end());
     EXPECT_EQ(calibration->status,rg::JointCheckStatus::Passed);
-    EXPECT_NE(calibration->reason.find("global-initial-stage-p95-k4"),std::string::npos);
+    EXPECT_NE(calibration->reason.find("global-initial-stage-q50-k4"),std::string::npos);
     ASSERT_TRUE(calibration->value && calibration->threshold);
     EXPECT_NEAR(*calibration->threshold,4.0*(*calibration->value),1e-12);
     const auto donor_coverage=std::find_if(stored.evidence.begin(),stored.evidence.end(),[](const auto & item) {

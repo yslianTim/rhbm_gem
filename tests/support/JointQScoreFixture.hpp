@@ -78,7 +78,7 @@ inline Fixture Make(std::vector<Atom> specs={Atom{}},bool coarse_x=false,bool bo
     // The bounded test adapter bypasses production donor-count calibration;
     // persist its explicit 2 A bound using the ordinary provenance contract.
     f.snapshot.evidence.push_back({"global-width-calibration",JointCheckStatus::Passed,
-        JointEvidenceScope::AssembledGlobal,.5,2.,"global-initial-stage-p95-k4; test-adapter-bound"});
+        JointEvidenceScope::AssembledGlobal,.5,2.,"global-initial-stage-q50-k4; test-adapter-bound"});
     f.snapshot.evidence.push_back({"qualified-initial-stage-donor-coverage",JointCheckStatus::Passed,
         JointEvidenceScope::AssembledGlobal,1.,.95,"target-only-qualified-initial-stage-widths"});
     f.snapshot.metadata.grid_size=f.map->GetGridSize(); f.snapshot.metadata.grid_spacing=f.map->GetGridSpacing();

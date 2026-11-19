@@ -519,7 +519,7 @@ rg::JointAnalysisResult CurrentJointExample(bool with_halo=true)
     result.assembled_state=component.state;
     result.evidence.push_back({"global-width-calibration",rg::JointCheckStatus::Passed,
         rg::JointEvidenceScope::AssembledGlobal,0.6,2.4,
-        "global-initial-stage-p95-k4; qualified-donors=1/1"});
+        "global-initial-stage-q50-k4; qualified-donors=1/1"});
     result.evidence.push_back({"qualified-initial-stage-donor-coverage",rg::JointCheckStatus::Passed,
         rg::JointEvidenceScope::AssembledGlobal,1.0,0.95,"target-only-qualified-initial-stage-widths"});
     return result;
@@ -583,6 +583,19 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV25RejectsOtherVersionsAndReti
     retired=current;
     retired.at("target_evidence").as_object()["ranks"]=boost::json::array{};
     EXPECT_THROW(io::Decode(boost::json::serialize(retired)),std::invalid_argument);
+}
+
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV25RejectsRetiredWidthCalibrationPolicy)
+{
+    namespace io=rg::joint_result_io;
+    auto current=boost::json::parse(io::Encode(CurrentJointExample())).as_object();
+    auto & evidence=current.at("evidence").as_array();
+    const auto calibration=std::find_if(evidence.begin(),evidence.end(),[](const auto & item) {
+        return item.as_object().at("name").as_string()=="global-width-calibration";
+    });
+    ASSERT_NE(calibration,evidence.end());
+    calibration->as_object()["reason"]="global-initial-stage-p95-k4; qualified-donors=1/1";
+    EXPECT_THROW(io::Decode(boost::json::serialize(current)),std::invalid_argument);
 }
 
 TEST(DataObjectPersistenceTest, JointCurrentSchemaV25UsesTauAndInitialStageKeys)

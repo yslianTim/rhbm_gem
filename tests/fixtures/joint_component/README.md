@@ -2,10 +2,10 @@
 
 `initial_stage.json` keeps the 24-target coarse-phase-0 F0 + MDPDE baseline from
 commit `503a6607674e068e4d3ef3db52aa770abcf3aea4`. Atom identity, alpha, OLS/MDPDE,
-calibration and complete final A/C/Width/gradient values are copied without
-numerical changes from the original committed study baseline. The identical
-component check contract is stored once. No time/RSS or alternative policies
-are reference data.
+donor distribution statistics and final A/C/Width/gradient values retain the
+original study values. The calibration bound and strategy evidence follow the
+current `4 × q50` policy. The identical component check contract is stored once.
+No time/RSS or alternative policies are reference data.
 
 C0 additionally captures isolated and crowded raw sampling fingerprints and
 original-grid peeling/Local results on the same unmodified production code.

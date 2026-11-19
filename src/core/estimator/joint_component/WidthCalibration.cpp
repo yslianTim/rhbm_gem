@@ -23,11 +23,12 @@ bool HasInitializationFailure(const JointInitializationAtom & atom)
     return atom.reason.rfind("initialization-exception",0)==0;
 }
 
-std::optional<double> BoundFrom(double p95, double multiplier)
+std::optional<double> BoundFrom(double reference_width, double multiplier)
 {
-    if (!(p95>0.0) || !std::isfinite(p95) || p95>std::numeric_limits<double>::max()/multiplier)
+    if (!(reference_width>0.0) || !std::isfinite(reference_width) ||
+        reference_width>std::numeric_limits<double>::max()/multiplier)
         return std::nullopt;
-    const double bound=multiplier*p95;
+    const double bound=multiplier*reference_width;
     if (!(bound>0.0) || !std::isfinite(bound) || !std::isfinite(std::log(bound)))
         return std::nullopt;
     return bound;
@@ -62,7 +63,7 @@ WidthBoundCalibration CalibrateQualifiedWidthDonors(
     result.p90=QuantileType7(donors,0.90);
     result.p95=QuantileType7(donors,0.95);
     result.p99=QuantileType7(donors,0.99);
-    result.tau_max4=BoundFrom(*result.p95,4.0);
+    result.tau_max4=BoundFrom(*result.median_width,4.0);
     if(!result.tau_max4)
     {
         result.unavailable_reason="global-width-bound-overflow-or-invalid-log-bound";

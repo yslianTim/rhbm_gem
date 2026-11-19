@@ -63,25 +63,29 @@ TEST(WidthCalibrationTest, SelectsOnlyQualifiedTargetInitialStageWidths)
     input.atoms[4].initial_stage_qualification=RHBMSolveQualification::RefinedSuccess;
     input.atoms[4].initial_stage_recovery=RHBMFailedOnlyRecoveryDiagnostics{};
     input.atoms[4].initial_stage_recovery->accepted=true;
-    input.atoms[5].mdpde[1]=std::numeric_limits<double>::infinity();
     for(auto & atom:input.atoms) atom.mdpde[1]=1.0;
     input.atoms[4].mdpde[1]=5.0;
     input.atoms[5].mdpde[1]=std::numeric_limits<double>::infinity();
+    input.atoms[6].reason="initialization-exception: test failure";
 
     const auto calibration=joint::CalibrateGlobalWidth(input,"unit-case");
     ASSERT_EQ(calibration.status,"Available");
     EXPECT_EQ(calibration.target_count,99u);
-    EXPECT_EQ(calibration.qualified_donor_count,96u);
+    EXPECT_EQ(calibration.qualified_donor_count,95u);
     EXPECT_EQ(calibration.native_success_count,97u);
     EXPECT_EQ(calibration.refined_success_count,1u);
     EXPECT_EQ(calibration.unqualified_count,1u);
     EXPECT_EQ(calibration.invalid_width_count,1u);
     EXPECT_EQ(calibration.fallback_count,1u);
-    EXPECT_NEAR(calibration.qualified_donor_coverage,96.0/99.0,1e-15);
+    EXPECT_EQ(calibration.initialization_failure_count,1u);
+    EXPECT_NEAR(calibration.qualified_donor_coverage,95.0/99.0,1e-15);
+    EXPECT_EQ(calibration.median_width,1.0);
+    EXPECT_EQ(calibration.tau_max4,4.0);
     EXPECT_DOUBLE_EQ(*calibration.p95,1.0);
     EXPECT_EQ(calibration.excluded_donor_reasons.at("unqualified-initial-stage"),1u);
     EXPECT_EQ(calibration.excluded_donor_reasons.at("median-fallback"),1u);
     EXPECT_EQ(calibration.excluded_donor_reasons.at("non-finite-width"),1u);
+    EXPECT_EQ(calibration.excluded_donor_reasons.at("initialization-failure"),1u);
 }
 
 TEST(WidthCalibrationTest, UsesDeterministicType7QuantilesForSmallAndDuplicateSamples)
@@ -93,6 +97,10 @@ TEST(WidthCalibrationTest, UsesDeterministicType7QuantilesForSmallAndDuplicateSa
     const auto second=joint::CalibrateGlobalWidth(input,"duplicates");
     ASSERT_EQ(first.status,"Available");
     ASSERT_EQ(second.status,"Available");
+    EXPECT_EQ(first.median_width,10.5);
+    EXPECT_EQ(second.median_width,10.5);
+    EXPECT_EQ(first.tau_max4,42.0);
+    EXPECT_EQ(second.tau_max4,42.0);
     EXPECT_DOUBLE_EQ(*first.p95,19.05);
     EXPECT_DOUBLE_EQ(*second.p95,19.05);
 
@@ -102,6 +110,82 @@ TEST(WidthCalibrationTest, UsesDeterministicType7QuantilesForSmallAndDuplicateSa
     const auto duplicates=joint::CalibrateGlobalWidth(input,"duplicates");
     ASSERT_EQ(duplicates.status,"Available");
     EXPECT_DOUBLE_EQ(*duplicates.p95,2.05);
+}
+
+TEST(WidthCalibrationTest, SingleExtremeDonorChangesP95WithoutChangingTheMedianBound)
+{
+    auto input=QualifiedInitialization(20);
+    for(auto & atom:input.atoms) atom.mdpde[1]=1.0;
+    input.atoms.back().mdpde[1]=1000.0;
+
+    const auto calibration=joint::CalibrateGlobalWidth(input,"single-tail-donor");
+    ASSERT_EQ(calibration.status,"Available");
+    EXPECT_EQ(calibration.qualified_donor_count,20u);
+    EXPECT_DOUBLE_EQ(calibration.qualified_donor_coverage,1.0);
+    EXPECT_EQ(calibration.median_width,1.0);
+    ASSERT_TRUE(calibration.p95);
+    // The Type 7 position is 18.05, between 1 and 1000.
+    EXPECT_NEAR(*calibration.p95,50.95,1e-12);
+    EXPECT_EQ(calibration.tau_max4,4.0);
+    EXPECT_EQ(calibration.eta_max4,std::log(4.0));
+}
+
+TEST(WidthCalibrationTest, ProjectsHighWidthDonorsToTheMedianBound)
+{
+    auto input=QualifiedInitialization(20);
+    for(std::size_t i=0;i<input.tau.size();++i)
+    {
+        const double width=i<11 ? 1.0 : 10.0;
+        input.tau[i]=width;
+        input.atoms[i].mdpde[1]=width;
+        input.atoms[i].original_tau=width;
+    }
+    const auto calibration=joint::CalibrateGlobalWidth(input,"multiple-tail-donors");
+    ASSERT_EQ(calibration.status,"Available");
+    EXPECT_EQ(calibration.qualified_donor_count,20u);
+    EXPECT_EQ(calibration.median_width,1.0);
+    EXPECT_EQ(calibration.p95,10.0);
+    EXPECT_EQ(calibration.tau_max4,4.0);
+    EXPECT_EQ(calibration.initial_violations4,9u);
+
+    const auto projected=joint::MakeBoundedInitialization(input,calibration);
+    ASSERT_TRUE(projected.available);
+    EXPECT_EQ(projected.projection_count,9u);
+    EXPECT_DOUBLE_EQ(projected.maximum_projection_magnitude,6.0);
+    ASSERT_EQ(projected.tau_values.size(),20u);
+    for(std::size_t i=0;i<input.tau.size();++i)
+        EXPECT_DOUBLE_EQ(projected.tau_values[i],i<11 ? 1.0 : 4.0);
+}
+
+TEST(WidthCalibrationTest, EqualDonorsGiveFourTimesTheirWidthIncludingSubnormalWidths)
+{
+    auto input=QualifiedInitialization(20);
+    for(double width:{0.5,std::numeric_limits<double>::denorm_min()})
+    {
+        for(auto & atom:input.atoms) atom.mdpde[1]=width;
+        const auto calibration=joint::CalibrateGlobalWidth(input,"equal-donors");
+        ASSERT_EQ(calibration.status,"Available");
+        EXPECT_EQ(calibration.median_width,width);
+        EXPECT_EQ(calibration.p95,width);
+        EXPECT_EQ(calibration.tau_max4,4.0*width);
+        EXPECT_EQ(calibration.eta_max4,std::log(4.0*width));
+    }
+}
+
+TEST(WidthCalibrationTest, ExcludesInvalidMdpdeWidthsBeforeComputingTheMedian)
+{
+    auto input=QualifiedInitialization(20);
+    for(double invalid:{0.0,-1.0,std::numeric_limits<double>::quiet_NaN(),
+        std::numeric_limits<double>::infinity()})
+    {
+        for(auto & atom:input.atoms) atom.mdpde[1]=invalid;
+        const auto calibration=joint::CalibrateGlobalWidth(input,"invalid-donors");
+        EXPECT_EQ(calibration.status,"CalibrationUnavailable");
+        EXPECT_EQ(calibration.unavailable_reason,"no-qualified-initial-stage-target-widths");
+        EXPECT_EQ(calibration.invalid_width_count,20u);
+        EXPECT_FALSE(calibration.median_width);
+        EXPECT_FALSE(calibration.eta_max4);
+    }
 }
 
 TEST(WidthCalibrationTest, ReportsEmptyAndOverflowAsCalibrationUnavailable)
@@ -120,6 +204,7 @@ TEST(WidthCalibrationTest, ReportsEmptyAndOverflowAsCalibrationUnavailable)
     EXPECT_EQ(overflow.status,"CalibrationUnavailable");
     EXPECT_EQ(overflow.unavailable_reason,"global-width-bound-overflow-or-invalid-log-bound");
     EXPECT_FALSE(overflow.tau_max4);
+    EXPECT_FALSE(overflow.eta_max4);
 }
 
 TEST(WidthCalibrationTest, ProducesOneGlobalBoundAndProjectsWithoutChangingStoredInitialization)
@@ -129,12 +214,14 @@ TEST(WidthCalibrationTest, ProducesOneGlobalBoundAndProjectsWithoutChangingStore
     const auto original=input;
     const auto calibration=joint::CalibrateGlobalWidth(input,"global");
     ASSERT_EQ(calibration.status,"Available");
-    EXPECT_DOUBLE_EQ(*calibration.tau_max4,4.0*(*calibration.p95));
+    EXPECT_EQ(calibration.median_width,50.5);
+    EXPECT_EQ(calibration.p95,95.05);
+    EXPECT_EQ(calibration.tau_max4,202.0);
     EXPECT_EQ(calibration.initial_violations4,1u);
 
     const auto projected=joint::MakeBoundedInitialization(input,calibration);
     ASSERT_TRUE(projected.available);
-    EXPECT_DOUBLE_EQ(projected.tau_max,4.0*(*calibration.p95));
+    EXPECT_DOUBLE_EQ(projected.tau_max,202.0);
     EXPECT_EQ(projected.projection_count,1u);
     EXPECT_DOUBLE_EQ(projected.maximum_projection_magnitude,1000.0-*calibration.tau_max4);
     EXPECT_DOUBLE_EQ(projected.tau_values[5],*calibration.tau_max4);
