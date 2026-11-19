@@ -86,6 +86,11 @@ if(RHBM_GEM_ENABLE_UMAP)
     list(APPEND RHBM_GEM_CORE_COMMAND_TEST_SOURCES
         core/command/UmapEmbeddingCommand_test.cpp
     )
+    set(CORE_CLASSIFIER_TEST_SOURCES
+        core/classifier/UmapEmbeddingFeatures_test.cpp
+        core/classifier/UmapEmbeddingAlgorithm_test.cpp
+        core/classifier/UmapEmbeddingOutput_test.cpp
+    )
 endif()
 
 set(CORE_COMMAND_TEST_SOURCES
@@ -212,6 +217,7 @@ set(INTEGRATION_COMMAND_TEST_SOURCES
 
 set(RHBM_GEM_ALL_GTEST_SOURCES
     ${CORE_COMMAND_TEST_SOURCES}
+    ${CORE_CLASSIFIER_TEST_SOURCES}
     ${CORE_ESTIMATOR_TEST_SOURCES}
     ${CORE_QSCORE_TEST_SOURCES}
     ${CORE_SAMPLER_TEST_SOURCES}
@@ -340,6 +346,14 @@ add_rhbm_gtest_group(rhbm_tests_core_command
     INTENTS command validation
     SOURCES ${CORE_COMMAND_TEST_SOURCES}
 )
+
+if(RHBM_GEM_ENABLE_UMAP)
+    add_rhbm_gtest_group(rhbm_tests_core_classifier
+        DOMAIN core
+        INTENTS algorithm contract
+        SOURCES ${CORE_CLASSIFIER_TEST_SOURCES}
+    )
+endif()
 
 add_rhbm_gtest_group(rhbm_tests_core_sampler
     DOMAIN core

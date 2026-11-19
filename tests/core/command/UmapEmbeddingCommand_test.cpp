@@ -655,8 +655,16 @@ TEST(UmapEmbeddingCommandTest, ClassifiesUnconfiguredSpotsAsOtherInRootPlot)
         }
         const auto output_dir{ temp_dir.path() / model_key };
         testing::internal::CaptureStdout();
+#ifndef HAVE_ROOT
+        testing::internal::CaptureStderr();
+#endif
         const auto result{ RunCommand(MakeRequest(database_path, output_dir, model_key)) };
         const auto log{ testing::internal::GetCapturedStdout() };
+#ifndef HAVE_ROOT
+        const auto warnings{ testing::internal::GetCapturedStderr() };
+        EXPECT_NE(warnings.find("UMAP scatter plots skipped because ROOT support is unavailable."),
+            std::string::npos);
+#endif
         ASSERT_TRUE(result.succeeded);
         const auto csv_path{ output_dir / ("umap_embedding_" + model_key + ".csv") };
         const auto lines{ ReadLines(csv_path) };
@@ -684,6 +692,7 @@ TEST(UmapEmbeddingCommandTest, ClassifiesUnconfiguredSpotsAsOtherInRootPlot)
             "2nd dominate spot,2nd dominate spot count,2nd dominate spot count ratio,"
             "3rd dominate spot,3rd dominate spot count,3rd dominate spot count ratio"
         };
+        constexpr double bin_width{ 0.5 };
         constexpr std::array<std::string_view, 5> configured_labels{ "C", "CA", "N", "O", "O (Water)" };
         for (const bool second : { false, true })
         {
@@ -696,8 +705,8 @@ TEST(UmapEmbeddingCommandTest, ClassifiesUnconfiguredSpotsAsOtherInRootPlot)
             {
                 const auto & [x, y]{ coordinates[point] };
                 const std::array key{
-                    static_cast<long long>(std::floor(x / 0.01)),
-                    static_cast<long long>(std::floor(y / 0.01))
+                    static_cast<long long>(std::floor(x / bin_width)),
+                    static_cast<long long>(std::floor(y / bin_width))
                 };
                 expected_bins[key].push_back(point);
             }
@@ -1033,7 +1042,8 @@ TEST(UmapEmbeddingCommandTest, SameSeedAndSettingsProduceIdenticalOutput)
     ASSERT_TRUE(RunCommand(first_request).succeeded);
     ASSERT_TRUE(RunCommand(second_request).succeeded);
 
-    for (const std::string suffix : { ".csv", "_second_umap_mean_shift_bins.csv" })
+    for (const std::string suffix : {
+        ".csv", ".csv.metadata.json", "_mean_shift_bins.csv", "_second_umap_mean_shift_bins.csv" })
     {
         const auto file_name{ "umap_embedding_repeat" + suffix };
         EXPECT_EQ(ReadLines(first_request.output_dir / file_name),

@@ -23,10 +23,14 @@ cached. See the [build and configuration guide](/docs/developer/build-and-config
 or set `RHBM_GEM_ENABLE_UMAP=OFF` to build without the command, UMAP lookup, or
 fallback downloads.
 
+`RHBM_GEM_ROOT_MODE=AUTO` (the default) enables ROOT plots when ROOT is available.
+Use `ON` to require ROOT at configure time or `OFF` to disable plots.
+Both modes still support CSV, metadata JSON, and bin summaries when UMAP is enabled.
+
 ## SQLite Model Contract
 
 The database must already exist, be a regular file, and use a supported SQLite
-schema (v24 only). `--model-key` must identify exactly one
+schema (v25 only). `--model-key` must identify exactly one
 model saved by `potential_analysis`; the command neither enumerates nor combines
 models.
 
@@ -42,8 +46,10 @@ map normalization (null when unknown), standardization, included/excluded row
 counts and exclusions by reason. Its `column_semantics`
 field identifies `amplitude joint` as Gaussian amplitude A, `width joint` as the
 shared Gaussian/charge-kernel width tau, and `offset joint` as the charge-kernel
-coefficient C. Standardization uses the retained rows and assigns zero to
-constant columns.
+coefficient C. Both embeddings use population variance (the sum of squared
+deviations divided by the retained row count) and assign zero to constant
+columns. The JSON field `standardization` retains the value
+`sample-z-score; constant columns zero` for compatibility.
 
 For each selected atom, the command reconstructs these 7 local-fitting features:
 
@@ -87,7 +93,10 @@ to UMAP:
 - distance to closest neighbor;
 - tail peeling ratio.
 
-The remaining features stay in the CSV but are not passed to UMAP.
+To change the first embedding's inputs, edit `include_in_umap` in
+`kFeatureDefinitions` in `src/core/classifier/UmapEmbeddingFeatures.cpp` and
+rebuild with at least one feature enabled. The remaining features stay in the CSV
+and are omitted from the first embedding.
 Input rows are not filtered by spot or residue name. Selected Joint Targets with
 all required features are retained; rows with missing required features are
 excluded as described above. Spot and residue names remain available for plot
@@ -147,8 +156,9 @@ then moves to the weighted mean of those neighbors' original coordinates.
 Weights are recomputed for each query at every iteration with the Gaussian kernel
 `exp(-alpha * distance_squared / (2 * sigma * sigma))`. The distance is between
 the query's current position and the neighbor's original position, using both
-UMAP coordinates at their original scale. The internal constants in
-`RunUmapMeanShift` are `alpha = 2.0` and `sigma = 1.5`, giving the default kernel
+UMAP coordinates at their original scale. In
+`src/core/classifier/UmapEmbeddingAlgorithm.cpp`, `RunUmapMeanShift` uses
+`alpha = 2.0` and `sigma = 1.5`, giving the default kernel
 `exp(-distance_squared / 2.25)`. Changing either constant requires rebuilding.
 Joint width remains in the CSV but does not affect the kernel weights.
 If a neighborhood has zero total weight, the query keeps its current position
@@ -162,8 +172,9 @@ Mean shift uses all retained rows regardless of plot visibility.
 
 The command reports `UMAP mean shift bin count: N` at Info level and writes
 `umap_embedding_<sanitized-model-key>_mean_shift_bins.csv` alongside the per-atom
-CSV. It assigns each final mean shift position to a square of width `0.01` in
-UMAP coordinates, with indices `floor(x / 0.01)` and `floor(y / 0.01)`. Each
+CSV. `BinMeanShiftEmbedding` in `src/core/classifier/UmapEmbeddingAlgorithm.cpp`
+assigns each final mean shift position to a square of width `0.5` in UMAP
+coordinates, with indices `floor(x / 0.5)` and `floor(y / 0.5)`. Each
 occupied square gets one row, sorted by `bin x` and then `bin y`. The first
 column, `bin number`, numbers the rows consecutively from 1 in that order. The
 per-atom CSV uses the first summary's bin numbers. Overlapping points count
@@ -183,9 +194,9 @@ After binning, the command runs another 2D UMAP on the retained atoms. The
 available features are numeric `bin number` and all seven local fitting
 features. To choose a combination, set `include_in_umap` to `true` or
 `false` for each entry in `kSecondUmapFeatureDefinitions` in
-`src/core/command/UmapEmbeddingCommand.cpp`, then rebuild. At least one feature
-must be enabled to compile. The `.metadata.json` field `second_umap_features`
-lists the enabled features in input order.
+`src/core/classifier/UmapEmbeddingFeatures.cpp`, then rebuild. At least one
+feature must be enabled to compile. The `.metadata.json` field
+`second_umap_features` lists the enabled features in input order.
 
 When enabled, differences between bin numbers enter the distance calculation
 as numeric differences. For each enabled column, the command fills missing
@@ -219,8 +230,8 @@ All plots use the same 10% margins, minimum-range
 handling, category colors, markers, legend, and layout. Categories are `C`, `CA`,
 `N`, `O`, and `O (Water)` for residue `HOH` with spot `O`; unmatched atoms are
 grouped by element as `Side-Chain <element>` or `Other Unknown`. Empty categories
-are omitted from the legend. Builds without ROOT write the coordinate pairs to
-CSV and report that plotting is unavailable.
+are omitted from the legend. Builds without ROOT write the CSV files and
+metadata JSON, and report that plotting is unavailable.
 
 The database and model are fully validated, features are reconstructed and
 standardized, and the embeddings, mean shift, and binning are computed before the
