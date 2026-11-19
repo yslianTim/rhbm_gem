@@ -118,6 +118,8 @@ if(RHBM_GEM_ENABLE_UMAP)
     target_sources(rhbm_gem PRIVATE
         core/command/UmapEmbeddingCommand.cpp
         core/classifier/LocalFittingFeatures.cpp
+        core/classifier/UmapEmbeddingFeatures.cpp
+        core/classifier/UmapEmbeddingAlgorithm.cpp
     )
 endif()
 

@@ -1,5 +1,7 @@
 #include "detail/CommandRunner.hpp"
-#include "core/classifier/LocalFittingFeatures.hpp"
+#include "core/classifier/UmapEmbeddingAlgorithm.hpp"
+#include "core/classifier/UmapEmbeddingFeatures.hpp"
+#include "core/classifier/UmapSpotCategories.hpp"
 #include <boost/json.hpp>
 #include <map>
 
@@ -10,9 +12,6 @@
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
-
-#include <umappp/umappp.hpp>
-#include <knncolle/knncolle.hpp>
 
 #ifdef HAVE_ROOT
 #include <rhbm_gem/utils/domain/ROOTHelper.hpp>
@@ -27,17 +26,14 @@
 
 #include <algorithm>
 #include <array>
-#include <atomic>
 #include <cmath>
 #include <cstddef>
-#include <cstdint>
 #include <exception>
 #include <fstream>
 #include <iomanip>
 #include <iterator>
 #include <limits>
 #include <memory>
-#include <numeric>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -50,101 +46,7 @@ namespace rhbm_gem::core {
 
 namespace {
 
-constexpr std::size_t kOutputDimensionCount{ 2 };
-
-struct UmapFeatureDefinition
-{
-    std::string_view name;
-    bool include_in_umap;
-};
-
-// Keep these entries in local fitting feature order. Toggle include_in_umap to
-// choose the features that are standardized and passed to UMAP, then rebuild.
-constexpr std::array<UmapFeatureDefinition, classifier::kLocalFittingFeatureCount>
-    kFeatureDefinitions{
-        UmapFeatureDefinition{ classifier::kLocalFittingFeatureNames[0], true },
-        UmapFeatureDefinition{ classifier::kLocalFittingFeatureNames[1], true },
-        UmapFeatureDefinition{ classifier::kLocalFittingFeatureNames[2], false },
-        UmapFeatureDefinition{ classifier::kLocalFittingFeatureNames[3], true },
-        UmapFeatureDefinition{ classifier::kLocalFittingFeatureNames[4], false },
-        UmapFeatureDefinition{ classifier::kLocalFittingFeatureNames[5], false },
-        UmapFeatureDefinition{ classifier::kLocalFittingFeatureNames[6], false },
-    };
-constexpr std::size_t kInputFeatureCount{ kFeatureDefinitions.size() };
-constexpr std::size_t kSelectedFeatureCount{ static_cast<std::size_t>(std::count_if(
-    kFeatureDefinitions.begin(),
-    kFeatureDefinitions.end(),
-    [](const UmapFeatureDefinition & feature) { return feature.include_in_umap; }))
-};
-static_assert(
-    kSelectedFeatureCount > 0,
-    "At least one feature must be selected in kFeatureDefinitions for UMAP.");
-
-// Keep bin number first, then the local fitting features.
-// Toggle include_in_umap to select features for the second UMAP, then rebuild.
-constexpr std::array kSecondUmapFeatureDefinitions{
-    UmapFeatureDefinition{ "bin number", true },
-    UmapFeatureDefinition{ classifier::kLocalFittingFeatureNames[0], true },
-    UmapFeatureDefinition{ classifier::kLocalFittingFeatureNames[1], false },
-    UmapFeatureDefinition{ classifier::kLocalFittingFeatureNames[2], true },
-    UmapFeatureDefinition{ classifier::kLocalFittingFeatureNames[3], false },
-    UmapFeatureDefinition{ classifier::kLocalFittingFeatureNames[4], true },
-    UmapFeatureDefinition{ classifier::kLocalFittingFeatureNames[5], true },
-    UmapFeatureDefinition{ classifier::kLocalFittingFeatureNames[6], true },
-};
-constexpr std::size_t kSecondSelectedFeatureCount{ static_cast<std::size_t>(std::count_if(
-    kSecondUmapFeatureDefinitions.begin(),
-    kSecondUmapFeatureDefinitions.end(),
-    [](const UmapFeatureDefinition & feature) { return feature.include_in_umap; }))
-};
-static_assert(
-    kSecondSelectedFeatureCount > 0,
-    "At least one feature must be selected in kSecondUmapFeatureDefinitions for the second UMAP.");
-
-struct ConfiguredUmapSpot
-{
-    std::string_view label;
-    std::string_view spot;
-    std::optional<std::string_view> residue;
-};
-
-constexpr std::array<ConfiguredUmapSpot, 5> kConfiguredUmapSpots{
-    ConfiguredUmapSpot{ "C", "C", std::nullopt },
-    ConfiguredUmapSpot{ "CA", "CA", std::nullopt },
-    ConfiguredUmapSpot{ "N", "N", std::nullopt },
-    ConfiguredUmapSpot{ "O", "O", std::nullopt },
-    ConfiguredUmapSpot{ "O (Water)", "O", "HOH" },
-};
-
-std::optional<std::size_t> FindConfiguredUmapSpotIndex(
-    std::string_view residue,
-    std::string_view spot)
-{
-    // Match residue-specific categories before the generic spot categories.
-    for (std::size_t index = 0; index < kConfiguredUmapSpots.size(); ++index)
-    {
-        const auto & configured_spot{ kConfiguredUmapSpots[index] };
-        if (configured_spot.residue
-            && residue == *configured_spot.residue
-            && spot == configured_spot.spot)
-        {
-            return index;
-        }
-    }
-    for (std::size_t index = 0; index < kConfiguredUmapSpots.size(); ++index)
-    {
-        const auto & configured_spot{ kConfiguredUmapSpots[index] };
-        if (!configured_spot.residue && spot == configured_spot.spot) return index;
-    }
-    return std::nullopt;
-}
-
-std::string GetOtherUmapSpotLabel(Element element)
-{
-    return element == Element::UNK
-        ? "Other Unknown"
-        : "Side-Chain " + std::string(ChemicalDataHelper::GetLabel(element));
-}
+using namespace classifier;
 
 #ifdef HAVE_ROOT
 struct UmapSpotPlotStyle
@@ -198,30 +100,6 @@ short GetOtherElementMarker(Element element)
 }
 #endif
 
-struct PreparedUmapInput
-{
-    std::vector<classifier::LocalFittingFeatureRow> feature_rows;
-    std::vector<std::optional<std::size_t>> configured_spot_indices;
-    std::vector<Element> elements;
-    std::vector<double> standardized_features;
-    std::vector<std::string_view> constant_features;
-    int effective_neighbors{ 0 };
-    std::filesystem::path output_path;
-    std::map<std::string, std::size_t> exclusions;
-    boost::json::value map_normalization;
-    std::size_t excluded_rows{};
-};
-
-std::string FormatFeatureLocation(
-    std::string_view model_key_tag,
-    int serial_id,
-    std::string_view column_name)
-{
-    return "model key '" + std::string(model_key_tag)
-        + "', atom serial " + std::to_string(serial_id)
-        + ", column '" + std::string(column_name) + "'";
-}
-
 std::string JoinFeatureNames(const std::vector<std::string_view> & names)
 {
     std::string result;
@@ -231,163 +109,6 @@ std::string JoinFeatureNames(const std::vector<std::string_view> & names)
         result += names[index];
     }
     return result;
-}
-
-std::optional<PreparedUmapInput> BuildAndStandardizeInput(
-    const ModelObject & model_object,
-    const UmapEmbeddingRequest & request,
-    std::string & error_message)
-{
-    std::vector<classifier::LocalFittingFeatureRow> source_rows;
-    try
-    {
-        source_rows = classifier::BuildLocalFittingFeatureRows(model_object);
-    }
-    catch (const std::exception & error)
-    {
-        error_message = "Failed to build local fitting features for model key '"
-            + request.model_key_tag + "': " + error.what();
-        return std::nullopt;
-    }
-
-    std::vector<classifier::LocalFittingFeatureRow> feature_rows;
-    std::vector<std::optional<std::size_t>> configured_spot_indices;
-    std::vector<Element> elements;
-    feature_rows.reserve(source_rows.size());
-    configured_spot_indices.reserve(source_rows.size());
-    elements.reserve(source_rows.size());
-    std::size_t excluded_rows=0;
-    std::map<std::string,std::size_t> exclusions;
-    std::array<long double, kInputFeatureCount> means{};
-    std::array<long double, kInputFeatureCount> sum_squared_differences{};
-
-    for (auto & row : source_rows)
-    {
-        const auto configured_spot_index{
-            FindConfiguredUmapSpotIndex(row.residue, row.spot)
-        };
-        bool valid=true;
-        for (std::size_t feature = 0; feature < kInputFeatureCount; ++feature)
-        {
-            if (kFeatureDefinitions[feature].include_in_umap && !std::isfinite(row.features[feature]))
-            {
-                std::string reason="unavailable: " + std::string(kFeatureDefinitions[feature].name);
-                if (feature == 3 && !row.tail_peeling_ratio_assessment.reason.empty())
-                    reason += " (" + row.tail_peeling_ratio_assessment.reason + ")";
-                ++exclusions[reason]; valid=false;
-                Logger::Log(LogLevel::Warning, FormatFeatureLocation(request.model_key_tag,row.serial_id,kFeatureDefinitions[feature].name) + ": excluded; required feature unavailable.");
-            }
-        }
-        if (!valid) { ++excluded_rows; continue; }
-
-        elements.push_back(model_object.FindAtomPtr(row.serial_id)->GetElement());
-        feature_rows.emplace_back(std::move(row));
-        configured_spot_indices.push_back(configured_spot_index);
-        const auto & stored_row{ feature_rows.back() };
-        const long double count{ static_cast<long double>(feature_rows.size()) };
-        for (std::size_t feature = 0; feature < kInputFeatureCount; ++feature)
-        {
-            if (!kFeatureDefinitions[feature].include_in_umap) continue;
-            const long double value{ static_cast<long double>(stored_row.features[feature]) };
-            const long double delta{ value - means[feature] };
-            means[feature] += delta / count;
-            const long double updated_delta{ value - means[feature] };
-            sum_squared_differences[feature] += delta * updated_delta;
-        }
-    }
-    if (feature_rows.size() < 3)
-    {
-        error_message = "UMAP embedding requires at least 3 data rows; found "
-            + std::to_string(feature_rows.size()) + ".";
-        return std::nullopt;
-    }
-    if (feature_rows.size() > static_cast<std::size_t>(std::numeric_limits<int>::max()))
-    {
-        error_message = "UMAP embedding input exceeds the supported number of rows.";
-        return std::nullopt;
-    }
-
-    std::array<long double, kInputFeatureCount> standard_deviations{};
-    std::vector<std::string_view> constant_features;
-    for (std::size_t feature = 0; feature < kInputFeatureCount; ++feature)
-    {
-        if (!kFeatureDefinitions[feature].include_in_umap) continue;
-        const long double variance{
-            sum_squared_differences[feature]
-                / static_cast<long double>(feature_rows.size())
-        };
-        if (!std::isfinite(means[feature]) || !std::isfinite(variance) || variance < 0)
-        {
-            error_message = "column '" + std::string(kFeatureDefinitions[feature].name)
-                + "' could not be standardized to finite values.";
-            return std::nullopt;
-        }
-        standard_deviations[feature] = std::sqrt(variance);
-        if (standard_deviations[feature] == 0)
-        {
-            constant_features.push_back(kFeatureDefinitions[feature].name);
-        }
-    }
-    if (constant_features.size() == kSelectedFeatureCount)
-    {
-        error_message = "All " + std::to_string(kSelectedFeatureCount)
-            + " selected UMAP feature columns are constant; no embedding can be created.";
-        return std::nullopt;
-    }
-
-    std::vector<double> standardized_features(
-        feature_rows.size() * kSelectedFeatureCount);
-    for (std::size_t observation = 0; observation < feature_rows.size(); ++observation)
-    {
-        std::size_t selected_feature{ 0 };
-        for (std::size_t feature = 0; feature < kInputFeatureCount; ++feature)
-        {
-            if (!kFeatureDefinitions[feature].include_in_umap) continue;
-            double standardized_value{ 0 };
-            if (standard_deviations[feature] != 0)
-            {
-                const long double value{
-                    (static_cast<long double>(feature_rows[observation].features[feature])
-                        - means[feature])
-                        / standard_deviations[feature]
-                };
-                standardized_value = static_cast<double>(value);
-            }
-            if (!std::isfinite(standardized_value))
-            {
-                error_message = FormatFeatureLocation(
-                    request.model_key_tag,
-                    feature_rows[observation].serial_id,
-                    kFeatureDefinitions[feature].name)
-                    + ": Z-score is not finite.";
-                return std::nullopt;
-            }
-            standardized_features[
-                observation * kSelectedFeatureCount + selected_feature] = standardized_value;
-            ++selected_feature;
-        }
-    }
-
-    PreparedUmapInput prepared;
-    prepared.feature_rows = std::move(feature_rows);
-    prepared.configured_spot_indices = std::move(configured_spot_indices);
-    prepared.elements = std::move(elements);
-    prepared.standardized_features = std::move(standardized_features);
-    prepared.constant_features = std::move(constant_features);
-    prepared.effective_neighbors = std::min(
-        request.num_neighbors,
-        static_cast<int>(prepared.feature_rows.size() - 1));
-    prepared.output_path = request.output_dir
-        / ("umap_embedding_" + path_helper::EnsureSanitizedTag(request.model_key_tag) + ".csv");
-    prepared.exclusions = std::move(exclusions);
-    prepared.excluded_rows=excluded_rows;
-    const auto & joint=model_object.GetAnalysisView().GetJointResult();
-    if(joint && joint->metadata.map_normalization)
-    {
-        const auto & n=*joint->metadata.map_normalization;
-        prepared.map_normalization=boost::json::object{{"requested",n.requested},{"applied",n.applied},{"divisor",n.divisor}};
-    }
-    return prepared;
 }
 
 void NormalizeAndValidateRequest(
@@ -426,120 +147,6 @@ void NormalizeAndValidateRequest(
             &UmapEmbeddingRequest::num_epochs,
             "num_epochs must be non-negative.");
     }
-}
-
-std::vector<double> RunUmap(
-    const std::vector<double> & features,
-    std::size_t feature_count,
-    int effective_neighbors,
-    const UmapEmbeddingRequest & request)
-{
-    const auto point_count{ static_cast<int>(features.size() / feature_count) };
-    std::vector<double> embedding(static_cast<std::size_t>(point_count) * kOutputDimensionCount);
-    knncolle::VptreeBuilder<int, double, double> neighbor_builder(
-        std::make_shared<knncolle::EuclideanDistance<double, double>>());
-    umappp::Options options;
-    options.num_neighbors = effective_neighbors;
-    options.min_dist = request.min_dist;
-    if (request.num_epochs > 0) options.num_epochs = request.num_epochs;
-    const auto seed{ static_cast<umappp::RngEngine::result_type>(request.random_seed) };
-    options.initialize_seed = seed;
-    options.initialize_spectral_irlba_options.seed = seed;
-    options.optimize_seed = seed;
-    options.num_threads = request.job_count;
-    options.num_threads_spectral = request.job_count;
-    options.num_threads_optimize = 1;
-
-    auto status{ umappp::initialize(feature_count, point_count, features.data(), neighbor_builder,
-        kOutputDimensionCount, embedding.data(), options) };
-    status.run(embedding.data());
-    return embedding;
-}
-
-std::vector<double> RunUmapMeanShift(
-    const std::vector<double> & embedding,
-    const std::vector<classifier::LocalFittingFeatureRow> & feature_rows,
-    [[maybe_unused]] int thread_size)
-{
-    constexpr int iteration_count{ 100 };
-    constexpr int requested_neighbors{ 200 };
-    constexpr double alpha{ 2.0 };
-    constexpr double sigma{ 1.5 };
-    const int point_count{ static_cast<int>(embedding.size() / kOutputDimensionCount) };
-    const int neighbors{ std::min(requested_neighbors, point_count) };
-    if (neighbors != requested_neighbors)
-    {
-        Logger::Log(LogLevel::Warning,
-            "UMAP mean shift neighbor count was limited to "
-                + std::to_string(neighbors) + " for " + std::to_string(point_count)
-                + " data rows.");
-    }
-
-    knncolle::VptreeBuilder<int, double, double> builder(
-        std::make_shared<knncolle::EuclideanDistance<double, double>>());
-    const auto index{ builder.build_unique(knncolle::SimpleMatrix<int, double>(
-        kOutputDimensionCount, point_count, embedding.data())) };
-    auto shifted{ embedding };
-    std::atomic<bool> nonfinite_update{ false };
-#ifdef USE_OPENMP
-    #pragma omp parallel num_threads(thread_size)
-#endif
-    {
-        auto searcher{ index->initialize() };
-        std::vector<int> nearest;
-        for (int iteration = 0; iteration < iteration_count; ++iteration)
-        {
-#ifdef USE_OPENMP
-            #pragma omp for schedule(static)
-#endif
-            for (int point = 0; point < point_count; ++point)
-            {
-                const auto offset{ static_cast<std::size_t>(point) * kOutputDimensionCount };
-                // Coordinate queries include coincident source points, including self.
-                searcher->search(shifted.data() + offset, neighbors, &nearest, nullptr);
-                std::array<double, kOutputDimensionCount> mean{};
-                double weight_sum{};
-                for (const int neighbor : nearest)
-                {
-                    const auto source{ static_cast<std::size_t>(neighbor) * kOutputDimensionCount };
-                    const double dx{ shifted[offset] - embedding[source] };
-                    const double dy{ shifted[offset + 1] - embedding[source + 1] };
-                    const double distance_squared{ dx * dx + dy * dy };
-                    const double weight{ std::exp(-alpha * distance_squared / (2.0 * sigma * sigma)) };
-                    weight_sum += weight;
-                    for (std::size_t dimension = 0; dimension < kOutputDimensionCount; ++dimension)
-                    {
-                        mean[dimension] += weight * embedding[source + dimension];
-                    }
-                }
-                if (weight_sum == 0.0)
-                {
-                    Logger::Log(LogLevel::Warning,
-                        "UMAP mean shift has zero total neighbor weight for atom serial "
-                            + std::to_string(feature_rows[static_cast<std::size_t>(point)].serial_id)
-                            + "; keeping its current position.");
-                    continue;
-                }
-                for (auto & coordinate : mean) coordinate /= weight_sum;
-                if (!std::isfinite(weight_sum)
-                    || !std::all_of(mean.begin(), mean.end(),
-                        [](double coordinate) { return std::isfinite(coordinate); }))
-                {
-                    nonfinite_update.store(true, std::memory_order_relaxed);
-                    continue;
-                }
-                for (std::size_t dimension = 0; dimension < kOutputDimensionCount; ++dimension)
-                {
-                    shifted[offset + dimension] = mean[dimension];
-                }
-            }
-        }
-    }
-    if (nonfinite_update.load(std::memory_order_relaxed))
-    {
-        throw std::runtime_error("Weighted mean shift produced a non-finite update.");
-    }
-    return shifted;
 }
 
 bool WriteEmbedding(
@@ -585,18 +192,24 @@ bool WriteEmbedding(
     }
     output.close();
     boost::json::array features;
-    for(const auto & feature:kFeatureDefinitions) if(feature.include_in_umap) features.push_back(boost::json::value(feature.name));
+    for (const auto name : GetUmapFeatureNames()) features.push_back(boost::json::value(name));
     boost::json::array second_umap_features;
-    for (const auto & feature : kSecondUmapFeatureDefinitions)
+    for (const auto name : GetSecondUmapFeatureNames()) second_umap_features.push_back(boost::json::value(name));
+    boost::json::value map_normalization;
+    if (const auto & normalization{ prepared.map_normalization }; normalization)
     {
-        if (feature.include_in_umap) second_umap_features.push_back(boost::json::value(feature.name));
+        map_normalization = boost::json::object{
+            { "requested", normalization->requested },
+            { "applied", normalization->applied },
+            { "divisor", normalization->divisor }
+        };
     }
     boost::json::object exclusions;
     for(const auto & [reason,count]:prepared.exclusions) exclusions[reason]=count;
     std::ofstream metadata(prepared.output_path.string()+".metadata.json");
     metadata << boost::json::serialize(boost::json::object{{"estimator","joint-components"},{"features",features},
         {"second_umap_features",second_umap_features},
-        {"peeling_mode","original-grid-v1"},{"map_normalization",prepared.map_normalization},
+        {"peeling_mode","original-grid-v1"},{"map_normalization",map_normalization},
         {"column_semantics",boost::json::object{
             {classifier::kLocalFittingFeatureNames[4],"Joint Gaussian amplitude A"},
             {classifier::kLocalFittingFeatureNames[5],"Joint shared Gaussian/charge-kernel width tau"},
@@ -611,126 +224,6 @@ bool WriteEmbedding(
         return false;
     }
     return true;
-}
-
-struct UmapBin
-{
-    std::vector<std::size_t> points;
-    std::size_t number{};
-};
-
-struct UmapBinning
-{
-    std::map<std::array<std::int64_t, kOutputDimensionCount>, UmapBin> bins;
-    std::vector<std::size_t> point_bin_numbers;
-};
-
-UmapBinning BinMeanShiftEmbedding(
-    const PreparedUmapInput & prepared,
-    const std::vector<double> & mean_shift_embedding)
-{
-    constexpr double bin_width{ 0.5 };
-    constexpr double min_bin_index{ static_cast<double>(std::numeric_limits<std::int64_t>::min()) };
-    UmapBinning result;
-    result.point_bin_numbers.resize(prepared.feature_rows.size());
-    for (std::size_t point = 0; point < prepared.feature_rows.size(); ++point)
-    {
-        std::array<std::int64_t, kOutputDimensionCount> bin_index{};
-        for (std::size_t axis = 0; axis < kOutputDimensionCount; ++axis)
-        {
-            const double index{ std::floor(mean_shift_embedding[point * kOutputDimensionCount + axis] / bin_width) };
-            if (index < min_bin_index || index >= -min_bin_index)
-            {
-                throw std::runtime_error("Mean shift bin index is out of range for atom serial "
-                    + std::to_string(prepared.feature_rows[point].serial_id) + ".");
-            }
-            bin_index[axis] = static_cast<std::int64_t>(index);
-        }
-        result.bins[bin_index].points.push_back(point);
-    }
-    std::size_t bin_number{};
-    for (auto & [index, bin] : result.bins)
-    {
-        bin.number = ++bin_number;
-        for (const auto point : bin.points) result.point_bin_numbers[point] = bin.number;
-    }
-    return result;
-}
-
-double MedianOfValues(std::vector<double> & values)
-{
-    std::sort(values.begin(), values.end());
-    const auto middle{ values.size() / 2 };
-    return std::midpoint(values[(values.size() - 1) / 2], values[middle]);
-}
-
-std::vector<double> BuildSecondUmapFeatures(
-    const std::vector<classifier::LocalFittingFeatureRow> & rows,
-    const std::vector<std::size_t> & bin_numbers)
-{
-    constexpr auto feature_count{ kSecondSelectedFeatureCount };
-    std::vector<double> features(rows.size() * feature_count);
-    std::vector<double> finite_values;
-    finite_values.reserve(rows.size());
-    bool has_variable_feature{};
-    std::size_t selected_feature{};
-    for (std::size_t feature = 0; feature < kSecondUmapFeatureDefinitions.size(); ++feature)
-    {
-        const auto & definition{ kSecondUmapFeatureDefinitions[feature] };
-        if (!definition.include_in_umap) continue;
-        const auto column{ selected_feature++ };
-        const std::string name{ definition.name };
-        finite_values.clear();
-        for (std::size_t point = 0; point < rows.size(); ++point)
-        {
-            const double value{ feature == 0
-                ? static_cast<double>(bin_numbers[point])
-                : rows[point].features[feature - 1] };
-            features[point * feature_count + column] = value;
-            if (std::isfinite(value)) finite_values.push_back(value);
-        }
-        double fill{};
-        if (finite_values.empty())
-        {
-            Logger::Log(LogLevel::Warning,
-                "Second UMAP feature '" + name + "' has no finite values. Using a zero column.");
-        }
-        else if (finite_values.size() < rows.size())
-        {
-            fill = MedianOfValues(finite_values);
-            Logger::Log(LogLevel::Warning, "Second UMAP feature '" + name + "' filled "
-                + std::to_string(rows.size() - finite_values.size()) + " missing values with its median.");
-        }
-
-        long double mean{};
-        long double sum_squared_differences{};
-        for (std::size_t point = 0; point < rows.size(); ++point)
-        {
-            auto & value{ features[point * feature_count + column] };
-            if (!std::isfinite(value)) value = fill;
-            const long double delta{ value - mean };
-            mean += delta / static_cast<long double>(point + 1);
-            sum_squared_differences += delta * (value - mean);
-        }
-        const auto variance{ sum_squared_differences / static_cast<long double>(rows.size()) };
-        if (!std::isfinite(variance) || variance < 0)
-        {
-            throw std::runtime_error("Column '" + name + "' could not be standardized to finite values.");
-        }
-        const auto deviation{ std::sqrt(variance) };
-        has_variable_feature |= deviation > 0;
-        for (std::size_t point = 0; point < rows.size(); ++point)
-        {
-            auto & value{ features[point * feature_count + column] };
-            value = deviation > 0 ? static_cast<double>((value - mean) / deviation) : 0.0;
-            if (!std::isfinite(value))
-            {
-                throw std::runtime_error("Column '" + name + "' has a non-finite Z-score.");
-            }
-        }
-    }
-    if (!has_variable_feature) features.clear();
-    return features;
 }
 
 bool WriteMeanShiftBins(
@@ -1084,8 +577,8 @@ bool ExecutePreparedRequest(
     std::vector<double> embedding;
     try
     {
-        embedding = RunUmap(prepared.standardized_features, kSelectedFeatureCount,
-            prepared.effective_neighbors, request);
+        embedding = RunUmap(prepared.features, prepared.effective_neighbors,
+            request.min_dist, request.num_epochs, request.random_seed, request.job_count);
     }
     catch (const std::exception & error)
     {
@@ -1096,9 +589,8 @@ bool ExecutePreparedRequest(
         return false;
     }
 
-    for (const double coordinate : embedding)
+    if (!HasFiniteCoordinates(embedding))
     {
-        if (std::isfinite(coordinate)) continue;
         runner.RequirePrepareCondition(false,
             "UMAP produced a non-finite embedding coordinate for model key '"
                 + request.model_key_tag + "' in database '"
@@ -1119,8 +611,7 @@ bool ExecutePreparedRequest(
                 + "': " + error.what());
         return false;
     }
-    if (!std::all_of(mean_shift_embedding.begin(), mean_shift_embedding.end(),
-        [](double coordinate) { return std::isfinite(coordinate); }))
+    if (!HasFiniteCoordinates(mean_shift_embedding))
     {
         runner.RequirePrepareCondition(false,
             "UMAP mean shift produced a non-finite coordinate for model key '"
@@ -1133,20 +624,19 @@ bool ExecutePreparedRequest(
     std::vector<double> second_embedding;
     try
     {
-        binning = BinMeanShiftEmbedding(prepared, mean_shift_embedding);
-        const auto features{ BuildSecondUmapFeatures(
+        binning = BinMeanShiftEmbedding(prepared.feature_rows, mean_shift_embedding);
+        const auto second_features{ BuildSecondUmapFeatures(
             prepared.feature_rows, binning.point_bin_numbers) };
-        if (features.empty())
+        if (second_features.values.empty())
         {
             Logger::Log(LogLevel::Warning,
                 "Second UMAP skipped because all selected feature columns are constant.");
         }
         else
         {
-            second_embedding = RunUmap(features, kSecondSelectedFeatureCount,
-                prepared.effective_neighbors, request);
-            if (!std::all_of(second_embedding.begin(), second_embedding.end(),
-                [](double coordinate) { return std::isfinite(coordinate); }))
+            second_embedding = RunUmap(second_features, prepared.effective_neighbors,
+                request.min_dist, request.num_epochs, request.random_seed, request.job_count);
+            if (!HasFiniteCoordinates(second_embedding))
             {
                 throw std::runtime_error("Second UMAP produced a non-finite embedding coordinate.");
             }
@@ -1168,12 +658,11 @@ bool ExecutePreparedRequest(
         {
             second_mean_shift_embedding = RunUmapMeanShift(
                 second_embedding, prepared.feature_rows, request.job_count);
-            if (!std::all_of(second_mean_shift_embedding.begin(), second_mean_shift_embedding.end(),
-                [](double coordinate) { return std::isfinite(coordinate); }))
+            if (!HasFiniteCoordinates(second_mean_shift_embedding))
             {
                 throw std::runtime_error("Mean shift produced a non-finite coordinate.");
             }
-            second_binning = BinMeanShiftEmbedding(prepared, second_mean_shift_embedding);
+            second_binning = BinMeanShiftEmbedding(prepared.feature_rows, second_mean_shift_embedding);
         }
         catch (const std::exception & error)
         {
@@ -1262,11 +751,24 @@ CommandResult ExecuteUmapEmbeddingCommand(const UmapEmbeddingRequest & request)
                 return;
             }
 
+            std::vector<LocalFittingFeatureRow> source_rows;
+            try
+            {
+                source_rows = BuildLocalFittingFeatureRows(*model_object);
+            }
+            catch (const std::exception & error)
+            {
+                validation_runner.AddFieldValidationError(
+                    &UmapEmbeddingRequest::model_key_tag,
+                    "Failed to build local fitting features for model key '"
+                        + prepared_request.model_key_tag + "': " + error.what());
+                return;
+            }
+
             std::string preparation_error;
             prepared_input = BuildAndStandardizeInput(
-                *model_object,
-                prepared_request,
-                preparation_error);
+                *model_object, std::move(source_rows), prepared_request.model_key_tag,
+                prepared_request.num_neighbors, preparation_error);
             if (!prepared_input)
             {
                 validation_runner.AddFieldValidationError(
@@ -1274,6 +776,9 @@ CommandResult ExecuteUmapEmbeddingCommand(const UmapEmbeddingRequest & request)
                     preparation_error);
                 return;
             }
+
+            prepared_input->output_path = prepared_request.output_dir
+                / ("umap_embedding_" + path_helper::EnsureSanitizedTag(prepared_request.model_key_tag) + ".csv");
 
             if (!prepared_input->constant_features.empty())
             {
