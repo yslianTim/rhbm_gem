@@ -6,7 +6,6 @@
 #include <rhbm_gem/data/object/JointAnalysisResult.hpp>
 #include <rhbm_gem/utils/domain/GlobalEnumClass.hpp>
 
-#include <filesystem>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -21,7 +20,6 @@ struct PreparedUmapInput
     UmapFeatureMatrix features;
     std::vector<std::string_view> constant_features;
     int effective_neighbors{ 0 };
-    std::filesystem::path output_path;
     std::map<std::string, std::size_t> exclusions;
     std::optional<JointMapNormalization> map_normalization;
     std::size_t excluded_rows{};

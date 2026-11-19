@@ -120,6 +120,8 @@ if(RHBM_GEM_ENABLE_UMAP)
         core/classifier/LocalFittingFeatures.cpp
         core/classifier/UmapEmbeddingFeatures.cpp
         core/classifier/UmapEmbeddingAlgorithm.cpp
+        core/classifier/UmapEmbeddingOutput.cpp
+        core/classifier/UmapEmbeddingPlot.cpp
     )
 endif()
 

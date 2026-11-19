@@ -28,4 +28,11 @@ struct UmapBinning
     std::vector<std::size_t> point_bin_numbers;
 };
 
+struct UmapEmbeddingResult
+{
+    std::vector<double> coordinates;
+    std::vector<double> mean_shift_coordinates;
+    UmapBinning binning;
+};
+
 } // namespace rhbm_gem::core::classifier
