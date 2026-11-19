@@ -5,7 +5,6 @@
 #include <rhbm_gem/core/TestDataFactory.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
-#include <array>
 #include <iomanip>
 #include <sstream>
 #include <string>
