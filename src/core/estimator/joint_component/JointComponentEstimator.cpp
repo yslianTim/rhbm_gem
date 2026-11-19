@@ -658,7 +658,7 @@ JointFitResult detail::FitJointComponentsInitializedWithProgress(
         if(initialization.atoms[atom].id!=input.atom_ids[atom] || !initialization.atoms[atom].target)
             return invalid("joint-initialization-unavailable:target-mapping-mismatch");
 
-    const auto calibration=joint_component::CalibrateGlobalWidth(initialization,"joint-target-widths");
+    const auto calibration=joint_component::CalibrateGlobalWidth(initialization);
     const auto bounded=joint_component::MakeBoundedInitialization(initialization,calibration);
     if(!bounded.available)
     {

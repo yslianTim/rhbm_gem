@@ -98,16 +98,13 @@ TEST(InitialStageTest, ExactProductionBaselineAndCertifiedEndpoint)
         EXPECT_EQ(atom.original_tau,atom.mdpde[1]); EXPECT_EQ(atom.used_tau,atom.mdpde[1]);
         EXPECT_EQ(init.tau[i],atom.mdpde[1]); EXPECT_EQ(atom.sample_count,200u);
     }
-    const auto calibration=n::CalibrateGlobalWidth(init,"baseline");
+    const auto calibration=n::CalibrateGlobalWidth(init);
     const auto & expected_calibration=baseline.at("calibration").as_object();
     EXPECT_EQ(calibration.status,"Available");
-    EXPECT_EQ(calibration.qualified_donor_count,24u); EXPECT_EQ(calibration.native_success_count,24u);
-    EXPECT_EQ(calibration.qualified_donor_coverage,1.); EXPECT_EQ(calibration.fallback_count,0u);
-    EXPECT_EQ(calibration.refined_success_count,0u); EXPECT_EQ(calibration.unqualified_count,0u);
-    EXPECT_EQ(calibration.initial_violations4,0u);
-    for(const auto & pair:{std::pair{"bound",calibration.tau_max4},
-        {"p50",calibration.median_width},{"p90",calibration.p90},{"p95",calibration.p95},{"p99",calibration.p99}})
-    { ASSERT_TRUE(pair.second); EXPECT_EQ(*pair.second,j::value_to<double>(expected_calibration.at(pair.first))); }
+    EXPECT_EQ(calibration.qualified_donor_count,j::value_to<std::size_t>(expected_calibration.at("donors")));
+    EXPECT_EQ(calibration.qualified_donor_coverage,j::value_to<double>(expected_calibration.at("coverage")));
+    EXPECT_EQ(calibration.median_width,j::value_to<double>(expected_calibration.at("p50")));
+    EXPECT_EQ(calibration.tau_max4,j::value_to<double>(expected_calibration.at("bound")));
     const auto bounded=n::MakeBoundedInitialization(init,calibration);
     ASSERT_TRUE(bounded.available); EXPECT_EQ(bounded.tau_values,init.tau); EXPECT_EQ(bounded.projection_count,0u);
     const auto fit=FitJointComponentsInitialized(problem,init);
@@ -183,8 +180,8 @@ TEST(InitialStageTest, ExactRawSamplingAcrossWorkersAndCrowdedSelection)
         }
         FitOptions options; options.quiet_mode=true; options.joint_initialization_thread_size=4;
         const auto init=d::RunInitialStage(*map,*model,workset,options);
-        const auto calibration=n::CalibrateGlobalWidth(init,"sampling-regression");
-        EXPECT_EQ(calibration.qualified_donor_count,24u); EXPECT_EQ(calibration.fallback_count,0u);
+        const auto calibration=n::CalibrateGlobalWidth(init);
+        EXPECT_EQ(calibration.qualified_donor_count,24u);
         if(separation==1.4)
         {
             double square=0.;
@@ -232,8 +229,8 @@ TEST(InitialStageTest, MedianFallbackPreservesRawEvidenceAndExcludesCalibrationD
     EXPECT_EQ(init.atoms[0].seed_source,"median-fallback"); EXPECT_EQ(init.atoms[0].used_tau,1.12);
     EXPECT_EQ(init.atoms[0].original_tau,0.); EXPECT_EQ(init.atoms[0].mdpde,before[0].mdpde);
     EXPECT_EQ(init.atoms[0].ols,before[0].ols);
-    const auto calibration=n::CalibrateGlobalWidth(init,"fallback");
-    EXPECT_EQ(calibration.qualified_donor_count,22u); EXPECT_EQ(calibration.fallback_count,1u);
+    const auto calibration=n::CalibrateGlobalWidth(init);
+    EXPECT_EQ(calibration.qualified_donor_count,22u);
     EXPECT_EQ(calibration.unavailable_reason,"qualified-initial-stage-target-coverage-below-0.95");
     init.atoms.back().target=false; init.tau.back()=0.;
     d::ApplyJointSeedFallback(init);
@@ -253,9 +250,9 @@ TEST(InitialStageTest, WidthTruthRecoveryAndQualificationAtTwoVoxelSpacings)
         FitOptions options; options.quiet_mode=true;
         const auto workset=d::BuildInitialStageWorkset(*model,problem);
         const auto init=d::RunInitialStage(*map,*model,workset,options);
-        const auto calibration=n::CalibrateGlobalWidth(init,"synthetic-truth-regression");
+        const auto calibration=n::CalibrateGlobalWidth(init);
         EXPECT_EQ(calibration.status,"Available"); EXPECT_EQ(calibration.qualified_donor_count,24u);
-        EXPECT_EQ(calibration.qualified_donor_coverage,1.); EXPECT_EQ(calibration.fallback_count,0u);
+        EXPECT_EQ(calibration.qualified_donor_coverage,1.);
         double square=0.;
         for(std::size_t i=0;i<init.atoms.size();++i)
         {

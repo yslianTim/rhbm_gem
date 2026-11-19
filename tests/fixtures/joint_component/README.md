@@ -1,14 +1,13 @@
 # Production InitialStage regression
 
-`initial_stage.json` keeps the 24-target coarse-phase-0 F0 + MDPDE baseline from
-commit `503a6607674e068e4d3ef3db52aa770abcf3aea4`. Atom identity, alpha, OLS/MDPDE,
-donor distribution statistics and final A/C/Width/gradient values retain the
-original study values. The calibration bound and strategy evidence follow the
-current `4 × q50` policy. The identical component check contract is stored once.
-No time/RSS or alternative policies are reference data.
+`initial_stage.json` records the 24-target coarse-phase-0 F0 + MDPDE baseline.
+It covers atom identity, alpha, InitialStage OLS/MDPDE, qualified donor count and
+coverage, the donor median `q50`, and the global upper bound `4 × q50`. It also
+covers final Joint A/C/Width, objective, gradient and certification evidence.
+The identical component check contract is stored once.
 
-C0 additionally captures isolated and crowded raw sampling fingerprints and
-original-grid peeling/Local results on the same unmodified production code.
+The fixture also captures isolated and crowded raw sampling fingerprints and
+original-grid peeling/Local results.
 Each fingerprint is FNV-1a over low-byte-first IEEE-754 words for positions,
 distances (squared distance for grid observations), selection and responses,
 with separate raw/selected counts. Comparisons are exact, without tolerance.
@@ -16,17 +15,14 @@ They protect ordering and rejected responses without retaining thousands of
 raw rows. Direct serial/parallel comparisons retain per-sample diagnostics.
 
 The shared normalized Gaussian generator lives in
-`tests/support/InitialStageSynthetic.hpp`; it is independent of retired study
-runners. `InitialStage_test.cpp` also covers truth at two spacings,
-median fallback, certified endpoints, persistence and grid invalidation.
-`WidthCalibration_test.cpp` owns donor gating, Type-7 quantiles, 20/95% limits
-and immutable bounded projection. Existing workflow/schema tests cover Group
-eligibility and failed-only recovery. The fixture uses precise JSON parsing;
-platform changes must be investigated rather than silently regenerating it.
+`tests/support/InitialStageSynthetic.hpp`. `InitialStage_test.cpp` also covers
+truth at two spacings, median fallback, certified endpoints, persistence and
+grid invalidation.
+`WidthCalibration_test.cpp` covers the 20-donor and 95%-coverage gates, the
+median-based bound, and projection of the working initialization while preserving
+the original estimates. Workflow and schema tests cover Group eligibility and
+failed-only recovery. The fixture uses precise JSON parsing and exact comparisons.
 
-QScore keeps separate exact Release and Debug references. Its original Debug
-implementation from commit `503a6607`, rebuilt with the current Debug compiler
-flags, returns 0.93585969694861493; the original Release reference is
-0.93585969694861482. This pre-existing one-ULP optimization-mode difference is
-not a cleanup regression. Both modes use exact equality, without loosening the
-correlation tolerance or changing production code.
+QScore has separate exact Release and Debug references for the one-ULP
+optimization-mode difference. Release expects 0.93585969694861482 and Debug
+expects 0.93585969694861493.

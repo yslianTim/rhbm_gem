@@ -1,5 +1,6 @@
 #include "WidthCalibration.hpp"
 
+#include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -8,20 +9,6 @@ namespace rhbm_gem::core::joint_component {
 namespace {
 constexpr std::size_t MinimumQualifiedWidthDonors=20;
 constexpr double MinimumQualifiedDonorCoverage=0.95;
-
-double QuantileType7(const std::vector<double> & sorted, double probability)
-{
-    const double position=static_cast<double>(sorted.size()-1)*probability;
-    const auto lower=static_cast<std::size_t>(std::floor(position));
-    const auto upper=static_cast<std::size_t>(std::ceil(position));
-    const double fraction=position-static_cast<double>(lower);
-    return sorted[lower]+(sorted[upper]-sorted[lower])*fraction;
-}
-
-bool HasInitializationFailure(const JointInitializationAtom & atom)
-{
-    return atom.reason.rfind("initialization-exception",0)==0;
-}
 
 std::optional<double> BoundFrom(double reference_width, double multiplier)
 {
@@ -34,59 +21,11 @@ std::optional<double> BoundFrom(double reference_width, double multiplier)
     return bound;
 }
 
-WidthBoundCalibration CalibrateQualifiedWidthDonors(
-    WidthBoundCalibration result, std::vector<double> donors)
-{
-    result.qualified_donor_count=donors.size();
-    result.qualified_donor_coverage=result.target_count ?
-        static_cast<double>(result.qualified_donor_count)/static_cast<double>(result.target_count) : 0.0;
-    if(donors.empty())
-    {
-        result.unavailable_reason="no-qualified-initial-stage-target-widths";
-        return result;
-    }
-    if(donors.size()<MinimumQualifiedWidthDonors)
-    {
-        result.unavailable_reason="too-few-qualified-initial-stage-target-widths";
-        return result;
-    }
-    if(result.qualified_donor_coverage<MinimumQualifiedDonorCoverage)
-    {
-        result.unavailable_reason="qualified-initial-stage-target-coverage-below-0.95";
-        return result;
-    }
-
-    std::sort(donors.begin(),donors.end());
-    result.minimum_width=donors.front();
-    result.maximum_width=donors.back();
-    result.median_width=QuantileType7(donors,0.5);
-    result.p90=QuantileType7(donors,0.90);
-    result.p95=QuantileType7(donors,0.95);
-    result.p99=QuantileType7(donors,0.99);
-    result.tau_max4=BoundFrom(*result.median_width,4.0);
-    if(!result.tau_max4)
-    {
-        result.unavailable_reason="global-width-bound-overflow-or-invalid-log-bound";
-        result.p95.reset();
-        result.p99.reset();
-        result.median_width.reset();
-        result.p90.reset();
-        result.minimum_width.reset();
-        result.maximum_width.reset();
-        return result;
-    }
-    result.eta_max4=std::log(*result.tau_max4);
-    result.status="Available";
-    return result;
-}
-
 } // namespace
 
-WidthBoundCalibration CalibrateGlobalWidth(
-    const JointInitialization & initialization, std::string dataset_identity)
+WidthBoundCalibration CalibrateGlobalWidth(const JointInitialization & initialization)
 {
     WidthBoundCalibration result;
-    result.dataset_identity=std::move(dataset_identity);
     if(initialization.atoms.size()!=initialization.tau.size())
     {
         result.unavailable_reason="initialization-record-size-mismatch";
@@ -107,39 +46,42 @@ WidthBoundCalibration CalibrateGlobalWidth(
     {
         if(!atom.target) continue;
         ++result.target_count;
-        const auto qualification=InitialStageQualification(atom.native_status,
-            atom.initial_stage_fit_qualified,atom.initial_stage_qualification,atom.initial_stage_recovery);
-        const bool qualified=IsQualifiedInitialStageEstimate(atom.native_status,
-            atom.initial_stage_fit_qualified,atom.initial_stage_qualification,atom.initial_stage_recovery);
-        if(qualified && qualification==RHBMSolveQualification::NativeSuccess) ++result.native_success_count;
-        else if(qualified && qualification==RHBMSolveQualification::RefinedSuccess) ++result.refined_success_count;
-        else ++result.unqualified_count;
-
         const double tau=atom.mdpde[1];
-        const bool valid_width=std::isfinite(tau) && tau>0.0;
-        if(!valid_width) ++result.invalid_width_count;
-        const bool fallback=atom.seed_source=="median-fallback";
-        if(fallback) ++result.fallback_count;
-        const bool initialization_failure=HasInitializationFailure(atom);
-        if(initialization_failure) ++result.initialization_failure_count;
-        std::string exclusion;
-        if(fallback) exclusion="median-fallback";
-        else if(initialization_failure) exclusion="initialization-failure";
-        else if(!qualified) exclusion="unqualified-initial-stage";
-        else if(!std::isfinite(tau)) exclusion="non-finite-width";
-        else if(!(tau>0.0)) exclusion="non-positive-width";
-        if(exclusion.empty()) donors.push_back(tau);
-        else ++result.excluded_donor_reasons[exclusion];
+        if(atom.seed_source!="median-fallback" && !atom.reason.starts_with("initialization-exception") &&
+            std::isfinite(tau) && tau>0.0 &&
+            IsQualifiedInitialStageEstimate(atom.native_status,atom.initial_stage_fit_qualified,
+                atom.initial_stage_qualification,atom.initial_stage_recovery))
+            donors.push_back(tau);
     }
 
-    result=CalibrateQualifiedWidthDonors(std::move(result),std::move(donors));
-    if(result.status!="Available") return result;
-    for(std::size_t i=0;i<initialization.atoms.size();++i)
+    result.qualified_donor_count=donors.size();
+    result.qualified_donor_coverage=result.target_count ?
+        static_cast<double>(result.qualified_donor_count)/static_cast<double>(result.target_count) : 0.0;
+    if(donors.empty())
     {
-        const auto & atom=initialization.atoms[i];
-        if(!atom.target || !std::isfinite(initialization.tau[i]) || !(initialization.tau[i]>0.0)) continue;
-        if(initialization.tau[i]>*result.tau_max4) ++result.initial_violations4;
+        result.unavailable_reason="no-qualified-initial-stage-target-widths";
+        return result;
     }
+    if(donors.size()<MinimumQualifiedWidthDonors)
+    {
+        result.unavailable_reason="too-few-qualified-initial-stage-target-widths";
+        return result;
+    }
+    if(result.qualified_donor_coverage<MinimumQualifiedDonorCoverage)
+    {
+        result.unavailable_reason="qualified-initial-stage-target-coverage-below-0.95";
+        return result;
+    }
+
+    result.median_width=array_helper::ComputeMedian(donors);
+    result.tau_max4=BoundFrom(*result.median_width,4.0);
+    if(!result.tau_max4)
+    {
+        result.unavailable_reason="global-width-bound-overflow-or-invalid-log-bound";
+        result.median_width.reset();
+        return result;
+    }
+    result.eta_max4=std::log(*result.tau_max4);
     result.status="Available";
     return result;
 }
@@ -160,7 +102,6 @@ BoundedInitialization MakeBoundedInitialization(
     }
     result.tau_max=*calibration.tau_max4;
     result.tau_values=initialization.tau;
-    result.projections.reserve(calibration.target_count);
     for(std::size_t i=0;i<initialization.atoms.size();++i)
     {
         const auto & atom=initialization.atoms[i];
@@ -168,14 +109,12 @@ BoundedInitialization MakeBoundedInitialization(
         const double initial=initialization.tau[i];
         double bounded=initial;
         if(std::isfinite(initial) && initial>result.tau_max) bounded=result.tau_max;
-        const bool projected=bounded!=initial;
-        if(projected)
+        if(bounded!=initial)
         {
             ++result.projection_count;
             result.maximum_projection_magnitude=std::max(result.maximum_projection_magnitude,initial-bounded);
             result.tau_values[i]=bounded;
         }
-        result.projections.push_back({i,atom.id,atom.original_tau,initial,bounded,projected});
     }
     result.available=true;
     return result;

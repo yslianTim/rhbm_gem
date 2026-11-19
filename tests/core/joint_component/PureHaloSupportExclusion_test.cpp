@@ -900,7 +900,7 @@ TEST(PureHaloSupportExclusionTest, ExtendedSearchQualifiesAssemblyAndFeedsEveryD
 
     auto initialization=fit.initialization;
     std::fill(initialization.tau.begin(),initialization.tau.end(),1.5);
-    const auto calibration=n::CalibrateGlobalWidth(initialization,"extension-workflow-test");
+    const auto calibration=n::CalibrateGlobalWidth(initialization);
     const auto bounded=n::MakeBoundedInitialization(initialization,calibration);
     ASSERT_TRUE(bounded.available)<<bounded.reason;
     n::BcdExecutionPolicy policy; policy.eta_upper_bound=calibration.eta_max4;
