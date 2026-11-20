@@ -46,32 +46,26 @@ static_assert(
     kSelectedFeatureCount > 0,
     "At least one feature must be selected in kFeatureDefinitions for UMAP.");
 
-constexpr std::array<std::string_view, kOutputDimensionCount> kSecondSpatialFeatureNames{
-    "first bin center x (diagonal-normalized)",
-    "first bin center y (diagonal-normalized)",
-};
-constexpr std::size_t kSecondSpatialFeatureCount{
-    kIncludeSecondUmapSpatialFeatures ? kSecondSpatialFeatureNames.size() : 0
+enum class SecondUmapFeatureSource { BinMedian, Atom };
+
+struct SecondUmapFeatureDefinition
+{
+    std::string_view name;
+    SecondUmapFeatureSource source;
+    std::size_t source_index;
 };
 
-// Keep these entries in local fitting feature order.
-constexpr std::array<UmapFeatureDefinition, kLocalFittingFeatureCount> kSecondUmapFeatureDefinitions{
-    UmapFeatureDefinition{ kLocalFittingFeatureNames[0], true },
-    UmapFeatureDefinition{ kLocalFittingFeatureNames[1], false },
-    UmapFeatureDefinition{ kLocalFittingFeatureNames[2], true },
-    UmapFeatureDefinition{ kLocalFittingFeatureNames[3], false },
-    UmapFeatureDefinition{ kLocalFittingFeatureNames[4], false },
-    UmapFeatureDefinition{ kLocalFittingFeatureNames[5], true },
-    UmapFeatureDefinition{ kLocalFittingFeatureNames[6], true },
+constexpr std::array kSecondUmapFeatureDefinitions{
+    SecondUmapFeatureDefinition{ "amplitude joint median of bin", SecondUmapFeatureSource::BinMedian, 0 },
+    SecondUmapFeatureDefinition{ "width joint median of bin", SecondUmapFeatureSource::BinMedian, 1 },
+    SecondUmapFeatureDefinition{ "offset joint median of bin", SecondUmapFeatureSource::BinMedian, 2 },
+    SecondUmapFeatureDefinition{ kLocalFittingFeatureNames[0], SecondUmapFeatureSource::Atom, 0 },
+    SecondUmapFeatureDefinition{ kLocalFittingFeatureNames[2], SecondUmapFeatureSource::Atom, 2 },
+    SecondUmapFeatureDefinition{ kLocalFittingFeatureNames[5], SecondUmapFeatureSource::Atom, 5 },
+    SecondUmapFeatureDefinition{ kLocalFittingFeatureNames[6], SecondUmapFeatureSource::Atom, 6 },
 };
-constexpr std::size_t kSecondSelectedFeatureCount{ kSecondSpatialFeatureCount + static_cast<std::size_t>(std::count_if(
-    kSecondUmapFeatureDefinitions.begin(),
-    kSecondUmapFeatureDefinitions.end(),
-    [](const UmapFeatureDefinition & feature) { return feature.include_in_umap; }))
-};
-static_assert(
-    kSecondSelectedFeatureCount > 0,
-    "At least one feature must be selected for the second UMAP.");
+
+constexpr std::array<std::size_t, 3> kJointFeatureIndices{ 4, 5, 6 };
 
 std::string FormatFeatureLocation(
     std::string_view model_key_tag,
@@ -103,9 +97,9 @@ std::vector<std::string_view> GetUmapFeatureNames()
 
 std::vector<std::string_view> GetSecondUmapFeatureNames()
 {
-    auto names{ CollectSelectedFeatureNames(kSecondUmapFeatureDefinitions) };
-    if constexpr (kIncludeSecondUmapSpatialFeatures)
-        names.insert(names.begin(), kSecondSpatialFeatureNames.begin(), kSecondSpatialFeatureNames.end());
+    std::vector<std::string_view> names;
+    names.reserve(kSecondUmapFeatureDefinitions.size());
+    for (const auto & feature : kSecondUmapFeatureDefinitions) names.push_back(feature.name);
     return names;
 }
 
@@ -264,48 +258,61 @@ double MedianOfValues(std::vector<double> & values)
     return std::midpoint(values[(values.size() - 1) / 2], values[middle]);
 }
 
+void PopulateUmapBinJointMedians(
+    const std::vector<LocalFittingFeatureRow> & rows,
+    UmapBinning & binning)
+{
+    std::vector<double> values;
+    for (auto & [index, bin] : binning.bins)
+    {
+        values.reserve(bin.points.size());
+        for (std::size_t joint = 0; joint < kJointFeatureIndices.size(); ++joint)
+        {
+            values.clear();
+            for (const auto point : bin.points)
+            {
+                const double value{ rows[point].features[kJointFeatureIndices[joint]] };
+                if (std::isfinite(value)) values.push_back(value);
+            }
+            bin.joint_medians[joint] = values.empty() ? std::nullopt : std::optional{ MedianOfValues(values) };
+        }
+    }
+}
+
 UmapFeatureMatrix BuildSecondUmapFeatures(
     const std::vector<LocalFittingFeatureRow> & rows,
     const UmapBinning & first_binning)
 {
-    constexpr auto feature_count{ kSecondSelectedFeatureCount };
+    constexpr auto feature_count{ kSecondUmapFeatureDefinitions.size() };
+    constexpr auto missing{ std::numeric_limits<double>::quiet_NaN() };
     if (rows.empty()) return { {}, feature_count };
-    std::vector<double> features(rows.size() * feature_count);
+    std::vector<double> features(rows.size() * feature_count, missing);
     bool has_variable_feature{};
-    if constexpr (kIncludeSecondUmapSpatialFeatures)
-    {
-        if (first_binning.scale.diagonal != 0.0)
-        {
-            // Evaluate the normalized center directly in grid units: lambda * (center - origin) / R.
-            constexpr double center_scale{ kSecondUmapSpatialWeight * kUmapBinWidthRatio };
-            for (const auto & [index, bin] : first_binning.bins)
-            {
-                const double x{ center_scale * (static_cast<double>(index[0]) + 0.5) };
-                const double y{ center_scale * (static_cast<double>(index[1]) + 0.5) };
-                for (const auto point : bin.points)
-                {
-                    features[point * feature_count] = x;
-                    features[point * feature_count + 1] = y;
-                }
-            }
-            // Each occupied grid cell contributes a distinct center.
-            has_variable_feature = first_binning.bins.size() > 1;
-        }
-    }
     std::vector<double> finite_values;
     finite_values.reserve(rows.size());
-    std::size_t selected_feature{ kSecondSpatialFeatureCount };
-    for (std::size_t feature = 0; feature < kSecondUmapFeatureDefinitions.size(); ++feature)
+    for (std::size_t column = 0; column < feature_count; ++column)
     {
-        const auto & definition{ kSecondUmapFeatureDefinitions[feature] };
-        if (!definition.include_in_umap) continue;
-        const auto column{ selected_feature++ };
+        const auto & definition{ kSecondUmapFeatureDefinitions[column] };
         const std::string name{ definition.name };
+        if (definition.source == SecondUmapFeatureSource::BinMedian)
+        {
+            for (const auto & [index, bin] : first_binning.bins)
+            {
+                const double value{ bin.joint_medians[definition.source_index].value_or(missing) };
+                for (const auto point : bin.points)
+                    features[point * feature_count + column] = value;
+            }
+        }
+        else
+        {
+            for (std::size_t point = 0; point < rows.size(); ++point)
+                features[point * feature_count + column] = rows[point].features[definition.source_index];
+        }
+
         finite_values.clear();
         for (std::size_t point = 0; point < rows.size(); ++point)
         {
-            const double value{ rows[point].features[feature] };
-            features[point * feature_count + column] = value;
+            const double value{ features[point * feature_count + column] };
             if (std::isfinite(value)) finite_values.push_back(value);
         }
         double fill{};
@@ -321,15 +328,18 @@ UmapFeatureMatrix BuildSecondUmapFeatures(
                 + std::to_string(rows.size() - finite_values.size()) + " missing values with its median.");
         }
 
+        // Center the inputs before accumulating to preserve variation near the column's precision limit.
+        const long double reference{ finite_values.empty() ? 0.0 : finite_values.front() };
         long double mean{};
         long double sum_squared_differences{};
         for (std::size_t point = 0; point < rows.size(); ++point)
         {
             auto & value{ features[point * feature_count + column] };
             if (!std::isfinite(value)) value = fill;
-            const long double delta{ value - mean };
+            const long double centered{ value - reference };
+            const long double delta{ centered - mean };
             mean += delta / static_cast<long double>(point + 1);
-            sum_squared_differences += delta * (value - mean);
+            sum_squared_differences += delta * (centered - mean);
         }
         const auto variance{ sum_squared_differences / static_cast<long double>(rows.size()) };
         if (!std::isfinite(variance) || variance < 0)
@@ -341,7 +351,7 @@ UmapFeatureMatrix BuildSecondUmapFeatures(
         for (std::size_t point = 0; point < rows.size(); ++point)
         {
             auto & value{ features[point * feature_count + column] };
-            value = deviation > 0 ? static_cast<double>((value - mean) / deviation) : 0.0;
+            value = deviation > 0 ? static_cast<double>(((value - reference) - mean) / deviation) : 0.0;
             if (!std::isfinite(value))
             {
                 throw std::runtime_error("Column '" + name + "' has a non-finite Z-score.");

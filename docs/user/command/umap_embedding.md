@@ -47,9 +47,7 @@ counts and exclusions by reason. Its `column_semantics`
 field identifies `amplitude joint` as Gaussian amplitude A, `width joint` as the
 shared Gaussian/charge-kernel width tau, and `offset joint` as the charge-kernel
 coefficient C. The JSON field `standardization` describes the population
-Z-score used for local-fitting features. The
-`spatial_feature_normalization` object records the source, distance metric,
-and radius-relative weight used for the second embedding's spatial features.
+Z-score used for the selected features in both embeddings.
 
 For each selected atom, the command reconstructs these 7 local-fitting features:
 
@@ -202,23 +200,28 @@ Absent ranks have a blank name and zero count and ratio.
 
 ### Second UMAP
 
-After binning, the command runs another 2D UMAP on the retained atoms. Each atom
-gets the two coordinates of its first grid cell's geometric center. For indices
-`(kx, ky)`, the center is `c = o + h * (kx + 0.5, ky + 0.5)`. The spatial
-features are `lambda * (c - o) / R` in both axes. With `lambda = 0.1`, this
-equals `(c - o) / D`. The common scale preserves Euclidean distance ratios
-between centers. Both coordinates are zero when the first embedding has
-`D = 0`. The `bin number` column is an identifier for the first bin summary.
+After the first binning, the command computes the finite-value Joint medians
+for each occupied bin once and shares them between the first bin summary and
+the second UMAP. Each atom inherits the three medians of its first bin.
+`bin number` identifies the summary row. The geometric bin center and bin
+number are excluded from the second feature matrix.
 
-The remaining features are neighbor distance sum in 2A, signal peeling ratio,
-Joint width, and Joint offset. For each selected local-fitting column, the command
-fills missing values with the median of the finite inputs, applies a population
-Z-score, and uses a zero column for constant or entirely missing inputs. The
-per-atom CSV and both bin summaries report the original Joint values.
-The `.metadata.json` field `second_umap_features` lists the enabled features
-in matrix order. The two spatial columns are selected together by
-`kIncludeSecondUmapSpatialFeatures`. The local-fitting inputs are selected in
-`kSecondUmapFeatureDefinitions` when compiling.
+The second UMAP uses seven features in this order, also recorded in the JSON
+field `second_umap_features`.
+
+1. `amplitude joint median of bin`
+2. `width joint median of bin`
+3. `offset joint median of bin`
+4. `neighbor distance sum in 2A`
+5. `signal peeling ratio`
+6. `width joint`
+7. `offset joint`
+
+For each column, the command fills missing values with the median of the finite
+atom rows, then applies a population Z-score. A bin with more atoms contributes
+its median once per atom to imputation and standardization. A constant or
+entirely missing column becomes zeros. The per-atom CSV reports the original
+Joint parameters and each bin summary reports the medians before imputation.
 
 Both UMAP runs use the same request settings. The command then applies
 mean shift to the second embedding. The updated coordinates are used for the
@@ -228,7 +231,7 @@ same columns and its own bin numbering starting at 1, and reports
 `Second UMAP mean shift bin count: N` at Info level. Both summaries are written
 in builds without ROOT.
 
-When all enabled features are constant, the command reports a warning, leaves
+When all seven columns are constant after imputation, the command reports a warning, leaves
 `second umap x` and `second umap y` blank, and writes only the header to the
 second bin summary with a reported bin count of zero. This replaces any earlier
 second summary at the same path.

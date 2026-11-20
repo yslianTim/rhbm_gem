@@ -8,6 +8,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <string>
 
 namespace rhbm_gem::core::classifier {
@@ -29,12 +30,17 @@ TEST(UmapEmbeddingOutputTest, MissingSecondEmbeddingLeavesEmptyCoordinatesAndHea
         row.serial_id = static_cast<int>(point + 1);
         row.residue = "ALA";
         row.spot = "CA";
+        row.features[4] = std::numeric_limits<double>::quiet_NaN();
+        row.features[5] = 4.0;
+        row.features[6] = -2.0;
     }
     UmapEmbeddingResult first;
     first.coordinates = { -1.0, 1.0, 0.0, 0.0, 1.0, -1.0 };
     first.mean_shift_coordinates = first.coordinates;
     first.binning = BinMeanShiftEmbedding(
         prepared.feature_rows, first.mean_shift_coordinates, GetUmapSpatialScale(first.coordinates));
+    PopulateUmapBinJointMedians(prepared.feature_rows, first.binning);
+    ASSERT_TRUE(BuildSecondUmapFeatures(prepared.feature_rows, first.binning).values.empty());
     const UmapEmbeddingResult second;
 
     std::ofstream(second_summary) << "previous summary\n";
@@ -57,6 +63,12 @@ TEST(UmapEmbeddingOutputTest, MissingSecondEmbeddingLeavesEmptyCoordinatesAndHea
     ASSERT_TRUE(std::getline(second_bins, line));
     EXPECT_EQ(line, first_header);
     EXPECT_FALSE(std::getline(second_bins, line));
+    for (std::size_t bin = 0; bin < prepared.feature_rows.size(); ++bin)
+    {
+        ASSERT_TRUE(std::getline(first_bins, line));
+        EXPECT_TRUE(line.ends_with(",1,,4,-2,1,CA,1,1,,0,0,,0,0")) << line;
+    }
+    EXPECT_FALSE(std::getline(first_bins, line));
 
     const auto second_plot{ dir.path() / "umap_embedding_model_second_umap.pdf" };
     const auto second_shift_plot{ dir.path() / "umap_embedding_model_second_umap_mean_shift.pdf" };

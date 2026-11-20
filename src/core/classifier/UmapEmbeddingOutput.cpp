@@ -85,20 +85,11 @@ bool WriteEmbedding(
             { kLocalFittingFeatureNames[4], "Joint Gaussian amplitude A" },
             { kLocalFittingFeatureNames[5], "Joint shared Gaussian/charge-kernel width tau" },
             { kLocalFittingFeatureNames[6], "Joint charge-kernel coefficient C" } } },
-        { "standardization", "population-z-score for non-spatial features; constant columns zero" },
+        { "standardization", "population-z-score; constant columns zero" },
         { "included_rows", prepared.feature_rows.size() },
         { "excluded_rows", prepared.excluded_rows },
         { "exclusions", exclusions }
     };
-    if constexpr (kIncludeSecondUmapSpatialFeatures)
-    {
-        metadata_fields["spatial_feature_normalization"] = boost::json::object{
-            { "source", "first-umap-mean-shift-bin-center" },
-            { "distance", "euclidean" },
-            { "scale", "original-umap-mean-shift-radius" },
-            { "weight", kSecondUmapSpatialWeight }
-        };
-    }
     metadata << boost::json::serialize(metadata_fields);
     metadata.close();
     if (!metadata)
@@ -134,25 +125,19 @@ bool WriteMeanShiftBins(
         << std::setprecision(std::numeric_limits<double>::max_digits10);
     for (const auto & [index, bin] : binning.bins)
     {
-        std::array<std::vector<double>, 3> joint_values;
         std::map<std::string, std::size_t> spot_counts;
         for (const auto point : bin.points)
         {
-            for (std::size_t feature = 0; feature < joint_values.size(); ++feature)
-            {
-                const double value{ prepared.feature_rows[point].features[4 + feature] };
-                if (std::isfinite(value)) joint_values[feature].push_back(value);
-            }
             const auto spot_index{ prepared.configured_spot_indices[point] };
             const auto label{ spot_index ? std::string(kConfiguredUmapSpots[*spot_index].label)
                 : GetOtherUmapSpotLabel(prepared.elements[point]) };
             ++spot_counts[label];
         }
         output << bin.number << ',' << index[0] << ',' << index[1] << ',' << bin.points.size();
-        for (auto & values : joint_values)
+        for (const auto & median : bin.joint_medians)
         {
             output << ',';
-            if (!values.empty()) output << MedianOfValues(values);
+            if (median) output << *median;
         }
         std::vector<std::pair<std::string_view, std::size_t>> ranked_spots(
             spot_counts.begin(), spot_counts.end());

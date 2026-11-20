@@ -501,15 +501,11 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
     const auto metadata_lines{ ReadLines(output_path.string() + ".metadata.json") };
     const auto metadata{ boost::json::parse(metadata_lines.at(0)) };
     EXPECT_EQ(metadata.at("standardization").as_string(),
-        "population-z-score for non-spatial features; constant columns zero");
+        "population-z-score; constant columns zero");
     EXPECT_EQ(metadata.at("second_umap_features").as_array(), (boost::json::array{
-        "first bin center x (diagonal-normalized)", "first bin center y (diagonal-normalized)",
+        "amplitude joint median of bin", "width joint median of bin", "offset joint median of bin",
         "neighbor distance sum in 2A", "signal peeling ratio", "width joint", "offset joint" }));
-    const auto & spatial_normalization{ metadata.at("spatial_feature_normalization").as_object() };
-    EXPECT_EQ(spatial_normalization.at("source").as_string(), "first-umap-mean-shift-bin-center");
-    EXPECT_EQ(spatial_normalization.at("distance").as_string(), "euclidean");
-    EXPECT_EQ(spatial_normalization.at("scale").as_string(), "original-umap-mean-shift-radius");
-    EXPECT_DOUBLE_EQ(spatial_normalization.at("weight").as_double(), 0.1);
+    EXPECT_FALSE(metadata.as_object().contains("spatial_feature_normalization"));
     const auto & column_semantics{ metadata.at("column_semantics").as_object() };
     EXPECT_EQ(column_semantics.size(), 3u);
     EXPECT_EQ(column_semantics.at("amplitude joint").as_string(),

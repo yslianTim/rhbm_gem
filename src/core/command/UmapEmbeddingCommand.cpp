@@ -214,6 +214,7 @@ bool ExecutePreparedRequest(
     {
         first.binning = classifier::BinMeanShiftEmbedding(
             prepared.feature_rows, first.mean_shift_coordinates, first_scale);
+        classifier::PopulateUmapBinJointMedians(prepared.feature_rows, first.binning);
         const auto second_features{ classifier::BuildSecondUmapFeatures(
             prepared.feature_rows, first.binning) };
         if (second_features.values.empty())
@@ -251,6 +252,7 @@ bool ExecutePreparedRequest(
             }
             second.binning = classifier::BinMeanShiftEmbedding(
                 prepared.feature_rows, second.mean_shift_coordinates, shifted.scale);
+            classifier::PopulateUmapBinJointMedians(prepared.feature_rows, second.binning);
         }
         catch (const std::exception & error)
         {

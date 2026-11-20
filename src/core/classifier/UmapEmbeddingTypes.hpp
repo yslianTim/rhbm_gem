@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <map>
+#include <optional>
 #include <vector>
 
 namespace rhbm_gem::core::classifier {
@@ -21,6 +22,7 @@ struct UmapBin
 {
     std::vector<std::size_t> points;
     std::size_t number{};
+    std::array<std::optional<double>, 3> joint_medians{}; // Amplitude, width, offset.
 };
 
 struct UmapSpatialScale
