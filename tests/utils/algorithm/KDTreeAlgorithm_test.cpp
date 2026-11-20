@@ -2,6 +2,79 @@
 
 #include <rhbm_gem/utils/algorithm/KDTreeAlgorithm.hpp>
 
+#include <array>
+#include <limits>
+
+namespace {
+
+struct TestNode2D
+{
+    std::array<double, 2> position;
+    const std::array<double, 2> & GetPosition() const { return position; }
+};
+
+} // namespace
+
+TEST(KDTreeAlgorithmTest, BuildsTwoDimensionalTreeAndMatchesBruteForce)
+{
+    using Tree = KDTreeAlgorithm<TestNode2D>;
+    std::vector<TestNode2D> points;
+    const TestNode2D origin{ { 0.0, 0.0 } };
+    EXPECT_TRUE(Tree::RangeSearch(Tree::BuildKDTree(points).get(), &origin, 5.0).empty());
+
+    points = { origin, origin, { { -3.0, 4.0 } }, { { 3.0, -4.0 } } };
+    for (int x = -5; x <= 5; ++x)
+    {
+        for (int y = -5; y <= 5; ++y)
+        {
+            points.push_back({ { x * 1.25, y * 0.75 } });
+        }
+    }
+    const auto root{ Tree::BuildKDTree(points) };
+    ASSERT_NE(root, nullptr);
+    ASSERT_NE(root->m_left, nullptr);
+    ASSERT_NE(root->m_left->m_left, nullptr);
+    EXPECT_EQ(root->m_axis, 0u);
+    EXPECT_EQ(root->m_left->m_axis, 1u);
+    EXPECT_EQ(root->m_left->m_left->m_axis, 0u);
+
+    const std::array queries{ origin, TestNode2D{ { -4.5, 0.25 } }, TestNode2D{ { 100.0, 100.0 } } };
+    for (const auto & query : queries)
+    {
+        for (const double radius : { 0.0, 0.5, 5.0, 150.0 })
+        {
+            SCOPED_TRACE(radius);
+            auto actual{ Tree::RangeSearch(root.get(), &query, radius) };
+            std::sort(actual.begin(), actual.end());
+            std::vector<TestNode2D *> expected;
+            for (auto & point : points)
+            {
+                const auto dx{ point.position[0] - query.position[0] };
+                const auto dy{ point.position[1] - query.position[1] };
+                if (std::hypot(dx, dy) <= radius) expected.push_back(&point);
+            }
+            EXPECT_EQ(actual, expected);
+        }
+    }
+    const auto boundary{ Tree::RangeSearch(root.get(), &origin, 5.0) };
+    EXPECT_NE(std::find(boundary.begin(), boundary.end(), &points[2]), boundary.end());
+    EXPECT_NE(std::find(boundary.begin(), boundary.end(), &points[3]), boundary.end());
+    EXPECT_EQ(Tree::RangeSearch(root.get(), &origin, 0.0).size(), 3u);
+}
+
+TEST(KDTreeAlgorithmTest, TwoDimensionalRangeHandlesExtremeScales)
+{
+    using Tree = KDTreeAlgorithm<TestNode2D>;
+    const auto tiny{ std::numeric_limits<double>::denorm_min() };
+    std::vector<TestNode2D> points{ { { tiny, tiny } }, { { 1e200, 0.0 } }, { { 1e200, 1e200 } } };
+    const TestNode2D origin{ { 0.0, 0.0 } };
+    const auto root{ Tree::BuildKDTree(points) };
+    EXPECT_TRUE(Tree::RangeSearch(root.get(), &origin, 0.0).empty());
+    auto actual{ Tree::RangeSearch(root.get(), &origin, 1e200) };
+    std::sort(actual.begin(), actual.end());
+    EXPECT_EQ(actual, (std::vector<TestNode2D *>{ &points[0], &points[1] }));
+}
+
 struct TestNode
 {
     std::array<double, 3> m_position;

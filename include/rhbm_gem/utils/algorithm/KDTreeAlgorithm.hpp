@@ -7,6 +7,9 @@
 #include <queue>
 #include <cmath>
 #include <atomic>
+#include <tuple>
+#include <type_traits>
+#include <utility>
 
 #ifdef USE_OPENMP
 #include <omp.h>
@@ -28,6 +31,15 @@ struct KDNode
 template <typename NodeType>
 class KDTreeAlgorithm
 {
+    using Position = std::remove_cvref_t<decltype(std::declval<const NodeType &>().GetPosition())>;
+    static constexpr std::size_t kDimension{ [] {
+        if constexpr (requires { std::tuple_size<Position>::value; })
+            return std::tuple_size_v<Position>;
+        else
+            return std::size_t{ 3 };
+    }() };
+    static_assert(kDimension > 0);
+
     struct DistNode
     {
         double m_distance;
@@ -176,8 +188,7 @@ private:
             return nullptr;
         }
 
-        constexpr int dimension{ 3 };
-        auto axis{ static_cast<size_t>(depth % dimension) };
+        auto axis{ static_cast<size_t>(depth) % kDimension };
         auto count{ std::distance(begin, end) };
         auto mid_iter{ begin + count / 2 };
 
@@ -319,9 +330,22 @@ private:
     {
         if (kd_node == nullptr) return;
 
-        auto dist_square{ ComputeNodeDistanceSquare(query_node, kd_node->m_node) };
-        auto range_square{ range * range };
-        if (dist_square <= range_square) results.emplace_back(kd_node->m_node);
+        if constexpr (kDimension == 2)
+        {
+            // Squaring can overflow or round nonzero distances down to zero.
+            const auto & query{ query_node->GetPosition() };
+            const auto & position{ kd_node->m_node->GetPosition() };
+            const double dx{ query.at(0) - position.at(0) };
+            const double dy{ query.at(1) - position.at(1) };
+            if (range == 0.0 ? dx == 0.0 && dy == 0.0 : std::hypot(dx, dy) <= range)
+                results.emplace_back(kd_node->m_node);
+        }
+        else
+        {
+            auto dist_square{ ComputeNodeDistanceSquare(query_node, kd_node->m_node) };
+            auto range_square{ range * range };
+            if (dist_square <= range_square) results.emplace_back(kd_node->m_node);
+        }
 
         auto axis{ kd_node->m_axis };
         auto diff{ ComputeNodeDifference(query_node, kd_node->m_node, axis) };
