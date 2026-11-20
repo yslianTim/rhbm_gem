@@ -149,10 +149,12 @@ reconstructed features, `umap x,umap y`, `mean shift x,mean shift y`, then
 `<folder>/umap_embedding_<sanitized-model-key>.csv`. ASCII letters, digits,
 `.`, `_`, and `-` are retained in the key; other bytes become `_`.
 
-Mean shift starts from the original two-dimensional UMAP coordinates and runs
-100 iterations with up to 200 nearest neighbors, limited to the number of retained rows.
-Each query searches the fixed original point set, allowing its own source point,
-then moves to the weighted mean of those neighbors' original coordinates.
+Mean shift starts from the original two-dimensional UMAP coordinates and applies
+100 updates per point. Each update searches the fixed original point set and uses
+every point within the two-dimensional Euclidean radius, including points on the
+boundary. The radius is 10% of the diagonal of the original coordinates' bounding
+box. It is computed once per embedding, separately for the first and second UMAP.
+Each query moves to the weighted mean of its neighbors' original coordinates.
 Weights are recomputed for each query at every iteration with the Gaussian kernel
 `exp(-alpha * distance_squared / (2 * sigma * sigma))`. The distance is between
 the query's current position and the neighbor's original position, using both
@@ -161,12 +163,13 @@ UMAP coordinates at their original scale. In
 `alpha = 2.0` and `sigma = 1.5`, giving the default kernel
 `exp(-distance_squared / 2.25)`. Changing either constant requires rebuilding.
 Joint width remains in the CSV but does not affect the kernel weights.
-If a neighborhood has zero total weight, the query keeps its current position
-and a warning is reported. Non-finite updates fail the command before CSV output.
-There is no early stopping or deduplication; row count and atom association are
-preserved. Even when all rows fit within the neighbor limit, each query has its
-own distance-based weights and need not move to the same global center.
-Mean shift uses all retained rows regardless of plot visibility.
+If a neighborhood is empty or its weights sum to zero, the query keeps its
+current position. The command reports these events in a single warning per
+embedding. Non-finite updates fail the command before CSV output. At zero radius,
+all eligible neighbors coincide with the query and its position stays fixed.
+All retained rows participate regardless of plot visibility, including rows with
+duplicate coordinates. OpenMP builds use `--jobs` threads for the independent
+point trajectories. Builds without OpenMP process the trajectories serially.
 
 ### Mean shift bin summary
 

@@ -82,11 +82,11 @@ TEST(UmapEmbeddingFeaturesTest, ImputesSecondFeaturesBeforePopulationZScore)
     }
     EXPECT_EQ(GetSecondUmapFeatureNames(), (std::vector<std::string_view>{
         "bin number", "neighbor distance sum in 2A", "signal peeling ratio",
-        "amplitude joint", "width joint", "offset joint" }));
+        "width joint", "offset joint" }));
 
     const std::vector<std::size_t> bins{ 1, 4, 1, 1, 4 };
     const auto features{ BuildSecondUmapFeatures(rows, bins) };
-    ASSERT_EQ(features.column_count, 6u);
+    ASSERT_EQ(features.column_count, 5u);
     ASSERT_EQ(features.values.size(), rows.size() * features.column_count);
     const std::array filled_signal{ 0.0, 2.0, 6.0, 8.0, 4.0 };
     for (std::size_t point = 0; point < rows.size(); ++point)
@@ -98,7 +98,6 @@ TEST(UmapEmbeddingFeaturesTest, ImputesSecondFeaturesBeforePopulationZScore)
         EXPECT_NEAR(features.values[offset + 2], (filled_signal[point] - 4.0) / std::sqrt(8.0), 1e-15);
         EXPECT_DOUBLE_EQ(features.values[offset + 3], 0.0);
         EXPECT_DOUBLE_EQ(features.values[offset + 4], 0.0);
-        EXPECT_DOUBLE_EQ(features.values[offset + 5], 0.0);
     }
 }
 

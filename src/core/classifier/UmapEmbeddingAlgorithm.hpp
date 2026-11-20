@@ -20,6 +20,13 @@ std::vector<double> RunUmapMeanShift(
     const std::vector<LocalFittingFeatureRow> & feature_rows,
     int thread_size);
 
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+std::array<double, kOutputDimensionCount> RunUmapMeanShiftStepForTesting(
+    std::span<const double> embedding,
+    std::array<double, kOutputDimensionCount> position,
+    double radius);
+#endif
+
 UmapBinning BinMeanShiftEmbedding(
     const std::vector<LocalFittingFeatureRow> & feature_rows,
     const std::vector<double> & mean_shift_embedding);

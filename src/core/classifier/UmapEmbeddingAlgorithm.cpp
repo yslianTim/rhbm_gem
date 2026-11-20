@@ -1,18 +1,105 @@
 #include "core/classifier/UmapEmbeddingAlgorithm.hpp"
 
+#include <rhbm_gem/utils/algorithm/KDTreeAlgorithm.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
 
 #include <knncolle/knncolle.hpp>
 #include <umappp/umappp.hpp>
 
 #include <algorithm>
-#include <atomic>
 #include <cmath>
+#include <exception>
 #include <limits>
 #include <memory>
 #include <stdexcept>
 
 namespace rhbm_gem::core::classifier {
+
+namespace {
+
+struct UmapPoint
+{
+    std::array<double, kOutputDimensionCount> position;
+    std::size_t index;
+
+    const auto & GetPosition() const { return position; }
+};
+
+using Tree = KDTreeAlgorithm<UmapPoint>;
+
+std::vector<UmapPoint> MakeUmapPoints(std::span<const double> embedding)
+{
+    std::vector<UmapPoint> points;
+    points.reserve(embedding.size() / kOutputDimensionCount);
+    for (std::size_t offset = 0; offset < embedding.size(); offset += kOutputDimensionCount)
+    {
+        points.push_back({ { embedding[offset], embedding[offset + 1] }, points.size() });
+    }
+    return points;
+}
+
+double MeanShiftRadius(const std::vector<UmapPoint> & points)
+{
+    auto lower{ points.front().position };
+    auto upper{ lower };
+    for (const auto & point : points)
+    {
+        for (std::size_t axis = 0; axis < kOutputDimensionCount; ++axis)
+        {
+            lower[axis] = std::min(lower[axis], point.position[axis]);
+            upper[axis] = std::max(upper[axis], point.position[axis]);
+        }
+    }
+    const double dx{ upper[0] - lower[0] };
+    const double dy{ upper[1] - lower[1] };
+    if (!std::isfinite(dx) || !std::isfinite(dy))
+        throw std::runtime_error("UMAP mean shift bounding box span exceeds the finite double range.");
+
+    const double diagonal{ std::hypot(dx, dy) };
+    return std::isfinite(diagonal) ? 0.1 * diagonal : std::hypot(0.1 * dx, 0.1 * dy);
+}
+
+enum class MeanShiftStep { Updated, EmptyNeighborhood, ZeroWeight, NonFiniteUpdate };
+
+MeanShiftStep ShiftUmapPoint(
+    const KDNode<UmapPoint> * root,
+    UmapPoint & query,
+    double radius,
+    std::vector<UmapPoint *> & neighbors)
+{
+    constexpr double alpha{ 2.0 };
+    constexpr double sigma{ 1.5 };
+    Tree::RangeSearch(root, &query, radius, neighbors);
+    if (neighbors.empty()) return MeanShiftStep::EmptyNeighborhood;
+    // At zero radius all neighbors coincide with the query, so their mean is its position.
+    if (radius == 0.0) return MeanShiftStep::Updated;
+
+    std::sort(neighbors.begin(), neighbors.end(), [](const auto * a, const auto * b) {
+        return a->index < b->index;
+    });
+    std::array<double, kOutputDimensionCount> mean{};
+    double weight_sum{};
+    for (const auto * neighbor : neighbors)
+    {
+        const double dx{ query.position[0] - neighbor->position[0] };
+        const double dy{ query.position[1] - neighbor->position[1] };
+        const double distance_squared{ dx * dx + dy * dy };
+        const double weight{ std::exp(-alpha * distance_squared / (2.0 * sigma * sigma)) };
+        weight_sum += weight;
+        for (std::size_t axis = 0; axis < kOutputDimensionCount; ++axis)
+        {
+            mean[axis] += weight * neighbor->position[axis];
+        }
+    }
+    if (weight_sum == 0.0) return MeanShiftStep::ZeroWeight;
+    for (auto & coordinate : mean) coordinate /= weight_sum;
+    if (!std::isfinite(weight_sum) || !HasFiniteCoordinates(mean)) return MeanShiftStep::NonFiniteUpdate;
+
+    query.position = mean;
+    return MeanShiftStep::Updated;
+}
+
+} // namespace
 
 std::vector<double> RunUmap(
     const UmapFeatureMatrix & features,
@@ -50,84 +137,90 @@ std::vector<double> RunUmapMeanShift(
     [[maybe_unused]] int thread_size)
 {
     constexpr int iteration_count{ 100 };
-    constexpr int requested_neighbors{ 200 };
-    constexpr double alpha{ 2.0 };
-    constexpr double sigma{ 1.5 };
-    const int point_count{ static_cast<int>(embedding.size() / kOutputDimensionCount) };
-    const int neighbors{ std::min(requested_neighbors, point_count) };
-    if (neighbors != requested_neighbors)
+    const auto point_count{ embedding.size() / kOutputDimensionCount };
+    if (embedding.size() % kOutputDimensionCount != 0 || point_count != feature_rows.size())
     {
-        Logger::Log(LogLevel::Warning,
-            "UMAP mean shift neighbor count was limited to "
-                + std::to_string(neighbors) + " for " + std::to_string(point_count)
-                + " data rows.");
+        throw std::invalid_argument("UMAP mean shift requires two coordinates per feature row.");
     }
+    if (!HasFiniteCoordinates(embedding))
+        throw std::runtime_error("UMAP mean shift received a non-finite embedding coordinate.");
+    if (embedding.empty()) return embedding;
 
-    knncolle::VptreeBuilder<int, double, double> builder(
-        std::make_shared<knncolle::EuclideanDistance<double, double>>());
-    const auto index{ builder.build_unique(knncolle::SimpleMatrix<int, double>(
-        kOutputDimensionCount, point_count, embedding.data())) };
+    auto points{ MakeUmapPoints(embedding) };
+    const double radius{ MeanShiftRadius(points) };
+    const auto root{ Tree::BuildKDTree(points) };
     auto shifted{ embedding };
-    std::atomic<bool> nonfinite_update{ false };
+    std::size_t empty_neighborhoods{};
+    std::size_t zero_weights{};
+    bool nonfinite_update{};
+    std::exception_ptr worker_error;
 #ifdef USE_OPENMP
-    #pragma omp parallel num_threads(thread_size)
+    #pragma omp parallel num_threads(thread_size) reduction(+:empty_neighborhoods,zero_weights) reduction(||:nonfinite_update)
 #endif
     {
-        auto searcher{ index->initialize() };
-        std::vector<int> nearest;
-        for (int iteration = 0; iteration < iteration_count; ++iteration)
-        {
+        std::vector<UmapPoint *> neighbors;
 #ifdef USE_OPENMP
-            #pragma omp for schedule(static)
+        #pragma omp for schedule(static)
 #endif
-            for (int point = 0; point < point_count; ++point)
+        for (std::size_t point = 0; point < point_count; ++point)
+        {
+            auto query{ points[point] };
+            try
             {
-                const auto offset{ static_cast<std::size_t>(point) * kOutputDimensionCount };
-                // Coordinate queries include coincident source points, including self.
-                searcher->search(shifted.data() + offset, neighbors, &nearest, nullptr);
-                std::array<double, kOutputDimensionCount> mean{};
-                double weight_sum{};
-                for (const int neighbor : nearest)
+                for (int iteration = 0; iteration < iteration_count; ++iteration)
                 {
-                    const auto source{ static_cast<std::size_t>(neighbor) * kOutputDimensionCount };
-                    const double dx{ shifted[offset] - embedding[source] };
-                    const double dy{ shifted[offset + 1] - embedding[source + 1] };
-                    const double distance_squared{ dx * dx + dy * dy };
-                    const double weight{ std::exp(-alpha * distance_squared / (2.0 * sigma * sigma)) };
-                    weight_sum += weight;
-                    for (std::size_t dimension = 0; dimension < kOutputDimensionCount; ++dimension)
+                    const auto step{ ShiftUmapPoint(root.get(), query, radius, neighbors) };
+                    empty_neighborhoods += step == MeanShiftStep::EmptyNeighborhood;
+                    zero_weights += step == MeanShiftStep::ZeroWeight;
+                    if (step == MeanShiftStep::NonFiniteUpdate)
                     {
-                        mean[dimension] += weight * embedding[source + dimension];
+                        nonfinite_update = true;
+                        break;
                     }
                 }
-                if (weight_sum == 0.0)
+            }
+            catch (...)
+            {
+#ifdef USE_OPENMP
+                #pragma omp critical(rhbm_umap_mean_shift_exception)
+#endif
                 {
-                    Logger::Log(LogLevel::Warning,
-                        "UMAP mean shift has zero total neighbor weight for atom serial "
-                            + std::to_string(feature_rows[static_cast<std::size_t>(point)].serial_id)
-                            + "; keeping its current position.");
-                    continue;
-                }
-                for (auto & coordinate : mean) coordinate /= weight_sum;
-                if (!std::isfinite(weight_sum)
-                    || !HasFiniteCoordinates(mean))
-                {
-                    nonfinite_update.store(true, std::memory_order_relaxed);
-                    continue;
-                }
-                for (std::size_t dimension = 0; dimension < kOutputDimensionCount; ++dimension)
-                {
-                    shifted[offset + dimension] = mean[dimension];
+                    if (!worker_error) worker_error = std::current_exception();
                 }
             }
+            const auto offset{ point * kOutputDimensionCount };
+            shifted[offset] = query.position[0];
+            shifted[offset + 1] = query.position[1];
         }
     }
-    if (nonfinite_update.load(std::memory_order_relaxed))
+    if (worker_error) std::rethrow_exception(worker_error);
+    if (nonfinite_update)
     {
         throw std::runtime_error("Weighted mean shift produced a non-finite update.");
     }
+    if (empty_neighborhoods != 0 || zero_weights != 0)
+    {
+        Logger::Log(LogLevel::Warning, "UMAP mean shift kept the current position for "
+            + std::to_string(empty_neighborhoods) + " updates with no neighbors and "
+            + std::to_string(zero_weights) + " updates with zero total neighbor weight.");
+    }
     return shifted;
 }
+
+#ifdef RHBM_GEM_TEST_INSTRUMENTATION
+std::array<double, kOutputDimensionCount> RunUmapMeanShiftStepForTesting(
+    std::span<const double> embedding,
+    std::array<double, kOutputDimensionCount> position,
+    double radius)
+{
+    auto points{ MakeUmapPoints(embedding) };
+    const auto root{ Tree::BuildKDTree(points) };
+    UmapPoint query{ position, 0 };
+    std::vector<UmapPoint *> neighbors;
+    ShiftUmapPoint(root.get(), query, radius, neighbors);
+    return query.position;
+}
+#endif
 
 UmapBinning BinMeanShiftEmbedding(
     const std::vector<LocalFittingFeatureRow> & feature_rows,

@@ -19,6 +19,7 @@
 #include "core/estimator/joint_component/HaloMedianReconstruction.hpp"
 #include "support/JointPostprocessingTestHelpers.hpp"
 #include "core/classifier/LocalFittingFeatures.hpp"
+#include "core/classifier/UmapEmbeddingAlgorithm.hpp"
 #include "io/sqlite/SQLiteWrapper.hpp"
 #include "support/CommandTestHelpers.hpp"
 
@@ -377,38 +378,33 @@ std::vector<std::array<double, 2>> ReadCoordinates(
 
 std::vector<std::array<double, 2>> ReferenceMeanShift(
     const std::vector<std::array<double, 2>> & original,
-    double alpha = 2.0)
+    double alpha = 2.0,
+    double sigma = 1.5,
+    int iterations = 100)
 {
+    if (original.empty()) return {};
+    const auto [min_x, max_x]{ std::minmax_element(original.begin(), original.end(),
+        [](const auto & a, const auto & b) { return a[0] < b[0]; }) };
+    const auto [min_y, max_y]{ std::minmax_element(original.begin(), original.end(),
+        [](const auto & a, const auto & b) { return a[1] < b[1]; }) };
+    const double radius{ std::hypot((*max_x)[0] - (*min_x)[0], (*max_y)[1] - (*min_y)[1]) / 10.0 };
     auto queries{ original };
-    constexpr double sigma{ 1.5 };
-    const auto neighbor_count{ std::min(std::size_t{ 200 }, original.size()) };
-    for (int iteration = 0; iteration < 100; ++iteration)
+    for (int iteration = 0; iteration < iterations; ++iteration)
     {
         for (auto & query : queries)
         {
-            std::vector<std::pair<double, std::size_t>> distances;
-            for (std::size_t point = 0; point < original.size(); ++point)
-            {
-                const double dx{ original[point][0] - query[0] };
-                const double dy{ original[point][1] - query[1] };
-                distances.emplace_back(dx * dx + dy * dy, point);
-            }
-            std::sort(distances.begin(), distances.end());
-            if (neighbor_count < distances.size())
-            {
-                EXPECT_LT(distances[neighbor_count - 1].first, distances[neighbor_count].first)
-                    << "The reference fixture must not tie at the neighbor cutoff.";
-            }
             std::array<double, 2> weighted_sum{};
             double weight_sum{};
-            for (std::size_t neighbor = 0; neighbor < neighbor_count; ++neighbor)
+            // Scanning in row order also fixes the order of the floating-point sums.
+            for (const auto & source : original)
             {
-                const auto source{ distances[neighbor].second };
-                const double weight{ std::exp(-alpha * distances[neighbor].first / (2.0 * sigma * sigma)) };
+                const double distance{ std::hypot(source[0] - query[0], source[1] - query[1]) };
+                if (distance > radius) continue;
+                const double weight{ std::exp(-alpha * distance * distance / (2.0 * sigma * sigma)) };
                 weight_sum += weight;
                 for (std::size_t dimension = 0; dimension < query.size(); ++dimension)
                 {
-                    weighted_sum[dimension] += original[source][dimension] * weight;
+                    weighted_sum[dimension] += source[dimension] * weight;
                 }
             }
             if (weight_sum > 0)
@@ -684,7 +680,7 @@ TEST(UmapEmbeddingCommandTest, ClassifiesUnconfiguredSpotsAsOtherInRootPlot)
             }
             point_rows.push_back(std::move(fields));
         }
-        const auto first_shifted{ ReadCoordinates(csv_path, kBinNumberColumn - 2) };
+        const auto first_shifted{ ReferenceMeanShift(ReadCoordinates(csv_path)) };
         const auto second_shifted{ ReferenceMeanShift(ReadCoordinates(csv_path, kBinNumberColumn + 1)) };
         constexpr std::string_view bin_header{
             "bin number,bin x,bin y,point count,amplitude joint median,width joint median,offset joint median,"
@@ -953,7 +949,7 @@ TEST(UmapEmbeddingCommandTest, AcceptsDocumentedOptionBoundaries)
     EXPECT_TRUE(RunCommand(request).succeeded);
 }
 
-TEST(UmapEmbeddingCommandTest, MeanShiftUsesFixedOriginalPointsAndClampsNeighborCount)
+TEST(UmapEmbeddingCommandTest, MeanShiftUsesFixedRadiusAndOriginalPoints)
 {
     command_test::ScopedTempDir temp_dir{ "umap_mean_shift" };
     for (const bool vary_joint_widths : { false, true })
@@ -1010,20 +1006,57 @@ TEST(UmapEmbeddingCommandTest, MeanShiftUsesFixedOriginalPointsAndClampsNeighbor
                     *std::min_element(widths.begin(), widths.end()), 1e-10);
             }
             const auto expected{ ReferenceMeanShift(original) };
-            const auto without_alpha{ ReferenceMeanShift(original, 1.0) };
-            bool alpha_changes_result{ false };
             for (std::size_t point = 0; point < point_count; ++point)
             {
-                alpha_changes_result |= std::hypot(expected[point][0] - without_alpha[point][0],
-                    expected[point][1] - without_alpha[point][1]) > 1e-6;
                 for (std::size_t dimension = 0; dimension < 2; ++dimension)
                 {
                     EXPECT_TRUE(std::isfinite(shifted[point][dimension]));
                     EXPECT_NEAR(shifted[point][dimension], expected[point][dimension], 1e-10);
                 }
             }
-            EXPECT_TRUE(alpha_changes_result) << "The fixture must detect a missing alpha coefficient.";
         }
+    }
+}
+
+TEST(UmapEmbeddingCommandTest, RadiusMeanShiftMatchesBruteForceAcrossThreadCounts)
+{
+    using Coordinate = std::array<double, 2>;
+    const std::vector<Coordinate> slow{ { -1.06, -0.5 }, { 1.06, -0.5 }, { 30.0, 1.0 } };
+    const auto expected_slow{ ReferenceMeanShift(slow) };
+    EXPECT_GT(std::abs(expected_slow[0][0] - ReferenceMeanShift(slow, 1.0)[0][0]), 1e-6);
+    EXPECT_GT(std::abs(expected_slow[0][0] - ReferenceMeanShift(slow, 2.0, 2.0)[0][0]), 1e-6);
+    EXPECT_GT(std::abs(expected_slow[0][0] - ReferenceMeanShift(slow, 2.0, 1.5, 99)[0][0]), 1e-6);
+
+    // A 30-by-40 bounding box makes the first pair exactly one radius apart.
+    const std::vector<Coordinate> boundary{ { -3.0, -4.0 }, { 0.0, 0.0 }, { 27.0, 36.0 } };
+    const std::vector<Coordinate> sparse{ { -3.0, -4.0 }, { 0.0, 0.0 }, { 2.0, 1.0 }, { 3.0, -2.0 } };
+    std::vector<Coordinate> dense(210, { -1.0, -0.25 });
+    dense.insert(dense.end(), 50, { 1.0, 0.25 });
+    dense.push_back({ 40.0, 0.0 });
+    const auto expected_dense{ ReferenceMeanShift(dense) };
+    EXPECT_GT(std::abs(expected_dense[0][0] - dense[0][0]), 1e-3);
+
+    const std::vector<Coordinate> identical(7, { -0.5, 0.25 });
+    const std::array<const std::vector<Coordinate> *, 5> fixtures{ &slow, &boundary, &sparse, &dense, &identical };
+    for (const auto * fixture : fixtures)
+    {
+        const auto & original{ *fixture };
+        SCOPED_TRACE(original.size());
+        const auto expected{ ReferenceMeanShift(original) };
+        std::vector<double> embedding;
+        for (const auto & position : original)
+            embedding.insert(embedding.end(), position.begin(), position.end());
+
+        const std::vector<rg::core::classifier::LocalFittingFeatureRow> rows(original.size());
+        const auto serial{ rg::core::classifier::RunUmapMeanShift(embedding, rows, 1) };
+        ASSERT_EQ(serial.size(), embedding.size());
+        for (std::size_t point = 0; point < original.size(); ++point)
+        {
+            EXPECT_NEAR(serial[2 * point], expected[point][0], 1e-10);
+            EXPECT_NEAR(serial[2 * point + 1], expected[point][1], 1e-10);
+        }
+        for (const int threads : { 2, 4 })
+            EXPECT_EQ(rg::core::classifier::RunUmapMeanShift(embedding, rows, threads), serial);
     }
 }
 
