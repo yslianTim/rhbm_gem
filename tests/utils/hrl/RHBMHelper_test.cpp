@@ -494,6 +494,7 @@ TEST(RHBMHelperTest, EstimateBetaMDPDERestoresEigenThreadCountAfterNonPositiveRe
     const int original_thread_count{ Eigen::nbThreads() };
     constexpr int test_thread_count{ 2 };
     Eigen::setNbThreads(test_thread_count);
+    const int active_thread_count{ Eigen::nbThreads() };
     const Eigen::MatrixXd X{ MakeVector({ 1.0, 2.0 }).transpose() };
     const Eigen::VectorXd y{ MakeVector({ 3.0 }) };
     rg::RHBMExecutionOptions options;
@@ -502,7 +503,7 @@ TEST(RHBMHelperTest, EstimateBetaMDPDERestoresEigenThreadCountAfterNonPositiveRe
     const auto result{ rhbm_gem::rhbm_helper::EstimateBetaMDPDE(0.2, MakeDataset(X, y), options) };
 
     EXPECT_EQ(rg::RHBMEstimationStatus::INSUFFICIENT_DATA, result.status);
-    EXPECT_EQ(test_thread_count, Eigen::nbThreads());
+    EXPECT_EQ(active_thread_count, Eigen::nbThreads());
     Eigen::setNbThreads(original_thread_count);
 }
 
