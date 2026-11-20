@@ -85,7 +85,7 @@ bool WriteEmbedding(
             { kLocalFittingFeatureNames[4], "Joint Gaussian amplitude A" },
             { kLocalFittingFeatureNames[5], "Joint shared Gaussian/charge-kernel width tau" },
             { kLocalFittingFeatureNames[6], "Joint charge-kernel coefficient C" } } },
-        { "standardization", "sample-z-score; constant columns zero" },
+        { "standardization", "population-z-score; constant columns zero" },
         { "included_rows", prepared.feature_rows.size() },
         { "excluded_rows", prepared.excluded_rows },
         { "exclusions", exclusions }

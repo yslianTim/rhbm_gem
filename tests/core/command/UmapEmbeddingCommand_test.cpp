@@ -476,6 +476,7 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
     EXPECT_EQ(kOutputColumnCount, 17u);
     const auto metadata_lines{ ReadLines(output_path.string() + ".metadata.json") };
     const auto metadata{ boost::json::parse(metadata_lines.at(0)) };
+    EXPECT_EQ(metadata.at("standardization").as_string(), "population-z-score; constant columns zero");
     const auto & second_features{ metadata.at("second_umap_features").as_array() };
     ASSERT_FALSE(second_features.empty());
     std::vector<std::string_view> available_features{ "bin number" };
