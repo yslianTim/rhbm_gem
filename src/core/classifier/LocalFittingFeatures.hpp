@@ -1,5 +1,7 @@
 #pragma once
 
+#include "core/classifier/LocalFittingFeatureNames.hpp"
+
 #include <array>
 #include <cstddef>
 #include <string>
@@ -16,7 +18,6 @@ class ModelObject;
 namespace rhbm_gem::core::classifier {
 
 inline constexpr std::size_t kLocalFittingIdentifierColumnCount{ 3 };
-inline constexpr std::size_t kLocalFittingFeatureCount{ 7 };
 inline constexpr std::size_t kLocalFittingColumnCount{
     kLocalFittingIdentifierColumnCount + kLocalFittingFeatureCount
 };
@@ -26,17 +27,6 @@ inline constexpr std::array<std::string_view, kLocalFittingIdentifierColumnCount
         "serial id",
         "residue",
         "spot",
-    };
-
-inline constexpr std::array<std::string_view, kLocalFittingFeatureCount>
-    kLocalFittingFeatureNames{
-        "neighbor distance sum in 2A",
-        "distance to closest neighbor",
-        "signal peeling ratio",
-        "tail peeling ratio",
-        "amplitude joint",
-        "width joint",
-        "offset joint",
     };
 
 struct LocalFittingFeatureRow

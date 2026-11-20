@@ -32,7 +32,7 @@ std::optional<PreparedUmapInput> BuildAndStandardizeInput(
     int requested_neighbors,
     std::string & error_message);
 
-void PopulateUmapBinJointMedians(
+void PopulateUmapBinFeatureMedians(
     const std::vector<LocalFittingFeatureRow> & rows,
     UmapBinning & binning);
 

@@ -504,6 +504,8 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
         "population-z-score; constant columns zero");
     EXPECT_EQ(metadata.at("second_umap_features").as_array(), (boost::json::array{
         "amplitude joint median of bin", "width joint median of bin", "offset joint median of bin",
+        "neighbor distance sum in 2A median of bin", "distance to closest neighbor median of bin",
+        "signal peeling ratio median of bin", "tail peeling ratio median of bin",
         "neighbor distance sum in 2A", "signal peeling ratio", "width joint", "offset joint" }));
     EXPECT_FALSE(metadata.as_object().contains("spatial_feature_normalization"));
     const auto & column_semantics{ metadata.at("column_semantics").as_object() };

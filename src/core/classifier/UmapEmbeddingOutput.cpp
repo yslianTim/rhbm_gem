@@ -134,8 +134,9 @@ bool WriteMeanShiftBins(
             ++spot_counts[label];
         }
         output << bin.number << ',' << index[0] << ',' << index[1] << ',' << bin.points.size();
-        for (const auto & median : bin.joint_medians)
+        for (const auto feature : { 4u, 5u, 6u })
         {
+            const auto & median{ bin.feature_medians[feature] };
             output << ',';
             if (median) output << *median;
         }

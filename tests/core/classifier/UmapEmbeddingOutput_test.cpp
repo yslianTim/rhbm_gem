@@ -39,7 +39,7 @@ TEST(UmapEmbeddingOutputTest, MissingSecondEmbeddingLeavesEmptyCoordinatesAndHea
     first.mean_shift_coordinates = first.coordinates;
     first.binning = BinMeanShiftEmbedding(
         prepared.feature_rows, first.mean_shift_coordinates, GetUmapSpatialScale(first.coordinates));
-    PopulateUmapBinJointMedians(prepared.feature_rows, first.binning);
+    PopulateUmapBinFeatureMedians(prepared.feature_rows, first.binning);
     ASSERT_TRUE(BuildSecondUmapFeatures(prepared.feature_rows, first.binning).values.empty());
     const UmapEmbeddingResult second;
 

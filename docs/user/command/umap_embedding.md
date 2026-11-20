@@ -200,38 +200,51 @@ Absent ranks have a blank name and zero count and ratio.
 
 ### Second UMAP
 
-After the first binning, the command computes the finite-value Joint medians
-for each occupied bin once and shares them between the first bin summary and
-the second UMAP. Each atom inherits the three medians of its first bin.
+After the first binning, the command computes a median for each of the seven
+local-fitting features once per occupied bin. Each feature uses its own finite
+values, excluding NaN and both infinities. An even sample count uses the midpoint
+of the two middle values. A feature with no finite values has a missing median.
+Each atom inherits the medians of its first bin. The first bin summary uses the
+same statistics for the three Joint parameters A, tau, and C.
 `bin number` identifies the summary row. The geometric bin center and bin
 number are excluded from the second feature matrix.
 
-The second UMAP uses seven features in this order, also recorded in the JSON
-field `second_umap_features`.
+All 11 second-embedding features are enabled by default, in this order.
 
 1. `amplitude joint median of bin`
 2. `width joint median of bin`
 3. `offset joint median of bin`
-4. `neighbor distance sum in 2A`
-5. `signal peeling ratio`
-6. `width joint`
-7. `offset joint`
+4. `neighbor distance sum in 2A median of bin`
+5. `distance to closest neighbor median of bin`
+6. `signal peeling ratio median of bin`
+7. `tail peeling ratio median of bin`
+8. `neighbor distance sum in 2A`
+9. `signal peeling ratio`
+10. `width joint`
+11. `offset joint`
 
-For each column, the command fills missing values with the median of the finite
-atom rows, then applies a population Z-score. A bin with more atoms contributes
-its median once per atom to imputation and standardization. A constant or
-entirely missing column becomes zeros. The per-atom CSV reports the original
-Joint parameters and each bin summary reports the medians before imputation.
+To select a subset, edit `include_in_umap` in `kSecondUmapFeatureDefinitions` in
+`src/core/classifier/UmapEmbeddingFeatures.cpp` and rebuild. At least one feature
+must be enabled. The feature matrix and the JSON field `second_umap_features`
+contain only enabled features, in the order above.
+
+For each enabled column, the command fills missing values with the median of
+the finite atom rows, then applies a population Z-score. A bin with more atoms
+contributes its median once per atom to imputation and standardization. A
+constant or entirely missing column becomes zeros. The per-atom CSV reports
+the original Joint parameters and each bin summary reports the three Joint
+medians before imputation.
 
 Both UMAP runs use the same request settings. The command then applies
 mean shift to the second embedding. The updated coordinates are used for the
-fourth scatter plot and binned by the same rules. The command writes
+fourth scatter plot and binned by the same rules. Feature medians are computed
+once for each of the second embedding's bins. The command writes
 `umap_embedding_<sanitized-model-key>_second_umap_mean_shift_bins.csv` with the
 same columns and its own bin numbering starting at 1, and reports
 `Second UMAP mean shift bin count: N` at Info level. Both summaries are written
 in builds without ROOT.
 
-When all seven columns are constant after imputation, the command reports a warning, leaves
+When all enabled columns are constant after imputation, the command reports a warning, leaves
 `second umap x` and `second umap y` blank, and writes only the header to the
 second bin summary with a reported bin count of zero. This replaces any earlier
 second summary at the same path.

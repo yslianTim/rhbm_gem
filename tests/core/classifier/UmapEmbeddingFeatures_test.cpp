@@ -72,28 +72,25 @@ TEST(UmapEmbeddingFeaturesTest, FiltersRequiredFeaturesAndUsesPopulationZScoreIn
     }
 }
 
-TEST(UmapEmbeddingFeaturesTest, ComputesIndependentFiniteJointMediansPerBin)
+TEST(UmapEmbeddingFeaturesTest, ComputesIndependentFiniteFeatureMediansPerBin)
 {
     constexpr auto missing{ std::numeric_limits<double>::quiet_NaN() };
     constexpr auto inf{ std::numeric_limits<double>::infinity() };
     constexpr auto large{ std::numeric_limits<double>::max() };
-    const std::array joint_values{
-        std::array{ 5.0, missing, -6.0 },
-        std::array{ -2.0, 0.0, missing },
-        std::array{ -2.0, -inf, inf },
-        std::array{ 0.0, 5.0, -inf },
-        std::array{ inf, 1.0, missing },
-        std::array{ missing, missing, missing },
-        std::array{ large, -4.0, -2.0 },
-        std::array{ large / 2.0, 0.0, 2.0 },
-        std::array{ -inf, 7.0, 2.0 },
+    const std::array source_values{
+        std::array{ 3.0, 0.0, -3.0, inf, 5.0, missing, -6.0 },
+        std::array{ 1.0, 0.0, missing, -2.0, -2.0, 0.0, missing },
+        std::array{ 3.0, 0.0, inf, -4.0, -2.0, -inf, inf },
+        std::array{ 3.0, 0.0, 6.0, 0.0, 0.0, 5.0, -inf },
+        std::array{ 9.0, missing, -6.0, 2.0, inf, 1.0, missing },
+        std::array{ missing, -inf, -inf, 4.0, missing, missing, missing },
+        std::array{ -large, -2.0, 0.0, missing, large, -4.0, -2.0 },
+        std::array{ large, -4.0, -1.0, 4.0, large / 2.0, 0.0, 2.0 },
+        std::array{ inf, 7.0, 5.0, 0.0, -inf, 7.0, 2.0 },
     };
-    std::vector<LocalFittingFeatureRow> rows(joint_values.size());
+    std::vector<LocalFittingFeatureRow> rows(source_values.size());
     for (std::size_t point = 0; point < rows.size(); ++point)
-    {
-        const auto & values{ joint_values[point] };
-        rows[point].features = { 0.0, 0.0, 0.0, 0.0, values[0], values[1], values[2] };
-    }
+        rows[point].features = source_values[point];
     UmapBinning bins;
     bins.bins = {
         { { 0, 0 }, { { 0 }, 1 } },
@@ -101,26 +98,36 @@ TEST(UmapEmbeddingFeaturesTest, ComputesIndependentFiniteJointMediansPerBin)
         { { 1, 0 }, { { 6, 7 }, 3 } },
         { { 1, 1 }, { { 8 }, 4 } },
     };
-    PopulateUmapBinJointMedians(rows, bins);
+    PopulateUmapBinFeatureMedians(rows, bins);
 
-    using Medians = std::array<std::optional<double>, 3>;
-    EXPECT_EQ(bins.bins.at({ 0, 0 }).joint_medians, (Medians{ 5.0, std::nullopt, -6.0 }));
-    EXPECT_EQ(bins.bins.at({ 0, 1 }).joint_medians, (Medians{ -2.0, 1.0, std::nullopt }));
-    EXPECT_EQ(bins.bins.at({ 1, 0 }).joint_medians, (Medians{ 0.75 * large, -2.0, 0.0 }));
-    EXPECT_EQ(bins.bins.at({ 1, 1 }).joint_medians, (Medians{ std::nullopt, 7.0, 2.0 }));
+    using Medians = std::array<std::optional<double>, kLocalFittingFeatureCount>;
+    EXPECT_EQ(bins.bins.at({ 0, 0 }).feature_medians,
+        (Medians{ 3.0, 0.0, -3.0, std::nullopt, 5.0, std::nullopt, -6.0 }));
+    EXPECT_EQ(bins.bins.at({ 0, 1 }).feature_medians,
+        (Medians{ 3.0, 0.0, 0.0, 0.0, -2.0, 1.0, std::nullopt }));
+    EXPECT_EQ(bins.bins.at({ 1, 0 }).feature_medians,
+        (Medians{ 0.0, -3.0, -0.5, 4.0, 0.75 * large, -2.0, 0.0 }));
+    EXPECT_EQ(bins.bins.at({ 1, 1 }).feature_medians,
+        (Medians{ std::nullopt, 7.0, 5.0, 0.0, std::nullopt, 7.0, 2.0 }));
+
+    rows[0].features[0] = missing;
+    rows[0].features[3] = -1.0;
+    PopulateUmapBinFeatureMedians(rows, bins);
+    EXPECT_EQ(bins.bins.at({ 0, 0 }).feature_medians,
+        (Medians{ std::nullopt, 0.0, -3.0, -1.0, 5.0, std::nullopt, -6.0 }));
 }
 
-TEST(UmapEmbeddingFeaturesTest, ImputesAndStandardizesSevenColumnsInAtomRowOrder)
+TEST(UmapEmbeddingFeaturesTest, ImputesAndStandardizesElevenColumnsInAtomRowOrder)
 {
     constexpr auto missing{ std::numeric_limits<double>::quiet_NaN() };
     constexpr auto inf{ std::numeric_limits<double>::infinity() };
     const std::array source_values{
         std::array{ 0.0, 99.0, 0.0, 11.0, 0.0, 2.0, -4.0 },
-        std::array{ 2.0, 98.0, 2.0, 11.0, 2.0, 4.0, -2.0 },
-        std::array{ 4.0, 97.0, 6.0, 11.0, 4.0, 6.0, 0.0 },
-        std::array{ 6.0, 96.0, 8.0, 11.0, 8.0, 10.0, 8.0 },
-        std::array{ 8.0, 95.0, missing, 11.0, missing, 4.0, 2.0 },
-        std::array{ 10.0, 94.0, inf, 11.0, inf, 4.0, 4.0 },
+        std::array{ 2.0, 98.0, 2.0, 13.0, 2.0, 4.0, -2.0 },
+        std::array{ 4.0, 97.0, 6.0, 15.0, 4.0, 6.0, 0.0 },
+        std::array{ 6.0, 96.0, missing, 17.0, 8.0, 10.0, 8.0 },
+        std::array{ 8.0, 95.0, 8.0, 20.0, missing, 4.0, 2.0 },
+        std::array{ 10.0, 94.0, inf, 22.0, inf, 4.0, 4.0 },
     };
     std::vector<LocalFittingFeatureRow> rows(source_values.size());
     for (std::size_t point = 0; point < rows.size(); ++point)
@@ -128,6 +135,8 @@ TEST(UmapEmbeddingFeaturesTest, ImputesAndStandardizesSevenColumnsInAtomRowOrder
 
     EXPECT_EQ(GetSecondUmapFeatureNames(), (std::vector<std::string_view>{
         "amplitude joint median of bin", "width joint median of bin", "offset joint median of bin",
+        "neighbor distance sum in 2A median of bin", "distance to closest neighbor median of bin",
+        "signal peeling ratio median of bin", "tail peeling ratio median of bin",
         "neighbor distance sum in 2A", "signal peeling ratio", "width joint", "offset joint" }));
 
     UmapBinning bins;
@@ -138,9 +147,9 @@ TEST(UmapEmbeddingFeaturesTest, ImputesAndStandardizesSevenColumnsInAtomRowOrder
         { { 1, 0 }, { { 3 }, 3 } },
     };
     bins.point_bin_numbers = { 1, 1, 1, 3, 2, 2 };
-    PopulateUmapBinJointMedians(rows, bins);
+    PopulateUmapBinFeatureMedians(rows, bins);
     const auto features{ BuildSecondUmapFeatures(rows, bins) };
-    ASSERT_EQ(features.column_count, 7u);
+    ASSERT_EQ(features.column_count, 11u);
     ASSERT_EQ(features.values.size(), rows.size() * features.column_count);
 
     // The amplitude fill is 2 because the first bin contributes three rows.
@@ -148,13 +157,19 @@ TEST(UmapEmbeddingFeaturesTest, ImputesAndStandardizesSevenColumnsInAtomRowOrder
         std::array{ 2.0, 2.0, 2.0, 8.0, 2.0, 2.0 },
         std::array{ 4.0, 4.0, 4.0, 10.0, 4.0, 4.0 },
         std::array{ -2.0, -2.0, -2.0, 8.0, 3.0, 3.0 },
+        std::array{ 2.0, 2.0, 2.0, 6.0, 9.0, 9.0 },
+        std::array{ 98.0, 98.0, 98.0, 96.0, 94.5, 94.5 },
+        std::array{ 2.0, 2.0, 2.0, 2.0, 8.0, 8.0 },
+        std::array{ 13.0, 13.0, 13.0, 17.0, 21.0, 21.0 },
         std::array{ 0.0, 2.0, 4.0, 6.0, 8.0, 10.0 },
-        std::array{ 0.0, 2.0, 6.0, 8.0, 4.0, 4.0 },
+        std::array{ 0.0, 2.0, 6.0, 4.0, 8.0, 4.0 },
         std::array{ 2.0, 4.0, 6.0, 10.0, 4.0, 4.0 },
         std::array{ -4.0, -2.0, 0.0, 8.0, 2.0, 4.0 },
     };
-    const std::array means{ 3.0, 5.0, 4.0 / 3.0, 5.0, 4.0, 5.0, 4.0 / 3.0 };
-    const std::array variances{ 5.0, 5.0, 125.0 / 9.0, 35.0 / 3.0, 20.0 / 3.0, 19.0 / 3.0, 140.0 / 9.0 };
+    const std::array means{ 3.0, 5.0, 4.0 / 3.0, 5.0, 96.5, 4.0, 49.0 / 3.0,
+        5.0, 4.0, 5.0, 4.0 / 3.0 };
+    const std::array variances{ 5.0, 5.0, 125.0 / 9.0, 10.0, 2.5, 8.0, 116.0 / 9.0,
+        35.0 / 3.0, 20.0 / 3.0, 19.0 / 3.0, 140.0 / 9.0 };
     for (std::size_t column = 0; column < features.column_count; ++column)
     {
         for (std::size_t point = 0; point < rows.size(); ++point)
@@ -185,39 +200,40 @@ TEST(UmapEmbeddingFeaturesTest, RequiresVariationInAtLeastOneMedianOrAtomColumn)
 {
     constexpr auto missing{ std::numeric_limits<double>::quiet_NaN() };
     std::vector<LocalFittingFeatureRow> rows(3);
-    for (std::size_t point = 0; point < rows.size(); ++point)
-    {
-        const auto unselected{ static_cast<double>(point) };
-        rows[point].features = { 2.0, unselected, missing, unselected, 7.0, 9.0, missing };
-    }
+    for (auto & row : rows) row.features = { 2.0, 3.0, missing, 4.0, 7.0, 9.0, 0.0 };
     UmapBinning bins;
     bins.bins = {
         { { 0, 0 }, { { 0, 2 }, 1 } },
         { { 1, 0 }, { { 1 }, 2 } },
     };
-    PopulateUmapBinJointMedians(rows, bins);
+    PopulateUmapBinFeatureMedians(rows, bins);
     const auto constant{ BuildSecondUmapFeatures(rows, bins) };
-    EXPECT_EQ(constant.column_count, 7u);
+    ASSERT_EQ(constant.column_count, 11u);
     EXPECT_TRUE(constant.values.empty());
 
-    rows[1].features[4] = 8.0;
-    PopulateUmapBinJointMedians(rows, bins);
+    rows[1].features[1] = 8.0;
+    PopulateUmapBinFeatureMedians(rows, bins);
     const auto median_variation{ BuildSecondUmapFeatures(rows, bins) };
-    ASSERT_EQ(median_variation.values.size(), 21u);
-    EXPECT_NEAR(median_variation.values[7], std::sqrt(2.0), 1e-14);
+    ASSERT_EQ(median_variation.values.size(), 33u);
+    EXPECT_NEAR(median_variation.values[11 + 4], std::sqrt(2.0), 1e-14);
 
-    rows[1].features[4] = 7.0;
-    rows[1].features[0] = 3.0;
-    PopulateUmapBinJointMedians(rows, bins);
+    rows[1].features[1] = 3.0;
+    rows[0].features[6] = -1.0;
+    rows[2].features[6] = 1.0;
+    PopulateUmapBinFeatureMedians(rows, bins);
     const auto atom_variation{ BuildSecondUmapFeatures(rows, bins) };
-    ASSERT_EQ(atom_variation.values.size(), 21u);
-    EXPECT_NEAR(atom_variation.values[10], std::sqrt(2.0), 1e-14);
+    ASSERT_EQ(atom_variation.values.size(), 33u);
+    EXPECT_NEAR(atom_variation.values[10], -std::sqrt(1.5), 1e-14);
 
-    for (std::size_t index = 0; index < 21; ++index)
+    for (std::size_t index = 0; index < 33; ++index)
     {
-        if (index % 7 != 0) EXPECT_DOUBLE_EQ(median_variation.values[index], 0.0);
-        if (index % 7 != 3) EXPECT_DOUBLE_EQ(atom_variation.values[index], 0.0);
+        if (index % 11 != 4) EXPECT_DOUBLE_EQ(median_variation.values[index], 0.0);
+        if (index % 11 != 10) EXPECT_DOUBLE_EQ(atom_variation.values[index], 0.0);
     }
+
+    for (auto & row : rows) row.features.fill(missing);
+    PopulateUmapBinFeatureMedians(rows, bins);
+    EXPECT_TRUE(BuildSecondUmapFeatures(rows, bins).values.empty());
 }
 
 TEST(UmapEmbeddingFeaturesTest, StandardizesAdjacentFloatingPointValues)
@@ -230,14 +246,15 @@ TEST(UmapEmbeddingFeaturesTest, StandardizesAdjacentFloatingPointValues)
         { { 0, 0 }, { { 0, 1, 2, 3, 4, 5, 6 }, 1 } },
         { { 1, 0 }, { { 7 }, 2 } },
     };
-    PopulateUmapBinJointMedians(rows, bins);
+    PopulateUmapBinFeatureMedians(rows, bins);
     const auto features{ BuildSecondUmapFeatures(rows, bins) };
-    ASSERT_EQ(features.values.size(), rows.size() * 7);
+    ASSERT_EQ(features.column_count, 11u);
+    ASSERT_EQ(features.values.size(), rows.size() * features.column_count);
     for (std::size_t row = 0; row < rows.size(); ++row)
     {
         const double expected{ row == 7 ? std::sqrt(7.0) : -1.0 / std::sqrt(7.0) };
-        EXPECT_NEAR(features.values[row * 7 + 2], expected, 1e-14);
-        EXPECT_NEAR(features.values[row * 7 + 6], expected, 1e-14);
+        EXPECT_NEAR(features.values[row * features.column_count + 2], expected, 1e-14);
+        EXPECT_NEAR(features.values[row * features.column_count + 10], expected, 1e-14);
     }
 }
 
