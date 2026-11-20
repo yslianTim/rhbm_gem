@@ -75,7 +75,7 @@ bool WriteEmbedding(
     for (const auto & [reason, count] : prepared.exclusions) exclusions[reason] = count;
 
     std::ofstream metadata(output_path.string() + ".metadata.json");
-    metadata << boost::json::serialize(boost::json::object{
+    boost::json::object metadata_fields{
         { "estimator", "joint-components" },
         { "features", features },
         { "second_umap_features", second_umap_features },
@@ -85,11 +85,21 @@ bool WriteEmbedding(
             { kLocalFittingFeatureNames[4], "Joint Gaussian amplitude A" },
             { kLocalFittingFeatureNames[5], "Joint shared Gaussian/charge-kernel width tau" },
             { kLocalFittingFeatureNames[6], "Joint charge-kernel coefficient C" } } },
-        { "standardization", "population-z-score; constant columns zero" },
+        { "standardization", "population-z-score for non-spatial features; constant columns zero" },
         { "included_rows", prepared.feature_rows.size() },
         { "excluded_rows", prepared.excluded_rows },
         { "exclusions", exclusions }
-    });
+    };
+    if constexpr (kIncludeSecondUmapSpatialFeatures)
+    {
+        metadata_fields["spatial_feature_normalization"] = boost::json::object{
+            { "source", "first-umap-mean-shift-bin-center" },
+            { "distance", "euclidean" },
+            { "scale", "original-umap-mean-shift-radius" },
+            { "weight", kSecondUmapSpatialWeight }
+        };
+    }
+    metadata << boost::json::serialize(metadata_fields);
     metadata.close();
     if (!metadata)
     {

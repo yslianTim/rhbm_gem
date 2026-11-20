@@ -9,6 +9,7 @@
 namespace rhbm_gem::core::classifier {
 
 inline constexpr std::size_t kOutputDimensionCount{ 2 };
+inline constexpr double kUmapBinWidthRatio{ 0.5 };
 
 struct UmapFeatureMatrix
 {
@@ -22,10 +23,25 @@ struct UmapBin
     std::size_t number{};
 };
 
+struct UmapSpatialScale
+{
+    std::array<double, kOutputDimensionCount> origin{};
+    double diagonal{};
+    double radius{};
+    double scaled_diagonal{};
+};
+
+struct UmapMeanShiftResult
+{
+    std::vector<double> coordinates;
+    UmapSpatialScale scale;
+};
+
 struct UmapBinning
 {
     std::map<std::array<std::int64_t, kOutputDimensionCount>, UmapBin> bins;
     std::vector<std::size_t> point_bin_numbers;
+    UmapSpatialScale scale;
 };
 
 struct UmapEmbeddingResult

@@ -185,10 +185,12 @@ bool ExecutePreparedRequest(
         return false;
     }
 
+    classifier::UmapSpatialScale first_scale;
     try
     {
-        first.mean_shift_coordinates = classifier::RunUmapMeanShift(
-            first.coordinates, prepared.feature_rows, request.job_count);
+        auto shifted{ classifier::RunUmapMeanShift(first.coordinates, prepared.feature_rows, request.job_count) };
+        first.mean_shift_coordinates = std::move(shifted.coordinates);
+        first_scale = shifted.scale;
     }
     catch (const std::exception & error)
     {
@@ -210,9 +212,10 @@ bool ExecutePreparedRequest(
     UmapEmbeddingResult second;
     try
     {
-        first.binning = classifier::BinMeanShiftEmbedding(prepared.feature_rows, first.mean_shift_coordinates);
+        first.binning = classifier::BinMeanShiftEmbedding(
+            prepared.feature_rows, first.mean_shift_coordinates, first_scale);
         const auto second_features{ classifier::BuildSecondUmapFeatures(
-            prepared.feature_rows, first.binning.point_bin_numbers) };
+            prepared.feature_rows, first.binning) };
         if (second_features.values.empty())
         {
             Logger::Log(LogLevel::Warning,
@@ -240,14 +243,14 @@ bool ExecutePreparedRequest(
     {
         try
         {
-            second.mean_shift_coordinates = classifier::RunUmapMeanShift(
-                second.coordinates, prepared.feature_rows, request.job_count);
+            auto shifted{ classifier::RunUmapMeanShift(second.coordinates, prepared.feature_rows, request.job_count) };
+            second.mean_shift_coordinates = std::move(shifted.coordinates);
             if (!classifier::HasFiniteCoordinates(second.mean_shift_coordinates))
             {
                 throw std::runtime_error("Mean shift produced a non-finite coordinate.");
             }
             second.binning = classifier::BinMeanShiftEmbedding(
-                prepared.feature_rows, second.mean_shift_coordinates);
+                prepared.feature_rows, second.mean_shift_coordinates, shifted.scale);
         }
         catch (const std::exception & error)
         {

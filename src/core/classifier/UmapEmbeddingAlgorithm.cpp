@@ -12,10 +12,14 @@
 #include <limits>
 #include <memory>
 #include <stdexcept>
+#include <utility>
 
 namespace rhbm_gem::core::classifier {
 
 namespace {
+
+constexpr double kRadiusRatio{ 0.1 };
+constexpr double kSubnormalCoordinateScale{ 0x1p54 };
 
 struct UmapPoint
 {
@@ -36,27 +40,6 @@ std::vector<UmapPoint> MakeUmapPoints(std::span<const double> embedding)
         points.push_back({ { embedding[offset], embedding[offset + 1] }, points.size() });
     }
     return points;
-}
-
-double MeanShiftRadius(const std::vector<UmapPoint> & points)
-{
-    auto lower{ points.front().position };
-    auto upper{ lower };
-    for (const auto & point : points)
-    {
-        for (std::size_t axis = 0; axis < kOutputDimensionCount; ++axis)
-        {
-            lower[axis] = std::min(lower[axis], point.position[axis]);
-            upper[axis] = std::max(upper[axis], point.position[axis]);
-        }
-    }
-    const double dx{ upper[0] - lower[0] };
-    const double dy{ upper[1] - lower[1] };
-    if (!std::isfinite(dx) || !std::isfinite(dy))
-        throw std::runtime_error("UMAP mean shift bounding box span exceeds the finite double range.");
-
-    const double diagonal{ std::hypot(dx, dy) };
-    return std::isfinite(diagonal) ? 0.1 * diagonal : std::hypot(0.1 * dx, 0.1 * dy);
 }
 
 enum class MeanShiftStep { Updated, EmptyNeighborhood, ZeroWeight, NonFiniteUpdate };
@@ -152,7 +135,39 @@ std::vector<double> RunUmap(
     return embedding;
 }
 
-std::vector<double> RunUmapMeanShift(
+UmapSpatialScale GetUmapSpatialScale(std::span<const double> embedding)
+{
+    if (embedding.size() % kOutputDimensionCount != 0)
+        throw std::invalid_argument("UMAP spatial scale requires two coordinates per point.");
+    if (!HasFiniteCoordinates(embedding))
+        throw std::runtime_error("UMAP mean shift received a non-finite embedding coordinate.");
+    if (embedding.empty()) return {};
+
+    std::array lower{ embedding[0], embedding[1] };
+    auto upper{ lower };
+    for (std::size_t offset = kOutputDimensionCount; offset < embedding.size(); offset += kOutputDimensionCount)
+    {
+        for (std::size_t axis = 0; axis < kOutputDimensionCount; ++axis)
+        {
+            lower[axis] = std::min(lower[axis], embedding[offset + axis]);
+            upper[axis] = std::max(upper[axis], embedding[offset + axis]);
+        }
+    }
+    const double dx{ upper[0] - lower[0] };
+    const double dy{ upper[1] - lower[1] };
+    if (!std::isfinite(dx) || !std::isfinite(dy))
+        throw std::runtime_error("UMAP mean shift bounding box span exceeds the finite double range.");
+
+    const double diagonal{ std::hypot(dx, dy) };
+    const double radius{ std::isfinite(diagonal) ? kRadiusRatio * diagonal
+        : std::hypot(kRadiusRatio * dx, kRadiusRatio * dy) };
+    // Keep the diagonal precise even when both spans are subnormal.
+    const double scaled_diagonal{ radius < std::numeric_limits<double>::min()
+        ? std::hypot(dx * kSubnormalCoordinateScale, dy * kSubnormalCoordinateScale) : 0.0 };
+    return { lower, diagonal, radius, scaled_diagonal };
+}
+
+UmapMeanShiftResult RunUmapMeanShift(
     const std::vector<double> & embedding,
     const std::vector<LocalFittingFeatureRow> & feature_rows,
     [[maybe_unused]] int thread_size)
@@ -163,12 +178,11 @@ std::vector<double> RunUmapMeanShift(
     {
         throw std::invalid_argument("UMAP mean shift requires two coordinates per feature row.");
     }
-    if (!HasFiniteCoordinates(embedding))
-        throw std::runtime_error("UMAP mean shift received a non-finite embedding coordinate.");
-    if (embedding.empty()) return embedding;
+    const auto scale{ GetUmapSpatialScale(embedding) };
+    if (embedding.empty()) return {};
 
     auto points{ MakeUmapPoints(embedding) };
-    const double radius{ MeanShiftRadius(points) };
+    const double radius{ scale.radius };
     const auto root{ Tree::BuildKDTree(points) };
     auto shifted{ embedding };
     std::size_t empty_neighborhoods{};
@@ -225,7 +239,7 @@ std::vector<double> RunUmapMeanShift(
             + std::to_string(empty_neighborhoods) + " updates with no neighbors and "
             + std::to_string(zero_weights) + " updates with zero total neighbor weight.");
     }
-    return shifted;
+    return { std::move(shifted), scale };
 }
 
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
@@ -245,19 +259,31 @@ std::array<double, kOutputDimensionCount> RunUmapMeanShiftStepForTesting(
 
 UmapBinning BinMeanShiftEmbedding(
     const std::vector<LocalFittingFeatureRow> & feature_rows,
-    const std::vector<double> & mean_shift_embedding)
+    const std::vector<double> & mean_shift_embedding,
+    const UmapSpatialScale & scale)
 {
-    constexpr double bin_width{ 0.5 };
+    if (mean_shift_embedding.size() % kOutputDimensionCount != 0
+        || mean_shift_embedding.size() / kOutputDimensionCount != feature_rows.size())
+        throw std::invalid_argument("UMAP binning requires two coordinates per feature row.");
+    if (!HasFiniteCoordinates(mean_shift_embedding))
+        throw std::runtime_error("UMAP binning received a non-finite mean shift coordinate.");
+
     constexpr double min_bin_index{ static_cast<double>(std::numeric_limits<std::int64_t>::min()) };
     UmapBinning result;
+    result.scale = scale;
     result.point_bin_numbers.resize(feature_rows.size());
     for (std::size_t point = 0; point < feature_rows.size(); ++point)
     {
         std::array<std::int64_t, kOutputDimensionCount> bin_index{};
-        for (std::size_t axis = 0; axis < kOutputDimensionCount; ++axis)
+        for (std::size_t axis = 0; scale.diagonal != 0.0 && axis < kOutputDimensionCount; ++axis)
         {
-            const double index{ std::floor(mean_shift_embedding[point * kOutputDimensionCount + axis] / bin_width) };
-            if (index < min_bin_index || index >= -min_bin_index)
+            const double offset{ mean_shift_embedding[point * kOutputDimensionCount + axis] - scale.origin[axis] };
+            // Normalize by D first when R is subnormal or has rounded to zero.
+            const double relative{ scale.scaled_diagonal > 0.0
+                ? (offset * kSubnormalCoordinateScale / scale.scaled_diagonal) / kRadiusRatio
+                : offset / scale.radius };
+            const double index{ std::floor(relative / kUmapBinWidthRatio) };
+            if (!(index >= min_bin_index && index < -min_bin_index))
             {
                 throw std::runtime_error("Mean shift bin index is out of range for atom serial "
                     + std::to_string(feature_rows[point].serial_id) + ".");

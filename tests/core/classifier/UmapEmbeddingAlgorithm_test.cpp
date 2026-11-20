@@ -13,14 +13,14 @@ namespace rhbm_gem::core::classifier {
 
 TEST(UmapEmbeddingAlgorithmTest, HandlesEmptyIdenticalAndIsolatedPoints)
 {
-    EXPECT_TRUE(RunUmapMeanShift({}, {}, 1).empty());
+    EXPECT_TRUE(RunUmapMeanShift({}, {}, 1).coordinates.empty());
 
     const double max{ std::numeric_limits<double>::max() };
     const std::vector<double> identical{ max, -max, max, -max, max, -max };
     const std::vector<double> isolated{ -3.0, 5.0, 4.0, -5.0, 0.0, 0.0 };
     const std::vector<LocalFittingFeatureRow> rows(3);
-    EXPECT_EQ(RunUmapMeanShift(identical, rows, 2), identical);
-    EXPECT_EQ(RunUmapMeanShift(isolated, rows, 4), isolated);
+    EXPECT_EQ(RunUmapMeanShift(identical, rows, 2).coordinates, identical);
+    EXPECT_EQ(RunUmapMeanShift(isolated, rows, 4).coordinates, isolated);
 }
 
 TEST(UmapEmbeddingAlgorithmTest, KeepsQueryPositionForAnEmptyNeighborhoodOrZeroRadius)
@@ -64,7 +64,7 @@ TEST(UmapEmbeddingAlgorithmTest, HandlesSubnormalAndVeryLargePositiveRadii)
         const std::vector<double> embedding{ 0.0, 0.0, scale, 0.0, 20.0 * scale, 0.0 };
         const std::vector<LocalFittingFeatureRow> rows(3);
         const auto step{ RunUmapMeanShiftStepForTesting(embedding, { 0.0, 0.0 }, 2.0 * scale) };
-        const auto shifted{ RunUmapMeanShift(embedding, rows, 2) };
+        const auto shifted{ RunUmapMeanShift(embedding, rows, 2).coordinates };
         // Subnormal coordinates here are quantized in units of scale / 16384.
         const double tolerance{ scale < std::numeric_limits<double>::min() ? 2e-4 : 1e-12 };
         EXPECT_NEAR(step[0] / scale, 1.0 / (1.0 + std::exp(1.0)), tolerance);
@@ -89,7 +89,7 @@ TEST(UmapEmbeddingAlgorithmTest, ValidatesCoordinateShapeAndReportsNonFiniteMath
 
     // The unscaled diagonal overflows, while the radius is finite.
     const std::vector<double> wide{ 0.0, 0.0, max, max };
-    EXPECT_EQ(RunUmapMeanShift(wide, two_rows, 2), wide);
+    EXPECT_EQ(RunUmapMeanShift(wide, two_rows, 2).coordinates, wide);
 }
 
 TEST(UmapEmbeddingAlgorithmTest, ComputesFiniteMeanWhenWeightedSumWouldOverflow)
@@ -104,7 +104,7 @@ TEST(UmapEmbeddingAlgorithmTest, ComputesFiniteMeanWhenWeightedSumWouldOverflow)
     EXPECT_NEAR(step[0] / max, expected, 1e-15);
     EXPECT_NEAR(step[1] / max, -expected, 1e-15);
 
-    const auto shifted{ RunUmapMeanShift(embedding, rows, 4) };
+    const auto shifted{ RunUmapMeanShift(embedding, rows, 4).coordinates };
     EXPECT_TRUE(HasFiniteCoordinates(shifted));
     EXPECT_GT(shifted[0], nearby);
     EXPECT_EQ(shifted[0], -shifted[1]);
@@ -119,7 +119,7 @@ TEST(UmapEmbeddingAlgorithmTest, PreservesTrajectoriesUnderUniformScalingTransla
         4.0, 2.0, 4.6, 2.2, 17.0, 6.0,
     };
     const std::vector<LocalFittingFeatureRow> rows(embedding.size() / 2);
-    const auto original{ RunUmapMeanShift(embedding, rows, 1) };
+    const auto original{ RunUmapMeanShift(embedding, rows, 1).coordinates };
     EXPECT_GT(std::abs(original[0] - embedding[0]), 0.1);
     for (const double scale : { 1.0, 10.0, 0.1 })
     {
@@ -131,7 +131,7 @@ TEST(UmapEmbeddingAlgorithmTest, PreservesTrajectoriesUnderUniformScalingTransla
             transformed.push_back(scale * embedding[i - 2] + offset[0]);
             transformed.push_back(scale * embedding[i - 1] + offset[1]);
         }
-        const auto shifted{ RunUmapMeanShift(transformed, rows, 1) };
+        const auto shifted{ RunUmapMeanShift(transformed, rows, 1).coordinates };
         for (std::size_t i = 0; i < embedding.size(); i += 2)
         {
             EXPECT_NEAR(shifted[i], scale * original[embedding.size() - i - 2] + offset[0], 1e-11);
@@ -140,24 +140,98 @@ TEST(UmapEmbeddingAlgorithmTest, PreservesTrajectoriesUnderUniformScalingTransla
     }
 }
 
-TEST(UmapEmbeddingAlgorithmTest, BinsAtHalfUnitBoundariesAndNumbersInCoordinateOrder)
+TEST(UmapEmbeddingAlgorithmTest, BinsAtAdaptiveBoundariesAndNumbersInCoordinateOrder)
 {
+    // The original 3-by-4 box gives R = 0.5 and cells of width 0.25.
+    const std::array original{ 0.0, -2.0, 3.0, 2.0 };
+    const auto scale{ GetUmapSpatialScale(original) };
+    EXPECT_EQ(scale.origin, (std::array{ 0.0, -2.0 }));
+    EXPECT_DOUBLE_EQ(scale.diagonal, 5.0);
+    EXPECT_DOUBLE_EQ(scale.radius, 0.5);
     const std::vector<LocalFittingFeatureRow> rows(6);
-    const std::vector<double> coordinates{
-        -0.5, 0.5,
-        0.0, std::nextafter(0.5, 0.0),
-        std::nextafter(-0.5, -1.0), -0.01,
-        -0.5, 0.99,
-        0.5, -0.5,
-        -0.001, -0.5,
+    const std::vector<double> shifted{
+        0.25, -1.75,
+        std::nextafter(0.25, 0.0), -1.75,
+        0.0, -2.0,
+        0.25, -1.75,
+        std::nextafter(0.25, 1.0), -1.8,
+        0.26, -1.7,
     };
 
-    const auto binning{ BinMeanShiftEmbedding(rows, coordinates) };
-    EXPECT_EQ(binning.point_bin_numbers, (std::vector<std::size_t>{ 3, 4, 1, 3, 5, 2 }));
-    ASSERT_EQ(binning.bins.size(), 5u);
-    const auto & shared_bin{ binning.bins.at({ -1, 1 }) };
-    EXPECT_EQ(shared_bin.number, 3u);
-    EXPECT_EQ(shared_bin.points, (std::vector<std::size_t>{ 0, 3 }));
+    const auto binning{ BinMeanShiftEmbedding(rows, shifted, scale) };
+    EXPECT_EQ(binning.point_bin_numbers, (std::vector<std::size_t>{ 4, 2, 1, 4, 3, 4 }));
+    ASSERT_EQ(binning.bins.size(), 4u);
+    const auto & shared_bin{ binning.bins.at({ 1, 1 }) };
+    EXPECT_EQ(shared_bin.number, 4u);
+    EXPECT_EQ(shared_bin.points, (std::vector<std::size_t>{ 0, 3, 5 }));
+}
+
+TEST(UmapEmbeddingAlgorithmTest, AdaptiveIndicesAreInvariantUnderUniformScalingAndTranslation)
+{
+    const std::vector<double> original{ -2.0, -1.0, 2.0, 2.0, 0.0, 0.0 };
+    const std::vector<double> shifted{ -1.875, -0.875, 1.875, 1.875, 0.125, 0.125 };
+    const std::vector<LocalFittingFeatureRow> rows(3);
+    for (const double factor : { 0.25, 1.0, 16.0 })
+    {
+        for (const auto & translation : { std::array{ 0.0, 0.0 }, std::array{ -10.0, 12.0 } })
+        {
+            auto transformed_original{ original };
+            auto transformed_shifted{ shifted };
+            for (std::size_t i = 0; i < original.size(); ++i)
+            {
+                transformed_original[i] = factor * original[i] + translation[i % 2];
+                transformed_shifted[i] = factor * shifted[i] + translation[i % 2];
+            }
+            const auto scale{ GetUmapSpatialScale(transformed_original) };
+            EXPECT_DOUBLE_EQ(scale.radius, 0.5 * factor);
+            const auto binning{ BinMeanShiftEmbedding(rows, transformed_shifted, scale) };
+            EXPECT_EQ(binning.point_bin_numbers, (std::vector<std::size_t>{ 1, 3, 2 }));
+            ASSERT_EQ(binning.bins.size(), 3u);
+            EXPECT_EQ(binning.bins.at({ 0, 0 }).number, 1u);
+            EXPECT_EQ(binning.bins.at({ 8, 4 }).number, 2u);
+            EXPECT_EQ(binning.bins.at({ 15, 11 }).number, 3u);
+        }
+    }
+}
+
+TEST(UmapEmbeddingAlgorithmTest, BinsZeroSubnormalAndExtremeRanges)
+{
+    EXPECT_TRUE(BinMeanShiftEmbedding({}, {}, GetUmapSpatialScale({})).bins.empty());
+    const double max{ std::numeric_limits<double>::max() };
+    const double tiny{ std::numeric_limits<double>::denorm_min() };
+    const std::vector<LocalFittingFeatureRow> rows(2);
+    const std::vector<double> identical{ max, -max, max, -max };
+    const auto zero{ GetUmapSpatialScale(identical) };
+    EXPECT_EQ(zero.radius, 0.0);
+    EXPECT_EQ(zero.diagonal, 0.0);
+    const auto binning{ BinMeanShiftEmbedding(rows, identical, zero) };
+    ASSERT_EQ(binning.bins.size(), 1u);
+    EXPECT_EQ(binning.bins.at({ 0, 0 }).points, (std::vector<std::size_t>{ 0, 1 }));
+
+    // The radius is either zero or the smallest positive double. In both cases h underflows.
+    for (const double diagonal : { tiny, 7.0 * tiny })
+    {
+        const std::vector<double> original{ -diagonal, tiny, 0.0, tiny };
+        const auto shifted{ RunUmapMeanShift(original, rows, 1) };
+        EXPECT_EQ(shifted.scale.diagonal, diagonal);
+        EXPECT_EQ(shifted.scale.radius, diagonal == tiny ? 0.0 : tiny);
+        EXPECT_EQ(shifted.coordinates, original);
+        const auto bins{ BinMeanShiftEmbedding(rows, shifted.coordinates, shifted.scale) };
+        ASSERT_EQ(bins.bins.size(), 2u);
+        EXPECT_EQ(bins.bins.at({ 20, 0 }).number, 2u);
+    }
+
+    const std::vector<double> tiny_diagonal{ 0.0, 0.0, tiny, tiny };
+    const auto tiny_bins{ BinMeanShiftEmbedding(rows, tiny_diagonal, GetUmapSpatialScale(tiny_diagonal)) };
+    EXPECT_EQ(tiny_bins.bins.at({ 14, 14 }).number, 2u);
+
+    const std::vector<double> wide{ -max, 0.0, 0.0, max };
+    const auto scale{ GetUmapSpatialScale(wide) };
+    EXPECT_TRUE(std::isinf(scale.diagonal));
+    EXPECT_NEAR(scale.radius / max, std::sqrt(2.0) / 10.0, 1e-15);
+    const auto bins{ BinMeanShiftEmbedding(rows, wide, scale) };
+    ASSERT_EQ(bins.bins.size(), 2u);
+    EXPECT_EQ(bins.bins.at({ 14, 14 }).points, (std::vector<std::size_t>{ 1 }));
 }
 
 TEST(UmapEmbeddingAlgorithmTest, DetectsNonFiniteCoordinatesAndOutOfRangeBinIndices)
@@ -170,7 +244,10 @@ TEST(UmapEmbeddingAlgorithmTest, DetectsNonFiniteCoordinatesAndOutOfRangeBinIndi
 
     const std::vector<LocalFittingFeatureRow> rows(1);
     const auto max{ std::numeric_limits<double>::max() };
-    EXPECT_THROW(BinMeanShiftEmbedding(rows, { max, 0.0 }), std::runtime_error);
+    const auto scale{ GetUmapSpatialScale(std::array{ 0.0, 0.0, 1.0, 1.0 }) };
+    EXPECT_THROW(BinMeanShiftEmbedding(rows, { max, 0.0 }, scale), std::runtime_error);
+    EXPECT_THROW(BinMeanShiftEmbedding(rows, { nan, 0.0 }, scale), std::runtime_error);
+    EXPECT_THROW(BinMeanShiftEmbedding(rows, { 0.0 }, scale), std::invalid_argument);
 }
 
 } // namespace rhbm_gem::core::classifier

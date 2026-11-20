@@ -419,6 +419,30 @@ std::vector<std::array<double, 2>> ReferenceMeanShift(
     return queries;
 }
 
+std::map<std::array<long long, 2>, std::vector<std::size_t>> ReferenceBins(
+    const std::vector<std::array<double, 2>> & original,
+    const std::vector<std::array<double, 2>> & shifted)
+{
+    auto lower{ original.front() };
+    auto upper{ lower };
+    for (const auto & [x, y] : original)
+    {
+        lower = { std::min(lower[0], x), std::min(lower[1], y) };
+        upper = { std::max(upper[0], x), std::max(upper[1], y) };
+    }
+    const auto width{ std::hypot(upper[0] - lower[0], upper[1] - lower[1]) / 20.0 };
+    std::map<std::array<long long, 2>, std::vector<std::size_t>> bins;
+    for (std::size_t point = 0; point < shifted.size(); ++point)
+    {
+        const auto & [x, y]{ shifted[point] };
+        bins[{
+            static_cast<long long>(std::floor((x - lower[0]) / width)),
+            static_cast<long long>(std::floor((y - lower[1]) / width))
+        }].push_back(point);
+    }
+    return bins;
+}
+
 int RunCli(std::vector<std::string> arguments)
 {
     std::vector<char *> argv;
@@ -476,22 +500,16 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
     EXPECT_EQ(kOutputColumnCount, 17u);
     const auto metadata_lines{ ReadLines(output_path.string() + ".metadata.json") };
     const auto metadata{ boost::json::parse(metadata_lines.at(0)) };
-    EXPECT_EQ(metadata.at("standardization").as_string(), "population-z-score; constant columns zero");
-    const auto & second_features{ metadata.at("second_umap_features").as_array() };
-    ASSERT_FALSE(second_features.empty());
-    std::vector<std::string_view> available_features{ "bin number" };
-    available_features.insert(available_features.end(),
-        rg::core::classifier::kLocalFittingFeatureNames.begin(),
-        rg::core::classifier::kLocalFittingFeatureNames.end());
-    auto next_feature{ available_features.begin() };
-    for (const auto & feature : second_features)
-    {
-        const auto & name{ feature.as_string() };
-        next_feature = std::find(next_feature, available_features.end(),
-            std::string_view{ name.data(), name.size() });
-        ASSERT_NE(next_feature, available_features.end()) << name;
-        ++next_feature;
-    }
+    EXPECT_EQ(metadata.at("standardization").as_string(),
+        "population-z-score for non-spatial features; constant columns zero");
+    EXPECT_EQ(metadata.at("second_umap_features").as_array(), (boost::json::array{
+        "first bin center x (diagonal-normalized)", "first bin center y (diagonal-normalized)",
+        "neighbor distance sum in 2A", "signal peeling ratio", "width joint", "offset joint" }));
+    const auto & spatial_normalization{ metadata.at("spatial_feature_normalization").as_object() };
+    EXPECT_EQ(spatial_normalization.at("source").as_string(), "first-umap-mean-shift-bin-center");
+    EXPECT_EQ(spatial_normalization.at("distance").as_string(), "euclidean");
+    EXPECT_EQ(spatial_normalization.at("scale").as_string(), "original-umap-mean-shift-radius");
+    EXPECT_DOUBLE_EQ(spatial_normalization.at("weight").as_double(), 0.1);
     const auto & column_semantics{ metadata.at("column_semantics").as_object() };
     EXPECT_EQ(column_semantics.size(), 3u);
     EXPECT_EQ(column_semantics.at("amplitude joint").as_string(),
@@ -683,32 +701,21 @@ TEST(UmapEmbeddingCommandTest, ClassifiesUnconfiguredSpotsAsOtherInRootPlot)
             }
             point_rows.push_back(std::move(fields));
         }
-        const auto first_shifted{ ReferenceMeanShift(ReadCoordinates(csv_path)) };
-        const auto second_shifted{ ReferenceMeanShift(ReadCoordinates(csv_path, kBinNumberColumn + 1)) };
         constexpr std::string_view bin_header{
             "bin number,bin x,bin y,point count,amplitude joint median,width joint median,offset joint median,"
             "spot class count,1st dominate spot,1st dominate spot count,1st dominate spot count ratio,"
             "2nd dominate spot,2nd dominate spot count,2nd dominate spot count ratio,"
             "3rd dominate spot,3rd dominate spot count,3rd dominate spot count ratio"
         };
-        constexpr double bin_width{ 0.5 };
         constexpr std::array<std::string_view, 5> configured_labels{ "C", "CA", "N", "O", "O (Water)" };
         for (const bool second : { false, true })
         {
             const auto suffix{ second ? "_second_umap_mean_shift_bins.csv" : "_mean_shift_bins.csv" };
             SCOPED_TRACE(suffix);
-            const auto & coordinates{ second ? second_shifted : first_shifted };
+            const auto coordinates{ second ? ReadCoordinates(csv_path, kBinNumberColumn + 1)
+                : ReadCoordinates(csv_path) };
             ASSERT_EQ(coordinates.size(), point_rows.size());
-            std::map<std::array<long long, 2>, std::vector<std::size_t>> expected_bins;
-            for (std::size_t point = 0; point < coordinates.size(); ++point)
-            {
-                const auto & [x, y]{ coordinates[point] };
-                const std::array key{
-                    static_cast<long long>(std::floor(x / bin_width)),
-                    static_cast<long long>(std::floor(y / bin_width))
-                };
-                expected_bins[key].push_back(point);
-            }
+            const auto expected_bins{ ReferenceBins(coordinates, ReferenceMeanShift(coordinates)) };
             const auto bin_lines{ ReadLines(output_dir / ("umap_embedding_" + model_key + suffix)) };
             ASSERT_EQ(bin_lines.size(), expected_bins.size() + 1);
             EXPECT_EQ(bin_lines.front(), bin_header);
@@ -1008,13 +1015,41 @@ TEST(UmapEmbeddingCommandTest, MeanShiftUsesFixedRadiusAndOriginalPoints)
                 EXPECT_NEAR(*std::max_element(widths.begin(), widths.end()),
                     *std::min_element(widths.begin(), widths.end()), 1e-10);
             }
-            const auto expected{ ReferenceMeanShift(original) };
+            const auto expected_shift{ ReferenceMeanShift(original) };
             for (std::size_t point = 0; point < point_count; ++point)
             {
                 for (std::size_t dimension = 0; dimension < 2; ++dimension)
                 {
                     EXPECT_TRUE(std::isfinite(shifted[point][dimension]));
-                    EXPECT_NEAR(shifted[point][dimension], expected[point][dimension], 1e-10);
+                    EXPECT_NEAR(shifted[point][dimension], expected_shift[point][dimension], 1e-10);
+                }
+            }
+
+            for (const bool second : { false, true })
+            {
+                SCOPED_TRACE(second);
+                const auto coordinates{ second ? ReadCoordinates(csv_path, kBinNumberColumn + 1) : original };
+                ASSERT_EQ(coordinates.size(), point_count);
+                const auto shifted_coordinates{ second ? ReferenceMeanShift(coordinates) : shifted };
+                const auto expected_bins{ ReferenceBins(coordinates, shifted_coordinates) };
+                const auto summary{ ReadLines(csv_path.parent_path() / (second
+                    ? "umap_embedding_model_second_umap_mean_shift_bins.csv"
+                    : "umap_embedding_model_mean_shift_bins.csv")) };
+                ASSERT_EQ(summary.size(), expected_bins.size() + 1);
+                std::size_t number{};
+                for (const auto & [index, points] : expected_bins)
+                {
+                    const auto fields{ SplitFields(summary[++number]) };
+                    ASSERT_GE(fields.size(), 4u);
+                    EXPECT_EQ(std::stoull(fields[0]), number);
+                    EXPECT_EQ(std::stoll(fields[1]), index[0]);
+                    EXPECT_EQ(std::stoll(fields[2]), index[1]);
+                    EXPECT_EQ(std::stoull(fields[3]), points.size());
+                    if (!second)
+                    {
+                        for (const auto point : points)
+                            EXPECT_EQ(std::stoull(SplitFields(lines[point + 1])[kBinNumberColumn]), number);
+                    }
                 }
             }
         }
@@ -1051,7 +1086,7 @@ TEST(UmapEmbeddingCommandTest, RadiusMeanShiftMatchesBruteForceAcrossThreadCount
             embedding.insert(embedding.end(), position.begin(), position.end());
 
         const std::vector<rg::core::classifier::LocalFittingFeatureRow> rows(original.size());
-        const auto serial{ rg::core::classifier::RunUmapMeanShift(embedding, rows, 1) };
+        const auto serial{ rg::core::classifier::RunUmapMeanShift(embedding, rows, 1).coordinates };
         ASSERT_EQ(serial.size(), embedding.size());
         for (std::size_t point = 0; point < original.size(); ++point)
         {
@@ -1059,7 +1094,7 @@ TEST(UmapEmbeddingCommandTest, RadiusMeanShiftMatchesBruteForceAcrossThreadCount
             EXPECT_NEAR(serial[2 * point + 1], expected[point][1], 1e-10);
         }
         for (const int threads : { 2, 4 })
-            EXPECT_EQ(rg::core::classifier::RunUmapMeanShift(embedding, rows, threads), serial);
+            EXPECT_EQ(rg::core::classifier::RunUmapMeanShift(embedding, rows, threads).coordinates, serial);
     }
 }
 

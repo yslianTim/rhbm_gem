@@ -12,6 +12,9 @@
 
 namespace rhbm_gem::core::classifier {
 
+inline constexpr bool kIncludeSecondUmapSpatialFeatures{ true };
+inline constexpr double kSecondUmapSpatialWeight{ 0.1 };
+
 struct PreparedUmapInput
 {
     std::vector<LocalFittingFeatureRow> feature_rows;
@@ -34,7 +37,7 @@ std::optional<PreparedUmapInput> BuildAndStandardizeInput(
 
 UmapFeatureMatrix BuildSecondUmapFeatures(
     const std::vector<LocalFittingFeatureRow> & rows,
-    const std::vector<std::size_t> & bin_numbers);
+    const UmapBinning & first_binning);
 
 std::vector<std::string_view> GetUmapFeatureNames();
 std::vector<std::string_view> GetSecondUmapFeatureNames();

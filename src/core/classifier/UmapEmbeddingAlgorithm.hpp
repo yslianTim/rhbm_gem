@@ -15,7 +15,9 @@ std::vector<double> RunUmap(
     std::uint64_t random_seed,
     int job_count);
 
-std::vector<double> RunUmapMeanShift(
+UmapSpatialScale GetUmapSpatialScale(std::span<const double> embedding);
+
+UmapMeanShiftResult RunUmapMeanShift(
     const std::vector<double> & embedding,
     const std::vector<LocalFittingFeatureRow> & feature_rows,
     int thread_size);
@@ -29,7 +31,8 @@ std::array<double, kOutputDimensionCount> RunUmapMeanShiftStepForTesting(
 
 UmapBinning BinMeanShiftEmbedding(
     const std::vector<LocalFittingFeatureRow> & feature_rows,
-    const std::vector<double> & mean_shift_embedding);
+    const std::vector<double> & mean_shift_embedding,
+    const UmapSpatialScale & scale);
 
 bool HasFiniteCoordinates(std::span<const double> coordinates);
 

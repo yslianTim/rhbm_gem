@@ -33,7 +33,8 @@ TEST(UmapEmbeddingOutputTest, MissingSecondEmbeddingLeavesEmptyCoordinatesAndHea
     UmapEmbeddingResult first;
     first.coordinates = { -1.0, 1.0, 0.0, 0.0, 1.0, -1.0 };
     first.mean_shift_coordinates = first.coordinates;
-    first.binning = BinMeanShiftEmbedding(prepared.feature_rows, first.mean_shift_coordinates);
+    first.binning = BinMeanShiftEmbedding(
+        prepared.feature_rows, first.mean_shift_coordinates, GetUmapSpatialScale(first.coordinates));
     const UmapEmbeddingResult second;
 
     std::ofstream(second_summary) << "previous summary\n";

@@ -46,10 +46,10 @@ map normalization (null when unknown), standardization, included/excluded row
 counts and exclusions by reason. Its `column_semantics`
 field identifies `amplitude joint` as Gaussian amplitude A, `width joint` as the
 shared Gaussian/charge-kernel width tau, and `offset joint` as the charge-kernel
-coefficient C. Both embeddings use population variance (the sum of squared
-deviations divided by the retained row count) and assign zero to constant
-columns. The JSON field `standardization` retains the value
-`sample-z-score; constant columns zero` for compatibility.
+coefficient C. The JSON field `standardization` describes the population
+Z-score used for local-fitting features. The
+`spatial_feature_normalization` object records the source, distance metric,
+and radius-relative weight used for the second embedding's spatial features.
 
 For each selected atom, the command reconstructs these 7 local-fitting features:
 
@@ -133,10 +133,11 @@ CLI option.
 
 ## Processing and Output
 
-Each selected feature is independently standardized with a population Z-score
-before UMAP runs. A constant selected feature is replaced with zeros and
-reported as a warning. If all 3 selected UMAP features are constant, the command
-fails without writing an output file.
+The first UMAP standardizes each selected feature with a population Z-score.
+The variance is the sum of squared deviations divided by the retained row count.
+A constant selected column is replaced with zeros and reported as a warning.
+If all three selected columns are constant, the command fails before writing
+outputs.
 
 Unlike the legacy CSV input path, features are restored directly from SQLite as
 full `double` values and are not quantized to two decimal places. The output
@@ -165,7 +166,7 @@ determined solely by the embedding geometry. Joint width is a separate CSV featu
 If a neighborhood is empty or its weights sum to zero, the query keeps its
 current position. The command reports these events in a single warning per
 embedding. Non-finite updates fail the command before CSV output. At zero radius,
-all eligible neighbors coincide with the query, which stays fixed without division.
+the query stays fixed without division, including when the radius rounds to zero.
 All retained rows participate regardless of plot visibility, including rows with
 duplicate coordinates. OpenMP builds use `--jobs` threads for the independent
 point trajectories. Builds without OpenMP process the trajectories serially.
@@ -174,13 +175,22 @@ point trajectories. Builds without OpenMP process the trajectories serially.
 
 The command reports `UMAP mean shift bin count: N` at Info level and writes
 `umap_embedding_<sanitized-model-key>_mean_shift_bins.csv` alongside the per-atom
-CSV. `BinMeanShiftEmbedding` in `src/core/classifier/UmapEmbeddingAlgorithm.cpp`
-assigns each final mean shift position to a square of width `0.5` in UMAP
-coordinates, with indices `floor(x / 0.5)` and `floor(y / 0.5)`. Each
-occupied square gets one row, sorted by `bin x` and then `bin y`. The first
+CSV. Each final mean shift position is assigned to a square of width
+`h = gamma * R = 0.05D`, where `gamma = 0.5` controls cell width independently
+of Gaussian bandwidth. The origin `(ox, oy)` is the lower-left corner of the
+original UMAP bounding box. The `bin x` and `bin y` columns are relative grid
+indices `floor((x - ox) / h)` and `floor((y - oy) / h)`, where `(x, y)`
+is the final mean shift position. Each round derives its own origin and width.
+Each occupied square gets one row, sorted by `bin x` and then `bin y`. The first
 column, `bin number`, numbers the rows consecutively from 1 in that order. The
 per-atom CSV uses the first summary's bin numbers. Overlapping points count
 individually.
+
+If `D = 0`, all points share grid cell `(0, 0)`. At tiny nonzero scales,
+binning uses a rescaled diagonal to retain a usable grid when the radius or
+width would underflow. For large finite axis spans, the radius can still be
+computed by scaling the spans before taking their hypotenuse. Non-finite
+coordinates or axis spans that exceed the finite range fail the command.
 
 Each row records `point count`, the three Joint parameter medians, and
 `spot class count`. Each median uses the finite values for its column. An even
@@ -192,20 +202,25 @@ Absent ranks have a blank name and zero count and ratio.
 
 ### Second UMAP
 
-After binning, the command runs another 2D UMAP on the retained atoms. The
-available features are numeric `bin number` and all seven local fitting
-features. To choose a combination, set `include_in_umap` to `true` or
-`false` for each entry in `kSecondUmapFeatureDefinitions` in
-`src/core/classifier/UmapEmbeddingFeatures.cpp`, then rebuild. At least one
-feature must be enabled to compile. The `.metadata.json` field
-`second_umap_features` lists the enabled features in input order.
+After binning, the command runs another 2D UMAP on the retained atoms. Each atom
+gets the two coordinates of its first grid cell's geometric center. For indices
+`(kx, ky)`, the center is `c = o + h * (kx + 0.5, ky + 0.5)`. The spatial
+features are `lambda * (c - o) / R` in both axes. With `lambda = 0.1`, this
+equals `(c - o) / D`. The common scale preserves Euclidean distance ratios
+between centers. Both coordinates are zero when the first embedding has
+`D = 0`. The `bin number` column is an identifier for the first bin summary.
 
-When enabled, differences between bin numbers enter the distance calculation
-as numeric differences. For each enabled column, the command fills missing
-values with the median of the finite inputs and uses zeros for an entirely
-missing column. It then applies a population Z-score and sets constant columns
-to zero. The per-atom CSV and both bin summaries report the original Joint
-values. Both UMAP runs use the same request settings. The command then applies
+The remaining features are neighbor distance sum in 2A, signal peeling ratio,
+Joint width, and Joint offset. For each selected local-fitting column, the command
+fills missing values with the median of the finite inputs, applies a population
+Z-score, and uses a zero column for constant or entirely missing inputs. The
+per-atom CSV and both bin summaries report the original Joint values.
+The `.metadata.json` field `second_umap_features` lists the enabled features
+in matrix order. The two spatial columns are selected together by
+`kIncludeSecondUmapSpatialFeatures`. The local-fitting inputs are selected in
+`kSecondUmapFeatureDefinitions` when compiling.
+
+Both UMAP runs use the same request settings. The command then applies
 mean shift to the second embedding. The updated coordinates are used for the
 fourth scatter plot and binned by the same rules. The command writes
 `umap_embedding_<sanitized-model-key>_second_umap_mean_shift_bins.csv` with the

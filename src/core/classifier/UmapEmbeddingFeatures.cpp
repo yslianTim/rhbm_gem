@@ -46,10 +46,16 @@ static_assert(
     kSelectedFeatureCount > 0,
     "At least one feature must be selected in kFeatureDefinitions for UMAP.");
 
-// Keep bin number first, then the local fitting features.
-// Toggle include_in_umap to select features for the second UMAP, then rebuild.
-constexpr std::array kSecondUmapFeatureDefinitions{
-    UmapFeatureDefinition{ "bin number", true },
+constexpr std::array<std::string_view, kOutputDimensionCount> kSecondSpatialFeatureNames{
+    "first bin center x (diagonal-normalized)",
+    "first bin center y (diagonal-normalized)",
+};
+constexpr std::size_t kSecondSpatialFeatureCount{
+    kIncludeSecondUmapSpatialFeatures ? kSecondSpatialFeatureNames.size() : 0
+};
+
+// Keep these entries in local fitting feature order.
+constexpr std::array<UmapFeatureDefinition, kLocalFittingFeatureCount> kSecondUmapFeatureDefinitions{
     UmapFeatureDefinition{ kLocalFittingFeatureNames[0], true },
     UmapFeatureDefinition{ kLocalFittingFeatureNames[1], false },
     UmapFeatureDefinition{ kLocalFittingFeatureNames[2], true },
@@ -58,14 +64,14 @@ constexpr std::array kSecondUmapFeatureDefinitions{
     UmapFeatureDefinition{ kLocalFittingFeatureNames[5], true },
     UmapFeatureDefinition{ kLocalFittingFeatureNames[6], true },
 };
-constexpr std::size_t kSecondSelectedFeatureCount{ static_cast<std::size_t>(std::count_if(
+constexpr std::size_t kSecondSelectedFeatureCount{ kSecondSpatialFeatureCount + static_cast<std::size_t>(std::count_if(
     kSecondUmapFeatureDefinitions.begin(),
     kSecondUmapFeatureDefinitions.end(),
     [](const UmapFeatureDefinition & feature) { return feature.include_in_umap; }))
 };
 static_assert(
     kSecondSelectedFeatureCount > 0,
-    "At least one feature must be selected in kSecondUmapFeatureDefinitions for the second UMAP.");
+    "At least one feature must be selected for the second UMAP.");
 
 std::string FormatFeatureLocation(
     std::string_view model_key_tag,
@@ -97,7 +103,10 @@ std::vector<std::string_view> GetUmapFeatureNames()
 
 std::vector<std::string_view> GetSecondUmapFeatureNames()
 {
-    return CollectSelectedFeatureNames(kSecondUmapFeatureDefinitions);
+    auto names{ CollectSelectedFeatureNames(kSecondUmapFeatureDefinitions) };
+    if constexpr (kIncludeSecondUmapSpatialFeatures)
+        names.insert(names.begin(), kSecondSpatialFeatureNames.begin(), kSecondSpatialFeatureNames.end());
+    return names;
 }
 
 std::optional<PreparedUmapInput> BuildAndStandardizeInput(
@@ -257,14 +266,35 @@ double MedianOfValues(std::vector<double> & values)
 
 UmapFeatureMatrix BuildSecondUmapFeatures(
     const std::vector<LocalFittingFeatureRow> & rows,
-    const std::vector<std::size_t> & bin_numbers)
+    const UmapBinning & first_binning)
 {
     constexpr auto feature_count{ kSecondSelectedFeatureCount };
+    if (rows.empty()) return { {}, feature_count };
     std::vector<double> features(rows.size() * feature_count);
+    bool has_variable_feature{};
+    if constexpr (kIncludeSecondUmapSpatialFeatures)
+    {
+        if (first_binning.scale.diagonal != 0.0)
+        {
+            // Evaluate the normalized center directly in grid units: lambda * (center - origin) / R.
+            constexpr double center_scale{ kSecondUmapSpatialWeight * kUmapBinWidthRatio };
+            for (const auto & [index, bin] : first_binning.bins)
+            {
+                const double x{ center_scale * (static_cast<double>(index[0]) + 0.5) };
+                const double y{ center_scale * (static_cast<double>(index[1]) + 0.5) };
+                for (const auto point : bin.points)
+                {
+                    features[point * feature_count] = x;
+                    features[point * feature_count + 1] = y;
+                }
+            }
+            // Each occupied grid cell contributes a distinct center.
+            has_variable_feature = first_binning.bins.size() > 1;
+        }
+    }
     std::vector<double> finite_values;
     finite_values.reserve(rows.size());
-    bool has_variable_feature{};
-    std::size_t selected_feature{};
+    std::size_t selected_feature{ kSecondSpatialFeatureCount };
     for (std::size_t feature = 0; feature < kSecondUmapFeatureDefinitions.size(); ++feature)
     {
         const auto & definition{ kSecondUmapFeatureDefinitions[feature] };
@@ -274,9 +304,7 @@ UmapFeatureMatrix BuildSecondUmapFeatures(
         finite_values.clear();
         for (std::size_t point = 0; point < rows.size(); ++point)
         {
-            const double value{ feature == 0
-                ? static_cast<double>(bin_numbers[point])
-                : rows[point].features[feature - 1] };
+            const double value{ rows[point].features[feature] };
             features[point * feature_count + column] = value;
             if (std::isfinite(value)) finite_values.push_back(value);
         }
