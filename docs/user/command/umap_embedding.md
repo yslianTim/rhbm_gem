@@ -150,23 +150,22 @@ reconstructed features, `umap x,umap y`, `mean shift x,mean shift y`, then
 `.`, `_`, and `-` are retained in the key; other bytes become `_`.
 
 Mean shift starts from the original two-dimensional UMAP coordinates and applies
-100 updates per point. Each update searches the fixed original point set and uses
-every point within the two-dimensional Euclidean radius, including points on the
-boundary. The radius is 10% of the diagonal of the original coordinates' bounding
-box. It is computed once per embedding, separately for the first and second UMAP.
+100 updates per point. A KD-tree built once per embedding indexes the fixed
+original points. Each update uses every original point within the two-dimensional
+Euclidean radius, including points on the boundary. For the original coordinates'
+bounding-box diagonal `D`, the search radius is `R = 0.1D` and the Gaussian
+bandwidth is `sigma = 0.5R`. The first and second UMAP derive both values
+separately from their own original coordinates.
+
 Each query moves to the weighted mean of its neighbors' original coordinates.
-Weights are recomputed for each query at every iteration with the Gaussian kernel
-`exp(-alpha * distance_squared / (2 * sigma * sigma))`. The distance is between
-the query's current position and the neighbor's original position, using both
-UMAP coordinates at their original scale. In
-`src/core/classifier/UmapEmbeddingAlgorithm.cpp`, `RunUmapMeanShift` uses
-`alpha = 2.0` and `sigma = 1.5`, giving the default kernel
-`exp(-distance_squared / 2.25)`. Changing either constant requires rebuilding.
-Joint width remains in the CSV but does not affect the kernel weights.
+With `alpha = 2.0`, each iteration computes the weight as
+`exp(-4 * (d / R)^2)`, where `d` is the Euclidean distance from the current
+query position to the neighbor's original position. The kernel bandwidth is
+determined solely by the embedding geometry. Joint width is a separate CSV feature.
 If a neighborhood is empty or its weights sum to zero, the query keeps its
 current position. The command reports these events in a single warning per
 embedding. Non-finite updates fail the command before CSV output. At zero radius,
-all eligible neighbors coincide with the query and its position stays fixed.
+all eligible neighbors coincide with the query, which stays fixed without division.
 All retained rows participate regardless of plot visibility, including rows with
 duplicate coordinates. OpenMP builds use `--jobs` threads for the independent
 point trajectories. Builds without OpenMP process the trajectories serially.
@@ -207,9 +206,8 @@ values with the median of the finite inputs and uses zeros for an entirely
 missing column. It then applies a population Z-score and sets constant columns
 to zero. The per-atom CSV and both bin summaries report the original Joint
 values. Both UMAP runs use the same request settings. The command then applies
-the same mean shift algorithm and parameters to the second embedding. The
-updated coordinates are used for the fourth scatter plot and binned by the same
-rules. The command writes
+mean shift to the second embedding. The updated coordinates are used for the
+fourth scatter plot and binned by the same rules. The command writes
 `umap_embedding_<sanitized-model-key>_second_umap_mean_shift_bins.csv` with the
 same columns and its own bin numbering starting at 1, and reports
 `Second UMAP mean shift bin count: N` at Info level. Both summaries are written

@@ -379,7 +379,7 @@ std::vector<std::array<double, 2>> ReadCoordinates(
 std::vector<std::array<double, 2>> ReferenceMeanShift(
     const std::vector<std::array<double, 2>> & original,
     double alpha = 2.0,
-    double sigma = 1.5,
+    double bandwidth_ratio = 0.5,
     int iterations = 100)
 {
     if (original.empty()) return {};
@@ -388,6 +388,7 @@ std::vector<std::array<double, 2>> ReferenceMeanShift(
     const auto [min_y, max_y]{ std::minmax_element(original.begin(), original.end(),
         [](const auto & a, const auto & b) { return a[1] < b[1]; }) };
     const double radius{ std::hypot((*max_x)[0] - (*min_x)[0], (*max_y)[1] - (*min_y)[1]) / 10.0 };
+    if (radius == 0.0) return original;
     auto queries{ original };
     for (int iteration = 0; iteration < iterations; ++iteration)
     {
@@ -400,7 +401,8 @@ std::vector<std::array<double, 2>> ReferenceMeanShift(
             {
                 const double distance{ std::hypot(source[0] - query[0], source[1] - query[1]) };
                 if (distance > radius) continue;
-                const double weight{ std::exp(-alpha * distance * distance / (2.0 * sigma * sigma)) };
+                const double distance_in_bandwidths{ (distance / radius) / bandwidth_ratio };
+                const double weight{ std::exp(-0.5 * alpha * distance_in_bandwidths * distance_in_bandwidths) };
                 weight_sum += weight;
                 for (std::size_t dimension = 0; dimension < query.size(); ++dimension)
                 {
@@ -1024,8 +1026,8 @@ TEST(UmapEmbeddingCommandTest, RadiusMeanShiftMatchesBruteForceAcrossThreadCount
     const std::vector<Coordinate> slow{ { -1.06, -0.5 }, { 1.06, -0.5 }, { 30.0, 1.0 } };
     const auto expected_slow{ ReferenceMeanShift(slow) };
     EXPECT_GT(std::abs(expected_slow[0][0] - ReferenceMeanShift(slow, 1.0)[0][0]), 1e-6);
-    EXPECT_GT(std::abs(expected_slow[0][0] - ReferenceMeanShift(slow, 2.0, 2.0)[0][0]), 1e-6);
-    EXPECT_GT(std::abs(expected_slow[0][0] - ReferenceMeanShift(slow, 2.0, 1.5, 99)[0][0]), 1e-6);
+    EXPECT_GT(std::abs(expected_slow[0][0] - ReferenceMeanShift(slow, 2.0, 1.0)[0][0]), 1e-6);
+    EXPECT_GT(std::abs(expected_slow[0][0] - ReferenceMeanShift(slow, 2.0, 0.5, 99)[0][0]), 1e-6);
 
     // A 30-by-40 bounding box makes the first pair exactly one radius apart.
     const std::vector<Coordinate> boundary{ { -3.0, -4.0 }, { 0.0, 0.0 }, { 27.0, 36.0 } };

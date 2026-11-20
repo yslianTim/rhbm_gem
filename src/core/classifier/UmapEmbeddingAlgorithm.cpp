@@ -68,12 +68,22 @@ MeanShiftStep ShiftUmapPoint(
     std::vector<UmapPoint *> & neighbors)
 {
     constexpr double alpha{ 2.0 };
-    constexpr double sigma{ 1.5 };
+    constexpr double bandwidth_ratio{ 0.5 };
+    constexpr double exponent_factor{ alpha / (2.0 * bandwidth_ratio * bandwidth_ratio) };
     Tree::RangeSearch(root, &query, radius, neighbors);
     if (neighbors.empty()) return MeanShiftStep::EmptyNeighborhood;
     // At zero radius all neighbors coincide with the query, so their mean is its position.
     if (radius == 0.0) return MeanShiftStep::Updated;
 
+    // A subnormal radius can have an unrepresentable reciprocal.
+    const double inverse_radius{ radius >= std::numeric_limits<double>::min() ? 1.0 / radius : 0.0 };
+    // Each source coordinate is at most radius away from the query. Leave headroom for summation.
+    const double safe_query_magnitude{
+        (std::numeric_limits<double>::max() / 4.0) / static_cast<double>(neighbors.size()) - radius
+    };
+    const bool use_running_mean{ inverse_radius == 0.0
+        || std::abs(query.position[0]) > safe_query_magnitude
+        || std::abs(query.position[1]) > safe_query_magnitude };
     std::sort(neighbors.begin(), neighbors.end(), [](const auto * a, const auto * b) {
         return a->index < b->index;
     });
@@ -83,16 +93,27 @@ MeanShiftStep ShiftUmapPoint(
     {
         const double dx{ query.position[0] - neighbor->position[0] };
         const double dy{ query.position[1] - neighbor->position[1] };
-        const double distance_squared{ dx * dx + dy * dy };
-        const double weight{ std::exp(-alpha * distance_squared / (2.0 * sigma * sigma)) };
+        const double ux{ inverse_radius == 0.0 ? dx / radius : dx * inverse_radius };
+        const double uy{ inverse_radius == 0.0 ? dy / radius : dy * inverse_radius };
+        if (!std::isfinite(ux) || !std::isfinite(uy)) return MeanShiftStep::NonFiniteUpdate;
+        const double weight{ std::exp(-exponent_factor * (ux * ux + uy * uy)) };
         weight_sum += weight;
-        for (std::size_t axis = 0; axis < kOutputDimensionCount; ++axis)
+        if (use_running_mean)
         {
-            mean[axis] += weight * neighbor->position[axis];
+            if (weight == 0.0) continue;
+            const double fraction{ weight / weight_sum };
+            for (std::size_t axis = 0; axis < kOutputDimensionCount; ++axis)
+                mean[axis] = std::lerp(mean[axis], neighbor->position[axis], fraction);
+        }
+        else
+        {
+            for (std::size_t axis = 0; axis < kOutputDimensionCount; ++axis)
+                mean[axis] += weight * neighbor->position[axis];
         }
     }
     if (weight_sum == 0.0) return MeanShiftStep::ZeroWeight;
-    for (auto & coordinate : mean) coordinate /= weight_sum;
+    if (!use_running_mean)
+        for (auto & coordinate : mean) coordinate /= weight_sum;
     if (!std::isfinite(weight_sum) || !HasFiniteCoordinates(mean)) return MeanShiftStep::NonFiniteUpdate;
 
     query.position = mean;
