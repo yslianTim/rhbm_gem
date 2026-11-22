@@ -56,15 +56,15 @@ struct SecondUmapFeatureDefinition
 };
 
 constexpr std::array kSecondUmapFeatureDefinitions{
-    SecondUmapFeatureDefinition{ "amplitude joint median of bin", SecondUmapFeatureSource::BinMedian, 4, true },
-    SecondUmapFeatureDefinition{ "width joint median of bin", SecondUmapFeatureSource::BinMedian, 5, true },
-    SecondUmapFeatureDefinition{ "offset joint median of bin", SecondUmapFeatureSource::BinMedian, 6, true },
     SecondUmapFeatureDefinition{ "neighbor distance sum in 2A median of bin", SecondUmapFeatureSource::BinMedian, 0, true },
     SecondUmapFeatureDefinition{ "distance to closest neighbor median of bin", SecondUmapFeatureSource::BinMedian, 1, true },
-    SecondUmapFeatureDefinition{ "signal peeling ratio median of bin", SecondUmapFeatureSource::BinMedian, 2, true },
+    SecondUmapFeatureDefinition{ "signal peeling ratio median of bin", SecondUmapFeatureSource::BinMedian, 2, false },
     SecondUmapFeatureDefinition{ "tail peeling ratio median of bin", SecondUmapFeatureSource::BinMedian, 3, true },
-    SecondUmapFeatureDefinition{ kLocalFittingFeatureNames[0], SecondUmapFeatureSource::Atom, 0, true },
+    SecondUmapFeatureDefinition{ "amplitude joint median of bin", SecondUmapFeatureSource::BinMedian, 4, false },
+    SecondUmapFeatureDefinition{ "width joint median of bin", SecondUmapFeatureSource::BinMedian, 5, false },
+    SecondUmapFeatureDefinition{ "offset joint median of bin", SecondUmapFeatureSource::BinMedian, 6, false },
     SecondUmapFeatureDefinition{ kLocalFittingFeatureNames[2], SecondUmapFeatureSource::Atom, 2, true },
+    SecondUmapFeatureDefinition{ kLocalFittingFeatureNames[4], SecondUmapFeatureSource::Atom, 4, true },
     SecondUmapFeatureDefinition{ kLocalFittingFeatureNames[5], SecondUmapFeatureSource::Atom, 5, true },
     SecondUmapFeatureDefinition{ kLocalFittingFeatureNames[6], SecondUmapFeatureSource::Atom, 6, true },
 };
