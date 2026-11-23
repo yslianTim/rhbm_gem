@@ -240,14 +240,20 @@ mean shift to the second embedding. The updated coordinates are used for the
 fourth scatter plot and binned by the same rules. Feature medians are computed
 once for each of the second embedding's bins. The command writes
 `umap_embedding_<sanitized-model-key>_second_umap_mean_shift_bins.csv` with the
-same columns and its own bin numbering starting at 1, and reports
+17 columns of the first summary followed by `carbon ratio`, `nitrogen ratio`,
+and `oxygen ratio`, in that order. Each ratio is the number of points in the
+bin with the corresponding atom `Element` divided by `point count`. All points
+in the bin contribute to the denominator, including points with other or
+unknown elements and points with overlapping coordinates. Each ratio ranges
+from 0 to 1 and is 0 when the element is absent. The second summary has its own
+bin numbering starting at 1. The command reports
 `Second UMAP mean shift bin count: N` at Info level. Both summaries are written
 in builds without ROOT.
 
 When all enabled columns are constant after imputation, the command reports a warning, leaves
 `second umap x` and `second umap y` blank, and writes only the header to the
-second bin summary with a reported bin count of zero. This replaces any earlier
-second summary at the same path.
+second bin summary, including the three ratio columns, with a reported bin count
+of zero. This replaces any earlier second summary at the same path.
 
 ### Scatter plots
 

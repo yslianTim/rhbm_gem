@@ -6,9 +6,11 @@
 #include "core/classifier/UmapEmbeddingPlot.hpp"
 #include "support/CommandTestHelpers.hpp"
 
+#include <array>
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <sstream>
 #include <string>
 
 namespace rhbm_gem::core::classifier {
@@ -61,7 +63,7 @@ TEST(UmapEmbeddingOutputTest, MissingSecondEmbeddingLeavesEmptyCoordinatesAndHea
     std::string first_header;
     ASSERT_TRUE(std::getline(first_bins, first_header));
     ASSERT_TRUE(std::getline(second_bins, line));
-    EXPECT_EQ(line, first_header);
+    EXPECT_EQ(line, first_header + ",carbon ratio,nitrogen ratio,oxygen ratio");
     EXPECT_FALSE(std::getline(second_bins, line));
     for (std::size_t bin = 0; bin < prepared.feature_rows.size(); ++bin)
     {
@@ -86,6 +88,62 @@ TEST(UmapEmbeddingOutputTest, MissingSecondEmbeddingLeavesEmptyCoordinatesAndHea
     EXPECT_FALSE(std::filesystem::exists(dir.path() / "umap_embedding_model.pdf"));
     EXPECT_FALSE(std::filesystem::exists(dir.path() / "umap_embedding_model_mean_shift.pdf"));
 #endif
+}
+
+TEST(UmapEmbeddingOutputTest, CountsElementRatiosInSecondMeanShiftBins)
+{
+    const command_test::ScopedTempDir dir{ "umap_second_bin_element_ratios" };
+    const auto output_path{ GetEmbeddingOutputPath(dir.path(), "model") };
+    const auto second_summary{ dir.path() / "umap_embedding_model_second_umap_mean_shift_bins.csv" };
+
+    PreparedUmapInput prepared;
+    prepared.elements = { Element::CARBON, Element::CARBON, Element::NITROGEN, Element::OXYGEN,
+        Element::SULFUR, Element::UNK, Element::OXYGEN };
+    prepared.feature_rows.resize(prepared.elements.size());
+    // Use the same configured spot for every element to exercise the Element-based count.
+    prepared.configured_spot_indices.resize(prepared.elements.size(), 1);
+    for (std::size_t point = 0; point < prepared.feature_rows.size(); ++point)
+    {
+        auto & row{ prepared.feature_rows[point] };
+        row.serial_id = static_cast<int>(point + 1);
+        row.residue = "ALA";
+        row.spot = "CA";
+    }
+
+    UmapEmbeddingResult first;
+    first.coordinates = { 0.0, 0.0, 1.0, 0.0, 2.0, 0.0, 3.0, 0.0, 4.0, 0.0, 5.0, 0.0, 6.0, 0.0 };
+    first.mean_shift_coordinates = first.coordinates;
+    first.binning = BinMeanShiftEmbedding(
+        prepared.feature_rows, first.mean_shift_coordinates, GetUmapSpatialScale(first.coordinates));
+
+    UmapEmbeddingResult second;
+    second.coordinates = first.coordinates;
+    second.mean_shift_coordinates = { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 6.0, 0.0 };
+    second.binning = BinMeanShiftEmbedding(
+        prepared.feature_rows, second.mean_shift_coordinates, GetUmapSpatialScale(second.coordinates));
+
+    std::string error;
+    ASSERT_TRUE(WriteEmbeddingOutputs(output_path, prepared, first, second, error)) << error;
+    std::ifstream bins{ second_summary };
+    std::string line;
+    ASSERT_TRUE(std::getline(bins, line));
+    ASSERT_TRUE(std::getline(bins, line));
+    std::istringstream mixed_bin{ line };
+    std::string field;
+    for (std::size_t column = 0; column < 17; ++column)
+    {
+        ASSERT_TRUE(std::getline(mixed_bin, field, ','));
+    }
+    for (const double ratio : std::array{ 2.0 / 6.0, 1.0 / 6.0, 1.0 / 6.0 })
+    {
+        ASSERT_TRUE(std::getline(mixed_bin, field, ','));
+        EXPECT_DOUBLE_EQ(std::stod(field), ratio);
+    }
+    EXPECT_FALSE(std::getline(mixed_bin, field, ','));
+
+    ASSERT_TRUE(std::getline(bins, line));
+    EXPECT_TRUE(line.ends_with(",0,0,1")) << line;
+    EXPECT_FALSE(std::getline(bins, line));
 }
 
 } // namespace rhbm_gem::core::classifier

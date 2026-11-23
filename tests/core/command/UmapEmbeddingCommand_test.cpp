@@ -706,6 +706,7 @@ TEST(UmapEmbeddingCommandTest, ClassifiesUnconfiguredSpotsAsOtherInRootPlot)
             "3rd dominate spot,3rd dominate spot count,3rd dominate spot count ratio"
         };
         constexpr std::array<std::string_view, 5> configured_labels{ "C", "CA", "N", "O", "O (Water)" };
+        constexpr std::array ratio_elements{ Element::CARBON, Element::NITROGEN, Element::OXYGEN };
         for (const bool second : { false, true })
         {
             const auto suffix{ second ? "_second_umap_mean_shift_bins.csv" : "_mean_shift_bins.csv" };
@@ -716,7 +717,9 @@ TEST(UmapEmbeddingCommandTest, ClassifiesUnconfiguredSpotsAsOtherInRootPlot)
             const auto expected_bins{ ReferenceBins(coordinates, ReferenceMeanShift(coordinates)) };
             const auto bin_lines{ ReadLines(output_dir / ("umap_embedding_" + model_key + suffix)) };
             ASSERT_EQ(bin_lines.size(), expected_bins.size() + 1);
-            EXPECT_EQ(bin_lines.front(), bin_header);
+            std::string expected_header{ bin_header };
+            if (second) expected_header += ",carbon ratio,nitrogen ratio,oxygen ratio";
+            EXPECT_EQ(bin_lines.front(), expected_header);
             const std::string log_prefix{ second
                 ? "\nSecond UMAP mean shift bin count: " : "\nUMAP mean shift bin count: " };
             EXPECT_NE(log.find(log_prefix + std::to_string(expected_bins.size()) + '\n'), std::string::npos);
@@ -724,7 +727,7 @@ TEST(UmapEmbeddingCommandTest, ClassifiesUnconfiguredSpotsAsOtherInRootPlot)
             for (const auto & [key, points] : expected_bins)
             {
                 const auto fields{ SplitFields(bin_lines[bin_line]) };
-                ASSERT_EQ(fields.size(), 17u);
+                ASSERT_EQ(fields.size(), second ? 20u : 17u);
                 EXPECT_EQ(std::stoull(fields[0]), bin_line);
                 if (!second)
                 {
@@ -755,15 +758,18 @@ TEST(UmapEmbeddingCommandTest, ClassifiesUnconfiguredSpotsAsOtherInRootPlot)
                         (values[(values.size() - 1) / 2] + values[values.size() / 2]) / 2.0);
                 }
                 std::map<std::string, std::size_t> counts;
+                std::map<Element, std::size_t> element_counts;
                 for (const auto point : points)
                 {
                     const auto index{ static_cast<std::size_t>(std::stoul(point_rows[point][0]) - 1) };
+                    const auto element{ index < configured_elements.size()
+                        ? configured_elements[index] : elements[index - configured_elements.size()] };
+                    ++element_counts[element];
                     if (index < configured_labels.size())
                     {
                         ++counts[std::string(configured_labels[index])];
                         continue;
                     }
-                    const auto element{ elements[index - configured_labels.size()] };
                     ++counts[element == Element::UNK ? "Other Unknown"
                         : "Side-Chain " + ChemicalDataHelper::GetLabel(element)];
                 }
@@ -782,6 +788,15 @@ TEST(UmapEmbeddingCommandTest, ClassifiesUnconfiguredSpotsAsOtherInRootPlot)
                     EXPECT_EQ(std::stoull(fields[column + 1]), expected.second);
                     EXPECT_DOUBLE_EQ(std::stod(fields[column + 2]),
                         static_cast<double>(expected.second) / static_cast<double>(points.size()));
+                }
+                if (second)
+                {
+                    const double point_count{ static_cast<double>(points.size()) };
+                    for (std::size_t ratio = 0; ratio < ratio_elements.size(); ++ratio)
+                    {
+                        EXPECT_DOUBLE_EQ(std::stod(fields[17 + ratio]),
+                            static_cast<double>(element_counts[ratio_elements[ratio]]) / point_count);
+                    }
                 }
             }
         }

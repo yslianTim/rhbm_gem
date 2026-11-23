@@ -110,6 +110,7 @@ bool WriteMeanShiftBins(
     const PreparedUmapInput & prepared,
     const UmapBinning & binning,
     const std::filesystem::path & output_path,
+    bool include_element_ratios,
     std::string & error_message)
 {
     std::ofstream output{ output_path };
@@ -121,17 +122,28 @@ bool WriteMeanShiftBins(
     output << "bin number,bin x,bin y,point count,amplitude joint median,width joint median,offset joint median,"
         "spot class count,1st dominate spot,1st dominate spot count,1st dominate spot count ratio,"
         "2nd dominate spot,2nd dominate spot count,2nd dominate spot count ratio,"
-        "3rd dominate spot,3rd dominate spot count,3rd dominate spot count ratio\n"
-        << std::setprecision(std::numeric_limits<double>::max_digits10);
+        "3rd dominate spot,3rd dominate spot count,3rd dominate spot count ratio";
+    if (include_element_ratios) output << ",carbon ratio,nitrogen ratio,oxygen ratio";
+    output << '\n' << std::setprecision(std::numeric_limits<double>::max_digits10);
     for (const auto & [index, bin] : binning.bins)
     {
         std::map<std::string, std::size_t> spot_counts;
+        std::size_t carbon_count{};
+        std::size_t nitrogen_count{};
+        std::size_t oxygen_count{};
         for (const auto point : bin.points)
         {
+            const auto element{ prepared.elements[point] };
             const auto spot_index{ prepared.configured_spot_indices[point] };
             const auto label{ spot_index ? std::string(kConfiguredUmapSpots[*spot_index].label)
-                : GetOtherUmapSpotLabel(prepared.elements[point]) };
+                : GetOtherUmapSpotLabel(element) };
             ++spot_counts[label];
+            if (include_element_ratios)
+            {
+                carbon_count += element == Element::CARBON;
+                nitrogen_count += element == Element::NITROGEN;
+                oxygen_count += element == Element::OXYGEN;
+            }
         }
         output << bin.number << ',' << index[0] << ',' << index[1] << ',' << bin.points.size();
         for (const auto feature : { 4u, 5u, 6u })
@@ -158,6 +170,13 @@ bool WriteMeanShiftBins(
             const auto & [label, count]{ ranked_spots[rank] };
             output << ',' << label << ',' << count << ','
                 << static_cast<double>(count) / static_cast<double>(bin.points.size());
+        }
+        if (include_element_ratios)
+        {
+            const double point_count{ static_cast<double>(bin.points.size()) };
+            output << ',' << static_cast<double>(carbon_count) / point_count
+                << ',' << static_cast<double>(nitrogen_count) / point_count
+                << ',' << static_cast<double>(oxygen_count) / point_count;
         }
         output << '\n';
     }
@@ -190,7 +209,8 @@ bool WriteEmbeddingOutputs(
     Logger::Log(LogLevel::Info, "UMAP embedding written to: " + output_path.string());
 
     const auto output_stem{ output_path.parent_path() / output_path.stem() };
-    if (!WriteMeanShiftBins(prepared, first.binning, output_stem.string() + "_mean_shift_bins.csv", error_message))
+    if (!WriteMeanShiftBins(prepared, first.binning,
+        output_stem.string() + "_mean_shift_bins.csv", false, error_message))
     {
         return false;
     }
@@ -198,7 +218,7 @@ bool WriteEmbeddingOutputs(
         "UMAP mean shift bin count: " + std::to_string(first.binning.bins.size()));
 
     if (!WriteMeanShiftBins(prepared, second.binning,
-        output_stem.string() + "_second_umap_mean_shift_bins.csv", error_message))
+        output_stem.string() + "_second_umap_mean_shift_bins.csv", true, error_message))
     {
         return false;
     }
