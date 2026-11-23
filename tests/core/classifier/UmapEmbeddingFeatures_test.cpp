@@ -33,7 +33,7 @@ TEST(UmapEmbeddingFeaturesTest, FiltersRequiredFeaturesAndUsesPopulationZScoreIn
         const auto serial_id{ static_cast<int>(index + 1) };
         auto atom{ std::make_unique<AtomObject>() };
         atom->SetSerialID(serial_id);
-        atom->SetElement(Element::CARBON);
+        atom->SetElement(index == 1 ? Element::NITROGEN : Element::CARBON);
         atoms.push_back(std::move(atom));
         LocalFittingFeatureRow row;
         row.serial_id = serial_id;
@@ -43,6 +43,10 @@ TEST(UmapEmbeddingFeaturesTest, FiltersRequiredFeaturesAndUsesPopulationZScoreIn
         rows.push_back(std::move(row));
     }
     rows[1].tail_peeling_ratio_assessment.reason = "fixture-tail-missing";
+    auto atom_without_features{ std::make_unique<AtomObject>() };
+    atom_without_features->SetSerialID(5);
+    atom_without_features->SetElement(Element::OXYGEN);
+    atoms.push_back(std::move(atom_without_features));
     const ModelObject model{ std::move(atoms) };
 
     std::string error;
@@ -57,6 +61,7 @@ TEST(UmapEmbeddingFeaturesTest, FiltersRequiredFeaturesAndUsesPopulationZScoreIn
         "neighbor distance sum in 2A", "distance to closest neighbor", "tail peeling ratio" }));
 
     ASSERT_EQ(prepared->feature_rows.size(), 3u);
+    EXPECT_EQ(prepared->elements, (std::vector<Element>{ Element::CARBON, Element::CARBON, Element::CARBON }));
     EXPECT_EQ(prepared->feature_rows[0].serial_id, 1);
     EXPECT_EQ(prepared->feature_rows[1].serial_id, 3);
     EXPECT_EQ(prepared->feature_rows[2].serial_id, 4);

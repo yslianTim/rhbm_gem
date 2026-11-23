@@ -8,6 +8,7 @@
 #include <boost/json.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <fstream>
 #include <iomanip>
@@ -123,14 +124,23 @@ bool WriteMeanShiftBins(
         "spot class count,1st dominate spot,1st dominate spot count,1st dominate spot count ratio,"
         "2nd dominate spot,2nd dominate spot count,2nd dominate spot count ratio,"
         "3rd dominate spot,3rd dominate spot count,3rd dominate spot count ratio";
-    if (include_element_ratios) output << ",carbon ratio,nitrogen ratio,oxygen ratio";
+    constexpr std::array ratio_elements{ Element::CARBON, Element::NITROGEN, Element::OXYGEN };
+    std::array<std::size_t, ratio_elements.size()> umap_element_counts{};
+    if (include_element_ratios)
+    {
+        output << ",local carbon ratio,local nitrogen ratio,local oxygen ratio"
+            ",global carbon ratio,global nitrogen ratio,global oxygen ratio";
+        for (std::size_t index = 0; index < ratio_elements.size(); ++index)
+        {
+            umap_element_counts[index] = static_cast<std::size_t>(
+                std::count(prepared.elements.begin(), prepared.elements.end(), ratio_elements[index]));
+        }
+    }
     output << '\n' << std::setprecision(std::numeric_limits<double>::max_digits10);
     for (const auto & [index, bin] : binning.bins)
     {
         std::map<std::string, std::size_t> spot_counts;
-        std::size_t carbon_count{};
-        std::size_t nitrogen_count{};
-        std::size_t oxygen_count{};
+        std::array<std::size_t, ratio_elements.size()> element_counts{};
         for (const auto point : bin.points)
         {
             const auto element{ prepared.elements[point] };
@@ -140,9 +150,10 @@ bool WriteMeanShiftBins(
             ++spot_counts[label];
             if (include_element_ratios)
             {
-                carbon_count += element == Element::CARBON;
-                nitrogen_count += element == Element::NITROGEN;
-                oxygen_count += element == Element::OXYGEN;
+                for (std::size_t element_index = 0; element_index < element_counts.size(); ++element_index)
+                {
+                    element_counts[element_index] += element == ratio_elements[element_index];
+                }
             }
         }
         output << bin.number << ',' << index[0] << ',' << index[1] << ',' << bin.points.size();
@@ -174,9 +185,16 @@ bool WriteMeanShiftBins(
         if (include_element_ratios)
         {
             const double point_count{ static_cast<double>(bin.points.size()) };
-            output << ',' << static_cast<double>(carbon_count) / point_count
-                << ',' << static_cast<double>(nitrogen_count) / point_count
-                << ',' << static_cast<double>(oxygen_count) / point_count;
+            for (const auto count : element_counts)
+            {
+                output << ',' << static_cast<double>(count) / point_count;
+            }
+            for (std::size_t element_index = 0; element_index < element_counts.size(); ++element_index)
+            {
+                const auto umap_count{ umap_element_counts[element_index] };
+                output << ',' << (umap_count == 0 ? 0.0
+                    : static_cast<double>(element_counts[element_index]) / static_cast<double>(umap_count));
+            }
         }
         output << '\n';
     }

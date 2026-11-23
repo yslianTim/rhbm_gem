@@ -63,7 +63,8 @@ TEST(UmapEmbeddingOutputTest, MissingSecondEmbeddingLeavesEmptyCoordinatesAndHea
     std::string first_header;
     ASSERT_TRUE(std::getline(first_bins, first_header));
     ASSERT_TRUE(std::getline(second_bins, line));
-    EXPECT_EQ(line, first_header + ",carbon ratio,nitrogen ratio,oxygen ratio");
+    EXPECT_EQ(line, first_header + ",local carbon ratio,local nitrogen ratio,local oxygen ratio"
+        ",global carbon ratio,global nitrogen ratio,global oxygen ratio");
     EXPECT_FALSE(std::getline(second_bins, line));
     for (std::size_t bin = 0; bin < prepared.feature_rows.size(); ++bin)
     {
@@ -134,7 +135,7 @@ TEST(UmapEmbeddingOutputTest, CountsElementRatiosInSecondMeanShiftBins)
     {
         ASSERT_TRUE(std::getline(mixed_bin, field, ','));
     }
-    for (const double ratio : std::array{ 2.0 / 6.0, 1.0 / 6.0, 1.0 / 6.0 })
+    for (const double ratio : std::array{ 2.0 / 6.0, 1.0 / 6.0, 1.0 / 6.0, 1.0, 1.0, 0.5 })
     {
         ASSERT_TRUE(std::getline(mixed_bin, field, ','));
         EXPECT_DOUBLE_EQ(std::stod(field), ratio);
@@ -142,7 +143,7 @@ TEST(UmapEmbeddingOutputTest, CountsElementRatiosInSecondMeanShiftBins)
     EXPECT_FALSE(std::getline(mixed_bin, field, ','));
 
     ASSERT_TRUE(std::getline(bins, line));
-    EXPECT_TRUE(line.ends_with(",0,0,1")) << line;
+    EXPECT_TRUE(line.ends_with(",0,0,1,0,0,0.5")) << line;
     EXPECT_FALSE(std::getline(bins, line));
 }
 

@@ -647,8 +647,10 @@ TEST(UmapEmbeddingCommandTest, ClassifiesUnconfiguredSpotsAsOtherInRootPlot)
         options.atom_count = 5 + elements.size();
         auto model{ BuildFeatureModel(options) };
         constexpr std::array<std::string_view, 5> configured_spots{ "C", "CA", "N", "O", "O" };
-        constexpr std::array<Element, 5> configured_elements{
-            Element::CARBON, Element::CARBON, Element::NITROGEN, Element::OXYGEN, Element::OXYGEN
+        // The second scenario has an N spot but only unselected nitrogen atoms.
+        const std::array<Element, 5> configured_elements{
+            Element::CARBON, Element::CARBON, scenario == 1 ? Element::SULFUR : Element::NITROGEN,
+            Element::OXYGEN, Element::OXYGEN
         };
         for (std::size_t index = 0; index < options.atom_count; ++index)
         {
@@ -663,6 +665,12 @@ TEST(UmapEmbeddingCommandTest, ClassifiesUnconfiguredSpotsAsOtherInRootPlot)
             {
                 atom->SetElement(elements[index - configured_spots.size()]);
             }
+        }
+        if (scenario == 1)
+        {
+            auto * atom{ model->FindAtomPtr(static_cast<int>(options.atom_count + 1)) };
+            ASSERT_NE(atom, nullptr);
+            atom->SetElement(Element::NITROGEN);
         }
         {
             rg::DataRepository repository{ database_path };
@@ -687,11 +695,16 @@ TEST(UmapEmbeddingCommandTest, ClassifiesUnconfiguredSpotsAsOtherInRootPlot)
         EXPECT_EQ(lines[0], rg::core::classifier::BuildLocalFittingCsvHeader()
             + ",umap x,umap y,mean shift x,mean shift y,bin number,second umap x,second umap y");
         std::vector<std::vector<std::string>> point_rows;
+        std::map<Element, std::size_t> umap_element_counts;
         for (std::size_t row = 1; row < lines.size(); ++row)
         {
             auto fields{ SplitFields(lines[row]) };
             ASSERT_EQ(fields.size(), kOutputColumnCount);
-            EXPECT_EQ(std::stoi(fields[0]), static_cast<int>(row));
+            const auto serial_id{ std::stoi(fields[0]) };
+            EXPECT_EQ(serial_id, static_cast<int>(row));
+            const auto * atom{ model->FindAtomPtr(serial_id) };
+            ASSERT_NE(atom, nullptr);
+            ++umap_element_counts[atom->GetElement()];
             for (std::size_t column = rg::core::classifier::kLocalFittingColumnCount;
                 column < kOutputColumnCount; ++column)
             {
@@ -718,16 +731,21 @@ TEST(UmapEmbeddingCommandTest, ClassifiesUnconfiguredSpotsAsOtherInRootPlot)
             const auto bin_lines{ ReadLines(output_dir / ("umap_embedding_" + model_key + suffix)) };
             ASSERT_EQ(bin_lines.size(), expected_bins.size() + 1);
             std::string expected_header{ bin_header };
-            if (second) expected_header += ",carbon ratio,nitrogen ratio,oxygen ratio";
+            if (second)
+            {
+                expected_header += ",local carbon ratio,local nitrogen ratio,local oxygen ratio"
+                    ",global carbon ratio,global nitrogen ratio,global oxygen ratio";
+            }
             EXPECT_EQ(bin_lines.front(), expected_header);
             const std::string log_prefix{ second
                 ? "\nSecond UMAP mean shift bin count: " : "\nUMAP mean shift bin count: " };
             EXPECT_NE(log.find(log_prefix + std::to_string(expected_bins.size()) + '\n'), std::string::npos);
+            std::array<double, ratio_elements.size()> global_ratio_sums{};
             std::size_t bin_line{ 1 };
             for (const auto & [key, points] : expected_bins)
             {
                 const auto fields{ SplitFields(bin_lines[bin_line]) };
-                ASSERT_EQ(fields.size(), second ? 20u : 17u);
+                ASSERT_EQ(fields.size(), second ? 23u : 17u);
                 EXPECT_EQ(std::stoull(fields[0]), bin_line);
                 if (!second)
                 {
@@ -794,9 +812,23 @@ TEST(UmapEmbeddingCommandTest, ClassifiesUnconfiguredSpotsAsOtherInRootPlot)
                     const double point_count{ static_cast<double>(points.size()) };
                     for (std::size_t ratio = 0; ratio < ratio_elements.size(); ++ratio)
                     {
-                        EXPECT_DOUBLE_EQ(std::stod(fields[17 + ratio]),
-                            static_cast<double>(element_counts[ratio_elements[ratio]]) / point_count);
+                        const auto element{ ratio_elements[ratio] };
+                        const double count{ static_cast<double>(element_counts[element]) };
+                        const auto umap_count{ umap_element_counts[element] };
+                        const double global_ratio{ std::stod(fields[20 + ratio]) };
+                        EXPECT_DOUBLE_EQ(std::stod(fields[17 + ratio]), count / point_count);
+                        EXPECT_DOUBLE_EQ(global_ratio,
+                            umap_count == 0 ? 0.0 : count / static_cast<double>(umap_count));
+                        global_ratio_sums[ratio] += global_ratio;
                     }
+                }
+            }
+            if (second)
+            {
+                for (std::size_t ratio = 0; ratio < ratio_elements.size(); ++ratio)
+                {
+                    EXPECT_NEAR(global_ratio_sums[ratio],
+                        umap_element_counts[ratio_elements[ratio]] == 0 ? 0.0 : 1.0, 1e-12);
                 }
             }
         }
