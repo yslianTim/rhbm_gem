@@ -200,8 +200,8 @@ JointAnalysisResult SolveJointStage(
         reporter.emplace();
         observer = reporter->Observer();
     }
-    const auto voxel_spacing=joint_component::IsotropicVoxelSpacing(map);
-    auto fit = FitJointComponentsInitializedWithProgress(problem, initialization, observer, voxel_spacing);
+    auto fit = FitJointComponentsInitializedWithProgress(problem, initialization, observer,
+        joint_component::AssessWidthGridSpacing(map));
     fit.costs.construction_seconds = construction_seconds;
     fit.costs.initialization_seconds = initialization_seconds;
     auto snapshot = CaptureJointAnalysisResult(std::move(fit));

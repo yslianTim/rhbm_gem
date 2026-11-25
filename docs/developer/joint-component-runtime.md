@@ -77,9 +77,13 @@ Target MDPDE widths, excluding median fallbacks and initialization exceptions.
 It requires at least 20 qualified donors and at least 95% Target coverage.
 Calibration computes `q50 = median(donor widths)` with
 `array_helper::ComputeMedian()`. The upper bound is `tau_max = 4 × q50`.
-Map-backed fitting also uses `tau_min = 0.25 × h` when the source grid is
-orthogonal with equal positive voxel spacing `h` on all three axes. Other
-grids and geometry-free initialized fits use the upper bound alone.
+Map-backed fitting also uses `tau_min = 0.25 × h` on an orthogonal grid with
+finite, positive axis spacings. For this policy, the grid is isotropic when
+the difference between the largest and smallest spacings divided by the largest
+spacing is at most twice float32 machine epsilon. This accommodates rounding
+of the map's stored cell lengths. Use the smallest spacing as `h`. Other grids
+and geometry-free initialized fits use the upper bound alone, with the reason
+recorded in `global-width-lower-bound` evidence.
 All components use the same log-width interval for bounded LM, projected Width
 KKT, Endpoint Verification and Independent Replay. Only the working Target
 seeds are projected into the interval. The original initialization and
@@ -128,10 +132,11 @@ Global KKT is evaluated on the component's accepted state using all its
 fitting rows. A/C uses the projected-gradient formula in
 [Numerics](joint-component-numerics.md#constrained-ac-least-squares), with
 component-wide design norms and the parent scale. Width uses
-`||eta - min(eta - dF/deta, eta_max)||∞` with feasibility and bound evidence.
-At an active upper face a nonpositive gradient satisfies the one-sided
-condition. The bound check uses `64 * epsilon * max(1, |eta_max|)` for
-feasibility and face classification, and reports multiplier and complementarity
+`||eta - projection(eta - dF/deta)||∞`, where `projection` projects onto the
+calibrated log-width interval. At a lower face the gradient must be nonnegative,
+and at an upper face it must be nonpositive. Certification and persistence use
+`64 * epsilon * max(1, |eta_bound|)` at each applicable face. LM trials use
+the exact interval. Certification reports multiplier and complementarity
 evidence. The raw gradient remains a diagnostic. Production `practical-v2`
 requires A/C KKT ≤ `1e-7` and projected log-width KKT ≤ `1e-9`.
 The `strict-v2` thresholds are `1e-10` and `1e-12`, respectively.

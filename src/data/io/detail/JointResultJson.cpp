@@ -828,28 +828,28 @@ void Validate(const JointAnalysisResult & x)
     else
         Require(!x.search_completed && x.components.empty() && !x.assembled_state && !x.objective,
             "solver result is missing global width bound provenance");
-    std::optional<double> width_floor;
+    core::joint_component::WidthBounds width_interval;
+    if(width_bound) width_interval.upper=std::log(*width_bound);
     if(const auto * floor=evidence(x.evidence,"global-width-lower-bound"))
     {
-        Require(floor->status==JointCheckStatus::Passed && floor->value && floor->threshold &&
-            width_bound && *floor->threshold>0 && *floor->threshold<*width_bound &&
-            *floor->threshold==0.25*(*floor->value) && floor->reason=="isotropic-voxel-spacing-k0.25",
-            "invalid global width lower-bound provenance");
-        width_floor=floor->threshold;
+        if(floor->status==JointCheckStatus::NotRun)
+            Require(!floor->value && !floor->threshold && !floor->reason.empty(),
+                "missing reason for disabled global width lower bound");
+        else
+        {
+            Require(floor->status==JointCheckStatus::Passed && floor->value && floor->threshold &&
+                width_bound && *floor->threshold>0 && *floor->threshold<*width_bound &&
+                *floor->threshold==0.25*(*floor->value) && floor->reason=="isotropic-voxel-spacing-k0.25",
+                "invalid global width lower-bound provenance");
+            width_interval.lower=std::log(*floor->threshold);
+        }
     }
-    const auto meets_floor=[&](double eta) {
-        if(!width_floor) return true;
-        const double eta_min=std::log(*width_floor);
-        return eta>=eta_min-core::joint_component::WidthBounds::RoundoffTolerance(eta_min);
-    };
     const auto validate_bound=[&](const JointState & state) {
-        if(width_bound)
-            for(double width:state.tau)
-                Require(std::log(width)<=std::log(*width_bound),"state exceeds global width bound");
-        if(width_floor)
+        if(width_interval.upper)
             for(std::size_t atom=0;atom<state.tau.size();++atom)
-                Require(meets_floor(state.log_tau[atom]) && meets_floor(std::log(state.tau[atom])),
-                    "state is below global width bound");
+                Require(width_interval.ContainsWithRoundoff(state.log_tau[atom]) &&
+                    width_interval.ContainsWithRoundoff(std::log(state.tau[atom])),
+                    "state is outside global width interval");
     };
     if(x.assembled_state)
     {
@@ -929,13 +929,10 @@ void Validate(const JointAnalysisResult & x)
         if(c.candidate_diagnostic)
         {
             ValidateCandidateDiagnostic(*c.candidate_diagnostic,c.atoms.size(),c.state.has_value());
-            if(width_bound && c.candidate_diagnostic->candidate_available &&
+            if(width_interval.upper && c.candidate_diagnostic->candidate_available &&
                 c.candidate_diagnostic->candidate_feasible.value_or(false))
                 for(const double eta:c.candidate_diagnostic->candidate_eta)
-                {
-                    Require(eta<=std::log(*width_bound),"candidate exceeds global width bound");
-                    Require(meets_floor(eta),"candidate is below global width bound");
-                }
+                    Require(width_interval.ContainsWithRoundoff(eta),"candidate is outside global width interval");
         }
     }
 }

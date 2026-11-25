@@ -87,13 +87,17 @@ WidthBoundCalibration CalibrateGlobalWidth(const JointInitialization & initializ
     return result;
 }
 
-std::optional<double> IsotropicVoxelSpacing(const MapObject & map)
+WidthGridSpacing AssessWidthGridSpacing(const MapObject & map)
 {
-    if(!map.HasOrthogonalGrid()) return std::nullopt;
+    if(!map.HasOrthogonalGrid()) return {{},"nonorthogonal-map-grid"};
     const auto spacing=map.GetGridSpacing();
-    const auto h=spacing.front();
-    if(std::isfinite(h) && h>0.0 && spacing[1]==h && spacing[2]==h) return h;
-    return std::nullopt;
+    if(std::any_of(spacing.begin(),spacing.end(),[](double h){return !std::isfinite(h) || h<=0.0;}))
+        return {{},"invalid-map-grid-spacing"};
+    const auto [lower,upper]=std::minmax_element(spacing.begin(),spacing.end());
+    // Map cell lengths are stored as float32. Allow their relative rounding on both axes.
+    constexpr double tolerance=2.0*std::numeric_limits<float>::epsilon();
+    if((*upper-*lower)/(*upper)>tolerance) return {{},"anisotropic-map-grid"};
+    return {*lower,{}};
 }
 
 BoundedInitialization MakeBoundedInitialization(

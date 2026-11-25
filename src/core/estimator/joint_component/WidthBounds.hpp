@@ -26,6 +26,12 @@ struct WidthBounds
     {
         return upper && eta <= *upper && (!lower || eta >= *lower);
     }
+
+    bool ContainsWithRoundoff(double eta) const
+    {
+        return upper && *upper-eta>=-RoundoffTolerance(*upper) &&
+            (!lower || eta-*lower>=-RoundoffTolerance(*lower));
+    }
 };
 
 } // namespace rhbm_gem::core::joint_component

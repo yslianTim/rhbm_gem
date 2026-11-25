@@ -73,7 +73,7 @@ struct Profile
             RecordBoundedSubproblem(failed_step); return failed_step;}
 #endif
         if(!context.width_bounds.IsValid())
-        {failed_step.status="invalid-width-upper-bound";
+        {failed_step.status="invalid-width-interval";
             RecordBoundedSubproblem(failed_step); return failed_step;}
         for(Eigen::Index i=0;i<eta.size();++i)
             if(!context.width_bounds.Contains(eta(i)))
@@ -155,7 +155,7 @@ struct Profile
     bool Evaluate(const Vector & eta,double & residual_norm)
     {
         if(!context.width_bounds.IsValid())
-        {failure="invalid-width-upper-bound"; return false;}
+        {failure="invalid-width-interval"; return false;}
         if(!std::all_of(eta.begin(),eta.end(),[&](double x){return context.width_bounds.Contains(x);}))
         {failure="bounded-step-infeasible"; return false;}
         if(!Get(eta)) return false;
@@ -212,7 +212,7 @@ SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & init
     BoundedLmStatus status;
     if(!context.width_bounds.IsValid())
     {
-        profile.failure="invalid-width-upper-bound";
+        profile.failure="invalid-width-interval";
         status=BoundedLmStatus::ProblemStopped;
     }
     else if(!std::all_of(eta.begin(),eta.end(),[&](double x){return context.width_bounds.Contains(x);}))

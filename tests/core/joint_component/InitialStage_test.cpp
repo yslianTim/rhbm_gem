@@ -165,11 +165,19 @@ TEST(InitialStageTest, ExactProductionBaselineAndCertifiedEndpoint)
 TEST(InitialStageTest, VoxelSpacingRequiresAnOrthogonalIsotropicGrid)
 {
     MapObject isotropic({1,1,1},{.6,.6,.6},{});
-    EXPECT_EQ(n::IsotropicVoxelSpacing(isotropic),.6);
-    EXPECT_FALSE(n::IsotropicVoxelSpacing(MapObject({1,1,1},{.6,.6,.5},{})));
-    EXPECT_FALSE(n::IsotropicVoxelSpacing(MapObject({1,1,1},{0.,0.,0.},{})));
+    EXPECT_EQ(n::AssessWidthGridSpacing(isotropic).spacing,.6);
+    const auto rounded=n::AssessWidthGridSpacing(MapObject({1,1,1},{.60000006,.6,.60000003},{}));
+    EXPECT_EQ(rounded.spacing,.6);
+    const auto anisotropic=n::AssessWidthGridSpacing(MapObject({1,1,1},{.6,.6,.600001},{}));
+    EXPECT_FALSE(anisotropic.spacing);
+    EXPECT_EQ(anisotropic.disabled_reason,"anisotropic-map-grid");
+    const auto invalid=n::AssessWidthGridSpacing(MapObject({1,1,1},{0.,0.,0.},{}));
+    EXPECT_FALSE(invalid.spacing);
+    EXPECT_EQ(invalid.disabled_reason,"invalid-map-grid-spacing");
     isotropic.SetOrthogonalGrid(false);
-    EXPECT_FALSE(n::IsotropicVoxelSpacing(MapObject(isotropic)));
+    const auto oblique=n::AssessWidthGridSpacing(MapObject(isotropic));
+    EXPECT_FALSE(oblique.spacing);
+    EXPECT_EQ(oblique.disabled_reason,"nonorthogonal-map-grid");
 }
 
 TEST(InitialStageTest, ExactRawSamplingAcrossWorkersAndCrowdedSelection)

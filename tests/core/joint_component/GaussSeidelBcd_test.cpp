@@ -885,11 +885,11 @@ TEST(JointBcdSearchTest, PreparedConditioningUsesValidatedContextWidthBound)
         EXPECT_EQ(result.block_preparations,0u);
         EXPECT_EQ(result.state.eta.size(),0);
     };
-    rejected(std::log(.5),std::log(.6),"invalid-global-width-bound");
-    rejected(std::log(.5),std::numeric_limits<double>::infinity(),"invalid-global-width-bound");
-    rejected(std::numeric_limits<double>::quiet_NaN(),std::log(.5),"invalid-global-width-bound");
-    rejected(std::nullopt,std::nullopt,"invalid-width-upper-bound");
-    rejected(std::numeric_limits<double>::infinity(),std::nullopt,"invalid-width-upper-bound");
+    rejected(std::log(.5),std::log(.6),"invalid-global-width-interval");
+    rejected(std::log(.5),std::numeric_limits<double>::infinity(),"invalid-global-width-interval");
+    rejected(std::numeric_limits<double>::quiet_NaN(),std::log(.5),"invalid-global-width-interval");
+    rejected(std::nullopt,std::nullopt,"invalid-width-interval");
+    rejected(std::numeric_limits<double>::infinity(),std::nullopt,"invalid-width-interval");
 }
 
 TEST(JointBcdSearchTest, ProductionBoundedSearchReleasesTheStartingUpperFace)

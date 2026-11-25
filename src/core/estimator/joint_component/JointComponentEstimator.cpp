@@ -635,7 +635,7 @@ JointFitResult FitJointComponentsInitialized(const JointProblem & problem,const 
 }
 JointFitResult detail::FitJointComponentsInitializedWithProgress(
     const JointProblem & problem,const JointInitialization & initialization,
-    const joint_component::JointProgressObserver & observer,std::optional<double> voxel_spacing)
+    const joint_component::JointProgressObserver & observer,joint_component::WidthGridSpacing width_grid)
 {
     const auto & input=problem.Input();
     const auto invalid=[&](std::string reason) {
@@ -659,7 +659,7 @@ JointFitResult detail::FitJointComponentsInitializedWithProgress(
             return invalid("joint-initialization-unavailable:target-mapping-mismatch");
 
     const auto calibration=joint_component::CalibrateGlobalWidth(initialization);
-    const auto tau_min=voxel_spacing ? std::optional<double>{0.25*(*voxel_spacing)} : std::nullopt;
+    const auto tau_min=width_grid.spacing ? std::optional<double>{0.25*(*width_grid.spacing)} : std::nullopt;
     const auto bounded=joint_component::MakeBoundedInitialization(initialization,calibration,tau_min);
     if(!bounded.available)
     {
@@ -690,11 +690,14 @@ JointFitResult detail::FitJointComponentsInitializedWithProgress(
     if(tau_min)
     {
         out.evidence.push_back({"global-width-lower-bound",JointCheckStatus::Passed,
-            JointEvidenceScope::AssembledGlobal,voxel_spacing,tau_min,"isotropic-voxel-spacing-k0.25"});
+            JointEvidenceScope::AssembledGlobal,width_grid.spacing,tau_min,"isotropic-voxel-spacing-k0.25"});
         out.evidence.push_back({"lower-bound-initialization-projection",JointCheckStatus::Passed,
             JointEvidenceScope::AssembledGlobal,static_cast<double>(bounded.lower_projection_count),{},
             "target-only-width-seeds"});
     }
+    else
+        out.evidence.push_back({"global-width-lower-bound",JointCheckStatus::NotRun,
+            JointEvidenceScope::AssembledGlobal,{},{},std::string(width_grid.disabled_reason)});
     return out;
 }
 JointFitResult n::FitBcdComponentsImpl(const JointProblem & problem,const std::vector<double> & initial_tau,
@@ -744,7 +747,7 @@ JointFitResult n::FitBcdComponentsImpl(const JointProblem & problem,const std::v
         out.available_row_mask.assign(data.input->observations.size(),false);
         for(auto row:data.partition.constant_rows) out.available_row_mask[static_cast<std::size_t>(row)]=true;
         out.evidence.push_back({"global-width-bound",JointCheckStatus::Unavailable,
-            JointEvidenceScope::AssembledGlobal,{}, {},"finite-width-upper-bound-required"});
+            JointEvidenceScope::AssembledGlobal,{}, {},"valid-width-interval-required"});
         return out;
     }
     const auto component_count=data.partition.components.size();
@@ -907,7 +910,7 @@ JointFitResult EstimateJointComponents(MapObject & map,ModelObject & model)
     auto initialization=n::InitializeContributors(map,model,problem);
     const double initialization_seconds=Seconds(initialization_start);
     auto out=detail::FitJointComponentsInitializedWithProgress(problem,initialization,{},
-        joint_component::IsotropicVoxelSpacing(map));
+        joint_component::AssessWidthGridSpacing(map));
     out.costs.initialization_seconds=initialization_seconds;
     out.costs.construction_seconds=construction_seconds;
     out.initialization=std::move(initialization);

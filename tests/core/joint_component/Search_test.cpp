@@ -423,7 +423,7 @@ TEST(JointComponentSearchTest, ProfileSearchRequiresFiniteWidthUpperBound)
         const auto search=joint::SearchProfile(domain,sample.y,Vector::Constant(2,.5),context);
         EXPECT_TRUE(search.stopped);
         EXPECT_TRUE(search.trials.empty());
-        EXPECT_EQ(search.stop_reason,"invalid-width-upper-bound");
+        EXPECT_EQ(search.stop_reason,"invalid-width-interval");
     }
 }
 

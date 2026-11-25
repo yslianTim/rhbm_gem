@@ -363,6 +363,10 @@ TEST(JointComponentRuntimeTest, MedianWidthBoundProjectsAndCertifiesAllComponent
     EXPECT_EQ(projection->status,JointCheckStatus::Passed);
     EXPECT_EQ(projection->value,4.);
     EXPECT_EQ(projection->reason,"projected-target-widths=4; maximum-projection-angstroms=1.500000");
+    const auto disabled=evidence(fit.evidence,"global-width-lower-bound");
+    ASSERT_NE(disabled,fit.evidence.end());
+    EXPECT_EQ(disabled->status,JointCheckStatus::NotRun);
+    EXPECT_EQ(disabled->reason,"map-grid-not-provided");
     EXPECT_EQ(fit.initialization.tau,init.tau);
     EXPECT_EQ(fit.initialization.atoms.back().mdpde,init.atoms.back().mdpde);
     EXPECT_EQ(fit.initialization.atoms.back().original_tau,3.5);
@@ -401,7 +405,7 @@ TEST(JointComponentRuntimeTest, MedianWidthBoundProjectsAndCertifiesAllComponent
     }
 
     constexpr double lower=.6;
-    const auto box=core::detail::FitJointComponentsInitializedWithProgress(problem,init,{},4*lower);
+    const auto box=core::detail::FitJointComponentsInitializedWithProgress(problem,init,{},{4*lower,{}});
     ASSERT_TRUE(box.assembled_state);
     EXPECT_EQ(box.TargetRuntimeConvergence(),JointCheckStatus::Passed);
     expect_certified(box.evidence);
@@ -418,7 +422,11 @@ TEST(JointComponentRuntimeTest, MedianWidthBoundProjectsAndCertifiesAllComponent
     const auto round_trip=rhbm_gem::joint_result_io::Decode(rhbm_gem::joint_result_io::Encode(saved_box));
     EXPECT_EQ(round_trip.assembled_state->log_tau,box.assembled_state->log_tau);
     saved_box.assembled_state->tau[0]=std::nextafter(std::exp(box.assembled_state->log_tau[0]),0.0);
+    saved_box.assembled_state->tau.back()=std::nextafter(upper,std::numeric_limits<double>::infinity());
     EXPECT_NO_THROW(rhbm_gem::joint_result_io::Encode(saved_box));
+    saved_box.assembled_state->tau.back()=upper+1e-5;
+    EXPECT_THROW(rhbm_gem::joint_result_io::Encode(saved_box),std::invalid_argument);
+    saved_box.assembled_state->tau.back()=upper;
     saved_box.assembled_state->tau[0]=lower-1e-5;
     EXPECT_THROW(rhbm_gem::joint_result_io::Encode(saved_box),std::invalid_argument);
     for(const auto & [name,count]:{std::pair{"active-width-lower-bound",20.},
@@ -715,8 +723,8 @@ TEST(JointComponentRuntimeTest, ComponentSearchPreflightKeepsValidationOrderAndC
         const n::JointProgressComponent component{1,1,"component",3,prepared.local_to_parent_rows.size()};
         const auto result=n::SolveBcdComponent(prepared,widths,data.context,policy,
             [&](const auto & event) {events.push_back(event);},&component);
-        EXPECT_EQ(result.search.reason,variant==0 ? "invalid-width-upper-bound" : variant<3 ?
-            "invalid-global-width-bound" : variant==3 ? "bounded-initial-width-infeasible" : "block-invalid-partition");
+        EXPECT_EQ(result.search.reason,variant==0 ? "invalid-width-interval" : variant<3 ?
+            "invalid-global-width-interval" : variant==3 ? "bounded-initial-width-infeasible" : "block-invalid-partition");
         EXPECT_FALSE(result.succeeded); EXPECT_FALSE(result.search.search_converged);
         EXPECT_FALSE(result.search.accepted_state_integrity); EXPECT_FALSE(result.search.certification);
         EXPECT_EQ(result.search.sweep_count,0u); EXPECT_EQ(result.search.state.eta.size(),0);

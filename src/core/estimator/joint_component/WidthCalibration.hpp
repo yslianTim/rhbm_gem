@@ -4,6 +4,7 @@
 #include <rhbm_gem/utils/domain/JointEstimationTypes.hpp>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace rhbm_gem { class MapObject; }
@@ -34,7 +35,13 @@ struct BoundedInitialization
 // Calibration consumes only the captured InitialStage/initialization record. It
 // deliberately has no simulation-truth input.
 WidthBoundCalibration CalibrateGlobalWidth(const JointInitialization &);
-std::optional<double> IsotropicVoxelSpacing(const MapObject &);
+
+struct WidthGridSpacing
+{
+    std::optional<double> spacing;
+    std::string_view disabled_reason{"map-grid-not-provided"};
+};
+WidthGridSpacing AssessWidthGridSpacing(const MapObject &);
 
 // Builds a feasible working vector without changing the captured InitialStage
 // estimates or the caller's JointInitialization.

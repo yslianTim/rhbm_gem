@@ -424,7 +424,7 @@ BcdSearchResult SearchBcdComponent(
         if(!policy.width_bounds.IsValid() ||
             (context.width_bounds.upper && context.width_bounds.upper!=policy.width_bounds.upper) ||
             (context.width_bounds.lower && context.width_bounds.lower!=policy.width_bounds.lower))
-        {out.reason="invalid-global-width-bound"; return out;}
+        {out.reason="invalid-global-width-interval"; return out;}
         context.width_bounds=policy.width_bounds;
     }
     if(initial_eta.size()!=static_cast<Eigen::Index>(domain.atoms.size()) || !initial_eta.allFinite() ||
@@ -437,7 +437,7 @@ BcdSearchResult SearchBcdComponent(
         if(!(std::exp(initial_eta(a))>0) || !std::isfinite(std::exp(initial_eta(a))))
         {out.reason="block-invalid-partition"; return out;}
     if(!context.width_bounds.IsValid())
-    {out.reason="invalid-width-upper-bound"; return out;}
+    {out.reason="invalid-width-interval"; return out;}
     if(!std::all_of(initial_eta.begin(),initial_eta.end(),[&](double x){return context.width_bounds.Contains(x);}))
     {out.reason="bounded-initial-width-infeasible"; return out;}
 

@@ -1,5 +1,6 @@
 #pragma once
 #include "JointProgress.hpp"
+#include "WidthCalibration.hpp"
 #include <rhbm_gem/data/object/JointAnalysisResult.hpp>
 #include <cstddef>
 #include <memory>
@@ -92,7 +93,7 @@ JointFitResult EstimateJointComponents(MapObject &,ModelObject &);
 namespace detail {
 JointFitResult FitJointComponentsInitializedWithProgress(
     const JointProblem &, const JointInitialization &,
-    const joint_component::JointProgressObserver &, std::optional<double> voxel_spacing = {});
+    const joint_component::JointProgressObserver &, joint_component::WidthGridSpacing width_grid = {});
 }
 }
 }
