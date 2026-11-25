@@ -95,6 +95,55 @@ std::vector<std::string_view> CollectSelectedFeatureNames(const auto & definitio
     return names;
 }
 
+struct PopulationZScore
+{
+    int exponent;
+    long double reference;
+    long double mean;
+    long double deviation;
+
+    double Standardize(double value) const
+    {
+        if (deviation == 0) return 0.0;
+        const auto scaled{ std::scalbn(static_cast<long double>(value), -exponent) };
+        return static_cast<double>(((scaled - reference) - mean) / deviation);
+    }
+};
+
+std::optional<PopulationZScore> CalculatePopulationZScore(
+    std::size_t row_count, const auto & value_at)
+{
+    double minimum{ value_at(0) };
+    double maximum{ minimum };
+    for (std::size_t row = 1; row < row_count; ++row)
+    {
+        const double value{ value_at(row) };
+        minimum = std::min(minimum, value);
+        maximum = std::max(maximum, value);
+    }
+    const double magnitude{ std::max(std::abs(minimum), std::abs(maximum)) };
+    const int exponent{ magnitude == 0 ? 0 : std::ilogb(magnitude) };
+    const auto scale{ [exponent](double value)
+    {
+        return std::scalbn(static_cast<long double>(value), -exponent);
+    } };
+    // Scale before subtracting or squaring. Center at the point in range nearest zero
+    // to retain differences among nearby values without subtracting a large offset from small ones.
+    const long double reference{ scale(std::clamp(0.0, minimum, maximum)) };
+    long double mean{};
+    long double sum_squared_differences{};
+    for (std::size_t row = 0; row < row_count; ++row)
+    {
+        const long double centered{ scale(value_at(row)) - reference };
+        const long double delta{ centered - mean };
+        mean += delta / static_cast<long double>(row + 1);
+        sum_squared_differences += delta * (centered - mean);
+    }
+    const auto variance{ sum_squared_differences / static_cast<long double>(row_count) };
+    if (!std::isfinite(variance) || variance < 0) return std::nullopt;
+    return PopulationZScore{ exponent, reference, mean, std::sqrt(variance) };
+}
+
 } // namespace
 
 std::vector<std::string_view> GetUmapFeatureNames()
@@ -122,8 +171,6 @@ std::optional<PreparedUmapInput> BuildAndStandardizeInput(
     elements.reserve(source_rows.size());
     std::size_t excluded_rows{ 0 };
     std::map<std::string, std::size_t> exclusions;
-    std::array<long double, kInputFeatureCount> means{};
-    std::array<long double, kInputFeatureCount> sum_squared_differences{};
 
     for (auto & row : source_rows)
     {
@@ -154,17 +201,6 @@ std::optional<PreparedUmapInput> BuildAndStandardizeInput(
         elements.push_back(model_object.FindAtomPtr(row.serial_id)->GetElement());
         feature_rows.emplace_back(std::move(row));
         configured_spot_indices.push_back(configured_spot_index);
-        const auto & stored_row{ feature_rows.back() };
-        const long double count{ static_cast<long double>(feature_rows.size()) };
-        for (std::size_t feature = 0; feature < kInputFeatureCount; ++feature)
-        {
-            if (!kFeatureDefinitions[feature].include_in_umap) continue;
-            const long double value{ static_cast<long double>(stored_row.features[feature]) };
-            const long double delta{ value - means[feature] };
-            means[feature] += delta / count;
-            const long double updated_delta{ value - means[feature] };
-            sum_squared_differences[feature] += delta * updated_delta;
-        }
     }
     if (feature_rows.size() < 3)
     {
@@ -178,23 +214,21 @@ std::optional<PreparedUmapInput> BuildAndStandardizeInput(
         return std::nullopt;
     }
 
-    std::array<long double, kInputFeatureCount> standard_deviations{};
+    std::array<PopulationZScore, kInputFeatureCount> standardizers{};
     std::vector<std::string_view> constant_features;
     for (std::size_t feature = 0; feature < kInputFeatureCount; ++feature)
     {
         if (!kFeatureDefinitions[feature].include_in_umap) continue;
-        const long double variance{
-            sum_squared_differences[feature]
-                / static_cast<long double>(feature_rows.size())
-        };
-        if (!std::isfinite(means[feature]) || !std::isfinite(variance) || variance < 0)
+        const auto standardizer{ CalculatePopulationZScore(feature_rows.size(),
+            [&](std::size_t row) { return feature_rows[row].features[feature]; }) };
+        if (!standardizer)
         {
             error_message = "column '" + std::string(kFeatureDefinitions[feature].name)
                 + "' could not be standardized to finite values.";
             return std::nullopt;
         }
-        standard_deviations[feature] = std::sqrt(variance);
-        if (standard_deviations[feature] == 0)
+        standardizers[feature] = *standardizer;
+        if (standardizer->deviation == 0)
         {
             constant_features.push_back(kFeatureDefinitions[feature].name);
         }
@@ -214,16 +248,8 @@ std::optional<PreparedUmapInput> BuildAndStandardizeInput(
         for (std::size_t feature = 0; feature < kInputFeatureCount; ++feature)
         {
             if (!kFeatureDefinitions[feature].include_in_umap) continue;
-            double standardized_value{ 0 };
-            if (standard_deviations[feature] != 0)
-            {
-                const long double value{
-                    (static_cast<long double>(feature_rows[observation].features[feature])
-                        - means[feature])
-                        / standard_deviations[feature]
-                };
-                standardized_value = static_cast<double>(value);
-            }
+            const double standardized_value{ standardizers[feature].Standardize(
+                feature_rows[observation].features[feature]) };
             if (!std::isfinite(standardized_value))
             {
                 error_message = FormatFeatureLocation(
@@ -314,10 +340,14 @@ UmapFeatureMatrix BuildSecondUmapFeatures(
                 features[point * feature_count + column] = rows[point].features[definition.source_index];
         }
 
+        const auto value_at{ [&](std::size_t point) -> double &
+        {
+            return features[point * feature_count + column];
+        } };
         finite_values.clear();
         for (std::size_t point = 0; point < rows.size(); ++point)
         {
-            const double value{ features[point * feature_count + column] };
+            const double value{ value_at(point) };
             if (std::isfinite(value)) finite_values.push_back(value);
         }
         double fill{};
@@ -333,30 +363,24 @@ UmapFeatureMatrix BuildSecondUmapFeatures(
                 + std::to_string(rows.size() - finite_values.size()) + " missing values with its median.");
         }
 
-        // Center the inputs before accumulating to preserve variation near the column's precision limit.
-        const long double reference{ finite_values.empty() ? 0.0 : finite_values.front() };
-        long double mean{};
-        long double sum_squared_differences{};
-        for (std::size_t point = 0; point < rows.size(); ++point)
+        if (finite_values.size() < rows.size())
         {
-            auto & value{ features[point * feature_count + column] };
-            if (!std::isfinite(value)) value = fill;
-            const long double centered{ value - reference };
-            const long double delta{ centered - mean };
-            mean += delta / static_cast<long double>(point + 1);
-            sum_squared_differences += delta * (centered - mean);
+            for (std::size_t point = 0; point < rows.size(); ++point)
+            {
+                auto & value{ value_at(point) };
+                if (!std::isfinite(value)) value = fill;
+            }
         }
-        const auto variance{ sum_squared_differences / static_cast<long double>(rows.size()) };
-        if (!std::isfinite(variance) || variance < 0)
+        const auto standardizer{ CalculatePopulationZScore(rows.size(), value_at) };
+        if (!standardizer)
         {
             throw std::runtime_error("Column '" + name + "' could not be standardized to finite values.");
         }
-        const auto deviation{ std::sqrt(variance) };
-        has_variable_feature |= deviation > 0;
+        has_variable_feature |= standardizer->deviation > 0;
         for (std::size_t point = 0; point < rows.size(); ++point)
         {
-            auto & value{ features[point * feature_count + column] };
-            value = deviation > 0 ? static_cast<double>(((value - reference) - mean) / deviation) : 0.0;
+            auto & value{ value_at(point) };
+            value = standardizer->Standardize(value);
             if (!std::isfinite(value))
             {
                 throw std::runtime_error("Column '" + name + "' has a non-finite Z-score.");

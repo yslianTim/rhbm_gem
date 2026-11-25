@@ -77,6 +77,37 @@ TEST(UmapEmbeddingFeaturesTest, FiltersRequiredFeaturesAndUsesPopulationZScoreIn
     }
 }
 
+TEST(UmapEmbeddingFeaturesTest, StandardizesFirstStageOverTheFiniteDoubleRange)
+{
+    constexpr double largest{ std::numeric_limits<double>::max() };
+    constexpr double smallest{ std::numeric_limits<double>::denorm_min() };
+    const double adjacent{ std::nextafter(largest, 0.0) };
+    const std::array opposite_extremes{ -largest, 0.0, largest };
+    const std::array adjacent_extremes{ std::nextafter(adjacent, 0.0), adjacent, largest };
+    const std::array subnormals{ smallest, 2 * smallest, 3 * smallest };
+    std::vector<std::unique_ptr<AtomObject>> atoms;
+    std::vector<LocalFittingFeatureRow> rows(opposite_extremes.size());
+    for (std::size_t row = 0; row < rows.size(); ++row)
+    {
+        rows[row].serial_id = static_cast<int>(row + 1);
+        rows[row].features = { opposite_extremes[row], adjacent_extremes[row], 0.0,
+            subnormals[row], 0.0, 0.0, 0.0 };
+        auto atom{ std::make_unique<AtomObject>() };
+        atom->SetSerialID(rows[row].serial_id);
+        atoms.push_back(std::move(atom));
+    }
+    const ModelObject model{ std::move(atoms) };
+    std::string error;
+    const auto prepared{ BuildAndStandardizeInput(model, std::move(rows), "extremes", 2, error) };
+    ASSERT_TRUE(prepared) << error;
+    EXPECT_TRUE(prepared->constant_features.empty());
+    const auto z{ std::sqrt(1.5) };
+    const std::array expected{ -z, -z, -z, 0.0, 0.0, 0.0, z, z, z };
+    ASSERT_EQ(prepared->features.values.size(), expected.size());
+    for (std::size_t index = 0; index < expected.size(); ++index)
+        EXPECT_NEAR(prepared->features.values[index], expected[index], 1e-14);
+}
+
 TEST(UmapEmbeddingFeaturesTest, ComputesIndependentFiniteFeatureMediansPerBin)
 {
     constexpr auto missing{ std::numeric_limits<double>::quiet_NaN() };
@@ -122,7 +153,7 @@ TEST(UmapEmbeddingFeaturesTest, ComputesIndependentFiniteFeatureMediansPerBin)
         (Medians{ std::nullopt, 0.0, -3.0, -1.0, 5.0, std::nullopt, -6.0 }));
 }
 
-TEST(UmapEmbeddingFeaturesTest, ImputesAndStandardizesElevenColumnsInAtomRowOrder)
+TEST(UmapEmbeddingFeaturesTest, ImputesAndStandardizesSelectedColumnsInAtomRowOrder)
 {
     constexpr auto missing{ std::numeric_limits<double>::quiet_NaN() };
     constexpr auto inf{ std::numeric_limits<double>::infinity() };
@@ -140,9 +171,7 @@ TEST(UmapEmbeddingFeaturesTest, ImputesAndStandardizesElevenColumnsInAtomRowOrde
 
     EXPECT_EQ(GetSecondUmapFeatureNames(), (std::vector<std::string_view>{
         "amplitude joint median of bin", "width joint median of bin", "offset joint median of bin",
-        "neighbor distance sum in 2A median of bin", "distance to closest neighbor median of bin",
-        "signal peeling ratio median of bin", "tail peeling ratio median of bin",
-        "neighbor distance sum in 2A", "signal peeling ratio", "width joint", "offset joint" }));
+        "amplitude joint", "width joint", "offset joint" }));
 
     UmapBinning bins;
     bins.scale = { { -2.0, 1.0 }, 10.0, 1.0 };
@@ -154,27 +183,20 @@ TEST(UmapEmbeddingFeaturesTest, ImputesAndStandardizesElevenColumnsInAtomRowOrde
     bins.point_bin_numbers = { 1, 1, 1, 3, 2, 2 };
     PopulateUmapBinFeatureMedians(rows, bins);
     const auto features{ BuildSecondUmapFeatures(rows, bins) };
-    ASSERT_EQ(features.column_count, 11u);
+    ASSERT_EQ(features.column_count, 6u);
     ASSERT_EQ(features.values.size(), rows.size() * features.column_count);
 
-    // The amplitude fill is 2 because the first bin contributes three rows.
+    // The median-of-bin amplitude fill is 2 because the first bin contributes three rows.
     const std::array imputed_columns{
         std::array{ 2.0, 2.0, 2.0, 8.0, 2.0, 2.0 },
         std::array{ 4.0, 4.0, 4.0, 10.0, 4.0, 4.0 },
         std::array{ -2.0, -2.0, -2.0, 8.0, 3.0, 3.0 },
-        std::array{ 2.0, 2.0, 2.0, 6.0, 9.0, 9.0 },
-        std::array{ 98.0, 98.0, 98.0, 96.0, 94.5, 94.5 },
-        std::array{ 2.0, 2.0, 2.0, 2.0, 8.0, 8.0 },
-        std::array{ 13.0, 13.0, 13.0, 17.0, 21.0, 21.0 },
-        std::array{ 0.0, 2.0, 4.0, 6.0, 8.0, 10.0 },
-        std::array{ 0.0, 2.0, 6.0, 4.0, 8.0, 4.0 },
+        std::array{ 0.0, 2.0, 4.0, 8.0, 3.0, 3.0 },
         std::array{ 2.0, 4.0, 6.0, 10.0, 4.0, 4.0 },
         std::array{ -4.0, -2.0, 0.0, 8.0, 2.0, 4.0 },
     };
-    const std::array means{ 3.0, 5.0, 4.0 / 3.0, 5.0, 96.5, 4.0, 49.0 / 3.0,
-        5.0, 4.0, 5.0, 4.0 / 3.0 };
-    const std::array variances{ 5.0, 5.0, 125.0 / 9.0, 10.0, 2.5, 8.0, 116.0 / 9.0,
-        35.0 / 3.0, 20.0 / 3.0, 19.0 / 3.0, 140.0 / 9.0 };
+    const std::array means{ 3.0, 5.0, 4.0 / 3.0, 10.0 / 3.0, 5.0, 4.0 / 3.0 };
+    const std::array variances{ 5.0, 5.0, 125.0 / 9.0, 53.0 / 9.0, 19.0 / 3.0, 140.0 / 9.0 };
     for (std::size_t column = 0; column < features.column_count; ++column)
     {
         for (std::size_t point = 0; point < rows.size(); ++point)
@@ -213,27 +235,25 @@ TEST(UmapEmbeddingFeaturesTest, RequiresVariationInAtLeastOneMedianOrAtomColumn)
     };
     PopulateUmapBinFeatureMedians(rows, bins);
     const auto constant{ BuildSecondUmapFeatures(rows, bins) };
-    ASSERT_EQ(constant.column_count, 11u);
+    ASSERT_EQ(constant.column_count, 6u);
     EXPECT_TRUE(constant.values.empty());
 
-    rows[1].features[1] = 8.0;
-    PopulateUmapBinFeatureMedians(rows, bins);
+    bins.bins.at({ 1, 0 }).feature_medians[5] = 11.0;
     const auto median_variation{ BuildSecondUmapFeatures(rows, bins) };
-    ASSERT_EQ(median_variation.values.size(), 33u);
-    EXPECT_NEAR(median_variation.values[11 + 4], std::sqrt(2.0), 1e-14);
+    ASSERT_EQ(median_variation.values.size(), 18u);
+    EXPECT_NEAR(median_variation.values[6 + 1], std::sqrt(2.0), 1e-14);
 
-    rows[1].features[1] = 3.0;
     rows[0].features[6] = -1.0;
     rows[2].features[6] = 1.0;
     PopulateUmapBinFeatureMedians(rows, bins);
     const auto atom_variation{ BuildSecondUmapFeatures(rows, bins) };
-    ASSERT_EQ(atom_variation.values.size(), 33u);
-    EXPECT_NEAR(atom_variation.values[10], -std::sqrt(1.5), 1e-14);
+    ASSERT_EQ(atom_variation.values.size(), 18u);
+    EXPECT_NEAR(atom_variation.values[5], -std::sqrt(1.5), 1e-14);
 
-    for (std::size_t index = 0; index < 33; ++index)
+    for (std::size_t index = 0; index < 18; ++index)
     {
-        if (index % 11 != 4) EXPECT_DOUBLE_EQ(median_variation.values[index], 0.0);
-        if (index % 11 != 10) EXPECT_DOUBLE_EQ(atom_variation.values[index], 0.0);
+        if (index % 6 != 1) EXPECT_DOUBLE_EQ(median_variation.values[index], 0.0);
+        if (index % 6 != 5) EXPECT_DOUBLE_EQ(atom_variation.values[index], 0.0);
     }
 
     for (auto & row : rows) row.features.fill(missing);
@@ -253,14 +273,45 @@ TEST(UmapEmbeddingFeaturesTest, StandardizesAdjacentFloatingPointValues)
     };
     PopulateUmapBinFeatureMedians(rows, bins);
     const auto features{ BuildSecondUmapFeatures(rows, bins) };
-    ASSERT_EQ(features.column_count, 11u);
+    ASSERT_EQ(features.column_count, 6u);
     ASSERT_EQ(features.values.size(), rows.size() * features.column_count);
     for (std::size_t row = 0; row < rows.size(); ++row)
     {
         const double expected{ row == 7 ? std::sqrt(7.0) : -1.0 / std::sqrt(7.0) };
         EXPECT_NEAR(features.values[row * features.column_count + 2], expected, 1e-14);
-        EXPECT_NEAR(features.values[row * features.column_count + 10], expected, 1e-14);
+        EXPECT_NEAR(features.values[row * features.column_count + 5], expected, 1e-14);
     }
+}
+
+TEST(UmapEmbeddingFeaturesTest, StandardizesSecondStageWithoutOverflowOrUnderflow)
+{
+    constexpr std::size_t row_count{ 20578 };
+    constexpr std::size_t outlier_row{ 4371 };
+    constexpr double largest{ std::numeric_limits<double>::max() };
+    constexpr double outlier{ 1.6643458216483026e161 };
+    constexpr double smaller{ 1.0097994934023054e144 };
+    std::vector<LocalFittingFeatureRow> rows(row_count);
+    rows[outlier_row].features[4] = outlier;
+    rows[1].features[4] = smaller;
+    rows.front().features[5] = std::numeric_limits<double>::denorm_min();
+    rows.front().features[6] = -largest;
+    rows.back().features[6] = largest;
+
+    const auto features{ BuildSecondUmapFeatures(rows, {}) };
+    ASSERT_EQ(features.column_count, 6u);
+    ASSERT_EQ(features.values.size(), rows.size() * features.column_count);
+    const double singleton_z{ std::sqrt(static_cast<double>(row_count - 1)) };
+    const double signed_extreme_z{ std::sqrt(static_cast<double>(row_count) / 2) };
+    for (std::size_t row = 0; row < row_count; ++row)
+    {
+        const std::size_t start{ row * features.column_count };
+        EXPECT_NEAR(features.values[start + 3], row == outlier_row ? singleton_z : -1.0 / singleton_z, 1e-11);
+        EXPECT_NEAR(features.values[start + 4], row == 0 ? singleton_z : -1.0 / singleton_z, 1e-11);
+    }
+    EXPECT_NEAR(features.values[5], -signed_extreme_z, 1e-11);
+    EXPECT_NEAR(features.values.back(), signed_extreme_z, 1e-11);
+    const double expected_small_difference{ (smaller / outlier) * static_cast<double>(row_count) / singleton_z };
+    EXPECT_NEAR(features.values[features.column_count + 3] - features.values[3], expected_small_difference, 1e-17);
 }
 
 } // namespace rhbm_gem::core::classifier
