@@ -24,8 +24,6 @@ Typical sequence
   python3 tests/research/buffer/run.py STUDY RUNNER matrix
   python3 tests/research/buffer/compare.py STUDY TAG archive g2
   python3 tests/research/buffer/audit_umap.py STUDY RUNNER
-  python3 tests/research/buffer/half_validate.py STUDY RUNNER TAG
-  python3 tests/research/buffer/truth.py STUDY prepare
   RUNNER truth STUDY/truth-fixtures.json STUDY/truth-results.jsonl
   python3 tests/research/buffer/truth.py STUDY summarize
   python3 tests/research/buffer/truth.py STUDY workflow
@@ -33,9 +31,8 @@ Typical sequence
 
 run.py serializes full fits. For a fixed-domain run the output calibration
 argument derives both width calibration and the reference norm from that
-run's own input and selected outputs. The training runner does not open
-the validation map. compare.py scores supported MRC layouts using raw units
-through the reported training divisor. Archived baseline projections are
+run's own input and selected outputs. compare.py scores supported MRC layouts
+in raw units through the reported divisor. Archived baseline projections are
 recomputed on recorded geometry from certified state and Halo medians.
 
 The C++ truth mode applies the original controlled perturbations to a
@@ -43,6 +40,22 @@ four-contributor fixture and uses the existing native constrained solver
 with the documented width interval. Its oracle prediction metric supplies
 known external Halo truth after fitting. The 6Z6U simulation experiment
 checks the complete workflow under the standard donor qualification rule.
+Use the frozen truth-fixtures.json from the E3–E4 research archive with seed
+2907 and SHA-256 6b0d8a589e09bf10446ce285a6747badcc020b73c8275feb1862e76b37a9d9c5.
+The manifest and historical reports record the source of the numerical draws.
+To inspect uncertified endpoints, copy the desired fixture conditions into
+a new file and add "diagnose": true to those conditions. The truth runner
+then saves the terminal candidate, its component and block identity, the
+native replay checks, and independent 50/100-digit reference calculations.
+These diagnostics do not publish trusted parameters.
+
+confirm_truth.py fixtures FROZEN_JSON NEW_JSON prepares independent train
+and scoring perturbations for the narrow, coarse and wide cases.
+confirm_truth.py workflow TRUE_MAP ORIGINAL_ROWS_TSV SEED NEW_MAP prepares
+a noisy complete volume and records its seed, scale and source digests.
+The full-donor-audit research stage compares fitted-target donors with
+output-only donors on the same certified fitted state. It saves paired
+Peeling observations and postprocessing in a separate output directory.
 
 Fitted state and donor records are research artifacts. The general
 production selection path, CLI behavior and SQLite schema need no setup for

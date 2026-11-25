@@ -17,6 +17,9 @@
 #include <numeric>
 #include <stdexcept>
 
+boost::json::array DiagnoseTruthReplay(const rhbm_gem::core::JointProblem &,
+    const rhbm_gem::core::JointFitResult &,const rhbm_gem::core::joint_component::BcdExecutionPolicy &);
+
 namespace {
 using namespace rhbm_gem;
 namespace n=core::joint_component;
@@ -103,6 +106,9 @@ j::value SolveTruth(const j::object & input)
         for (std::size_t i=1;i<s.size();++i) entry.noise.push_back(Number(s[i]));
     }
     const auto repeats=samples.at(0).noise.size();
+    const auto * validation=input.if_contains("validation_noise");
+    if (validation && validation->as_array().size()!=samples.size())
+        throw std::invalid_argument("Independent reference noise must use the same voxel identities.");
     j::array results;
     for (std::size_t rep=0;rep<repeats;++rep)
     {
@@ -156,17 +162,27 @@ j::value SolveTruth(const j::object & input)
                     {"fitting_targets",fitting.atom_ids.size()},{"fitting_incidence",n::CountSupportEntries(fitting).value()},
                     {"construction_estimate",core::JointProblemAccess::Get(problem).construction_memory.estimated_peak_bytes},
                     {"wall_seconds",elapsed},{"recovered_rows",j::value_from(recovered)}};
+                if (!passed && input.if_contains("diagnose"))
+                {
+                    try {row["uncertified_replay"]=DiagnoseTruthReplay(problem,fit,policy);}
+                    catch (const std::exception & error) {row["diagnostic_error"]=error.what();}
+                }
                 if (passed)
                 {
                     const auto & state=*fit.assembled_state;
+                    std::size_t zero_amplitude{},lower_face{},upper_face{};
                     std::vector<Point> coeff=truth;
                     j::array estimates;
                     for (std::size_t i=0;i<state.tau.size();++i)
                     {
                         const auto slot=static_cast<std::size_t>(std::stoi(fitting.atom_ids[i])-1);
                         coeff[slot]={state.ac[2*i],state.tau[i],state.ac[2*i+1]};
+                        zero_amplitude+=state.ac[2*i]==0.0;
+                        lower_face+=state.log_tau[i]-*policy.width_bounds.lower<=n::WidthBounds::RoundoffTolerance(*policy.width_bounds.lower);
+                        upper_face+=*policy.width_bounds.upper-state.log_tau[i]<=n::WidthBounds::RoundoffTolerance(*policy.width_bounds.upper);
                         estimates.push_back(j::value_from(coeff[slot]));
                     }
+                    row["bound_activity"]=j::array{zero_amplitude,lower_face,upper_face};
                     row["points"]=std::move(estimates);
                     const auto & original=problem.OriginalInput();
                     std::vector<double> prediction(original.row_ids.size());
@@ -196,6 +212,28 @@ j::value SolveTruth(const j::object & input)
                     j::array residuals;
                     for (const auto v:prediction) residuals.push_back(v);
                     row["residuals"]=std::move(residuals);
+                    if (validation)
+                    {
+                        std::vector<double> separate_reference(count);
+                        for (std::size_t i=0;i<samples.size();++i)
+                        {
+                            const auto & x=validation->as_array().at(i).as_array();
+                            if (static_cast<std::size_t>(x.at(0).as_int64())!=samples[i].row)
+                                throw std::invalid_argument("Independent reference noise row differs from training row.");
+                            separate_reference[samples[i].row]=Number(x.at(rep+1));
+                        }
+                        j::array training_residual, validation_residual;
+                        for (std::size_t i=0;i<prediction.size();++i)
+                        {
+                            const auto native_row=std::stoull(original.row_ids[i]);
+                            training_residual.push_back(prediction[i]+noiseless[native_row]-map.GetMapValue(native_row));
+                            validation_residual.push_back(prediction[i]-separate_reference[native_row]);
+                        }
+                        row["oracle_training_residuals"]=std::move(training_residual);
+                        row["oracle_independent_residuals"]=std::move(validation_residual);
+                        row["oracle_domain_rows"]=j::object{{"common",j::value_from(common)},
+                            {"core",j::value_from(core_rows)}};
+                    }
                 }
                 results.push_back(std::move(row));
             }

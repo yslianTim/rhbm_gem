@@ -2,11 +2,13 @@
 
 import argparse
 from collections import Counter
+from contextlib import closing
+import codecs
 import csv
 import json
 import math
 from pathlib import Path
-import sys
+import sqlite3
 
 import numpy as np
 
@@ -57,6 +59,39 @@ def endpoint(parameters):
     return np.array([[float(p[key]) for key in ("A","tau","C")] for p in parameters])
 
 
+def archived_stages(path, output_ids):
+    """Stream the saved stage payload without retaining per-voxel samples."""
+    reader = json.JSONDecoder()
+    utf8 = codecs.getincrementaldecoder("utf-8")()
+    output = {}
+    with closing(sqlite3.connect(path.as_uri()+"?mode=ro", uri=True)) as db:
+        rowid, = db.execute("SELECT rowid FROM model_stage_result").fetchone()
+        with db.blobopen("model_stage_result", "result_json", rowid, readonly=True) as blob:
+            data = utf8.decode(blob.read(1 << 20)).split('"atoms":[',1)[1]
+            while True:
+                data = data.lstrip(", \n\r\t")
+                if data.startswith("]"):
+                    tail = data[1:] + utf8.decode(blob.read(), final=True)
+                    return output, json.loads("{" + tail.lstrip(" ,\n\r\t"))["groups"]
+                if data:
+                    try:
+                        atom, end = reader.raw_decode(data)
+                    except json.JSONDecodeError:
+                        pass
+                    else:
+                        i = atom["id"]
+                        if i in output_ids:
+                            output[i] = {"reason":atom["post_joint_local"]["reason"],
+                                         "available":atom["post_joint_local"]["information"] is not None,
+                                         "qscore":atom["post_joint_qscore"]["scores"]}
+                        data = data[end:]
+                        continue
+                chunk = blob.read(1 << 20)
+                if not chunk:
+                    raise ValueError("Archived model stage payload ended before the groups.")
+                data += utf8.decode(chunk)
+
+
 def archived(root, tag, g, ds):
     s, rows = baseline(root/"snapshot", ds)
     keys = [int(s["atom_ids"][i]) for i in s["fitting_to_original_contributors"]]
@@ -67,14 +102,8 @@ def archived(root, tag, g, ds):
     signal=field(g,points)
     full=signal+field(g,halo)
     # Consume the frozen, officially generated all-target stage results read-only.
-    sys.path.insert(0,str(root/"snapshot/scripts"))
-    from domain import Saved
-    saved=Saved(root/"snapshot"/ds["baseline"])
-    stages,groups=saved.replay_stage(())
-    local={str(i):{"reason":x["post_joint_local"]["reason"],
-                   "available":x["post_joint_local"]["information"] is not None,
-                   "qscore":x["post_joint_qscore"]["scores"]}
-           for i,x in stages.items() if i in points}
+    stages,groups=archived_stages(root/"snapshot"/ds["baseline"], points)
+    local={str(i):x for i,x in stages.items()}
     group_points={str(row["key"]):row["summary"]["inference"]["mdpde"] for row in groups
                   if row.get("summary") and row["summary"].get("inference")}
     return {"source":"frozen-native-G0-with-reconstructed-projection","kept":g.retained,"fit":signal,"total":full,

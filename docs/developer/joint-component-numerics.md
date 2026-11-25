@@ -216,8 +216,8 @@ build/release/bin/joint_ac_compensation \
 ```
 
 The executable normalizes each map by its map-value standard deviation.
-For a half-map comparison, repeat the same selection and compare predictions
-at identical fitting row IDs on the same grid. Multiply A, C and predictions
+Compare full-map predictions at identical fitting row IDs on the same grid.
+Multiply A, C and predictions
 by the recorded map divisor before comparing values in input-map units.
 The optional fixed-face perturbation uses `||D delta_beta|| = 0.01`,
 reduced if needed to keep every positive amplitude interior. With fixed

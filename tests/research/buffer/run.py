@@ -11,13 +11,13 @@ import time
 from geometry import dump
 
 
-def fit(root, binary, tag, arm, buffer, map_override=None, stage=None):
+def fit(root, binary, tag, arm, buffer):
     snapshot = root/"snapshot"
     ds = json.loads((snapshot/"SHA256.json").read_text())["datasets"][tag]
     result = root/"runs"/f"{tag}-{arm}"
     result.mkdir(parents=True,exist_ok=True)
-    stage = stage or ("full-simulation" if tag == "6z6u-sim" else "full")
-    m = snapshot/ds["map"] if map_override is None else map_override
+    stage = "full-simulation" if tag == "6z6u-sim" else "full"
+    m = snapshot/ds["map"]
     executable = binary.resolve()
     argv = [str(executable),str(snapshot/ds["model"]),str(m),ds["chains"],
             ",".join(map(str,buffer)) or "-", "fixed","output",
@@ -27,7 +27,7 @@ def fit(root, binary, tag, arm, buffer, map_override=None, stage=None):
                 VECLIB_MAXIMUM_THREADS="1",MKL_NUM_THREADS="1")
     with m.open("rb") as f:
         digest = hashlib.file_digest(f,"sha256").hexdigest()
-    if map_override is None and digest!=ds["map_sha256"]:
+    if digest!=ds["map_sha256"]:
         raise ValueError(f"{tag} map hash differs from the frozen source")
     dump(result/"provenance.json", {"argv":argv,"thread_caps":caps,"map_sha256":digest,
         "model_sha256":ds["model_sha256"]})

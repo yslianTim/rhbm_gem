@@ -287,7 +287,7 @@ target_link_libraries(joint_ac_compensation PRIVATE rhbm_gem CompilerFlags)
 target_include_directories(joint_ac_compensation PRIVATE "${PROJECT_SOURCE_DIR}/src")
 
 add_executable(joint_buffer_expansion EXCLUDE_FROM_ALL
-    research/JointBufferExpansion.cpp research/JointBufferTruth.cpp)
+    research/JointBufferExpansion.cpp research/JointBufferTruth.cpp research/JointBufferTruthReplay.cpp)
 target_link_libraries(joint_buffer_expansion PRIVATE rhbm_gem CompilerFlags)
 target_include_directories(joint_buffer_expansion PRIVATE "${PROJECT_SOURCE_DIR}/src")
 
