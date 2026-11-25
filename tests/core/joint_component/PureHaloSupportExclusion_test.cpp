@@ -505,6 +505,59 @@ TEST(PureHaloSupportExclusionTest, NoHaloKeepsTheWholeSelectedObservationClosure
     EXPECT_EQ(problem.FittingToOriginalRows(),(std::vector<std::size_t>{0,1,2,3,4,5,6,7,8,9,10}));
 }
 
+TEST(PureHaloSupportExclusionTest, ExplicitBufferKeepsOutputIdentityAndRequiresAllBlockingHalos)
+{
+    auto fixture=MultipleHaloBoundaryFixture();
+    using detail::BufferObservationDomain;
+    using detail::BuildJointBufferProblem;
+    const auto baseline=BuildPureHaloSupportExclusionProblem(fixture.map,fixture.model);
+    const auto empty=BuildJointBufferProblem(fixture.map,fixture.model,{},BufferObservationDomain::Expanded);
+    EXPECT_EQ(empty.problem.Input().atom_ids,baseline.Input().atom_ids);
+    EXPECT_EQ(empty.problem.Input().row_ids,baseline.Input().row_ids);
+    EXPECT_EQ(empty.problem.FittingToOriginalRows(),baseline.FittingToOriginalRows());
+    EXPECT_DOUBLE_EQ(empty.problem.ObservationScale(),baseline.ObservationScale());
+    EXPECT_EQ(empty.output_fitting_indices,(std::vector<std::size_t>{0}));
+
+    const auto partial=BuildJointBufferProblem(fixture.map,fixture.model,
+        std::array{10},BufferObservationDomain::Fixed);
+    EXPECT_EQ(partial.problem.Input().row_ids.back(),"9");
+    EXPECT_EQ(partial.output_fitting_indices,(std::vector<std::size_t>{1}));
+    const auto restored=BuildJointBufferProblem(fixture.map,fixture.model,
+        std::array{20,10},BufferObservationDomain::Fixed);
+    EXPECT_EQ(restored.problem.Input().row_ids.back(),"10");
+    EXPECT_EQ(restored.problem.Input().atom_ids,(std::vector<std::string>{"10","20","30"}));
+    EXPECT_EQ(restored.output_fitting_indices,(std::vector<std::size_t>{2}));
+    EXPECT_EQ(fixture.model.GetSelectedAtomCount(),1u);
+
+    EXPECT_THROW(BuildJointBufferProblem(fixture.map,fixture.model,std::array{10,10},
+        BufferObservationDomain::Fixed),std::invalid_argument);
+    EXPECT_THROW(BuildJointBufferProblem(fixture.map,fixture.model,std::array{30},
+        BufferObservationDomain::Fixed),std::invalid_argument);
+    EXPECT_THROW(BuildJointBufferProblem(fixture.map,fixture.model,std::array{99},
+        BufferObservationDomain::Fixed),std::invalid_argument);
+    EXPECT_THROW(BuildJointBufferProblem(fixture.map,fixture.model,std::array{20},
+        BufferObservationDomain::Fixed),std::invalid_argument);
+}
+
+TEST(PureHaloSupportExclusionTest, ExplicitBufferCanExpandRowsWithFixedObservationScale)
+{
+    auto fixture=BoundaryFixture();
+    auto values=std::make_unique<double[]>(21);
+    for (std::size_t i=0;i<21;++i) values[i]=static_cast<double>(i+1);
+    const MapObject map({21,1,1},{.5,.5,.5},{-2.5,0,0},std::move(values));
+    using detail::BufferObservationDomain;
+    using detail::BuildJointBufferProblem;
+    const auto fixed=BuildJointBufferProblem(map,fixture.model,std::array{2},BufferObservationDomain::Fixed);
+    const auto expanded=BuildJointBufferProblem(map,fixture.model,std::array{2},BufferObservationDomain::Expanded);
+    const auto normalized=BuildJointBufferProblem(map,fixture.model,std::array{2},
+        BufferObservationDomain::Expanded,fixed.problem.ObservationScale());
+    EXPECT_EQ(fixed.problem.OriginalInput().row_ids.size(),11u);
+    EXPECT_EQ(expanded.problem.OriginalInput().row_ids.size(),21u);
+    EXPECT_EQ(normalized.problem.Input().row_ids,expanded.problem.Input().row_ids);
+    EXPECT_GT(expanded.problem.ObservationScale(),fixed.problem.ObservationScale());
+    EXPECT_DOUBLE_EQ(normalized.problem.ObservationScale(),fixed.problem.ObservationScale());
+}
+
 TEST(PureHaloSupportExclusionTest, RejectsEmptyFitAndTargetWithoutRetainedSupport)
 {
     auto empty=MultipleHaloBoundaryFixture();

@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <numeric>
 
 namespace {
 using namespace rhbm_gem;
@@ -57,6 +58,22 @@ TEST(WidthCalibrationTest, SelectsOnlyQualifiedTargetInitialStageWidths)
     EXPECT_EQ(calibration.qualified_donor_coverage,0.95);
     EXPECT_EQ(calibration.median_width,65.5);
     EXPECT_EQ(calibration.tau_max4,262.0);
+}
+
+TEST(WidthCalibrationTest, ExplicitOutputDonorsExcludeBufferWidths)
+{
+    const auto input=QualifiedInitialization(22);
+    std::vector<std::size_t> output(20);
+    std::iota(output.begin(),output.end(),0);
+    const auto calibration=joint::CalibrateGlobalWidth(input,output);
+    ASSERT_EQ(calibration.status,"Available");
+    EXPECT_EQ(calibration.target_count,20u);
+    EXPECT_EQ(calibration.qualified_donor_count,20u);
+    EXPECT_EQ(calibration.tau_max4,42.0);
+    EXPECT_EQ(joint::CalibrateGlobalWidth(input).tau_max4,46.0);
+    output.back()=output.front();
+    EXPECT_EQ(joint::CalibrateGlobalWidth(input,output).unavailable_reason,
+        "invalid-width-calibration-donor-mapping");
 }
 
 TEST(WidthCalibrationTest, FindsOddAndEvenMediansRegardlessOfDonorOrder)

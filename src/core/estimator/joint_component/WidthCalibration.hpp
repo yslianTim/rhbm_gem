@@ -3,6 +3,7 @@
 #include "WidthBounds.hpp"
 #include <rhbm_gem/utils/domain/JointEstimationTypes.hpp>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -34,7 +35,9 @@ struct BoundedInitialization
 
 // Calibration consumes only the captured InitialStage/initialization record. It
 // deliberately has no simulation-truth input.
-WidthBoundCalibration CalibrateGlobalWidth(const JointInitialization &);
+// An empty index set uses all fitting targets, as in production.
+WidthBoundCalibration CalibrateGlobalWidth(const JointInitialization &,
+    std::span<const std::size_t> donor_indices = {});
 
 struct WidthGridSpacing
 {

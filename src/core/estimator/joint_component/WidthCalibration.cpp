@@ -24,7 +24,8 @@ std::optional<double> BoundFrom(double reference_width, double multiplier)
 
 } // namespace
 
-WidthBoundCalibration CalibrateGlobalWidth(const JointInitialization & initialization)
+WidthBoundCalibration CalibrateGlobalWidth(const JointInitialization & initialization,
+    std::span<const std::size_t> donor_indices)
 {
     WidthBoundCalibration result;
     if(initialization.atoms.size()!=initialization.tau.size())
@@ -41,11 +42,21 @@ WidthBoundCalibration CalibrateGlobalWidth(const JointInitialization & initializ
             return result;
         }
 
+    for(std::size_t i=0;i<donor_indices.size();++i)
+        if(donor_indices[i]>=initialization.atoms.size() || !initialization.atoms[donor_indices[i]].target ||
+            (i && donor_indices[i-1]>=donor_indices[i]))
+        {
+            result.unavailable_reason="invalid-width-calibration-donor-mapping";
+            return result;
+        }
+
     std::vector<double> donors;
     donors.reserve(initialization.atoms.size());
-    for(const auto & atom:initialization.atoms)
+    for(std::size_t i=0;i<initialization.atoms.size();++i)
     {
-        if(!atom.target) continue;
+        const auto & atom=initialization.atoms[i];
+        if(!atom.target || (!donor_indices.empty() &&
+            !std::binary_search(donor_indices.begin(),donor_indices.end(),i))) continue;
         ++result.target_count;
         const double tau=atom.mdpde[1];
         if(atom.seed_source!="median-fallback" && !atom.reason.starts_with("initialization-exception") &&
