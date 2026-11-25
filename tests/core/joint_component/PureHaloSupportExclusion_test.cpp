@@ -537,6 +537,9 @@ TEST(PureHaloSupportExclusionTest, ExplicitBufferKeepsOutputIdentityAndRequiresA
         BufferObservationDomain::Fixed),std::invalid_argument);
     EXPECT_THROW(BuildJointBufferProblem(fixture.map,fixture.model,std::array{20},
         BufferObservationDomain::Fixed),std::invalid_argument);
+    fixture.model.FindAtomPtr(10)->SetElement(Element::HYDROGEN);
+    EXPECT_THROW(BuildJointBufferProblem(fixture.map,fixture.model,std::array{10},
+        BufferObservationDomain::Fixed),std::invalid_argument);
 }
 
 TEST(PureHaloSupportExclusionTest, ExplicitBufferCanExpandRowsWithFixedObservationScale)

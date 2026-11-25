@@ -1,10 +1,15 @@
 #include "core/estimator/InitialStage.hpp"
+#include "core/estimator/GroupingStage.hpp"
 #include "core/estimator/PotentialFittingWorkflow.hpp"
+#include "core/classifier/LocalFittingFeatures.hpp"
+#include "core/classifier/UmapEmbeddingAlgorithm.hpp"
+#include "core/classifier/UmapEmbeddingFeatures.hpp"
 #include "core/estimator/gaussian_fit/PreparedLocalGaussianFit.hpp"
 #include "core/estimator/joint_component/HaloMedianReconstruction.hpp"
 #include "core/estimator/joint_component/JointCliProgressReporter.hpp"
 #include "core/estimator/joint_component/Numerics.hpp"
 #include "core/estimator/joint_component/PostJointQScore.hpp"
+#include "core/estimator/joint_component/Problem.hpp"
 #include "data/detail/JointStageAdapter.hpp"
 #include "data/io/detail/JointResultJson.hpp"
 #include <rhbm_gem/core/QScoreHelper.hpp>
@@ -12,6 +17,7 @@
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/data/object/ModelAnalysisEditor.hpp>
+#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 
 #include <boost/json.hpp>
@@ -21,6 +27,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -76,6 +83,80 @@ void Write(const fs::path & path, const j::value & data)
     file << j::serialize(data) << '\n';
 }
 
+#ifdef RHBM_GEM_ENABLE_UMAP
+void WriteUmapMatrix(const fs::path & path,
+    const std::vector<core::classifier::LocalFittingFeatureRow> & rows,
+    const core::classifier::UmapFeatureMatrix & matrix)
+{
+    std::ofstream file(path);
+    file.exceptions(std::ios::failbit | std::ios::badbit);
+    file << std::setprecision(17);
+    if (matrix.values.empty()) return;
+    for (std::size_t i=0;i<rows.size();++i)
+    {
+        file << rows[i].serial_id;
+        for (std::size_t column=0;column<matrix.column_count;++column)
+            file << '\t' << matrix.values[i*matrix.column_count+column];
+        file << '\n';
+    }
+}
+#endif
+
+void SelectOutput(ModelObject & model, const std::string & argument)
+{
+    const auto chains=Split(argument);
+    model.SelectAtoms([&](const AtomObject & atom) {
+        return atom.GetElement()!=Element::HYDROGEN &&
+            (chains.empty() || std::find(chains.begin(),chains.end(),atom.GetChainID())!=chains.end());
+    });
+}
+
+void ExportGeometry(const MapObject & map, const ModelObject & model,
+    const core::JointProblem & problem, const fs::path & out)
+{
+    fs::create_directories(out);
+    const auto & original=problem.OriginalInput();
+    j::array atoms;
+    std::ofstream incidences(out/"support.bin",std::ios::binary), rows(out/"rows.tsv");
+    incidences.exceptions(std::ios::failbit | std::ios::badbit);
+    rows.exceptions(std::ios::failbit | std::ios::badbit);
+    if (original.row_ids.size()>std::numeric_limits<std::uint32_t>::max())
+        throw std::length_error("Research incidence row index exceeds uint32.");
+    for (std::size_t i=0; i<original.atom_ids.size(); ++i)
+    {
+        const auto id=std::stoi(original.atom_ids[i]);
+        const auto & atom=*model.FindAtomPtr(id);
+        const auto & support=original.support[i];
+        atoms.push_back(j::object{{"id",id},{"chain",atom.GetChainID()},{"residue",atom.GetComponentID()},
+            {"sequence",atom.GetSequenceID()},{"atom",atom.GetAtomID()},{"element",static_cast<int>(atom.GetElement())},
+            {"position",j::value_from(atom.GetPositionRef())},{"support",support.size()},
+            {"output",std::binary_search(original.selection_domain->target_indices.begin(),
+                original.selection_domain->target_indices.end(),i)}});
+        for (const auto & s:support)
+        {
+            const auto row=static_cast<std::uint32_t>(s.row);
+            incidences.write(reinterpret_cast<const char *>(&row),sizeof(row));
+            incidences.write(reinterpret_cast<const char *>(&s.squared_distance),sizeof(s.squared_distance));
+        }
+    }
+    rows << "voxel\tfitting\n";
+    auto fitting=problem.FittingToOriginalRows().begin();
+    for (std::size_t i=0; i<original.row_ids.size(); ++i)
+    {
+        const bool retained=fitting!=problem.FittingToOriginalRows().end() && *fitting==i;
+        rows << original.row_ids[i] << '\t' << retained << '\n';
+        if (retained) ++fitting;
+    }
+    const auto spacing=n::AssessWidthGridSpacing(map);
+    const auto & memory=core::JointProblemAccess::Get(problem).construction_memory;
+    Write(out/"geometry.json",j::object{{"grid",j::value_from(map.GetGridSize())},
+        {"spacing",j::value_from(map.GetGridSpacing())},{"origin",j::value_from(map.GetOrigin())},
+        {"isotropic_spacing",spacing.spacing ? Number(*spacing.spacing) : j::value{}},
+        {"spacing_reason",std::string(spacing.disabled_reason)},{"atoms",std::move(atoms)},
+        {"fitting_rows",problem.Input().row_ids.size()},{"original_rows",original.row_ids.size()},
+        {"construction_peak_estimate_bytes",memory.estimated_peak_bytes}});
+}
+
 j::object DiagnoseLocal(const LocalPotentialSampleList & samples)
 {
     std::vector<double> y;
@@ -101,6 +182,8 @@ j::object DiagnoseLocal(const LocalPotentialSampleList & samples)
 
 void ReuseOutputSeedFallback(JointInitialization & initialization, std::span<const std::size_t> output)
 {
+    if (std::none_of(initialization.atoms.begin(),initialization.atoms.end(),
+        [](const auto & atom){return atom.seed_source=="median-fallback";})) return;
     JointInitialization seed;
     for (const auto i : output)
     {
@@ -108,6 +191,10 @@ void ReuseOutputSeedFallback(JointInitialization & initialization, std::span<con
         seed.tau.push_back(seed.atoms.back().seed_source == "median-fallback" ?
             std::numeric_limits<double>::quiet_NaN() : initialization.tau.at(i));
     }
+    // Use the existing fallback calculation for an additional fitting atom
+    // with no valid width, without admitting that atom to the donor pool.
+    seed.atoms.emplace_back().target=true;
+    seed.tau.push_back(std::numeric_limits<double>::quiet_NaN());
     detail::ApplyJointSeedFallback(seed);
     if (!seed.valid) throw std::invalid_argument("Invalid output-only width initialization.");
     for (std::size_t i=0; i<output.size(); ++i)
@@ -115,6 +202,13 @@ void ReuseOutputSeedFallback(JointInitialization & initialization, std::span<con
         initialization.tau[output[i]]=seed.tau[i];
         initialization.atoms[output[i]]=std::move(seed.atoms[i]);
     }
+    for (std::size_t i=0;i<initialization.atoms.size();++i)
+        if (auto & atom=initialization.atoms[i]; atom.seed_source=="median-fallback")
+        {
+            initialization.tau[i]=seed.tau.back();
+            atom.used_tau=seed.tau.back();
+            atom.donor_count=seed.atoms.back().donor_count;
+        }
 }
 
 void ExportFocalGrid(const fs::path & path, const core::JointProblem & problem,
@@ -158,29 +252,189 @@ void ExportFocalGrid(const fs::path & path, const core::JointProblem & problem,
     }
 }
 
+void ExportPrediction(const fs::path & out, const core::JointProblem & problem,
+    const JointAnalysisResult & snapshot, const ModelObject & model,
+    const detail::HaloMedianBuildResult & halos, const std::set<int> & output_ids)
+{
+    const auto & original=problem.OriginalInput();
+    const auto & state=*snapshot.assembled_state;
+    std::vector<std::array<double,3>> predicted(original.row_ids.size());
+    auto add=[&](std::size_t atom, const std::array<double,3> & point, std::size_t col) {
+        for (const auto & s:original.support[atom])
+        {
+            const auto b=n::EvaluateKernel(s.squared_distance,point[1],2.5);
+            predicted[s.row][col]+=point[0]*b.gaussian+point[2]*b.charge;
+        }
+    };
+    for (std::size_t i=0;i<state.tau.size();++i)
+        add(snapshot.fitting_to_original_contributors[i],{state.ac[2*i],state.tau[i],state.ac[2*i+1]},0);
+    for (auto & row:predicted) row[1]=row[2]=row[0];
+    std::vector<detail::HaloMedianTargetDonor> donors;
+    for (const auto & donor:halos.target_donors)
+        if (output_ids.contains(std::stoi(donor.atom_id))) donors.push_back(donor);
+    const detail::GeometryLocalTargetDonorIndex output_only(donors);
+    const auto & medians=*halos.snapshot;
+    j::array halo_diagnostics;
+    for (const auto & halo:medians.halos)
+    {
+        const auto * atom=model.FindAtomPtr(std::stoi(halo.atom_id));
+        const auto group=output_only.Query(atom->GetPositionRef());
+        const auto alternative=detail::GeometryLocalTargetMedian(group);
+        const std::array point{halo.amplitude,halo.width,halo.charge};
+        add(halo.halo_contributor_index,point,1);
+        add(halo.halo_contributor_index,alternative,2);
+        std::vector<std::string> alternative_ids;
+        for (const auto * donor:group) alternative_ids.push_back(donor->atom_id);
+        halo_diagnostics.push_back(j::object{{"id",halo.atom_id},{"fitting_donors",j::value_from(halo.donor_atom_ids)},
+            {"output_donors",j::value_from(alternative_ids)},{"fitting_point",j::value_from(point)},
+            {"output_point",j::value_from(alternative)}});
+    }
+    Write(out/"donors.json",halo_diagnostics);
+    std::ofstream file(out/"prediction.tsv");
+    file.exceptions(std::ios::failbit | std::ios::badbit);
+    file << std::setprecision(17) << "voxel\tfitting\tfit_only\tfull\tfull_output_donors\n";
+    for (std::size_t i=0;i<original.row_ids.size();++i)
+        file << original.row_ids[i] << '\t' << snapshot.available_row_mask[i] << '\t'
+            << predicted[i][0] << '\t' << predicted[i][1] << '\t' << predicted[i][2] << '\n';
+}
+
+void ExportOutputAnalysis(const fs::path & out, ModelObject & model, const core::FitOptions & options)
+{
+    namespace c=core::classifier;
+    detail::RunGroupingStage(model,options);
+    const auto view=model.GetAnalysisView();
+    j::array groups;
+    for (const auto key:view.CollectAtomGroupKeys())
+    {
+        const auto s=view.GetGroupParameterSummary(key);
+        if (s) groups.push_back(j::object{{"key",key},{"status",static_cast<int>(s->status)},
+            {"reason",s->reason},{"eligible",s->eligible_count},{"excluded",s->excluded_count},
+            {"mdpde",s->inference ? j::value(Point(s->inference->mdpde)) : j::value{}}});
+    }
+    Write(out/"groups.json",groups);
+#ifdef RHBM_GEM_ENABLE_UMAP
+    const auto rows=c::BuildLocalFittingFeatureRows(model);
+    std::ofstream features(out/"features.tsv");
+    features.exceptions(std::ios::failbit | std::ios::badbit);
+    features << std::setprecision(17);
+    for (const auto & r:rows)
+    {
+        features << r.serial_id;
+        for (const double v:r.features) features << '\t' << v;
+        features << '\n';
+    }
+    std::string reason;
+    auto prepared=c::BuildAndStandardizeInput(model,rows,"buffer-research",15,reason);
+    if (!prepared)
+    {
+        Write(out/"umap.json",j::object{{"status","unavailable"},{"reason",reason}});
+        return;
+    }
+    WriteUmapMatrix(out/"standardized.tsv",prepared->feature_rows,prepared->features);
+    try
+    {
+        const auto first=c::RunUmap(prepared->features,prepared->effective_neighbors,.1,0,42,1);
+        const auto shifted=c::RunUmapMeanShift(first,prepared->feature_rows,1);
+        auto binning=c::BinMeanShiftEmbedding(prepared->feature_rows,shifted.coordinates,shifted.scale);
+        c::PopulateUmapBinFeatureMedians(prepared->feature_rows,binning);
+        const auto second_features=c::BuildSecondUmapFeatures(prepared->feature_rows,binning);
+        const auto second=c::RunUmap(second_features,prepared->effective_neighbors,.1,0,42,1);
+        if (!c::HasFiniteCoordinates(first) || !c::HasFiniteCoordinates(second))
+            throw std::runtime_error("Nonfinite UMAP coordinates.");
+        std::ofstream embedding(out/"umap.tsv");
+        embedding.exceptions(std::ios::failbit | std::ios::badbit);
+        embedding << std::setprecision(17);
+        for (std::size_t i=0;i<prepared->feature_rows.size();++i)
+            embedding << prepared->feature_rows[i].serial_id << '\t' << first[2*i] << '\t' << first[2*i+1]
+                << '\t' << second[2*i] << '\t' << second[2*i+1] << '\n';
+        Write(out/"umap.json",j::object{{"status","passed"},{"rows",prepared->feature_rows.size()},
+            {"excluded",prepared->excluded_rows},{"exclusions",j::value_from(prepared->exclusions)}});
+    }
+    catch (const std::exception & e)
+    {
+        Write(out/"umap.json",j::object{{"status","failed"},{"reason",e.what()}});
+    }
+#endif
+}
+
+#ifdef RHBM_GEM_ENABLE_UMAP
+void ReplayUmapFeatures(const ModelObject & model, const fs::path & input, const fs::path & out)
+{
+    namespace c = core::classifier;
+    std::ifstream stream(input);
+    if (!stream) throw std::runtime_error("Unable to read recorded UMAP inputs.");
+    std::vector<c::LocalFittingFeatureRow> rows;
+    std::vector<double> coordinates;
+    c::UmapBinning bins;
+    std::size_t recorded_bins{};
+    for (std::string line; std::getline(stream,line);)
+    {
+        std::istringstream fields(line);
+        c::LocalFittingFeatureRow row;
+        if (!(fields >> row.serial_id)) throw std::runtime_error("Missing recorded UMAP atom ID.");
+        for (double & feature:row.features)
+        {
+            std::string token;
+            if (!(fields >> token)) throw std::runtime_error("Incomplete recorded UMAP features.");
+            feature=std::stod(token);
+        }
+        double x{},y{};
+        std::int64_t bin{};
+        if (!(fields >> x >> y >> bin) || !model.FindAtomPtr(row.serial_id))
+            throw std::runtime_error("Invalid recorded UMAP row.");
+        if (bin>0)
+        {
+            bins.bins[{bin,0}].points.push_back(rows.size());
+            ++recorded_bins;
+        }
+        rows.push_back(row);
+        coordinates.insert(coordinates.end(),{x,y});
+    }
+    const auto row_count=rows.size();
+    if (recorded_bins!=0 && recorded_bins!=row_count)
+        throw std::runtime_error("Recorded UMAP bins must cover all rows.");
+    std::string reason;
+    const auto prepared=c::BuildAndStandardizeInput(model,std::move(rows),"buffer-audit",15,reason);
+    if (!prepared || prepared->feature_rows.size()!=row_count)
+        throw std::runtime_error("Recorded UMAP comparison rows were excluded during feature replay. " + reason);
+    if (bins.bins.empty())
+    {
+        const auto shifted=c::RunUmapMeanShift(coordinates,prepared->feature_rows,1);
+        bins=c::BinMeanShiftEmbedding(prepared->feature_rows,shifted.coordinates,shifted.scale);
+    }
+    c::PopulateUmapBinFeatureMedians(prepared->feature_rows,bins);
+    const auto second=c::BuildSecondUmapFeatures(prepared->feature_rows,bins);
+    WriteUmapMatrix(out/"audited-first-features.tsv",prepared->feature_rows,prepared->features);
+    WriteUmapMatrix(out/"audited-second-features.tsv",prepared->feature_rows,second);
+    Write(out/"audited-features.json",j::object{{"first",j::value_from(c::GetUmapFeatureNames())},
+        {"second",j::value_from(c::GetSecondUmapFeatureNames())},{"bins",bins.bins.size()}});
+}
+#endif
+
 void Run(const char * model_path, const char * map_path, const std::string & chain_argument,
     const std::string & buffer_argument, const std::string & domain_argument,
-    const std::string & reference_argument, int focal, const fs::path & out)
+    const std::string & reference_argument, int focal, const fs::path & out, const std::string & stage)
 {
     const auto start=Clock::now();
     const auto elapsed=[](auto since) {return std::chrono::duration<double>(Clock::now()-since).count();};
-    const auto chains=Split(chain_argument);
     std::vector<int> buffer;
     for (const auto & value:Split(buffer_argument)) buffer.push_back(std::stoi(value));
     if (domain_argument!="fixed" && domain_argument!="expanded") throw std::invalid_argument("Unknown domain mode.");
     const auto domain=domain_argument=="fixed" ? detail::BufferObservationDomain::Fixed : detail::BufferObservationDomain::Expanded;
     std::optional<double> reference_norm;
-    if (reference_argument!="-") reference_norm=std::stod(reference_argument);
+    const bool output_calibration=reference_argument!="-";
+    if (output_calibration && reference_argument!="output") reference_norm=std::stod(reference_argument);
+    const bool simulation=stage=="full-simulation";
+    const bool full=stage=="full" || simulation;
+    if (!full && stage!="focal" && stage!="prediction") throw std::invalid_argument("Unknown research stage.");
 
     auto model=ReadModel(model_path);
-    model->SelectAtoms([&](const AtomObject & atom) {
-        return atom.GetElement()!=Element::HYDROGEN &&
-            (chains.empty() || std::find(chains.begin(),chains.end(),atom.GetChainID())!=chains.end());
-    });
+    SelectOutput(*model,chain_argument);
     std::set<int> output_ids;
     for (const auto * atom:model->GetSelectedAtoms()) output_ids.insert(atom->GetSerialID());
     auto map=ReadMap(map_path);
-    const auto divisor=map->MapValueArrayNormalization().value_or(1);
+    if (simulation) model->ApplySimulationMetadata(.5);
+    const auto divisor=simulation ? 1.0 : map->MapValueArrayNormalization().value_or(1);
     const auto [height,offset]=core::GetReferenceGaussianParameters(*map);
     model->SetReferenceHeight(height);
     model->SetReferenceOffset(offset);
@@ -206,10 +460,17 @@ void Run(const char * model_path, const char * map_path, const std::string & cha
     auto workset=detail::BuildInitialStageWorkset(*model,problem);
     model->EditAnalysis().InitializeFromSelection();
     auto init=detail::RunInitialStage(*map,*model,workset,options);
-    if (reference_norm) ReuseOutputSeedFallback(init,experiment.output_fitting_indices);
+    if (output_calibration) ReuseOutputSeedFallback(init,experiment.output_fitting_indices);
     const double init_seconds=elapsed(init_start);
+    j::array seeds;
+    for (const auto & atom:init.atoms)
+        seeds.push_back(j::object{{"id",atom.id},{"initial_mdpde",Point(GaussianModel3D{
+            atom.mdpde[0],atom.mdpde[1],atom.mdpde[2]})},{"seed_source",atom.seed_source},
+            {"used_tau",atom.used_tau ? Number(*atom.used_tau) : j::value{}},{"donor_count",atom.donor_count},
+            {"qualified",atom.initial_stage_fit_qualified},{"reason",atom.reason}});
+    Write(out/"initialization.json",seeds);
     detail::JointCliProgressReporter progress;
-    const auto calibrated=reference_norm ? std::span<const std::size_t>(experiment.output_fitting_indices) :
+    const auto calibrated=output_calibration ? std::span<const std::size_t>(experiment.output_fitting_indices) :
         std::span<const std::size_t>{};
     auto fit=detail::FitJointComponentsInitializedWithProgress(problem,init,progress.Observer(),
         n::AssessWidthGridSpacing(*map),calibrated);
@@ -219,15 +480,23 @@ void Run(const char * model_path, const char * map_path, const std::string & cha
     metadata.grid_size=map->GetGridSize();
     metadata.grid_spacing=map->GetGridSpacing();
     metadata.origin=map->GetOrigin();
+    metadata.map_normalization=JointMapNormalization{!simulation,!simulation,divisor};
     auto snapshot=core::CaptureJointAnalysisResult(std::move(fit),std::move(metadata));
     j::array components;
+    std::size_t conditioning_peak{};
     for (const auto & c:snapshot.components)
+    {
         components.push_back(j::object{{"id",c.id},{"sweeps",c.search_sweeps},{"evaluations",c.profile_evaluations},
             {"stop",c.stop_reason},{"state",c.state.has_value()},{"evidence",Checks(c.evidence)}});
+        conditioning_peak=std::max(conditioning_peak,c.local_conditioning_peak_memory_estimate_bytes.value_or(0));
+    }
     j::object summary{{"fitting_targets",fitting.atom_ids.size()},{"output_targets",output_ids.size()},
         {"original_rows",problem.OriginalInput().row_ids.size()},{"fitting_rows",fitting.row_ids.size()},
         {"buffer",j::value_from(buffer)},{"domain",domain_argument},
-        {"calibration",reference_norm ? "fixed-output" : "fitting-population"},
+        {"calibration",output_calibration ? "fixed-output" : "fitting-population"},
+        {"fitting_incidence",n::CountSupportEntries(fitting).value()},
+        {"construction_estimated_peak_bytes",core::JointProblemAccess::Get(problem).construction_memory.estimated_peak_bytes},
+        {"conditioning_estimated_peak_bytes",conditioning_peak},
         {"map_divisor",divisor},{"observation_scale",snapshot.observation_scale},
         {"runtime",std::string(joint_result_io::StatusText(snapshot.runtime_convergence))},
         {"target_runtime",std::string(joint_result_io::StatusText(snapshot.target_runtime_convergence))},
@@ -235,7 +504,17 @@ void Run(const char * model_path, const char * map_path, const std::string & cha
         {"components",components},{"evidence",Checks(snapshot.evidence)},
         {"initialization_seconds",init_seconds},{"construction_seconds",construction_seconds},
         {"search_seconds",snapshot.costs.search_seconds},{"seconds_to_solve",elapsed(start)}};
-    Write(out/"summary.json",summary);
+    const auto write_summary=[&]
+    {
+        summary["selected_after_run"]=model->GetSelectedAtomCount();
+        summary["elapsed_seconds"]=elapsed(start);
+#if defined(__APPLE__) || defined(__linux__)
+        rusage usage{};
+        if (getrusage(RUSAGE_SELF,&usage)==0) summary["peak_rss_platform_units"]=usage.ru_maxrss;
+#endif
+        Write(out/"summary.json",summary);
+    };
+    write_summary();
     if (!IsQualifiedJointAnalysisResult(snapshot)) throw std::runtime_error("Joint experiment endpoint did not qualify.");
     if (model->GetSelectedAtomCount()!=output_ids.size()) throw std::logic_error("Model output selection changed.");
 
@@ -259,54 +538,70 @@ void Run(const char * model_path, const char * map_path, const std::string & cha
     const std::string run_id="buffer-research";
     auto halo_build=detail::BuildHaloMedianReconstruction(*model,problem,snapshot,run_id);
     ExportFocalGrid(out/"focal-grid.tsv",problem,snapshot,&*halo_build.snapshot,focal);
-    model->EditAnalysis().ApplyJointStageEstimates(data_internal::BuildJointStageEstimates(snapshot,run_id));
+    ExportPrediction(out,problem,snapshot,*model,halo_build,output_ids);
     if (problem.OriginalInput().atom_ids.size()>fitting.atom_ids.size())
-        snapshot.halo_median_reconstruction=halo_build.TakeSnapshot();
-    detail::JointPostprocessingMetrics metrics;
-    detail::JointPostprocessingContext post(*map,*model,problem,snapshot,&metrics,&halo_build,
-        detail::BuildJointPeelingContributorUniverse(*model,problem,snapshot));
-    std::vector<std::size_t> focal_indices;
-    for (const auto i:experiment.output_fitting_indices)
-        if (const auto id=std::stoi(fitting.atom_ids[i]); id==focal || id==8607 || id==2768)
-            focal_indices.push_back(snapshot.fitting_to_original_contributors[i]);
-    auto qscore=detail::BuildPostJointQScores(*map,*model,problem,snapshot,&halo_build,metrics);
-    j::object points;
-    for (const auto & [id,peeling]:post.BuildPostFitPeelingBatch(focal_indices))
+        snapshot.halo_median_reconstruction=*halo_build.snapshot;
+    if (stage!="prediction")
     {
-        auto local=detail::FitPostJointLocalTarget(post,*model,id,peeling,options,metrics);
-        auto diagnostics=DiagnoseLocal(post.BuildPostJointLocalSamples(id,peeling).BuildGaussianSamples());
-        diagnostics["reason"]=local.reason;
-        diagnostics["peeling_samples"]=peeling.samples.size();
-        diagnostics["peeling_available"]=std::count_if(peeling.samples.begin(),peeling.samples.end(),
-            [](const auto & sample) {return sample.response.has_value();});
-        const auto q=std::find_if(qscore.begin(),qscore.end(),[id](const auto & p){return p.first==id;});
-        if (q!=qscore.end())
+        model->EditAnalysis().ApplyJointResult(snapshot,run_id);
+        model->EditAnalysis().BindJointMapObservations(*map);
+        detail::JointPostprocessingMetrics metrics;
+        detail::JointPostprocessingContext post(*map,*model,problem,snapshot,&metrics,&halo_build,
+            detail::BuildJointPeelingContributorUniverse(*model,problem,snapshot));
+        std::vector<std::size_t> focal_indices;
+        for (const auto i:experiment.output_fitting_indices)
+            if (const auto id=std::stoi(fitting.atom_ids[i]); full || id==focal || id==8607 || id==2768)
+                focal_indices.push_back(snapshot.fitting_to_original_contributors[i]);
+        auto qscore=detail::BuildPostJointQScores(*map,*model,problem,snapshot,&halo_build,metrics);
+        auto peelings=post.BuildPostFitPeelingBatch(focal_indices);
+        std::vector<std::pair<int,PostJointLocalResult>> local_results;
+        std::erase_if(qscore,[&](const auto & p){return !output_ids.contains(p.first);});
+        const std::map<int,PostJointQScoreResult> scores(qscore.begin(),qscore.end());
+        j::object points;
+        for (const auto & [id,peeling]:peelings)
         {
-            if (q->second.scores) diagnostics["qscore"]=j::array{q->second.scores->standard,q->second.scores->joint};
-            else diagnostics["qscore_reason"]=q->second.reason;
+            auto local=detail::FitPostJointLocalTarget(post,*model,id,peeling,options,metrics);
+            j::object diagnostics{{"effective_samples",local.effective_sample_count},
+                {"mdpde",Point(local.fit.mdpde.GetModel())},{"available",local.information.has_value()}};
+            diagnostics["reason"]=local.reason;
+            diagnostics["peeling_samples"]=peeling.samples.size();
+            diagnostics["peeling_available"]=std::count_if(peeling.samples.begin(),peeling.samples.end(),
+                [](const auto & sample) {return sample.response.has_value();});
+            const auto q=scores.find(id);
+            if (q!=scores.end())
+            {
+                if (q->second.scores) diagnostics["qscore"]=j::array{q->second.scores->standard,q->second.scores->joint};
+                else diagnostics["qscore_reason"]=q->second.reason;
+            }
+            points[std::to_string(id)]=std::move(diagnostics);
+            if (full) local_results.emplace_back(id,std::move(local));
         }
-        points[std::to_string(id)]=std::move(diagnostics);
+        summary["post_joint"]=std::move(points);
+        if (full)
+        {
+            auto editor=model->EditAnalysis();
+            editor.ApplyPostFitPeelingsBatch(std::move(peelings));
+            editor.ApplyPostJointLocalResultsBatch(std::move(local_results));
+            ExportOutputAnalysis(out,*model,options);
+        }
     }
-    summary["post_joint"]=std::move(points);
-    summary["selected_after_run"]=model->GetSelectedAtomCount();
-    summary["elapsed_seconds"]=elapsed(start);
-#if defined(__APPLE__) || defined(__linux__)
-    rusage usage{};
-    if (getrusage(RUSAGE_SELF,&usage)==0)
-    {
-        summary["peak_rss_platform_units"]=usage.ru_maxrss;
-    }
-#endif
-    Write(out/"summary.json",summary);
+    write_summary();
 }
 
 } // namespace
+
+void RunBufferTruth(const std::filesystem::path &, const std::filesystem::path &);
 
 int main(int argc, char ** argv)
 {
     try
     {
-        if (argc==3 && std::string_view(argv[1])=="local")
+        if (argc==4 && std::string_view(argv[1])=="truth") RunBufferTruth(argv[2],argv[3]);
+#ifdef RHBM_GEM_ENABLE_UMAP
+        else if (argc==5 && std::string_view(argv[1])=="umap-audit")
+            ReplayUmapFeatures(*ReadModel(argv[2]),argv[3],argv[4]);
+#endif
+        else if (argc==3 && std::string_view(argv[1])=="local")
         {
             std::ifstream samples(argv[2]);
             if (!samples) throw std::invalid_argument("Unable to read corrected samples.");
@@ -315,7 +610,16 @@ int main(int argc, char ** argv)
                 input.push_back({value,{radius,{0,0,0},true}});
             std::cout << boost::json::serialize(DiagnoseLocal(input)) << '\n';
         }
-        else if (argc==9) Run(argv[1],argv[2],argv[3],argv[4],argv[5],argv[6],std::stoi(argv[7]),argv[8]);
+        else if (argc==6 && std::string_view(argv[1])=="geometry")
+        {
+            const auto model=ReadModel(argv[2]);
+            SelectOutput(*model,argv[4]);
+            const auto map=ReadMap(argv[3]);
+            const auto problem=core::BuildPureHaloSupportExclusionProblem(*map,*model);
+            ExportGeometry(*map,*model,problem,argv[5]);
+        }
+        else if (argc==9 || argc==10) Run(argv[1],argv[2],argv[3],argv[4],argv[5],argv[6],
+            std::stoi(argv[7]),argv[8],argc==10 ? argv[9] : "focal");
         else throw std::invalid_argument("Usage: joint_buffer_expansion MODEL MAP CHAINS BUFFER_IDS fixed|expanded REFERENCE_NORM|- FOCAL OUTPUT_DIR");
         return 0;
     }
