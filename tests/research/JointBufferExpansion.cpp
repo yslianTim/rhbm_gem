@@ -677,6 +677,12 @@ void Run(const char * model_path, const char * map_path, const std::string & cha
 
 } // namespace
 
+void ExportBufferTruthGeometry(const rhbm_gem::MapObject & map,const rhbm_gem::ModelObject & model,
+    const rhbm_gem::core::JointProblem & problem,const std::filesystem::path & out)
+{
+    ExportGeometry(map,model,problem,out);
+}
+
 void RunBufferTruth(const std::filesystem::path &, const std::filesystem::path &);
 
 int main(int argc, char ** argv)

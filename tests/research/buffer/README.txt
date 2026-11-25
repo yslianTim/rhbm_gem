@@ -57,6 +57,15 @@ The full-donor-audit research stage compares fitted-target donors with
 output-only donors on the same certified fitted state. It saves paired
 Peeling observations and postprocessing in a separate output directory.
 
+For E5-W, run confirm_truth.py widths E5_SYNTHETIC_FIXTURES STUDY
+with --geometry-only. Run the native truth mode on geometry-fixtures.json to
+export the incidence, then repeat the widths command without the flag.
+Run truth on W2–W5 and confirm fixture files in the generated manifest.
+The reports use true Gaussian width bins through truth.stratify_matrix.
+An empty selected bundle reuses the certified or failed G0 result.
+Forced coarse-grid fixtures are controls of the added contributor, separate
+from the selector. Each arm uses the same pinned B1 interval and noise draw.
+
 Fitted state and donor records are research artifacts. The general
 production selection path, CLI behavior and SQLite schema need no setup for
 these tests. Use independent result directories and the committed study

@@ -18,7 +18,9 @@
 #include <stdexcept>
 
 boost::json::array DiagnoseTruthReplay(const rhbm_gem::core::JointProblem &,
-    const rhbm_gem::core::JointFitResult &,const rhbm_gem::core::joint_component::BcdExecutionPolicy &);
+    const rhbm_gem::core::JointFitResult &,const rhbm_gem::core::joint_component::BcdExecutionPolicy &,bool);
+void ExportBufferTruthGeometry(const rhbm_gem::MapObject &,const rhbm_gem::ModelObject &,
+    const rhbm_gem::core::JointProblem &,const std::filesystem::path &);
 
 namespace {
 using namespace rhbm_gem;
@@ -110,6 +112,13 @@ j::value SolveTruth(const j::object & input)
     if (validation && validation->as_array().size()!=samples.size())
         throw std::invalid_argument("Independent reference noise must use the same voxel identities.");
     j::array results;
+    std::vector<int> buffer{3};
+    if (const auto * selection=input.if_contains("buffer"))
+    {
+        buffer.clear();
+        for (const auto & id:selection->as_array()) buffer.push_back(static_cast<int>(id.as_int64()));
+    }
+    const bool width_diagnostics=input.if_contains("width_diagnostics");
     for (std::size_t rep=0;rep<repeats;++rep)
     {
         auto values=std::make_unique<double[]>(count);
@@ -117,16 +126,28 @@ j::value SolveTruth(const j::object & input)
         for (const auto & s:samples) values[s.row]+=s.noise.at(rep);
         const MapObject map(dimensions,spacing,origin,std::move(values));
         const auto baseline=core::BuildPureHaloSupportExclusionProblem(map,model);
+        if (const auto * directory=input.if_contains("geometry_directory"))
+        {
+            ExportBufferTruthGeometry(map,model,baseline,fs::path(directory->as_string().c_str()));
+            return j::object{{"scenario",name},{"geometry",*directory}};
+        }
         const auto & common=baseline.FittingToOriginalRows();
         std::vector<std::size_t> recovered;
-        const std::array<int,1> one{3};
         for (std::string_view label:{"G0","single"})
         {
+            if (label=="single" && buffer.empty())
+            {
+                auto identical=results.back().as_object();
+                identical["strategy"]="single";
+                identical["reused_identical_G0"]=true;
+                results.push_back(std::move(identical));
+                continue;
+            }
             try
             {
                 const auto start=std::chrono::steady_clock::now();
                 const auto problem=label=="G0" ? baseline :
-                    core::detail::BuildJointBufferProblem(map,model,one,
+                    core::detail::BuildJointBufferProblem(map,model,buffer,
                         core::detail::BufferObservationDomain::Fixed).problem;
                 const auto & fitting=problem.Input();
                 if (label=="single")
@@ -141,7 +162,21 @@ j::value SolveTruth(const j::object & input)
                 n::BcdExecutionPolicy policy;
                 policy.width_bounds.lower=std::log(.25*h);
                 policy.width_bounds.upper=std::log(Number(input.at("upper")));
-                const auto fit=n::FitBcdComponents(problem,std::vector<double>(fitting.atom_ids.size(),.7),policy);
+                j::object recent_sweeps;
+                n::JointProgressObserver observe;
+                if (width_diagnostics)
+                    observe=[&](const n::JointProgressEvent & event) {
+                        if (!event.bcd) return;
+                        const auto & b=*event.bcd;
+                        auto & tail=recent_sweeps[event.component_id];
+                        if (tail.is_null()) tail.emplace_array();
+                        auto & a=tail.as_array();
+                        if (a.size()==6) a.erase(a.begin());
+                        a.push_back(j::object{{"sweep",b.sweep},{"objective",b.objective},
+                            {"projected_width_kkt",b.projected_width_kkt},{"failed_blocks",b.failed_blocks},
+                            {"recovery_attempts",b.recovery_attempts},{"recovery_successes",b.recovery_successes}});
+                    };
+                const auto fit=n::FitBcdComponents(problem,std::vector<double>(fitting.atom_ids.size(),.7),policy,observe);
                 j::array checks;
                 for (const auto & e:fit.evidence)
                     checks.push_back(j::object{{"name",e.name},{"status",std::string(joint_result_io::StatusText(e.status))},
@@ -161,10 +196,16 @@ j::value SolveTruth(const j::object & input)
                     {"checks",checks},{"evaluations",evaluations},{"sweeps",sweeps},{"component_sizes",components},
                     {"fitting_targets",fitting.atom_ids.size()},{"fitting_incidence",n::CountSupportEntries(fitting).value()},
                     {"construction_estimate",core::JointProblemAccess::Get(problem).construction_memory.estimated_peak_bytes},
-                    {"wall_seconds",elapsed},{"recovered_rows",j::value_from(recovered)}};
-                if (!passed && input.if_contains("diagnose"))
+                    {"wall_seconds",elapsed},{"recovered_rows",j::value_from(recovered)},
+                    {"fitting_ids",j::value_from(fitting.atom_ids)}};
+                if (width_diagnostics) row["recent_sweeps"]=std::move(recent_sweeps);
+                if (width_diagnostics || (!passed && input.if_contains("diagnose")))
                 {
-                    try {row["uncertified_replay"]=DiagnoseTruthReplay(problem,fit,policy);}
+                    try
+                    {
+                        row[width_diagnostics ? "width_diagnostics" : "uncertified_replay"]=
+                            DiagnoseTruthReplay(problem,fit,policy,!width_diagnostics);
+                    }
                     catch (const std::exception & error) {row["diagnostic_error"]=error.what();}
                 }
                 if (passed)
@@ -245,7 +286,7 @@ j::value SolveTruth(const j::object & input)
         }
     }
     return j::object{{"scenario",name},{"truth",input.at("truth")},{"seed",input.at("seed")},
-        {"repeats",repeats},{"fits",results}};
+        {"spacing",h},{"upper",input.at("upper")},{"buffer",j::value_from(buffer)},{"repeats",repeats},{"fits",results}};
 }
 } // namespace
 

@@ -153,15 +153,15 @@ template <class Real> j::object Reference(const n::Domain & domain, n::VectorRef
 }
 
 j::array DiagnoseTruthReplay(const core::JointProblem & problem, const core::JointFitResult & fit,
-    const n::BcdExecutionPolicy & policy)
+    const n::BcdExecutionPolicy & policy,bool detailed)
 {
     const auto & data=core::JointProblemAccess::Get(problem);
     j::array result;
     for (std::size_t index=0;index<fit.components.size();++index)
     {
         const auto & c=fit.components[index];
-        if (c.state || !c.candidate_diagnostic || !c.candidate_diagnostic->candidate_available) continue;
-        const auto & candidate=*c.candidate_diagnostic;
+        if ((detailed && c.state) || (!c.state && (!c.candidate_diagnostic || !c.candidate_diagnostic->candidate_available)))
+            continue;
         const auto & view=data.partition.components.at(index);
         JointParameterLayout layout;
         for (auto atom:data.layout.full_atoms)
@@ -179,8 +179,10 @@ j::array DiagnoseTruthReplay(const core::JointProblem & problem, const core::Joi
         context.linear.rank_relative=context.rank.Relative(context.rank.design_columns);
         n::Vector y(domain.rows);
         for (Eigen::Index i=0;i<y.size();++i) y(i)=data.y(prepared.local_to_parent_rows[static_cast<std::size_t>(i)]);
-        const n::VectorMap eta(candidate.candidate_eta.data(),static_cast<Eigen::Index>(candidate.candidate_eta.size()));
-        const n::VectorMap beta(candidate.candidate_ac.data(),static_cast<Eigen::Index>(candidate.candidate_ac.size()));
+        const auto & log_width=c.state ? c.state->log_tau : c.candidate_diagnostic->candidate_eta;
+        const auto & ac=c.state ? c.state->ac : c.candidate_diagnostic->candidate_ac;
+        const n::VectorMap eta(log_width.data(),static_cast<Eigen::Index>(log_width.size()));
+        const n::VectorMap beta(ac.data(),static_cast<Eigen::Index>(ac.size()));
         const n::Vector tau=eta.array().exp();
         const auto primary=n::EvaluateStateStreaming(domain,y,eta,beta,context);
         const auto replay=n::CheckIndependentReplay(domain,y,primary,context,nullptr,nullptr,n::PracticalJointConvergenceCriteria);
@@ -191,10 +193,10 @@ j::array DiagnoseTruthReplay(const core::JointProblem & problem, const core::Joi
             (primary.residual-independent_residual).lpNorm<Eigen::Infinity>()!=replay.residual_difference ||
             n::CalculateWidthBoundKkt(eta,independent_gradient,context.width_bounds).projected!=replay.independent_width_projected_kkt)
             throw std::logic_error("Rowwise diagnostics differ from native replay reductions.");
-        j::object rec{{"trusted",false},{"component",c.id},{"stop",c.stop_reason},
+        j::object rec{{"trusted",c.state.has_value()},{"component",c.id},{"stop",c.stop_reason},
             {"last_certification_sweep",c.endpoint_certification_sweep},{"last_search_sweep",c.search_sweeps},
-            {"endpoint_reason",candidate.verification_reason},{"replay_reason",replay.reason},
-            {"saved_normalized_objective",j::value_from(candidate.candidate_objective)},
+            {"endpoint_reason",c.candidate_diagnostic ? c.candidate_diagnostic->verification_reason : ""},{"replay_reason",replay.reason},
+            {"saved_normalized_objective",c.state ? Finite(c.state->objective) : j::value_from(c.candidate_diagnostic->candidate_objective)},
             {"scale",context.scale},{"lower_eta",*policy.width_bounds.lower},{"upper_eta",*policy.width_bounds.upper},
             {"primary_ac_kkt",Finite(replay.primary_ac_kkt)},{"independent_ac_kkt",Finite(replay.independent_ac_kkt)},
             {"primary_projected_width_kkt",Finite(replay.primary_width_projected_kkt)},
@@ -221,21 +223,60 @@ j::array DiagnoseTruthReplay(const core::JointProblem & problem, const core::Joi
         Eigen::Index limiting{};
         projected.maxCoeff(&limiting);
         j::array atoms, rows, blocks, references;
+        std::vector<double> projected_norms;
+        if (!detailed)
+        {
+            // Each study fixture component fits in a single production block.
+            if (domain.atoms.size()>n::ProductionBcdCoreAtoms)
+                throw std::logic_error("Width-study conditioning expects one block per fixture component.");
+            projected_norms=n::AssessBcdLocalConditioning(domain,y,eta,beta,context,c.id).evidence.projected_width_column_norms;
+        }
         for (Eigen::Index i=0;i<domain.rows;++i)
-            rows.push_back(j::array{prepared.row_ids[static_cast<std::size_t>(i)],y(i),
+            if (detailed) rows.push_back(j::array{prepared.row_ids[static_cast<std::size_t>(i)],y(i),
                 primary.residual(i)+y(i),primary.residual(i),independent_prediction(i),independent_residual(i)});
         for (Eigen::Index i=0;i<eta.size();++i)
         {
             const auto slot=static_cast<std::size_t>(i);
             const auto id=prepared.atom_ids[slot];
             j::array support;
-            for (const auto & row:domain.atoms[slot]) support.push_back(j::array{row.row,row.square});
-            atoms.push_back(j::object{{"id",id},{"eta",eta(i)},{"tau",tau(i)},{"A",beta(2*i)},{"C",beta(2*i+1)},
+            if (detailed)
+                for (const auto & row:domain.atoms[slot]) support.push_back(j::array{row.row,row.square});
+            j::object point{{"id",id},{"eta",eta(i)},{"tau",tau(i)},{"A",beta(2*i)},{"C",beta(2*i+1)},
                 {"amplitude_lower_face",beta(2*i)==0.0},{"primary_gradient",primary.gradient(i)},
                 {"independent_gradient",independent_gradient(i)},{"primary_projected_kkt",projected(i)},
                 {"width_lower_face",eta(i)-*policy.width_bounds.lower<=n::WidthBounds::RoundoffTolerance(*policy.width_bounds.lower)},
                 {"width_upper_face",*policy.width_bounds.upper-eta(i)<=n::WidthBounds::RoundoffTolerance(*policy.width_bounds.upper)},
-                {"support",std::move(support)}});
+                {"support",std::move(support)}};
+            if (!detailed)
+            {
+                const auto compensation=n::AssessAcCompensation(domain,y,eta,beta,context,i);
+                double max_g=0,sum_r=0,sum_r2=0;
+                std::vector<double> gaussian;
+                for (const auto & sample:domain.atoms[slot])
+                {
+                    const double g=n::EvaluateKernel(sample.square,tau(i),2.5).gaussian;
+                    gaussian.push_back(g);
+                    max_g=std::max(max_g,std::abs(g));
+                    sum_r+=std::sqrt(sample.square);
+                    sum_r2+=sample.square;
+                }
+                double weights=0,squared_weights=0;
+                if (max_g>0)
+                    for (const double g:gaussian)
+                    {
+                        const double scaled=g/max_g, weight=scaled*scaled;
+                        weights+=weight; squared_weights+=weight*weight;
+                    }
+                const auto count=static_cast<double>(gaussian.size());
+                point["fit_diagnostics"]=j::object{{"conditional_AC",j::value_from(compensation.conditional_correlation)},
+                    {"own_cosine",j::value_from(compensation.raw_correlation)},
+                    {"AC_cancellation",j::value_from(compensation.cancellation_ratio)},
+                    {"radial_spread",count>0 ? Finite(std::sqrt(std::max(0.,sum_r2/count-std::pow(sum_r/count,2)))) : j::value{}},
+                    {"effective_Gaussian_support",squared_weights>0 ? Finite(weights*weights/squared_weights) : j::value{}},
+                    {"projected_width_norm",slot<projected_norms.size() ? Finite(projected_norms[slot]) : j::value{}}};
+            }
+            atoms.push_back(std::move(point));
+            if (!detailed) continue;
             if (i!=limiting && id!=replay.maximum_gradient_difference_atom_id) continue;
             j::object evidence{{"atom",id},{"limits_primary_width_kkt",i==limiting}};
             const auto compensation=n::AssessAcCompensation(domain,y,eta,beta,context,i);
@@ -259,6 +300,7 @@ j::array DiagnoseTruthReplay(const core::JointProblem & problem, const core::Joi
             "independent_prediction","independent_residual"};
         rec["rows"]=std::move(rows);
         rec["atoms"]=std::move(atoms);
+        rec["limiting_atom"]=prepared.atom_ids[static_cast<std::size_t>(limiting)];
         rec["blocks"]=std::move(blocks);
         rec["coordinate_references"]=std::move(references);
         result.push_back(std::move(rec));
