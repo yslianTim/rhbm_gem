@@ -1052,24 +1052,9 @@ TEST(JointComponentNumericsTest, PracticalStationarityCannotHidePerCoordinateRep
     EXPECT_EQ(replay.reason,"per-coordinate-replay-enclosure");
     EXPECT_GT(replay.primary_eta_gradient,n::StrictJointConvergenceCriteria.global_eta_gradient);
     EXPECT_LE(replay.primary_eta_gradient,n::PracticalJointConvergenceCriteria.global_eta_gradient);
-    EXPECT_EQ(replay.maximum_gradient_difference_atom_id,"target-42");
-    EXPECT_EQ(replay.gradient_enclosure_failure_atom_id,"target-42");
-    EXPECT_DOUBLE_EQ(replay.gradient_enclosure_failure_primary,primary.gradient(0));
-    EXPECT_TRUE(std::isfinite(replay.gradient_enclosure_failure_independent));
-    EXPECT_DOUBLE_EQ(replay.gradient_enclosure_failure_difference,
-        std::abs(replay.gradient_enclosure_failure_independent-primary.gradient(0)));
-    EXPECT_DOUBLE_EQ(replay.gradient_difference,replay.gradient_enclosure_failure_difference);
-    EXPECT_DOUBLE_EQ(replay.maximum_gradient_difference_primary,primary.gradient(0));
-    EXPECT_DOUBLE_EQ(replay.maximum_gradient_difference_independent,replay.gradient_enclosure_failure_independent);
-    EXPECT_DOUBLE_EQ(replay.maximum_gradient_difference_bound,replay.gradient_enclosure_failure_bound);
-    EXPECT_DOUBLE_EQ(replay.maximum_gradient_difference_ratio,replay.gradient_enclosure_failure_ratio);
     EXPECT_DOUBLE_EQ(replay.primary_eta_gradient,std::abs(primary.gradient(0)));
-    EXPECT_DOUBLE_EQ(replay.independent_eta_gradient,std::abs(replay.gradient_enclosure_failure_independent));
-    EXPECT_DOUBLE_EQ(replay.gradient_enclosure_failure_bound,
-        1e-13+2e-9*std::abs(primary.gradient(0)));
-    EXPECT_DOUBLE_EQ(replay.gradient_enclosure_failure_ratio,
-        replay.gradient_enclosure_failure_difference/replay.gradient_enclosure_failure_bound);
-    EXPECT_GT(replay.gradient_enclosure_failure_ratio,1.0);
+    EXPECT_DOUBLE_EQ(replay.independent_eta_gradient,original.independent_eta_gradient);
+    EXPECT_GT(replay.gradient_difference,1e-13+2e-9*std::abs(primary.gradient(0)));
     EXPECT_DOUBLE_EQ(replay.primary_objective,primary.certificate.objective);
     EXPECT_DOUBLE_EQ(replay.primary_residual_norm,primary.residual.norm());
     EXPECT_DOUBLE_EQ(replay.independent_residual_norm,std::sqrt(2.0*replay.independent_objective));

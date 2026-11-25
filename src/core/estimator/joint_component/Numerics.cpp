@@ -732,30 +732,8 @@ IndependentReplayEvidence CheckIndependentReplay(const Domain & domain,VectorRef
         const double difference=std::abs(independent-primary);
         const double enclosure=1e-13+2e-9*std::abs(primary);
         if(atom==0 || difference>maximum_gradient_difference)
-        {
             maximum_gradient_difference=difference;
-            out.maximum_gradient_difference_primary=primary;
-            out.maximum_gradient_difference_independent=independent;
-            out.maximum_gradient_difference_bound=enclosure;
-            out.maximum_gradient_difference_ratio=difference/enclosure;
-            if(static_cast<std::size_t>(atom)<policy.atom_ids.size())
-                out.maximum_gradient_difference_atom_id=policy.atom_ids[static_cast<std::size_t>(atom)];
-        }
-        if(difference>enclosure)
-        {
-            out.gradient_agrees=false;
-            const double ratio=difference/enclosure;
-            if(out.gradient_enclosure_failure_atom_id.empty() || ratio>out.gradient_enclosure_failure_ratio)
-            {
-                out.gradient_enclosure_failure_primary=primary;
-                out.gradient_enclosure_failure_independent=independent;
-                out.gradient_enclosure_failure_difference=difference;
-                out.gradient_enclosure_failure_bound=enclosure;
-                out.gradient_enclosure_failure_ratio=ratio;
-                if(static_cast<std::size_t>(atom)<policy.atom_ids.size())
-                    out.gradient_enclosure_failure_atom_id=policy.atom_ids[static_cast<std::size_t>(atom)];
-            }
-        }
+        if(difference>enclosure) out.gradient_agrees=false;
     }
     out.gradient_difference=maximum_gradient_difference;
     out.passed=out.primary_kkt_passed && out.independent_kkt_passed && out.prediction_passed &&

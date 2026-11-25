@@ -135,12 +135,6 @@ struct IndependentReplayEvidence
         primary_objective{unavailable},primary_residual_norm{unavailable},independent_residual_norm{unavailable},
         primary_ac_kkt{unavailable},independent_ac_kkt{unavailable},primary_eta_gradient{unavailable},
         independent_eta_gradient{unavailable};
-    std::string maximum_gradient_difference_atom_id,gradient_enclosure_failure_atom_id;
-    double gradient_enclosure_failure_primary{unavailable},gradient_enclosure_failure_independent{unavailable},
-        gradient_enclosure_failure_difference{unavailable},gradient_enclosure_failure_bound{unavailable},
-        gradient_enclosure_failure_ratio{unavailable},maximum_gradient_difference_primary{unavailable},
-        maximum_gradient_difference_independent{unavailable},maximum_gradient_difference_bound{unavailable},
-        maximum_gradient_difference_ratio{unavailable};
     bool width_bound_applied{},width_bound_feasible{true},primary_width_kkt_passed{true},
         independent_width_kkt_passed{true};
     double primary_width_projected_kkt{unavailable},independent_width_projected_kkt{unavailable},

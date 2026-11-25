@@ -381,7 +381,7 @@ const std::vector<std::size_t> & JointProblem::FittingToOriginalRows() const
 JointProblem::JointProblem(std::shared_ptr<const n::ProblemData> data):m_data(std::move(data)) {}
 JointProblem JointProblem::WithReconstructionDomain(
     JointProblemInput original, std::vector<std::size_t> fitting_to_original_contributors,
-    std::vector<std::size_t> fitting_to_original_rows, std::optional<double> reference_observation_norm) const
+    std::vector<std::size_t> fitting_to_original_rows) const
 {
     const auto & fitting=*m_data->input;
     if (original.atom_ids.empty() || original.support.size()!=original.atom_ids.size() ||
@@ -410,9 +410,7 @@ JointProblem JointProblem::WithReconstructionDomain(
     data->fitting_to_original_rows=std::move(fitting_to_original_rows);
     const Eigen::Map<const Eigen::VectorXd> original_values(
         data->original_input->observations.data(),static_cast<Eigen::Index>(data->original_input->observations.size()));
-    const double original_norm=reference_observation_norm ? *reference_observation_norm : original_values.norm();
-    if(reference_observation_norm && (!std::isfinite(original_norm) || original_norm<0.0))
-        throw std::invalid_argument("Invalid Joint reference observation norm.");
+    const double original_norm=original_values.norm();
     data->context.scale=std::max(1.0,original_norm);
     data->context.linear.release_response_norm=original_norm;
     return JointProblem(std::move(data));
@@ -424,35 +422,21 @@ struct SelectedObservationClosure
 {
     JointProblemInput original;
     std::vector<std::size_t> target_indices;
-    std::vector<std::size_t> output_fitting_indices;
     std::size_t candidate_halos{},retained_halos{},zero_support_halos{};
 };
 
-SelectedObservationClosure BuildSelectedObservationClosure(const MapObject & map,const ModelObject & model,
-    std::span<const int> buffer_ids, detail::BufferObservationDomain observation_domain)
+SelectedObservationClosure BuildSelectedObservationClosure(const MapObject & map,const ModelObject & model)
 {
     const auto atoms=EligibleAtoms(model); SelectedObservationClosure closure;
     auto & input=closure.original;
-    std::set<const AtomObject *> output;
-    for(const auto * atom:model.GetSelectedAtoms()) if(atom->GetElement()!=Element::HYDROGEN) output.insert(atom);
-    if(output.empty()) throw std::invalid_argument("Joint fitting requires at least one selected non-hydrogen atom.");
-    auto selected=output;
-    for(const auto id:buffer_ids)
-    {
-        const AtomObject * atom{};
-        try {atom=model.FindAtomPtr(id);}
-        catch(const std::out_of_range &) {throw std::invalid_argument("Unknown Joint buffer atom ID.");}
-        if(!atom || atom->GetElement()==Element::HYDROGEN)
-            throw std::invalid_argument("Joint buffer atom must be a non-hydrogen model atom.");
-        if(!selected.insert(atom).second)
-            throw std::invalid_argument("Joint buffer IDs must be unique and disjoint from output targets.");
-    }
-    const auto & observation_atoms=observation_domain==detail::BufferObservationDomain::Fixed ? output : selected;
+    std::set<const AtomObject *> selected;
+    for(const auto * atom:model.GetSelectedAtoms()) if(atom->GetElement()!=Element::HYDROGEN) selected.insert(atom);
+    if(selected.empty()) throw std::invalid_argument("Joint fitting requires at least one selected non-hydrogen atom.");
     const auto dims=map.GetGridSize(); const auto spacing=map.GetGridSpacing(),origin=map.GetOrigin();
     for(std::size_t k=0;k<3;++k) if(dims[k]<=0 || !std::isfinite(spacing[k]) || spacing[k]<=0 || !std::isfinite(origin[k]))
         throw std::invalid_argument("Invalid joint map geometry.");
     std::size_t selected_support_entries{};
-    for(const auto * atom:atoms) if(observation_atoms.contains(atom))
+    for(const auto * atom:atoms) if(selected.contains(atom))
         VisitSupport(map,*atom,[&](auto,double) {
             if(!n::CheckedAddBytes(selected_support_entries,1,selected_support_entries))
                 throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
@@ -475,7 +459,7 @@ SelectedObservationClosure BuildSelectedObservationClosure(const MapObject & map
         RejectBuildPreflight(shape,"raw-target-row-buffer-exceeds-budget");
     }
     std::vector<std::size_t> rows; rows.reserve(selected_support_entries);
-    for(const auto * atom:atoms) if(observation_atoms.contains(atom))
+    for(const auto * atom:atoms) if(selected.contains(atom))
         VisitSupport(map,*atom,[&](auto index,double) {rows.push_back(index);});
     std::sort(rows.begin(),rows.end()); rows.erase(std::unique(rows.begin(),rows.end()),rows.end());
     const auto target_bounds=BoundsForRows(map,rows);
@@ -576,11 +560,7 @@ SelectedObservationClosure BuildSelectedObservationClosure(const MapObject & map
         });
         if(selected_target || !support.empty())
         {
-            if(selected_target)
-            {
-                if(output.contains(atom)) closure.output_fitting_indices.push_back(closure.target_indices.size());
-                closure.target_indices.push_back(input.atom_ids.size());
-            }
+            if(selected_target) closure.target_indices.push_back(input.atom_ids.size());
             input.atom_ids.push_back(std::to_string(atom->GetSerialID()));
             input.support.push_back(std::move(support));
         }
@@ -594,14 +574,7 @@ SelectedObservationClosure BuildSelectedObservationClosure(const MapObject & map
 
 JointProblem BuildPureHaloSupportExclusionProblem(const MapObject & map,const ModelObject & model)
 {
-    return detail::BuildJointBufferProblem(map,model,{},detail::BufferObservationDomain::Fixed).problem;
-}
-
-detail::JointBufferProblem detail::BuildJointBufferProblem(const MapObject & map,const ModelObject & model,
-    std::span<const int> buffer_ids, BufferObservationDomain observation_domain,
-    std::optional<double> reference_observation_norm)
-{
-    auto closure=BuildSelectedObservationClosure(map,model,buffer_ids,observation_domain);
+    auto closure=BuildSelectedObservationClosure(map,model);
     const auto & source=closure.original;
     const auto & targets=closure.target_indices;
     std::vector<bool> retained(source.observations.size(),true);
@@ -653,10 +626,8 @@ detail::JointBufferProblem detail::BuildJointBufferProblem(const MapObject & map
         original.observations.size(),retained_count,original.observations.size()-retained_count,
         closure.candidate_halos,closure.retained_halos,closure.zero_support_halos};
     std::vector<std::size_t> fitting_to_original_contributors=targets;
-    auto problem=JointProblem(std::move(fitting)).WithReconstructionDomain(
-        std::move(original),std::move(fitting_to_original_contributors),std::move(fitting_rows),
-        reference_observation_norm);
-    return {std::move(problem),std::move(closure.output_fitting_indices)};
+    return JointProblem(std::move(fitting)).WithReconstructionDomain(
+        std::move(original),std::move(fitting_to_original_contributors),std::move(fitting_rows));
 }
 JointFitResult FitJointComponentsInitialized(const JointProblem & problem,const JointInitialization & initialization)
 {
@@ -664,8 +635,7 @@ JointFitResult FitJointComponentsInitialized(const JointProblem & problem,const 
 }
 JointFitResult detail::FitJointComponentsInitializedWithProgress(
     const JointProblem & problem,const JointInitialization & initialization,
-    const joint_component::JointProgressObserver & observer,joint_component::WidthGridSpacing width_grid,
-    std::span<const std::size_t> width_calibration_fitting_indices)
+    const joint_component::JointProgressObserver & observer,joint_component::WidthGridSpacing width_grid)
 {
     const auto & input=problem.Input();
     const auto invalid=[&](std::string reason) {
@@ -688,7 +658,7 @@ JointFitResult detail::FitJointComponentsInitializedWithProgress(
         if(initialization.atoms[atom].id!=input.atom_ids[atom] || !initialization.atoms[atom].target)
             return invalid("joint-initialization-unavailable:target-mapping-mismatch");
 
-    const auto calibration=joint_component::CalibrateGlobalWidth(initialization,width_calibration_fitting_indices);
+    const auto calibration=joint_component::CalibrateGlobalWidth(initialization);
     const auto tau_min=width_grid.spacing ? std::optional<double>{0.25*(*width_grid.spacing)} : std::nullopt;
     const auto bounded=joint_component::MakeBoundedInitialization(initialization,calibration,tau_min);
     if(!bounded.available)
@@ -712,8 +682,7 @@ JointFitResult detail::FitJointComponentsInitializedWithProgress(
             std::to_string(calibration.qualified_donor_count)+"/"+std::to_string(calibration.target_count)});
     out.evidence.push_back({"qualified-initial-stage-donor-coverage",JointCheckStatus::Passed,
         JointEvidenceScope::AssembledGlobal,calibration.qualified_donor_coverage,0.95,
-        width_calibration_fitting_indices.empty() ? "target-only-qualified-initial-stage-widths" :
-            "output-target-only-qualified-initial-stage-widths"});
+        "target-only-qualified-initial-stage-widths"});
     out.evidence.push_back({"bounded-initialization-projection",JointCheckStatus::Passed,
         JointEvidenceScope::AssembledGlobal,static_cast<double>(bounded.projection_count),{},
         "projected-target-widths="+std::to_string(bounded.projection_count)+

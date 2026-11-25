@@ -5,7 +5,6 @@
 #include <cstddef>
 #include <memory>
 #include <optional>
-#include <span>
 #include <string>
 #include <vector>
 
@@ -34,8 +33,7 @@ public:
     const std::vector<std::size_t> & FittingToOriginalRows() const;
     JointProblem WithReconstructionDomain(JointProblemInput original,
         std::vector<std::size_t> fitting_to_original_contributors,
-        std::vector<std::size_t> fitting_to_original_rows,
-        std::optional<double> reference_observation_norm = {}) const;
+        std::vector<std::size_t> fitting_to_original_rows) const;
     double ObservationScale() const;
     const JointParameterLayout & ParameterLayout() const;
 private:
@@ -93,23 +91,9 @@ JointFitResult FitJointComponentsInitialized(const JointProblem &,const JointIni
 JointFitResult EstimateJointComponents(MapObject &,ModelObject &);
 
 namespace detail {
-enum class BufferObservationDomain { Fixed, Expanded };
-struct JointBufferProblem
-{
-    JointProblem problem;
-    // Indices in problem.Input(). All other fitting indices are explicit buffer atoms.
-    std::vector<std::size_t> output_fitting_indices;
-};
-// Research path. The user's selection remains the output population. Production
-// publication and persistence still use the unbuffered builder.
-JointBufferProblem BuildJointBufferProblem(const MapObject &, const ModelObject &,
-    std::span<const int> buffer_ids, BufferObservationDomain,
-    std::optional<double> reference_observation_norm = {});
-
 JointFitResult FitJointComponentsInitializedWithProgress(
     const JointProblem &, const JointInitialization &,
-    const joint_component::JointProgressObserver &, joint_component::WidthGridSpacing width_grid = {},
-    std::span<const std::size_t> width_calibration_fitting_indices = {});
+    const joint_component::JointProgressObserver &, joint_component::WidthGridSpacing width_grid = {});
 }
 }
 }
