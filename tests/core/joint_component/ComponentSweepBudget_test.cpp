@@ -143,7 +143,7 @@ TEST(JointComponentSweepBudgetTest, EasyQualifiedSearchStopsWithoutExtraWorkOrPa
     const n::Vector eta=n::Vector::Constant(2,std::log(.55));
     n::BcdSearchPolicy policy;
     policy.maximum_sweeps=30; policy.convergence_criteria=n::PracticalJointConvergenceCriteria;
-    policy.eta_upper_bound=std::log(2.2);
+    policy.width_bounds.upper=std::log(2.2);
     const auto fixed=joint_component_test::SearchBcdFixture(problem,eta,policy);
     policy.nominal_sweeps=20;
     const auto adaptive=joint_component_test::SearchBcdFixture(problem,eta,policy);
@@ -163,10 +163,10 @@ TEST(JointComponentSweepBudgetTest, EasyQualifiedSearchStopsWithoutExtraWorkOrPa
 TEST(JointComponentSweepBudgetTest, ExtensionPreservesTheOriginalPathAndQualifiesProductionAssembly)
 {
     const auto problem=CoupledPair();
-    n::BcdExecutionPolicy policy; policy.eta_upper_bound=std::log(2.2);
+    n::BcdExecutionPolicy policy; policy.width_bounds.upper=std::log(2.2);
     n::BcdSearchPolicy search;
     search.core_atoms=1; search.maximum_sweeps=40;
-    search.eta_upper_bound=std::log(1.0);
+    search.width_bounds.upper=std::log(1.0);
     search.component_id="search-only-id";
     search.production_progress=[](const auto &) {ADD_FAILURE()<<"Search callback escaped into component execution";};
     policy.search_policy_for_testing=&search;
@@ -205,7 +205,7 @@ TEST(JointComponentSweepBudgetTest, ExtensionPreservesTheOriginalPathAndQualifie
 TEST(JointComponentSweepBudgetTest, UnqualifiedHardLimitAndMemoryRejectionCannotPublishComponentState)
 {
     const auto problem=CoupledPair();
-    n::BcdExecutionPolicy policy; policy.eta_upper_bound=std::log(2.2);
+    n::BcdExecutionPolicy policy; policy.width_bounds.upper=std::log(2.2);
     n::BcdSearchPolicy search;
     search.core_atoms=1; search.nominal_sweeps=30; search.maximum_sweeps=31;
     policy.search_policy_for_testing=&search;
@@ -240,7 +240,7 @@ TEST(JointComponentSweepBudgetTest, MultipleComponentsExtendAndStopIndependently
     input.selection_domain->pure_halo_support_exclusion=rhbm_gem::JointPureHaloSupportExclusionProvenance{
         input.observations.size(),input.observations.size(),0,0,0,0};
     const rhbm_gem::core::JointProblem problem(std::move(input));
-    n::BcdExecutionPolicy policy; policy.eta_upper_bound=std::log(2.2);
+    n::BcdExecutionPolicy policy; policy.width_bounds.upper=std::log(2.2);
     n::BcdSearchPolicy search;
     search.core_atoms=1; search.nominal_sweeps=30; search.maximum_sweeps=40;
     policy.search_policy_for_testing=&search;

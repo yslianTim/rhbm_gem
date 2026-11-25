@@ -1140,7 +1140,7 @@ TEST(JointComponentNumericsTest, BoundedReplayUsesProjectedWidthKktAndChecksFeas
             y(row)=2.0*basis.gaussian+.5*basis.charge;
         }
         auto context=p::MakeContext(y,1);
-        context.eta_upper_bound=std::log(.55);
+        context.width_bounds.upper=std::log(.55);
         const auto primary=n::EvaluateProfile(domain,y,eta,&context);
         EXPECT_TRUE(primary.valid)<<primary.reason;
         const auto replay=n::CheckIndependentReplay(domain,y,primary,context,nullptr,nullptr,
@@ -1218,7 +1218,7 @@ TEST(JointComponentNumericsTest, WidthBoundKktUsesUpperFaceSignAndInteriorGradie
     Vector eta(2),gradient(2);
     eta<<0.0,1.0;
     gradient<<0.0,-2.0;
-    auto kkt=n::CalculateWidthBoundKkt(eta,gradient,1.0);
+    auto kkt=n::CalculateWidthBoundKkt(eta,gradient,{1.0,{}});
     EXPECT_TRUE(kkt.feasible);
     EXPECT_DOUBLE_EQ(kkt.projected,0.0);
     EXPECT_EQ(kkt.active,1u);
@@ -1227,26 +1227,46 @@ TEST(JointComponentNumericsTest, WidthBoundKktUsesUpperFaceSignAndInteriorGradie
     EXPECT_DOUBLE_EQ(kkt.complementarity,0.0);
 
     gradient(1)=.25;
-    kkt=n::CalculateWidthBoundKkt(eta,gradient,1.0);
+    kkt=n::CalculateWidthBoundKkt(eta,gradient,{1.0,{}});
     EXPECT_TRUE(kkt.feasible);
     EXPECT_DOUBLE_EQ(kkt.projected,.25);
 
     eta(0)=std::nextafter(1.0,0.0);
     eta(1)=1.0;
     gradient<<-.5,0.0;
-    kkt=n::CalculateWidthBoundKkt(eta,gradient,1.0);
+    kkt=n::CalculateWidthBoundKkt(eta,gradient,{1.0,{}});
     EXPECT_TRUE(kkt.feasible);
     EXPECT_NEAR(kkt.projected,0.0,2e-16);
 
     eta(1)=1.0+1e-8;
-    kkt=n::CalculateWidthBoundKkt(eta,gradient,1.0);
+    kkt=n::CalculateWidthBoundKkt(eta,gradient,{1.0,{}});
     EXPECT_FALSE(kkt.feasible);
     EXPECT_NEAR(kkt.violation,1e-8,1e-12);
 
     eta<<.2,.4;
     gradient<<-.3,.5;
-    kkt=n::CalculateWidthBoundKkt(eta,gradient,1.0);
+    kkt=n::CalculateWidthBoundKkt(eta,gradient,{1.0,{}});
     EXPECT_TRUE(kkt.feasible);
     EXPECT_EQ(kkt.active,0u);
     EXPECT_DOUBLE_EQ(kkt.projected,gradient.lpNorm<Eigen::Infinity>());
+}
+
+TEST(JointComponentNumericsTest, WidthBoundKktUsesOppositeSignsAtTheTwoFaces)
+{
+    Vector eta(3),gradient(3);
+    eta<<-1.0,0.0,1.0;
+    gradient<<2.0,0.0,-3.0;
+    const n::WidthBounds bounds{1.0,-1.0};
+    auto kkt=n::CalculateWidthBoundKkt(eta,gradient,bounds);
+    EXPECT_TRUE(kkt.feasible);
+    EXPECT_DOUBLE_EQ(kkt.projected,0.0);
+    EXPECT_EQ(kkt.active_lower,1u);
+    EXPECT_EQ(kkt.active_upper,1u);
+    gradient<<-.25,.125,.5;
+    kkt=n::CalculateWidthBoundKkt(eta,gradient,bounds);
+    EXPECT_DOUBLE_EQ(kkt.projected,.5);
+    eta(0)-=1e-8;
+    kkt=n::CalculateWidthBoundKkt(eta,gradient,bounds);
+    EXPECT_FALSE(kkt.feasible);
+    EXPECT_NEAR(kkt.violation,1e-8,1e-12);
 }

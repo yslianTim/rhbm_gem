@@ -17,7 +17,7 @@ LocalConditioningAssessment AssessBcdLocalConditioning(
 struct AcCompensationAssessment
 {
     std::string reason,raw_reason,conditional_reason,cancellation_reason,weak_reason;
-    bool amplitude_active{},width_upper_bound_active{},conditional_on_active_face{};
+    bool amplitude_active{},width_lower_bound_active{},width_upper_bound_active{},conditional_on_active_face{};
     std::optional<double> raw_correlation,conditional_correlation,cancellation_ratio;
     std::optional<double> gaussian_norm,charge_norm,residualized_gaussian_norm,residualized_charge_norm;
     std::optional<Eigen::Index> free_rank,nuisance_rank;

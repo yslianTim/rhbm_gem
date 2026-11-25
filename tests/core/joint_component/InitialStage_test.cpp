@@ -162,6 +162,16 @@ TEST(InitialStageTest, ExactProductionBaselineAndCertifiedEndpoint)
     EXPECT_EQ(joint_result_io::Encode(joint_result_io::Decode(encoded)),encoded);
 }
 
+TEST(InitialStageTest, VoxelSpacingRequiresAnOrthogonalIsotropicGrid)
+{
+    MapObject isotropic({1,1,1},{.6,.6,.6},{});
+    EXPECT_EQ(n::IsotropicVoxelSpacing(isotropic),.6);
+    EXPECT_FALSE(n::IsotropicVoxelSpacing(MapObject({1,1,1},{.6,.6,.5},{})));
+    EXPECT_FALSE(n::IsotropicVoxelSpacing(MapObject({1,1,1},{0.,0.,0.},{})));
+    isotropic.SetOrthogonalGrid(false);
+    EXPECT_FALSE(n::IsotropicVoxelSpacing(MapObject(isotropic)));
+}
+
 TEST(InitialStageTest, ExactRawSamplingAcrossWorkersAndCrowdedSelection)
 {
     j::array captured;

@@ -903,7 +903,7 @@ TEST(PureHaloSupportExclusionTest, ExtendedSearchQualifiesAssemblyAndFeedsEveryD
     const auto calibration=n::CalibrateGlobalWidth(initialization);
     const auto bounded=n::MakeBoundedInitialization(initialization,calibration);
     ASSERT_TRUE(bounded.available)<<bounded.reason;
-    n::BcdExecutionPolicy policy; policy.eta_upper_bound=calibration.eta_max4;
+    n::BcdExecutionPolicy policy; policy.width_bounds.upper=calibration.eta_max4;
     n::BcdSearchPolicy search;
     search.core_atoms=1; search.nominal_sweeps=35; search.maximum_sweeps=100;
     policy.search_policy_for_testing=&search;

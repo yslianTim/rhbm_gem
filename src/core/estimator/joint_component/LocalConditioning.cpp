@@ -156,7 +156,7 @@ LocalConditioningAssessment AssessBcdLocalConditioning(
     if(state.certificate.available)
     {
         evidence.local_ac_projected_kkt=state.certificate.projected_kkt;
-        if(context.eta_upper_bound)
+        if(context.width_bounds.upper)
             evidence.active_width_bound_targets=state.certificate.active_width_bound_count;
     }
     const auto local_width_kkt=ProfileGradientInfinityNorm(state,context);
@@ -313,13 +313,14 @@ AcCompensationAssessment AssessAcCompensation(
         out.conditional_on_active_face|=beta(a)==0;
     }
     out.amplitude_active=beta(2*target)==0;
-    if(context.eta_upper_bound)
+    if(context.width_bounds.upper)
     {
         const Vector zero=Vector::Zero(eta.size());
-        const auto bound=CalculateWidthBoundKkt(eta,zero,*context.eta_upper_bound);
+        const auto bound=CalculateWidthBoundKkt(eta,zero,context.width_bounds);
         if(!bound.feasible) {out.reason="infeasible-width-bound"; return out;}
-        out.width_upper_bound_active=CalculateWidthBoundKkt(eta.segment(target,1),zero.head(1),
-            *context.eta_upper_bound).active!=0;
+        const auto face=CalculateWidthBoundKkt(eta.segment(target,1),zero.head(1),context.width_bounds);
+        out.width_upper_bound_active=face.active_upper!=0;
+        out.width_lower_bound_active=face.active_lower!=0;
     }
 
     MemoryShape shape;

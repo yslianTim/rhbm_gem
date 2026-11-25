@@ -23,5 +23,7 @@ struct ActiveSetStep
 // ||D p|| <= trust_radius. The returned step is the step used by the model.
 ActiveSetStep SolveBoundedTrustRegionStep(const Eigen::MatrixXd &,const Eigen::VectorXd &,
     const Eigen::VectorXd &,const Eigen::VectorXd &,double,double);
+ActiveSetStep SolveBoundedTrustRegionStep(const Eigen::MatrixXd &,const Eigen::VectorXd &,
+    const Eigen::VectorXd &,const Eigen::VectorXd & lower,const Eigen::VectorXd & upper,double,double);
 
 } // namespace rhbm_gem::core::joint_component

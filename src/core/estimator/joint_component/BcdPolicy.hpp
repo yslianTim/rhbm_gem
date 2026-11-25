@@ -1,5 +1,6 @@
 #pragma once
 
+#include "WidthBounds.hpp"
 #include <cstddef>
 #include <optional>
 #include <string>
@@ -20,7 +21,7 @@ struct BcdExecutionPolicy
 {
     std::size_t component_index{};
     std::string component_id;
-    std::optional<double> eta_upper_bound;
+    WidthBounds width_bounds;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     // Borrowed for the synchronous fit. Only search budgets and fault controls are read.
     const BcdSearchPolicy * search_policy_for_testing{};

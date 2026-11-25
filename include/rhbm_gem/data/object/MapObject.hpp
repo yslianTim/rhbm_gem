@@ -20,6 +20,7 @@ class MapObject
     std::array<double, 3> m_grid_spacing, m_origin, m_map_length;
     std::array<double, 3> m_overflow, m_underflow, m_upper_bound, m_lower_bound;
     std::unique_ptr<double[]> m_map_value_array;
+    bool m_orthogonal_grid{ true };
 
 public:
     MapObject();
@@ -37,6 +38,8 @@ public:
 
     std::array<int, 3> GetGridSize() const { return m_grid_size; }
     std::array<double, 3> GetGridSpacing() const { return m_grid_spacing; }
+    bool HasOrthogonalGrid() const { return m_orthogonal_grid; }
+    void SetOrthogonalGrid(bool orthogonal) { m_orthogonal_grid = orthogonal; }
     std::array<double, 3> GetOrigin() const { return m_origin; }
     std::size_t GetMapValueArraySize() const { return m_voxel_size; }
     const double * GetMapValueArray() const { return m_map_value_array.get(); }

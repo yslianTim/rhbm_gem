@@ -71,13 +71,13 @@ j::object Trust(const Domain & d,const Vector & y,const Evaluation & e,const Eva
 j::object Fit(const Domain & domain,const Vector & y,const Vector & initial_tau,const EvaluationContext * provided)
 {
     auto context=provided ? *provided : MakeContext(y,static_cast<Eigen::Index>(domain.atoms.size()));
-    if(!context.eta_upper_bound)
+    if(!context.width_bounds.upper)
     {
         double maximum_initial_width{};
         for(const double width:initial_tau)
             if(std::isfinite(width) && width>maximum_initial_width) maximum_initial_width=width;
         if(!(maximum_initial_width>0.0)) maximum_initial_width=1.0;
-        context.eta_upper_bound=std::log(4.0*maximum_initial_width);
+        context.width_bounds.upper=std::log(4.0*maximum_initial_width);
     }
     const auto start=std::chrono::steady_clock::now();
     const auto search=runtime::SearchProfile(domain,y,initial_tau,context);

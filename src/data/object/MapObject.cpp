@@ -79,7 +79,8 @@ MapObject::MapObject(const MapObject & other) :
     m_grid_size{ other.m_grid_size }, m_grid_spacing{ other.m_grid_spacing }, m_origin{ other.m_origin },
     m_map_length{ other.m_map_length }, m_overflow{ other.m_overflow }, m_underflow{ other.m_underflow },
     m_upper_bound{ other.m_upper_bound }, m_lower_bound{ other.m_lower_bound },
-    m_map_value_array{ std::make_unique<double[]>(other.m_voxel_size) }
+    m_map_value_array{ std::make_unique<double[]>(other.m_voxel_size) },
+    m_orthogonal_grid{ other.m_orthogonal_grid }
 {
     std::memcpy(m_map_value_array.get(), other.m_map_value_array.get(), m_voxel_size * sizeof(double));
     RecomputeStatistics();

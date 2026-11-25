@@ -1,5 +1,6 @@
 #pragma once
 
+#include "WidthBounds.hpp"
 #include "SnapshotViews.hpp"
 #include "ResourceWork.hpp"
 #include "ConvergenceCriteria.hpp"
@@ -39,7 +40,7 @@ struct EvaluationContext
     RankPolicy rank;
     LinearPolicy linear;
     int profile_budget{200},update_budget{100};
-    std::optional<double> eta_upper_bound;
+    WidthBounds width_bounds;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     bool force_width_subproblem_failure_for_testing{};
 #endif
@@ -110,9 +111,9 @@ struct WidthBoundKkt
     bool feasible{};
     double projected{std::numeric_limits<double>::infinity()},violation{},
         boundary_gradient{unavailable},multiplier{},complementarity{};
-    std::size_t active{};
+    std::size_t active{}, active_lower{}, active_upper{};
 };
-WidthBoundKkt CalculateWidthBoundKkt(const Vector &,const Vector &,double);
+WidthBoundKkt CalculateWidthBoundKkt(const Vector &,const Vector &,const WidthBounds &);
 Spectrum ComputeSpectrum(const Sparse &,const RankPolicy &,Eigen::Index,bool);
 Evaluation EvaluateProfile(const Domain &,VectorRef,const Vector &,const EvaluationContext *,
     ConstrainedAcWorkspace * = nullptr);

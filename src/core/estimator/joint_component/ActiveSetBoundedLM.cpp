@@ -5,6 +5,8 @@
 #include <limits>
 namespace rhbm_gem::core::joint_component {
 namespace {
+enum class WorkingBound { Free, Lower, Upper };
+
 struct BoundedSubproblemContext
 {
     double bound_tolerance{};
@@ -23,7 +25,7 @@ struct BoundedLmWorkspace
     Eigen::VectorXd rhs,adjusted,candidate,step,residual,gradient,multipliers,solution;
     std::vector<Eigen::Index> free_step_indices,newly_blocked_indices;
     // Bounds held as equalities in the current subproblem; excludes frozen directions.
-    std::vector<bool> working_bound_mask;
+    std::vector<WorkingBound> working_bounds;
 };
 
 void ResizeWorkspaceVector(Eigen::VectorXd & value,Eigen::Index size)
@@ -38,8 +40,7 @@ void ResizeWorkspaceMatrix(Eigen::MatrixXd & value,Eigen::Index rows,Eigen::Inde
 
 void PrepareWorkspace(BoundedLmWorkspace & workspace,Eigen::Index rows,Eigen::Index columns)
 {
-    if(workspace.working_bound_mask.size()!=static_cast<std::size_t>(columns))
-        workspace.working_bound_mask.resize(static_cast<std::size_t>(columns));
+    workspace.working_bounds.resize(static_cast<std::size_t>(columns));
     for(auto * value:{&workspace.candidate,&workspace.step,&workspace.gradient,&workspace.multipliers})
         ResizeWorkspaceVector(*value,columns);
     ResizeWorkspaceVector(workspace.adjusted,rows);
@@ -56,12 +57,14 @@ void CopyActiveSetStep(ActiveSetStep & destination,const ActiveSetStep & source)
 }
 
 bool ValidSubproblemInput(const Eigen::MatrixXd & j,const Eigen::VectorXd & r,
-    const Eigen::VectorXd & d,const Eigen::VectorXd & upper,double lambda)
+    const Eigen::VectorXd & d,const Eigen::VectorXd & lower,const Eigen::VectorXd & upper,double lambda)
 {
     const Eigen::Index n=j.cols();
     return j.rows()==r.size() && n>0 && d.size()==n && upper.size()==n &&
         j.allFinite() && r.allFinite() && d.allFinite() && upper.allFinite() &&
         (d.array()>0.0).all() && !(upper.array()<0.0).any() &&
+        (lower.size()==0 || (lower.size()==n && lower.allFinite() &&
+            (lower.array()<=0.0).all() && (lower.array()<upper.array()).all())) &&
         std::isfinite(lambda) && lambda>=0.0;
 }
 
@@ -109,7 +112,7 @@ ActiveSetStep Failure(std::string status)
 }
 void SolveAtDamping(BoundedSubproblemContext & context,BoundedLmWorkspace & workspace,
     const Eigen::MatrixXd & j,const Eigen::VectorXd & r,const Eigen::VectorXd & d,
-    const Eigen::VectorXd & upper,double lambda,ActiveSetStep & result)
+    const Eigen::VectorXd & lower,const Eigen::VectorXd & upper,double lambda,ActiveSetStep & result)
 {
     const Eigen::Index n=j.cols();
     result.valid=false; result.status.clear(); result.damping=lambda;
@@ -123,13 +126,20 @@ void SolveAtDamping(BoundedSubproblemContext & context,BoundedLmWorkspace & work
 
     PrepareWorkspace(workspace,j.rows(),n);
     const double bound_tolerance=context.bound_tolerance;
-    std::fill(workspace.working_bound_mask.begin(),workspace.working_bound_mask.end(),false);
+    std::fill(workspace.working_bounds.begin(),workspace.working_bounds.end(),WorkingBound::Free);
+    const bool has_lower=lower.size()!=0;
+    const auto is_working=[&](Eigen::Index i) {
+        return workspace.working_bounds[static_cast<std::size_t>(i)]!=WorkingBound::Free;
+    };
     workspace.step.setZero();
     for(Eigen::Index i=0;i<n;++i)
     {
-        workspace.working_bound_mask[static_cast<std::size_t>(i)]=!context.stationary_null_direction_mask[static_cast<std::size_t>(i)] &&
-            upper(i)<=bound_tolerance;
-        if(workspace.working_bound_mask[static_cast<std::size_t>(i)]) workspace.step(i)=upper(i);
+        const auto index=static_cast<std::size_t>(i);
+        if(context.stationary_null_direction_mask[index]) continue;
+        if(upper(i)<=bound_tolerance)
+        {workspace.working_bounds[index]=WorkingBound::Upper; workspace.step(i)=upper(i);}
+        else if(has_lower && -lower(i)<=bound_tolerance)
+        {workspace.working_bounds[index]=WorkingBound::Lower; workspace.step(i)=lower(i);}
     }
 
     std::size_t working_set_releases{};
@@ -138,7 +148,7 @@ void SolveAtDamping(BoundedSubproblemContext & context,BoundedLmWorkspace & work
         ++result.damping_active_set_iterations;
         workspace.free_step_indices.clear();
         for(Eigen::Index i=0;i<n;++i)
-            if(!workspace.working_bound_mask[static_cast<std::size_t>(i)] &&
+            if(!is_working(i) &&
                 !context.stationary_null_direction_mask[static_cast<std::size_t>(i)])
                 workspace.free_step_indices.push_back(i);
         workspace.candidate=workspace.step;
@@ -153,7 +163,7 @@ void SolveAtDamping(BoundedSubproblemContext & context,BoundedLmWorkspace & work
             workspace.rhs.setZero();
             workspace.adjusted=r;
             for(Eigen::Index i=0;i<n;++i)
-                if(workspace.working_bound_mask[static_cast<std::size_t>(i)])
+                if(is_working(i))
                     workspace.adjusted.noalias()+=j.col(i)*workspace.step(i);
             workspace.rhs.head(j.rows())=-workspace.adjusted;
             for(Eigen::Index k=0;k<free_count;++k)
@@ -187,10 +197,14 @@ void SolveAtDamping(BoundedSubproblemContext & context,BoundedLmWorkspace & work
         workspace.newly_blocked_indices.clear();
         for(const auto index:workspace.free_step_indices)
         {
-            if(workspace.candidate(index)<=upper(index)) continue;
+            const bool hit_upper=workspace.candidate(index)>upper(index);
+            const bool hit_lower=has_lower && workspace.candidate(index)<lower(index);
+            if(!hit_upper && !hit_lower) continue;
+            const double bound=hit_upper ? upper(index) : lower(index);
             const double direction=workspace.candidate(index)-workspace.step(index);
-            if(!(direction>0.0)) {fail("inconsistent-active-set-direction"); return;}
-            const double alpha=std::clamp((upper(index)-workspace.step(index))/direction,0.0,1.0);
+            if(hit_upper ? !(direction>0.0) : !(direction<0.0))
+            {fail("inconsistent-active-set-direction"); return;}
+            const double alpha=std::clamp((bound-workspace.step(index))/direction,0.0,1.0);
             if(alpha<first_hit-bound_tolerance)
             {
                 first_hit=alpha;
@@ -204,8 +218,10 @@ void SolveAtDamping(BoundedSubproblemContext & context,BoundedLmWorkspace & work
             workspace.step.noalias()+=first_hit*(workspace.candidate-workspace.step);
             for(const auto index:workspace.newly_blocked_indices)
             {
-                workspace.step(index)=upper(index);
-                workspace.working_bound_mask[static_cast<std::size_t>(index)]=true;
+                const bool hit_upper=workspace.candidate(index)>upper(index);
+                workspace.step(index)=hit_upper ? upper(index) : lower(index);
+                workspace.working_bounds[static_cast<std::size_t>(index)]=
+                    hit_upper ? WorkingBound::Upper : WorkingBound::Lower;
             }
             continue;
         }
@@ -223,16 +239,18 @@ void SolveAtDamping(BoundedSubproblemContext & context,BoundedLmWorkspace & work
         double largest_wrong_multiplier=kkt_tolerance;
         for(Eigen::Index i=0;i<n;++i)
         {
-            if(!workspace.working_bound_mask[static_cast<std::size_t>(i)]) continue;
-            if(workspace.gradient(i)>largest_wrong_multiplier)
+            if(!is_working(i)) continue;
+            const double wrong=workspace.working_bounds[static_cast<std::size_t>(i)]==WorkingBound::Upper ?
+                workspace.gradient(i) : -workspace.gradient(i);
+            if(wrong>largest_wrong_multiplier)
             {
-                largest_wrong_multiplier=workspace.gradient(i);
+                largest_wrong_multiplier=wrong;
                 released_bound_index=i;
             }
         }
         if(released_bound_index>=0)
         {
-            workspace.working_bound_mask[static_cast<std::size_t>(released_bound_index)]=false;
+            workspace.working_bounds[static_cast<std::size_t>(released_bound_index)]=WorkingBound::Free;
             ++working_set_releases;
             ++result.damping_working_set_releases;
             continue;
@@ -240,19 +258,24 @@ void SolveAtDamping(BoundedSubproblemContext & context,BoundedLmWorkspace & work
 
         double kkt_inf{};
         workspace.multipliers.setZero();
+        result.working_bound_mask.resize(static_cast<std::size_t>(n));
         for(Eigen::Index i=0;i<n;++i)
         {
-            if(workspace.working_bound_mask[static_cast<std::size_t>(i)])
-                workspace.multipliers(i)=std::max(0.0,-workspace.gradient(i));
-            else
+            result.working_bound_mask[static_cast<std::size_t>(i)]=is_working(i);
+            if(!is_working(i))
                 kkt_inf=std::max(kkt_inf,std::abs(workspace.gradient(i)));
-            if(workspace.working_bound_mask[static_cast<std::size_t>(i)])
-                kkt_inf=std::max(kkt_inf,std::max(0.0,workspace.gradient(i)));
+            else
+            {
+                const double wrong=workspace.working_bounds[static_cast<std::size_t>(i)]==WorkingBound::Upper ?
+                    workspace.gradient(i) : -workspace.gradient(i);
+                workspace.multipliers(i)=std::max(0.0,-wrong);
+                kkt_inf=std::max(kkt_inf,std::max(0.0,wrong));
+            }
         }
         if(kkt_inf>kkt_tolerance) {fail("subproblem-kkt-failed"); return;}
         result.valid=true; result.status="solved"; result.step=workspace.step;
         result.gradient=workspace.gradient; result.multipliers=workspace.multipliers;
-        result.working_bound_mask=workspace.working_bound_mask; result.damping=lambda;
+        result.damping=lambda;
         result.scaled_step_norm=d.cwiseProduct(result.step).stableNorm();
         result.kkt_inf_norm=kkt_inf; result.iterations=iteration+1; result.working_set_releases=working_set_releases;
         return;
@@ -269,7 +292,8 @@ ActiveSetStep WithDamping(ActiveSetStep result,double damping)
 
 namespace {
 ActiveSetStep SolveBoundedTrustRegionStepImpl(const Eigen::MatrixXd & j,const Eigen::VectorXd & r,
-    const Eigen::VectorXd & d,const Eigen::VectorXd & upper,double trust_radius,double damping_seed,
+    const Eigen::VectorXd & d,const Eigen::VectorXd & lower,const Eigen::VectorXd & upper,
+    double trust_radius,double damping_seed,
     BoundedLmWorkspace & workspace)
 {
     BoundedSubproblemContext context;
@@ -289,14 +313,14 @@ ActiveSetStep SolveBoundedTrustRegionStepImpl(const Eigen::MatrixXd & j,const Ei
         ++damping_solves;
         if(phase==1) ++bracket_solves;
         else if(phase==2) ++bisection_solves;
-        SolveAtDamping(context,workspace,j,r,d,upper,lambda,result);
+        SolveAtDamping(context,workspace,j,r,d,lower,upper,lambda,result);
         damping_qr_factorizations+=result.damping_qr_factorizations;
         damping_active_set_iterations+=result.damping_active_set_iterations;
         damping_working_set_releases+=result.damping_working_set_releases;
     };
     if(!std::isfinite(trust_radius) || !(trust_radius>0.0) || !std::isfinite(damping_seed) || damping_seed<0.0)
         return Failure("invalid-trust-region-input");
-    if(!ValidSubproblemInput(j,r,d,upper,0.0)) return Failure("invalid-subproblem-input");
+    if(!ValidSubproblemInput(j,r,d,lower,upper,0.0)) return Failure("invalid-subproblem-input");
     context=MakeBoundedSubproblemContext(j,r,d,upper);
     solve_candidate(0.0,0,candidate);
     const double trust_tolerance=64.0*std::numeric_limits<double>::epsilon()*trust_radius;
@@ -344,8 +368,15 @@ ActiveSetStep SolveBoundedTrustRegionStepImpl(const Eigen::MatrixXd & j,const Ei
 ActiveSetStep SolveBoundedTrustRegionStep(const Eigen::MatrixXd & j,const Eigen::VectorXd & r,
     const Eigen::VectorXd & d,const Eigen::VectorXd & upper,double trust_radius,double damping_seed)
 {
+    return SolveBoundedTrustRegionStep(j,r,d,Eigen::VectorXd{},upper,trust_radius,damping_seed);
+}
+
+ActiveSetStep SolveBoundedTrustRegionStep(const Eigen::MatrixXd & j,const Eigen::VectorXd & r,
+    const Eigen::VectorXd & d,const Eigen::VectorXd & lower,const Eigen::VectorXd & upper,
+    double trust_radius,double damping_seed)
+{
     BoundedLmWorkspace workspace;
-    return SolveBoundedTrustRegionStepImpl(j,r,d,upper,trust_radius,damping_seed,workspace);
+    return SolveBoundedTrustRegionStepImpl(j,r,d,lower,upper,trust_radius,damping_seed,workspace);
 }
 
 } // namespace rhbm_gem::core::joint_component

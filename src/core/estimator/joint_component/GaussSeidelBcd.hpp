@@ -133,7 +133,7 @@ struct BcdSearchPolicy
     std::size_t component_index{};
     std::string component_id;
     std::function<void(const BcdSweepRecord &)> production_progress;
-    std::optional<double> eta_upper_bound;
+    WidthBounds width_bounds;
 #ifdef RHBM_GEM_TEST_INSTRUMENTATION
     // Zero-based block and sweep; affects only this visit's existing LM fault hook.
     std::function<bool(std::size_t,std::size_t)> force_width_failure_for_testing;

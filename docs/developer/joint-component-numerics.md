@@ -70,8 +70,9 @@ to report deficient-rank evidence.
 [ProfileLmSearch.cpp](../../src/core/estimator/joint_component/ProfileLmSearch.cpp)
 owns the JCE problem adapter. It supplies the qualified A/C evaluations, full
 residual norms, reduced derivatives and cached accepted stationarity. It
-requires a finite `eta_max = log(tau_max)`, validates initial and trial
-widths, and passes `eta_max - eta` as the step's upper bounds. A proposed
+requires a finite `eta_max = log(tau_max)` and accepts an optional
+`eta_min = log(tau_min)`. It validates initial and trial widths and translates
+the width interval into step bounds. A proposed
 trial must pass local replay of the profile and its feasibility and agreement
 checks. A step exceeding one log-width decade is rejected when at least 95%
 of its norm lies in weak right-singular directions of the trial Jacobian and
@@ -110,13 +111,15 @@ least squares and selects damping to meet the trust radius.
 
 ```text
 min_p  (||J_r p + r_r||² + lambda ||D p||²) / 2
-       p_j <= eta_max - eta_j,  ||D p||₂ <= Delta
+       eta_min - eta_j <= p_j <= eta_max - eta_j,  ||D p||₂ <= Delta
 ```
 
-At fixed damping, the working set holds upper bounds while scaled, pivoted QR
-solves the augmented free problem. Steps stop at blocking faces and release
-a bound when its damped gradient is positive beyond tolerance. At a valid
-upper face the gradient is nonpositive and the multiplier is nonnegative.
+An omitted `eta_min` leaves the lower side unbounded. At fixed damping,
+the working set holds lower or upper faces while scaled, pivoted QR solves
+the augmented free problem. Steps stop at blocking faces. A lower face
+requires a nonnegative damped gradient, and an upper face requires a
+nonpositive one. The solver releases a working face when its gradient
+violates that sign beyond tolerance.
 A separate stationary-null mask freezes only directions with negligible
 Jacobian norm and gradient. Working bounds, frozen directions and geometric
 equality therefore describe different sets. The solver verifies feasibility and

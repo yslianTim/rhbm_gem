@@ -53,6 +53,7 @@ TEST(DataObjectFileIOTest, MapReadWriteFormatMatrix)
         EXPECT_EQ(loaded_map->GetGridSize(), grid_size);
         EXPECT_EQ(loaded_map->GetGridSpacing(), grid_spacing);
         EXPECT_EQ(loaded_map->GetOrigin(), origin);
+        EXPECT_TRUE(loaded_map->HasOrthogonalGrid());
 
         const auto * loaded_values{ loaded_map->GetMapValueArray() };
         ASSERT_NE(loaded_values, nullptr);
@@ -60,6 +61,15 @@ TEST(DataObjectFileIOTest, MapReadWriteFormatMatrix)
         {
             EXPECT_DOUBLE_EQ(loaded_values[i], static_cast<double>(i));
         }
+        {
+            std::fstream header{path,std::ios::binary | std::ios::in | std::ios::out};
+            constexpr float oblique_angle=80.0f;
+            // MRC/CCP4 word 14 is the first cell angle.
+            header.seekp(52);
+            header.write(reinterpret_cast<const char *>(&oblique_angle),sizeof(oblique_angle));
+            ASSERT_TRUE(header);
+        }
+        EXPECT_FALSE(rg::ReadMap(path)->HasOrthogonalGrid());
     }
 }
 

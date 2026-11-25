@@ -400,6 +400,35 @@ TEST(JointComponentRuntimeTest, MedianWidthBoundProjectsAndCertifiesAllComponent
         }
     }
 
+    constexpr double lower=.6;
+    const auto box=core::detail::FitJointComponentsInitializedWithProgress(problem,init,{},4*lower);
+    ASSERT_TRUE(box.assembled_state);
+    EXPECT_EQ(box.TargetRuntimeConvergence(),JointCheckStatus::Passed);
+    expect_certified(box.evidence);
+    EXPECT_EQ(box.initialization.tau,init.tau);
+    for(std::size_t i=0;i<targets;++i)
+    {
+        SCOPED_TRACE(i);
+        const bool narrow=i<narrow_targets;
+        EXPECT_DOUBLE_EQ(box.assembled_state->log_tau[i],std::log(narrow ? lower : upper));
+        EXPECT_GT((narrow ? 1 : -1)*box.assembled_state->eta_gradient[i],
+            n::PracticalJointConvergenceCriteria.global_eta_gradient);
+    }
+    auto saved_box=core::CaptureJointAnalysisResult(box);
+    const auto round_trip=rhbm_gem::joint_result_io::Decode(rhbm_gem::joint_result_io::Encode(saved_box));
+    EXPECT_EQ(round_trip.assembled_state->log_tau,box.assembled_state->log_tau);
+    saved_box.assembled_state->tau[0]=std::nextafter(std::exp(box.assembled_state->log_tau[0]),0.0);
+    EXPECT_NO_THROW(rhbm_gem::joint_result_io::Encode(saved_box));
+    saved_box.assembled_state->tau[0]=lower-1e-5;
+    EXPECT_THROW(rhbm_gem::joint_result_io::Encode(saved_box),std::invalid_argument);
+    for(const auto & [name,count]:{std::pair{"active-width-lower-bound",20.},
+        std::pair{"active-width-upper-bound",4.},std::pair{"lower-bound-initialization-projection",20.}})
+    {
+        const auto check=evidence(round_trip.evidence,name);
+        ASSERT_NE(check,round_trip.evidence.end());
+        EXPECT_EQ(check->value,count);
+    }
+
     for(std::size_t i=0;i<2;++i) init.atoms[i].initial_stage_fit_qualified=false;
     bool solver_started=false;
     const auto rejected=core::detail::FitJointComponentsInitializedWithProgress(problem,init,
@@ -431,7 +460,7 @@ RecoveryAssemblyRun RunRecoveryAssembly(bool inject,bool persistent=false,std::s
     input.selection_domain->pure_halo_support_exclusion=rhbm_gem::JointPureHaloSupportExclusionProvenance{
         input.observations.size(),input.observations.size(),0,0,0,0};
     const core::JointProblem problem(std::move(input));
-    n::BcdExecutionPolicy policy; policy.eta_upper_bound=std::log(2.2);
+    n::BcdExecutionPolicy policy; policy.width_bounds.upper=std::log(2.2);
     n::BcdSearchPolicy search;
     search.core_atoms=1; search.maximum_sweeps=sweeps; search.nominal_sweeps=n::ProductionBcdNominalSweeps;
     search.force_width_failure_for_testing=[&](std::size_t block,std::size_t sweep) {
@@ -557,7 +586,7 @@ TEST(JointComponentRuntimeTest, WidthRecoveryExhaustionAndUnqualifiedTerminalSta
     const auto recovered=RunRecoveryAssembly(true);
     ASSERT_EQ(recovered.fit.RuntimeConvergence(),Status::Passed);
     const auto & data=core::JointProblemAccess::Get(*recovered.fit.problem);
-    auto context=data.context; context.eta_upper_bound=std::log(2.2);
+    auto context=data.context; context.width_bounds.upper=std::log(2.2);
     ASSERT_EQ(recovered.fit.components.size(),1u);
     const auto & state=recovered.fit.components.front().state;
     ASSERT_TRUE(state);
@@ -676,10 +705,10 @@ TEST(JointComponentRuntimeTest, ComponentSearchPreflightKeepsValidationOrderAndC
         SCOPED_TRACE(variant);
         auto prepared=n::MakeComponentProblemView(data.layout,data.partition.components.front());
         n::Vector widths=n::Vector::Constant(3,.55);
-        n::BcdExecutionPolicy policy; policy.eta_upper_bound=std::log(2.2);
-        if(variant==0) policy.eta_upper_bound.reset();
-        if(variant==1) policy.eta_upper_bound=std::numeric_limits<double>::quiet_NaN();
-        if(variant==2) policy.eta_upper_bound=std::numeric_limits<double>::infinity();
+        n::BcdExecutionPolicy policy; policy.width_bounds.upper=std::log(2.2);
+        if(variant==0) policy.width_bounds.upper.reset();
+        if(variant==1) policy.width_bounds.upper=std::numeric_limits<double>::quiet_NaN();
+        if(variant==2) policy.width_bounds.upper=std::numeric_limits<double>::infinity();
         if(variant==3) widths.setConstant(3);
         if(variant==4) prepared.row_ids=n::Identities{};
         std::vector<n::JointProgressEvent> events;
@@ -710,7 +739,7 @@ TEST(JointComponentRuntimeTest, CanonicalReasonReachesComponentProgressAndCaptur
     for(std::size_t variant=0;variant<reasons.size();++variant)
     {
         SCOPED_TRACE(variant);
-        n::BcdExecutionPolicy policy; policy.eta_upper_bound=std::log(2.2);
+        n::BcdExecutionPolicy policy; policy.width_bounds.upper=std::log(2.2);
         n::BcdSearchPolicy search;
         search.maximum_sweeps=n::ProductionBcdMaximumSweeps;
         search.nominal_sweeps=n::ProductionBcdNominalSweeps;

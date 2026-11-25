@@ -155,7 +155,7 @@ TEST(JointLocalConditioningTest, ZeroAmplitudeWidthInformationDependsOnCharge)
         n::Vector y(6);
         for(const auto & support:domain.atoms[0])
             y(support.row)=charge*n::EvaluateKernel(support.square,.7,2.5).charge;
-        auto context=tc::MakeContext(y,1); context.eta_upper_bound=std::log(2.2);
+        auto context=tc::MakeContext(y,1); context.width_bounds.upper=std::log(2.2);
         const auto state=n::EvaluateState(domain,y,eta,beta,context);
         ASSERT_TRUE(state.valid); EXPECT_TRUE(state.certificate.kkt_passed);
         EXPECT_LE(*n::ProfileGradientInfinityNorm(state,context),1e-9);
@@ -243,7 +243,7 @@ TEST(JointLocalConditioningTest, MultiBlockDiagnosticsLeaveTheAcceptedFitUnchang
     const auto run=[&](bool diagnostics) {
         n::BcdSearchPolicy policy; policy.core_atoms=1;
         policy.collect_diagnostics=diagnostics;
-        policy.eta_upper_bound=std::log(2.2);
+        policy.width_bounds.upper=std::log(2.2);
         const n::Vector eta=n::Vector::Constant(2,std::log(.55));
         return n::SearchBcdComponent(data.domain,data.layout,data.y,eta,data.context,policy);
     };
@@ -251,7 +251,7 @@ TEST(JointLocalConditioningTest, MultiBlockDiagnosticsLeaveTheAcceptedFitUnchang
     ASSERT_EQ(with_diagnostics.local_conditioning.size(),2u);
     EXPECT_EQ(without_diagnostics.local_conditioning.size(),2u);
     auto context=data.context;
-    context.eta_upper_bound=std::log(2.2);
+    context.width_bounds.upper=std::log(2.2);
     const auto compensation=n::AssessAcCompensation(data.domain,data.y,with_diagnostics.state.eta,
         with_diagnostics.state.beta,context,0);
     EXPECT_TRUE(compensation.raw_correlation)<<compensation.reason;
@@ -364,7 +364,7 @@ TEST(JointLocalConditioningTest, CompensationRespectsActiveAmplitudeAndWidthFace
 {
     const auto domain=CompensationDomain(.1);
     const n::Vector y=n::Vector::Zero(domain.rows),eta=n::Vector::Constant(1,std::log(2.2));
-    auto context=tc::MakeContext(y,1); context.eta_upper_bound=eta(0);
+    auto context=tc::MakeContext(y,1); context.width_bounds.upper=eta(0);
     n::Vector beta(2); beta<<0.,-.3;
     const auto active=n::AssessAcCompensation(domain,y,eta,beta,context,0);
     EXPECT_TRUE(active.amplitude_active && active.width_upper_bound_active && active.conditional_on_active_face);

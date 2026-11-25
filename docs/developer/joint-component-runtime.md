@@ -16,7 +16,7 @@ K(r; tau) = erf(r / (sqrt(2) tau)) / r
 ```
 
 A is nonnegative Gaussian amplitude. Signed C multiplies the charge kernel.
-Both terms share `0 < tau ≤ tau_max` and the fixed 2.5 Å support. For
+Both terms share the calibrated width interval and the fixed 2.5 Å support. For
 `r < 1e-5 Å` the charge basis uses its center value `sqrt(2/pi)/tau`.
 The solver uses `eta = log(tau)`. Inside support,
 `dG/deta = G (r²/tau² - 3)` and
@@ -77,11 +77,15 @@ Target MDPDE widths, excluding median fallbacks and initialization exceptions.
 It requires at least 20 qualified donors and at least 95% Target coverage.
 Calibration computes `q50 = median(donor widths)` with
 `array_helper::ComputeMedian()`. The upper bound is `tau_max = 4 × q50`.
-All components use the same `eta_max = log(tau_max)` for bounded LM, projected Width KKT,
-Endpoint Verification and Independent Replay. Each working seed is
-`min(initial_tau, tau_max)`. The original Joint initialization and
-InitialStage estimates and qualification evidence are retained. An invalid,
-overflowing or unavailable bound prevents Joint search.
+Map-backed fitting also uses `tau_min = 0.25 × h` when the source grid is
+orthogonal with equal positive voxel spacing `h` on all three axes. Other
+grids and geometry-free initialized fits use the upper bound alone.
+All components use the same log-width interval for bounded LM, projected Width
+KKT, Endpoint Verification and Independent Replay. Only the working Target
+seeds are projected into the interval. The original initialization and
+InitialStage evidence are retained. An invalid or unavailable required bound
+prevents Joint search. A saved lower-bound fit records the spacing, floor,
+seed projections and final active-face counts in the Joint evidence.
 
 ## Gauss–Seidel BCD
 

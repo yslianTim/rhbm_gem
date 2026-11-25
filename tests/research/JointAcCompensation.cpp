@@ -143,7 +143,7 @@ try
     const auto fit=FitJointComponentsInitialized(problem,init);
     auto context=JointProblemAccess::Get(problem).context;
     const auto calibration=n::CalibrateGlobalWidth(init);
-    context.eta_upper_bound=calibration.eta_max4;
+    context.width_bounds.upper=calibration.eta_max4;
     json::object checks,targets;
     for(const auto & check:fit.evidence)
         checks[check.name]={{"status",joint_result_io::StatusText(check.status)},

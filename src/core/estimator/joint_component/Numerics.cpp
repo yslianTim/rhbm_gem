@@ -24,29 +24,42 @@ void AddCompensatedProduct(double left,double right,double & sum,double & compen
     AddCompensated(std::fma(left,right,-product),sum,compensation);
 }
 }
-WidthBoundKkt CalculateWidthBoundKkt(const Vector & eta,const Vector & gradient,double upper)
+WidthBoundKkt CalculateWidthBoundKkt(const Vector & eta,const Vector & gradient,const WidthBounds & bounds)
 {
     WidthBoundKkt out;
-    if(!std::isfinite(upper) || eta.size()==0 || eta.size()!=gradient.size() ||
+    if(!bounds.IsValid() || eta.size()==0 || eta.size()!=gradient.size() ||
         !eta.allFinite() || !gradient.allFinite()) return out;
-    const double tolerance=64.0*std::numeric_limits<double>::epsilon()*std::max(1.0,std::abs(upper));
+    const double upper=*bounds.upper;
+    const double tolerance=WidthBounds::RoundoffTolerance(upper);
+    const double lower_tolerance=bounds.lower ? WidthBounds::RoundoffTolerance(*bounds.lower) : 0.0;
     out.feasible=true;
     out.projected=0.0;
     for(Eigen::Index i=0;i<eta.size();++i)
     {
-        const double slack=upper-eta(i);
-        out.violation=std::max(out.violation,std::max(0.0,-slack));
-        out.feasible &= slack>=-tolerance;
-        const double projected=eta(i)-std::min(eta(i)-gradient(i),upper);
-        out.projected=std::max(out.projected,std::abs(projected));
-        if(slack<=tolerance)
-        {
-            out.boundary_gradient=out.active==0 ? gradient(i) : std::max(out.boundary_gradient,gradient(i));
+        const auto boundary=[&](double slack,double tol,bool active,double oriented_gradient,std::size_t & count) {
+            out.violation=std::max(out.violation,std::max(0.0,-slack));
+            out.feasible &= slack>=-tol;
+            if(!active) return;
+            out.boundary_gradient=out.active==0 ? oriented_gradient :
+                std::max(out.boundary_gradient,oriented_gradient);
             ++out.active;
-            const double multiplier=std::max(0.0,-gradient(i));
+            ++count;
+            const double multiplier=std::max(0.0,-oriented_gradient);
             out.multiplier=std::max(out.multiplier,multiplier);
             out.complementarity=std::max(out.complementarity,std::abs(multiplier*slack));
+        };
+        double projected=std::min(eta(i)-gradient(i),upper);
+        const double upper_slack=upper-eta(i);
+        const double lower_slack=bounds.lower ? eta(i)-*bounds.lower : std::numeric_limits<double>::infinity();
+        const bool lower_active=lower_slack<=lower_tolerance &&
+            (upper_slack>tolerance || lower_slack<upper_slack);
+        boundary(upper_slack,tolerance,upper_slack<=tolerance && !lower_active,gradient(i),out.active_upper);
+        if(bounds.lower)
+        {
+            projected=std::max(projected,*bounds.lower);
+            boundary(lower_slack,lower_tolerance,lower_active,-gradient(i),out.active_lower);
         }
+        out.projected=std::max(out.projected,std::abs(eta(i)-projected));
     }
     return out;
 }
@@ -54,8 +67,8 @@ namespace {
 void CaptureWidthBoundKkt(Certificate & certificate,const Vector & eta,const Vector & gradient,
     const EvaluationContext & context)
 {
-    if(!context.eta_upper_bound) return;
-    const auto kkt=CalculateWidthBoundKkt(eta,gradient,*context.eta_upper_bound);
+    if(!context.width_bounds.upper) return;
+    const auto kkt=CalculateWidthBoundKkt(eta,gradient,context.width_bounds);
     certificate.width_bound_applied=true;
     certificate.width_bound_feasible=kkt.feasible;
     certificate.width_bound_projected_kkt=kkt.projected;
@@ -207,11 +220,10 @@ std::optional<double> ProfileGradientInfinityNorm(const Evaluation & evaluation)
 
 std::optional<double> ProfileGradientInfinityNorm(const Evaluation & evaluation,const EvaluationContext & context)
 {
-    if(context.eta_upper_bound)
+    if(context.width_bounds.upper)
     {
         if(!evaluation.valid || evaluation.eta.size()!=evaluation.gradient.size()) return std::nullopt;
-        const auto kkt=CalculateWidthBoundKkt(evaluation.eta,evaluation.gradient,
-            *context.eta_upper_bound);
+        const auto kkt=CalculateWidthBoundKkt(evaluation.eta,evaluation.gradient,context.width_bounds);
         if(!std::isfinite(kkt.projected)) return std::nullopt;
         return kkt.projected;
     }
@@ -510,9 +522,9 @@ TrustEvidence CheckReplay(const Domain & domain,VectorRef y,const Evaluation & e
             eta_gradient(a)+=(e.beta(2*a)*g*(p.square/(tau*tau)-3)+e.beta(2*a+1)*dk)*replay_residual(p.row)/scale/scale;
         }
     }
-    if(context->eta_upper_bound)
+    if(context->width_bounds.upper)
     {
-        const auto bound=CalculateWidthBoundKkt(e.eta,eta_gradient,*context->eta_upper_bound);
+        const auto bound=CalculateWidthBoundKkt(e.eta,eta_gradient,context->width_bounds);
         out.width_bound_feasible=bound.feasible;
     }
     const bool prediction_ok=((prediction-original_prediction).array().abs()<=
@@ -668,10 +680,10 @@ IndependentReplayEvidence CheckIndependentReplay(const Domain & domain,VectorRef
     out.independent_ac_kkt=(scaled_beta-projected).lpNorm<Eigen::Infinity>();
     out.primary_eta_gradient=e.gradient.lpNorm<Eigen::Infinity>();
     out.independent_eta_gradient=eta_gradient.lpNorm<Eigen::Infinity>();
-    if(policy.eta_upper_bound)
+    if(policy.width_bounds.upper)
     {
-        const auto primary_width=CalculateWidthBoundKkt(e.eta,e.gradient,*policy.eta_upper_bound);
-        const auto independent_width=CalculateWidthBoundKkt(e.eta,eta_gradient,*policy.eta_upper_bound);
+        const auto primary_width=CalculateWidthBoundKkt(e.eta,e.gradient,policy.width_bounds);
+        const auto independent_width=CalculateWidthBoundKkt(e.eta,eta_gradient,policy.width_bounds);
         out.width_bound_applied=true;
         out.width_bound_feasible=primary_width.feasible && independent_width.feasible;
         out.primary_width_projected_kkt=primary_width.projected;
@@ -822,7 +834,7 @@ Assessment VerifyJointEndpoint(const Domain & domain,VectorRef y,const Evaluatio
     out.gradient=MeetsJointThreshold(endpoint.gradient.lpNorm<Eigen::Infinity>(),criteria.global_eta_gradient) &&
         MeetsJointThreshold(replay.primary_eta_gradient,criteria.global_eta_gradient) &&
         MeetsJointThreshold(replay.independent_eta_gradient,criteria.global_eta_gradient) && replay.gradient_agrees;
-    if(context.eta_upper_bound)
+    if(context.width_bounds.upper)
         out.gradient=replay.width_bound_applied && replay.width_bound_feasible && replay.primary_width_kkt_passed &&
             replay.independent_width_kkt_passed &&
             MeetsJointThreshold(replay.primary_width_projected_kkt,criteria.global_eta_gradient) &&

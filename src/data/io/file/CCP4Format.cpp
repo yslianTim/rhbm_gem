@@ -58,8 +58,11 @@ std::unique_ptr<MapObject> CCP4Format::ReadMap(
             m_header.map_length,
             m_header.cell_angle,
             m_header.axis);
-        return std::make_unique<MapObject>(
-            GetGridSize(), GetGridSpacing(), GetOrigin(), std::move(data));
+        auto map{ std::make_unique<MapObject>(
+            GetGridSize(), GetGridSpacing(), GetOrigin(), std::move(data)) };
+        map->SetOrthogonalGrid(std::ranges::all_of(m_header.cell_angle,
+            [](float angle) { return angle == 90.0f; }));
+        return map;
     }
     catch (const std::exception & ex)
     {

@@ -72,15 +72,18 @@ struct Profile
         {failed_step.status="injected-width-subproblem-failure";
             RecordBoundedSubproblem(failed_step); return failed_step;}
 #endif
-        if(!context.eta_upper_bound || !std::isfinite(*context.eta_upper_bound))
+        if(!context.width_bounds.IsValid())
         {failed_step.status="invalid-width-upper-bound";
             RecordBoundedSubproblem(failed_step); return failed_step;}
         for(Eigen::Index i=0;i<eta.size();++i)
-            if(eta(i)>*context.eta_upper_bound)
+            if(!context.width_bounds.Contains(eta(i)))
             {failed_step.status="infeasible-current-width";
                 RecordBoundedSubproblem(failed_step); return failed_step;}
-        const Vector upper=Vector::Constant(eta.size(),*context.eta_upper_bound)-eta;
-        auto result=SolveBoundedTrustRegionStep(jacobian,response,diagonal,upper,radius,damping);
+        const Vector upper=Vector::Constant(eta.size(),*context.width_bounds.upper)-eta;
+        Vector lower;
+        if(context.width_bounds.lower)
+            lower=Vector::Constant(eta.size(),*context.width_bounds.lower)-eta;
+        auto result=SolveBoundedTrustRegionStep(jacobian,response,diagonal,lower,upper,radius,damping);
         RecordBoundedSubproblem(result);
         return result;
     }
@@ -151,9 +154,9 @@ struct Profile
     }
     bool Evaluate(const Vector & eta,double & residual_norm)
     {
-        if(!context.eta_upper_bound || !std::isfinite(*context.eta_upper_bound))
+        if(!context.width_bounds.IsValid())
         {failure="invalid-width-upper-bound"; return false;}
-        if((eta.array()>*context.eta_upper_bound).any())
+        if(!std::all_of(eta.begin(),eta.end(),[&](double x){return context.width_bounds.Contains(x);}))
         {failure="bounded-step-infeasible"; return false;}
         if(!Get(eta)) return false;
         // Normalize each coefficient before taking the norm, as in the full residual model.
@@ -182,7 +185,6 @@ struct Profile
 SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & initial_tau,
     const EvaluationContext & context)
 {
-    const auto eta_upper_bound=context.eta_upper_bound;
     Profile profile{domain,y,context,{}, {},0,0,{}, {},false,{},{}};
     Vector eta=initial_tau.array().log(); int accepted{};
     auto search=[&] {
@@ -208,12 +210,12 @@ SearchResult SearchProfile(const Domain & domain,VectorRef y,const Vector & init
         return status;
     };
     BoundedLmStatus status;
-    if(!eta_upper_bound || !std::isfinite(*eta_upper_bound))
+    if(!context.width_bounds.IsValid())
     {
         profile.failure="invalid-width-upper-bound";
         status=BoundedLmStatus::ProblemStopped;
     }
-    else if((eta.array()>*eta_upper_bound).any())
+    else if(!std::all_of(eta.begin(),eta.end(),[&](double x){return context.width_bounds.Contains(x);}))
     {
         profile.failure="bounded-initial-width-infeasible";
         status=BoundedLmStatus::ProblemStopped;

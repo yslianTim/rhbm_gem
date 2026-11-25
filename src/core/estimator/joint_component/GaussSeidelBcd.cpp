@@ -292,7 +292,7 @@ BcdBlockFailureDiagnostics FailureDiagnostics(const BcdSearchPolicy & policy,
     out.initial_profile_valid=profile.initial.valid;
     out.initial_profile_reason=profile.initial.reason;
     out.initial_profile_trusted=profile.initial_accepted;
-    out.tau_upper_bound=context.eta_upper_bound ? std::optional<double>(std::exp(*context.eta_upper_bound)) : std::nullopt;
+    out.tau_upper_bound=context.width_bounds.upper ? std::optional<double>(std::exp(*context.width_bounds.upper)) : std::nullopt;
     const auto & certificate=profile.initial.certificate;
     out.solver_valid=certificate.linear_solver_valid;
     out.solver_reason=certificate.linear_solver_reason;
@@ -333,10 +333,9 @@ BcdBlockFailureDiagnostics FailureDiagnostics(const BcdSearchPolicy & policy,
             out.eta_step_inf=trial->lm->step.size() ?
                 trial->lm->step.lpNorm<Eigen::Infinity>() : 0.0;
             out.weak_width_step_fraction=trial->weak_width_step_fraction;
-            out.width_bound_active=context.eta_upper_bound && trial->endpoint.eta.size()>0 &&
-                (trial->endpoint.eta.array()>=*context.eta_upper_bound-
-                    64.0*std::numeric_limits<double>::epsilon()*
-                        std::max(1.0,std::abs(*context.eta_upper_bound))).any();
+            out.width_bound_active=context.width_bounds.upper &&
+                CalculateWidthBoundKkt(trial->endpoint.eta,Vector::Zero(trial->endpoint.eta.size()),
+                    context.width_bounds).active!=0;
             break;
         }
     for(auto trial=profile.trials.rbegin();trial!=profile.trials.rend();++trial)
@@ -420,13 +419,13 @@ BcdSearchResult SearchBcdComponent(
     constexpr bool collect_diagnostics=false;
 #endif
     EvaluationContext context=parent_context;
-    if(policy.eta_upper_bound)
+    if(policy.width_bounds.upper || policy.width_bounds.lower)
     {
-        if(!std::isfinite(*policy.eta_upper_bound) ||
-            (context.eta_upper_bound &&
-                *context.eta_upper_bound!=*policy.eta_upper_bound))
+        if(!policy.width_bounds.IsValid() ||
+            (context.width_bounds.upper && context.width_bounds.upper!=policy.width_bounds.upper) ||
+            (context.width_bounds.lower && context.width_bounds.lower!=policy.width_bounds.lower))
         {out.reason="invalid-global-width-bound"; return out;}
-        context.eta_upper_bound=policy.eta_upper_bound;
+        context.width_bounds=policy.width_bounds;
     }
     if(initial_eta.size()!=static_cast<Eigen::Index>(domain.atoms.size()) || !initial_eta.allFinite() ||
         y.size()!=domain.rows || !y.allFinite() || !(context.scale>0) || !std::isfinite(context.scale) ||
@@ -437,9 +436,9 @@ BcdSearchResult SearchBcdComponent(
     for(Eigen::Index a=0;a<initial_eta.size();++a)
         if(!(std::exp(initial_eta(a))>0) || !std::isfinite(std::exp(initial_eta(a))))
         {out.reason="block-invalid-partition"; return out;}
-    if(!context.eta_upper_bound || !std::isfinite(*context.eta_upper_bound))
+    if(!context.width_bounds.IsValid())
     {out.reason="invalid-width-upper-bound"; return out;}
-    if((initial_eta.array()>*context.eta_upper_bound).any())
+    if(!std::all_of(initial_eta.begin(),initial_eta.end(),[&](double x){return context.width_bounds.Contains(x);}))
     {out.reason="bounded-initial-width-infeasible"; return out;}
 
     MemoryShape memory_shape; memory_shape.component_atoms=domain.atoms.size();
@@ -1166,7 +1165,7 @@ BcdComponentResult SolveBcdComponent(
         local_y(static_cast<Eigen::Index>(k))=(*parent_context.observations)(prepared.local_to_parent_rows[k]);
     auto context=parent_context;
     context.atom_ids=prepared.atom_ids; context.row_ids=prepared.row_ids;
-    context.eta_upper_bound=production_policy.eta_upper_bound;
+    context.width_bounds=production_policy.width_bounds;
     const auto atom_count=static_cast<Eigen::Index>(local_layout.full_atoms.size());
     context.rank={prepared.parent_row_count,2*atom_count,atom_count};
     context.linear.rank_relative=context.rank.Relative(2*atom_count);
@@ -1194,7 +1193,7 @@ BcdComponentResult SolveBcdComponent(
     policy.convergence_criteria=PracticalJointConvergenceCriteria;
     policy.component_index=production_policy.component_index;
     policy.component_id=production_policy.component_id;
-    policy.eta_upper_bound=production_policy.eta_upper_bound;
+    policy.width_bounds=production_policy.width_bounds;
     std::optional<JointBcdProgress> last_bcd_progress;
     if(progress_component && observer)
     {

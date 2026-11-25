@@ -23,7 +23,7 @@ rhbm_gem::core::JointFitResult FitBoundedJointComponentsForTesting(
     if(!(std::isfinite(maximum_width) && maximum_width>0.0))
         throw std::invalid_argument("Bounded Joint test fit requires a finite positive Width upper bound.");
     runtime::BcdExecutionPolicy policy;
-    policy.eta_upper_bound=std::log(maximum_width);
+    policy.width_bounds.upper=std::log(maximum_width);
     return runtime::FitBcdComponents(problem,initial_widths,policy);
 }
 ComponentPartition BuildPartition(const Domain & d,const std::vector<std::string> & ids) {return runtime::Partition(d,ids);}
@@ -261,16 +261,16 @@ runtime::BcdComponentResult SolveBcdComponentForTesting(const ComponentView & vi
     layout.informative_rows.assign(view.rows.begin(),view.rows.end());
     const auto prepared=runtime::MakeComponentProblemView(layout,view);
     auto bounded_parent=parent;
-    if(!bounded_parent.eta_upper_bound)
+    if(!bounded_parent.width_bounds.upper)
     {
         double maximum_initial_width{};
         for(const double width:initial_tau)
             if(std::isfinite(width) && width>maximum_initial_width) maximum_initial_width=width;
         if(!(maximum_initial_width>0.0)) maximum_initial_width=1.0;
-        bounded_parent.eta_upper_bound=std::log(4.0*maximum_initial_width);
+        bounded_parent.width_bounds.upper=std::log(4.0*maximum_initial_width);
     }
     runtime::BcdExecutionPolicy policy;
-    policy.eta_upper_bound=bounded_parent.eta_upper_bound;
+    policy.width_bounds.upper=bounded_parent.width_bounds.upper;
     return runtime::SolveBcdComponent(prepared,initial_tau,bounded_parent,policy);
 }
 BcdFitDiagnostic SolveBcdComponentForDiagnostics(const ComponentView & view,

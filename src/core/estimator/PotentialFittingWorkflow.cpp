@@ -8,6 +8,7 @@
 #include "core/estimator/joint_component/PostFitPeeling.hpp"
 #include "core/estimator/joint_component/PostJointQScore.hpp"
 #include "core/estimator/joint_component/ResourceWork.hpp"
+#include "core/estimator/joint_component/WidthCalibration.hpp"
 #include "data/detail/PostJointLocalValidation.hpp"
 
 #include <rhbm_gem/data/object/AtomObject.hpp>
@@ -189,7 +190,7 @@ JointPostprocessingSnapshotHook & JointPostprocessingSnapshotHookForTesting()
 
 namespace {
 JointAnalysisResult SolveJointStage(
-    const JointProblem & problem, const JointInitialization & initialization, const FitOptions & options,
+    const MapObject & map, const JointProblem & problem, const JointInitialization & initialization, const FitOptions & options,
     double construction_seconds, double initialization_seconds)
 {
     std::optional<JointCliProgressReporter> reporter;
@@ -199,7 +200,8 @@ JointAnalysisResult SolveJointStage(
         reporter.emplace();
         observer = reporter->Observer();
     }
-    auto fit = FitJointComponentsInitializedWithProgress(problem, initialization, observer);
+    const auto voxel_spacing=joint_component::IsotropicVoxelSpacing(map);
+    auto fit = FitJointComponentsInitializedWithProgress(problem, initialization, observer, voxel_spacing);
     fit.costs.construction_seconds = construction_seconds;
     fit.costs.initialization_seconds = initialization_seconds;
     auto snapshot = CaptureJointAnalysisResult(std::move(fit));
@@ -244,7 +246,7 @@ void RunPotentialFittingWorkflowForSelection(
     const auto initialization_seconds = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - initial_stage_start).count();
     auto snapshot = SolveJointStage(
-        problem, initial_stage_result, options, construction_seconds, initialization_seconds);
+        map, problem, initial_stage_result, options, construction_seconds, initialization_seconds);
     CompletePotentialFittingWorkflow(map, model, problem, std::move(snapshot), options, postprocessing_metrics);
 }
 

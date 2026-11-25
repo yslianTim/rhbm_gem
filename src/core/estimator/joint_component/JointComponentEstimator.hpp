@@ -92,7 +92,7 @@ JointFitResult EstimateJointComponents(MapObject &,ModelObject &);
 namespace detail {
 JointFitResult FitJointComponentsInitializedWithProgress(
     const JointProblem &, const JointInitialization &,
-    const joint_component::JointProgressObserver &);
+    const joint_component::JointProgressObserver &, std::optional<double> voxel_spacing = {});
 }
 }
 }

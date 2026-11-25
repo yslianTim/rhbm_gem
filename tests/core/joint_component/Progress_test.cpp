@@ -323,7 +323,7 @@ TEST(JointProgressTest, BoundedSyntheticFitUsesBcdContract)
     const auto actual=joint_component_test::matched::joint_component::FitBoundedJointComponentsForTesting(
         problem,initial,2.2);
     auto policy=joint::BcdExecutionPolicy{};
-    policy.eta_upper_bound=std::log(2.2);
+    policy.width_bounds.upper=std::log(2.2);
     const auto expected=joint::FitBcdComponents(problem,initial,policy);
 
     EXPECT_EQ(actual.solver_provenance.search_method, "gauss-seidel-bcd");
@@ -344,7 +344,7 @@ TEST(JointProgressTest, BcdUsesConfiguredQualifiedDefaults)
     const core::JointProblem problem(MakeInput());
     const std::vector<double> initial{.55, .55};
     auto policy=joint::BcdExecutionPolicy{};
-    policy.eta_upper_bound=std::log(2.2);
+    policy.width_bounds.upper=std::log(2.2);
     std::vector<joint::JointProgressEvent> events;
     const auto fit=joint::FitBcdComponents(problem,initial,policy,
         [&](const auto & event) { events.push_back(event); });
@@ -374,7 +374,7 @@ TEST(JointProgressTest, ObservableComponentsUseTheSameLifecycle)
     std::vector<joint::JointProgressEvent> events;
     const joint::JointProgressObserver observer = [&](const auto & event) { events.push_back(event); };
     auto policy=joint::BcdExecutionPolicy{};
-    policy.eta_upper_bound=std::log(2.2);
+    policy.width_bounds.upper=std::log(2.2);
     const auto fit=joint::FitBcdComponents(problem,initial,policy,observer);
     ASSERT_TRUE(fit.assembled_state);
     ExpectLifecycle(problem,fit,events);
@@ -576,7 +576,7 @@ TEST(JointProgressTest, ReportingDoesNotChangeNumericsOrObserverCadence)
     const std::vector<double> initial{.55, .55};
     const auto previous_level = Logger::GetLogLevel();
     auto policy=joint::BcdExecutionPolicy{};
-    policy.eta_upper_bound=std::log(2.2);
+    policy.width_bounds.upper=std::log(2.2);
     const auto run = [&](LogLevel level, bool report) {
         Logger::SetLogLevel(level);
         Logger::FinishProgressLine();

@@ -73,7 +73,7 @@ TEST(JointComponentSearchTest, GuardedSearchOnlyAcceptsReplayedStates)
     Sample s; const p::Domain domain(s.grid,s.atoms); const Vector tau=Eigen::Vector2d(.48,.59);
     const auto fit=p::Fit(domain,s.y,tau); ASSERT_EQ(fit.at("runtime_convergence"),"passed");
     auto context=p::MakeContext(s.y,static_cast<Eigen::Index>(s.atoms.size()));
-    context.eta_upper_bound=std::log(4.0*tau.maxCoeff());
+    context.width_bounds.upper=std::log(4.0*tau.maxCoeff());
     const auto search=joint::SearchProfile(domain,s.y,tau,context);
     ASSERT_FALSE(search.trials.empty());
     for(const auto & trial:search.trials) if(trial.accepted)
@@ -150,7 +150,7 @@ TEST(JointComponentSearchTest, ProfileSearchPreservesAcceptedTrajectory)
     const rhbm_gem::core::JointProblem problem(joint_component_test::SyntheticJointWorkload("chain",3));
     const auto & data=rhbm_gem::core::JointProblemAccess::Get(problem);
     auto context=data.context;
-    context.eta_upper_bound=std::log(.53);
+    context.width_bounds.upper=std::log(.53);
     context.update_budget=3;
     const Vector tau=Eigen::Vector3d(.46,.49,.52);
     const auto search=joint::SearchProfile(data.domain,data.y,tau,context);
@@ -199,7 +199,7 @@ TEST(JointComponentSearchTest, ProfileSearchPreservesAcceptedTrajectory)
 TEST(JointComponentSearchTest, ProfileBudgetKeepsTheTrustedInitialEndpoint)
 {
     Sample sample; const p::Domain domain(sample.grid,sample.atoms);
-    auto context=p::MakeContext(sample.y,2); context.eta_upper_bound=std::log(2.2);
+    auto context=p::MakeContext(sample.y,2); context.width_bounds.upper=std::log(2.2);
     context.profile_budget=1;
     const Vector tau=Eigen::Vector2d(.48,.59);
     const auto search=joint::SearchProfile(domain,sample.y,tau,context);
@@ -395,7 +395,7 @@ TEST(JointComponentSearchTest, BoundedProfileSearchKeepsEveryEvaluatedWidthFeasi
     auto context=p::MakeContext(sample.y,static_cast<Eigen::Index>(sample.atoms.size()));
     const Vector initial=Eigen::Vector2d(.48,.59);
     const double eta_max=std::log(.6);
-    context.eta_upper_bound=eta_max;
+    context.width_bounds.upper=eta_max;
     const auto search=joint::SearchProfile(domain,sample.y,initial,context);
     ASSERT_FALSE(search.trials.empty())<<search.stop_reason;
     for(const auto & trial:search.trials)
@@ -419,7 +419,7 @@ TEST(JointComponentSearchTest, ProfileSearchRequiresFiniteWidthUpperBound)
         std::optional{std::numeric_limits<double>::infinity()},
         std::optional{std::numeric_limits<double>::quiet_NaN()}})
     {
-        context.eta_upper_bound=bound;
+        context.width_bounds.upper=bound;
         const auto search=joint::SearchProfile(domain,sample.y,Vector::Constant(2,.5),context);
         EXPECT_TRUE(search.stopped);
         EXPECT_TRUE(search.trials.empty());
@@ -436,7 +436,7 @@ TEST(JointComponentSearchTest, InfeasibleRoundedTrialKeepsInitialAcceptanceEvide
     const p::Domain domain(sample.grid,sample.atoms);
     auto context=p::MakeContext(sample.y,2);
     // Adding the full bound increment rounds to zero from log(.98), above the bound.
-    context.eta_upper_bound=-1e-18;
+    context.width_bounds.upper=-1e-18;
     const auto search=joint::SearchProfile(domain,sample.y,Vector::Constant(2,.98),context);
     ASSERT_TRUE(search.initial_accepted);
     ASSERT_FALSE(search.trials.empty());
@@ -506,7 +506,7 @@ TEST(JointComponentSearchTest, NearUnitWidthHasOriginIndependentRadiusAndEvaluat
 TEST(JointComponentSearchTest, InitialAcAcceptanceDoesNotHideAWidthSubproblemFailure)
 {
     Sample sample; const p::Domain domain(sample.grid,sample.atoms);
-    auto context=p::MakeContext(sample.y,2); context.eta_upper_bound=std::log(2.2);
+    auto context=p::MakeContext(sample.y,2); context.width_bounds.upper=std::log(2.2);
     context.force_width_subproblem_failure_for_testing=true;
     const auto search=joint::SearchProfile(domain,sample.y,Eigen::Vector2d(.48,.59),context);
     EXPECT_TRUE(search.initial_accepted);

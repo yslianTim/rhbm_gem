@@ -1,5 +1,6 @@
 #include "WidthCalibration.hpp"
 
+#include <rhbm_gem/data/object/MapObject.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
 #include <algorithm>
 #include <cmath>
@@ -86,8 +87,18 @@ WidthBoundCalibration CalibrateGlobalWidth(const JointInitialization & initializ
     return result;
 }
 
+std::optional<double> IsotropicVoxelSpacing(const MapObject & map)
+{
+    if(!map.HasOrthogonalGrid()) return std::nullopt;
+    const auto spacing=map.GetGridSpacing();
+    const auto h=spacing.front();
+    if(std::isfinite(h) && h>0.0 && spacing[1]==h && spacing[2]==h) return h;
+    return std::nullopt;
+}
+
 BoundedInitialization MakeBoundedInitialization(
-    const JointInitialization & initialization, const WidthBoundCalibration & calibration)
+    const JointInitialization & initialization, const WidthBoundCalibration & calibration,
+    std::optional<double> tau_min)
 {
     BoundedInitialization result;
     if(initialization.atoms.size()!=initialization.tau.size())
@@ -101,6 +112,14 @@ BoundedInitialization MakeBoundedInitialization(
         return result;
     }
     result.tau_max=*calibration.tau_max4;
+    result.bounds.upper=calibration.eta_max4;
+    if(tau_min)
+        result.bounds.lower=std::log(*tau_min);
+    if(!result.bounds.IsValid())
+    {
+        result.reason="invalid-global-width-interval";
+        return result;
+    }
     result.tau_values=initialization.tau;
     for(std::size_t i=0;i<initialization.atoms.size();++i)
     {
@@ -109,10 +128,15 @@ BoundedInitialization MakeBoundedInitialization(
         const double initial=initialization.tau[i];
         double bounded=initial;
         if(std::isfinite(initial) && initial>result.tau_max) bounded=result.tau_max;
+        if(tau_min && bounded<*tau_min)
+        {
+            bounded=*tau_min;
+            ++result.lower_projection_count;
+        }
         if(bounded!=initial)
         {
             ++result.projection_count;
-            result.maximum_projection_magnitude=std::max(result.maximum_projection_magnitude,initial-bounded);
+            result.maximum_projection_magnitude=std::max(result.maximum_projection_magnitude,std::abs(initial-bounded));
             result.tau_values[i]=bounded;
         }
     }

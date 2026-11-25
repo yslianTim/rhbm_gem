@@ -59,6 +59,34 @@ TEST(ActiveSetBoundedLMTest, ReleasesAnUpperWorkingSetCoordinateWhenKktRequiresA
     EXPECT_LE(result.kkt_inf_norm,1e-10);
 }
 
+TEST(ActiveSetBoundedLMTest, MixedFacesHaveCorrectMultiplierSigns)
+{
+    const Eigen::Matrix3d j=Eigen::Matrix3d::Identity();
+    const Eigen::Vector3d r(2.0,-3.0,0.25),d=Eigen::Vector3d::Ones();
+    const Eigen::Vector3d lower(-0.5,-1.0,-1.0),upper(1.0,0.5,1.0);
+    const auto result=joint::SolveBoundedTrustRegionStep(j,r,d,lower,upper,10.0,0.0);
+    ASSERT_TRUE(result.valid)<<result.status;
+    EXPECT_EQ(result.working_bound_mask,(std::vector<bool>{true,true,false}));
+    EXPECT_DOUBLE_EQ(result.step(0),-0.5);
+    EXPECT_DOUBLE_EQ(result.step(1),0.5);
+    EXPECT_DOUBLE_EQ(result.step(2),-0.25);
+    EXPECT_DOUBLE_EQ(result.multipliers(0),1.5);
+    EXPECT_DOUBLE_EQ(result.multipliers(1),2.5);
+    EXPECT_DOUBLE_EQ(result.kkt_inf_norm,0.0);
+}
+
+TEST(ActiveSetBoundedLMTest, ReleasesBothFacesForAnInwardStep)
+{
+    const Eigen::Matrix2d j=Eigen::Matrix2d::Identity();
+    const Eigen::Vector2d r(-1.0,1.0),d=Eigen::Vector2d::Ones();
+    const Eigen::Vector2d lower(0.0,-2.0),upper(2.0,0.0);
+    const auto result=joint::SolveBoundedTrustRegionStep(j,r,d,lower,upper,10.0,0.0);
+    ASSERT_TRUE(result.valid)<<result.status;
+    EXPECT_EQ(result.working_set_releases,2u);
+    EXPECT_EQ(result.working_bound_mask,(std::vector<bool>{false,false}));
+    EXPECT_TRUE(result.step.isApprox(Eigen::Vector2d(1.0,-1.0),1e-14));
+}
+
 TEST(ActiveSetBoundedLMTest, EnforcesSeveralUpperBoundsAndChecksTheirMultipliers)
 {
     Eigen::Matrix3d j=Eigen::Matrix3d::Identity();
