@@ -253,7 +253,7 @@ def assert_joint_workflow() -> None:
         export.output_dir = root
         assert m.RunCommand(export).succeeded
         saved = json.loads((root / "joint_result_model.json").read_text())
-        assert saved["schema_version"] == 27
+        assert saved["schema_version"] == 28
         assert saved["selection_domain"]["output_indices"] == list(range(25))
         assert saved["selection_domain"]["buffer_indices"] == []
         assert saved["atom_ids"] == [str(index) for index in range(1, 26)]

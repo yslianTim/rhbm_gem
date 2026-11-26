@@ -41,19 +41,19 @@ codecs decode float32 mode-2 voxels into the runtime's contiguous double map.
 
 | Layer | Supported format |
 | --- | --- |
-| SQLite | Schema v27 only |
-| Stage Result JSON | Version 11 only |
-| Joint Result JSON | Schema v27 only |
+| SQLite | Schema v28 only |
+| Stage Result JSON | Version 12 only |
+| Joint Result JSON | Schema v28 only |
 
-SQLite initializes schema v27 when `PRAGMA user_version` is zero and
+SQLite initializes schema v28 when `PRAGMA user_version` is zero and
 `sqlite_master` contains no user schema objects. An existing database opens
-only when `user_version` is 26 and the exact current schema validates.
+only when `user_version` is 28 and the exact current schema validates.
 SQLite and both JSON codecs require their current formats without migration.
 The repository rejects unsupported versions or structures before schema or
 row mutation.
 
-Stage JSON readers require `{"version":10}`. Joint JSON writers always emit
-schema 27, and Joint readers require schema 27 with the
+Stage JSON readers require `{"version":12}`. Joint JSON writers always emit
+schema 28, and Joint readers require schema 28 with the
 `fixed-output-domain-buffer-expansion-v1` parameterization. Version
 selection does not depend on convergence, Halo count, or reconstruction
 availability. Current documents may represent failed initialization,
@@ -70,7 +70,7 @@ and `"position"` fields.
 Original-grid peeling retains its `"peeling"` record and stores the
 unpeeled voxel `PostJointGridObservation::map_value` under `"raw_response"`,
 and its derived peeled response under `"response"`. These keys distinguish
-serialization records independently of C++ API spelling. SQLite schema 27,
+serialization records independently of C++ API spelling. SQLite schema 28,
 Stage JSON 10 and Joint JSON 26 retain their existing round-trip contract.
 Map Value denotes the currently stored voxel, including after normalization;
 Sampling Value denotes an interpolation output. Generic response/observation
@@ -78,7 +78,7 @@ containers may also carry derived values without changing their source semantics
 
 ## SQLite schema and lifecycle
 
-Schema v27 contains these tables:
+Schema v28 contains these tables:
 
 - `model_object`
 - `model_chain_map`
@@ -108,7 +108,7 @@ transaction. A failed write rolls back all rows for that save. A key saved
 without a Joint result has no Joint result row.
 
 Load validates the database, loads the current model structure, decodes a
-Joint result only as schema 27, and decodes a Stage result only as version 11.
+Joint result only as schema 28, and decodes a Stage result only as version 12.
 Any malformed JSON or unsupported payload fails the load; it is not rewritten
 in place.
 
@@ -118,8 +118,8 @@ in place.
 - `src/data/io/sqlite/ModelObjectStorage.cpp`: current model and result SQL.
 - `src/data/io/detail/PersistenceSchema.hpp`: SQLite, Stage, and Joint
   version constants.
-- `src/data/io/detail/StageResultJson.cpp`: Stage JSON version 11.
-- `src/data/io/detail/JointResultJson.cpp`: Joint JSON schema 27.
+- `src/data/io/detail/StageResultJson.cpp`: Stage JSON version 12.
+- `src/data/io/detail/JointResultJson.cpp`: Joint JSON schema 28.
 - `tests/data/DataObjectSchemaLifecycle_test.cpp` and
   `DataObjectSchemaValidation_test.cpp`: database bootstrap and rejection.
 - `tests/data/DataObjectPersistence_test.cpp`: current JSON and model

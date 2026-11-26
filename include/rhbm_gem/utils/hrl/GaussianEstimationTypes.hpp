@@ -59,7 +59,7 @@ struct PeelingSampleEstimate
     PostJointGridObservation observation;
 };
 
-inline constexpr char PostFitPeelingContract[] = "original-grid-v2";
+inline constexpr char PostFitPeelingContract[] = "original-grid-v3";
 
 struct PostFitPeelingResult
 {

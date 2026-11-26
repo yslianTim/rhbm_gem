@@ -102,6 +102,7 @@ TEST(ContributorReconstructionTest, ComputesSeparateComponentAndWidthAndChargeMe
     ASSERT_TRUE(built.snapshot);
     const auto & snapshot=*built.snapshot;
     ASSERT_EQ(snapshot.replacements.size(),2u);
+    EXPECT_EQ(built.audit.direct_contributor_count,3u);
     EXPECT_EQ(built.audit.qualified_donor_count,3u);
     EXPECT_EQ(built.audit.reconstructed_halos,2u);
     EXPECT_EQ(snapshot.neighbor_count,4u);
@@ -115,6 +116,12 @@ TEST(ContributorReconstructionTest, ComputesSeparateComponentAndWidthAndChargeMe
     EXPECT_DOUBLE_EQ(snapshot.replacements[1].amplitude,3.0);
     EXPECT_DOUBLE_EQ(snapshot.replacements[1].width,2.0);
     EXPECT_DOUBLE_EQ(snapshot.replacements[1].charge,5.0);
+
+    fixture.result.contributor_reconstruction=snapshot;
+    EXPECT_NO_THROW(ValidateSavedContributorReconstruction(fixture.result,&fixture.model));
+    auto & ids=fixture.result.contributor_reconstruction->replacements.front().donor_atom_ids;
+    std::swap(ids.front(),ids.back());
+    EXPECT_THROW(ValidateSavedContributorReconstruction(fixture.result,&fixture.model),std::invalid_argument);
 }
 
 TEST(ContributorReconstructionTest, DistinguishesQualityWarningsFromNumericalFailures)
@@ -125,10 +132,13 @@ TEST(ContributorReconstructionTest, DistinguishesQualityWarningsFromNumericalFai
         f.result.target_evidence->point_atoms[0].local_conditioning=quality;
         const auto built=BuildContributorReconstruction(f.model,f.problem,f.result,"warning");
         ASSERT_EQ(built.snapshot->qualified_donor_count,2u);
+        EXPECT_EQ(built.audit.direct_contributor_count,3u);
+        EXPECT_EQ(built.audit.conditioning_rejected,1u);
+        ASSERT_EQ(built.snapshot->replacements.size(),2u);
         const auto & replacement=built.snapshot->replacements.front();
-        EXPECT_EQ(replacement.role,FittingRole::OutputTarget);
-        EXPECT_EQ(replacement.rejection_reasons,ConditioningNotAdequateReconstruction);
-        EXPECT_EQ(replacement.donor_atom_ids,(std::vector<std::string>{"2","3"}));
+        EXPECT_EQ(replacement.role,FittingRole::ExternalHalo);
+        EXPECT_EQ(replacement.rejection_reasons,ExternalHaloReconstruction);
+        EXPECT_EQ(replacement.donor_atom_ids,(std::vector<std::string>{"3","2"}));
         EXPECT_EQ((std::array{replacement.amplitude,replacement.width,replacement.charge}),
             (std::array{4.,2.5,6.5}));
         EXPECT_EQ(*built.joint_points[0],(std::array{1.,1.,2.}));
@@ -146,6 +156,9 @@ TEST(ContributorReconstructionTest, DistinguishesQualityWarningsFromNumericalFai
     invalid.components.front().runtime_convergence=JointCheckStatus::Failed;
     EXPECT_THROW(BuildContributorReconstruction(f.model,f.problem,invalid,"bad-component"),std::invalid_argument);
     invalid=f.result;
+    invalid.components.front().target_runtime_convergence=JointCheckStatus::Failed;
+    EXPECT_THROW(BuildContributorReconstruction(f.model,f.problem,invalid,"bad-component-target"),std::invalid_argument);
+    invalid=f.result;
     invalid.runtime_convergence=JointCheckStatus::Failed;
     EXPECT_THROW(BuildContributorReconstruction(f.model,f.problem,invalid,"bad-joint"),std::invalid_argument);
 }
@@ -162,15 +175,18 @@ TEST(ContributorReconstructionTest, WidthBoundsArePerAtomAndRetainOverlappingRej
     f.result.target_evidence->point_atoms[0].local_conditioning="Warning";
     const auto built=BuildContributorReconstruction(f.model,f.problem,f.result,"boundary");
     ASSERT_EQ(built.snapshot->qualified_donor_count,1u);
-    ASSERT_EQ(built.snapshot->replacements.size(),4u);
-    const auto & lower=built.snapshot->replacements[0];
-    const auto & upper=built.snapshot->replacements[1];
-    EXPECT_EQ(lower.contributor_index,0u);
-    EXPECT_EQ(lower.rejection_reasons,WidthLowerBoundReconstruction|ConditioningNotAdequateReconstruction);
-    EXPECT_EQ(upper.contributor_index,2u);
-    EXPECT_EQ(upper.rejection_reasons,WidthUpperBoundReconstruction);
+    ASSERT_EQ(built.snapshot->replacements.size(),2u);
+    EXPECT_EQ(built.audit.direct_contributor_count,3u);
+    EXPECT_EQ(built.audit.lower_bound,1u);
+    EXPECT_EQ(built.audit.upper_bound,1u);
+    EXPECT_EQ(built.audit.conditioning_rejected,1u);
+    EXPECT_EQ(built.joint_points[0],(std::array{1.,1.,2.}));
+    EXPECT_EQ(built.joint_points[2],(std::array{5.,5.,8.}));
     for (const auto & replacement:built.snapshot->replacements)
+    {
+        EXPECT_EQ(replacement.role,FittingRole::ExternalHalo);
         EXPECT_EQ(replacement.donor_atom_ids,(std::vector<std::string>{"2"}));
+    }
     EXPECT_EQ(built.audit.overlapping_rejections,1u);
 }
 
@@ -183,19 +199,17 @@ TEST(ContributorReconstructionTest, QualifiedBufferDonatesAndBothWidthFacesRetai
     ASSERT_EQ(interior.donor_index->Donors().size(),3u);
     EXPECT_EQ(interior.donor_index->Donors().back().contributor_index,2u);
 
-    for (const auto & [width,reason]:{std::pair{.5,WidthLowerBoundReconstruction},
-        std::pair{5.,WidthUpperBoundReconstruction}})
+    for (const double width:{.5,5.})
     {
         auto & state=*f.result.components.front().state;
         state.tau[2]=width;
         state.log_tau[2]=std::log(width);
         const auto built=BuildContributorReconstruction(f.model,f.problem,f.result,"buffer-face");
-        ASSERT_EQ(built.audit.replaced_buffers,1u);
+        EXPECT_EQ(built.audit.direct_contributor_count,3u);
         ASSERT_EQ(built.donor_index->Donors().size(),2u);
-        const auto & buffer=built.snapshot->replacements.front();
-        EXPECT_EQ(buffer.role,FittingRole::BufferTarget);
-        EXPECT_EQ(buffer.rejection_reasons,reason);
-        EXPECT_EQ(buffer.donor_atom_ids,(std::vector<std::string>{"2","1"}));
+        EXPECT_EQ(f.result.selection_domain->RoleOf(2),FittingRole::BufferTarget);
+        ASSERT_EQ(built.snapshot->replacements.size(),2u);
+        EXPECT_EQ(built.snapshot->replacements.front().donor_atom_ids,(std::vector<std::string>{"2","1"}));
         EXPECT_EQ((*built.joint_points[2])[1],width);
     }
 }
@@ -219,15 +233,18 @@ TEST(ContributorReconstructionTest, PreservesMixedSignChargeMedian)
     EXPECT_EQ(built.snapshot->replacements.front().charge,4.0);
 }
 
-TEST(ContributorReconstructionTest, EmptyQualifiedTargetPoolIsExplicitlyRejected)
+TEST(ContributorReconstructionTest, EmptyDonorPoolLeavesOnlyHalosUnavailable)
 {
     auto fixture=MakeFixture();
     for (auto & point:fixture.result.target_evidence->point_atoms)
         point.local_conditioning="Warning";
     const auto built=BuildContributorReconstruction(fixture.model,fixture.problem,fixture.result,"run-3");
-    EXPECT_EQ(built.audit.unavailable,fixture.result.atom_ids.size());
+    EXPECT_EQ(built.audit.direct_contributor_count,3u);
+    EXPECT_EQ(built.audit.unavailable,2u);
+    ASSERT_EQ(built.snapshot->replacements.size(),2u);
     for (const auto & replacement:built.snapshot->replacements)
     {
+        EXPECT_EQ(replacement.role,FittingRole::ExternalHalo);
         EXPECT_EQ(replacement.source,ReconstructionSource::Unavailable);
         EXPECT_TRUE(replacement.donor_atom_ids.empty());
     }
@@ -352,5 +369,5 @@ TEST(ContributorReconstructionTest, ConditioningExclusionPreservesSmallPoolProve
         EXPECT_DOUBLE_EQ(halo.width,3.0);
     }
     f.result.target_evidence->point_atoms[2].local_conditioning="Unavailable";
-    EXPECT_EQ(BuildContributorReconstruction(f.model,f.problem,f.result,"empty").audit.unavailable,5u);
+    EXPECT_EQ(BuildContributorReconstruction(f.model,f.problem,f.result,"empty").audit.unavailable,2u);
 }

@@ -262,7 +262,7 @@ void ValidateModelRootForeignKey(
 void ValidateCurrentSchema(rhbm_gem::SQLiteWrapper & database)
 {
     if (QueryUserVersion(database) != kCurrentSchemaVersion)
-        throw std::runtime_error("Unsupported SQLite schema: expected schema v27. Rerun potential_analysis with a new database.");
+        throw std::runtime_error("Unsupported SQLite schema: expected schema v28. Rerun potential_analysis with a new database.");
 
     if (QuerySingleInt(database, std::string(kUserSchemaObjectCountSql))
         != static_cast<int>(kModelTableNames.size()))
@@ -346,7 +346,7 @@ void EnsureCurrentSchema(rhbm_gem::SQLiteWrapper & database)
         return;
     }
     throw std::runtime_error(
-        "Unsupported SQLite schema: expected an empty version-0 database or schema v27. Rerun potential_analysis with a new database.");
+        "Unsupported SQLite schema: expected an empty version-0 database or schema v28. Rerun potential_analysis with a new database.");
 }
 
 } // namespace

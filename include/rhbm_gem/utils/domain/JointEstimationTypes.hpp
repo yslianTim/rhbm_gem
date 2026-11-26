@@ -20,7 +20,7 @@ inline constexpr std::string_view BufferExpansionContributorPolicy="buffer-expan
 inline constexpr std::string_view JointBufferExpansionParameterizationContract=
     "fixed-output-domain-buffer-expansion-v1";
 inline constexpr std::string_view ContributorReconstructionContractVersion=
-    "quality-qualified-contributor-reconstruction-v1";
+    "donor-only-contributor-reconstruction-v1";
 inline constexpr std::size_t GeometryLocalFittingMedianNeighborCount=4;
 inline constexpr std::string_view ContributorReconstructionDonorPolicy=
     "interior-adequate-joint-fitting-points-knn4-unbounded-euclidean-angstrom-distance-atom-id-tie-v1";
@@ -160,10 +160,7 @@ inline bool IsQualifiedInitialStageEstimate(
 enum class ReconstructionSource { JointPoint, GeometryLocalFittingMedian, Unavailable };
 enum ReconstructionRejectionReason : unsigned
 {
-    ExternalHaloReconstruction = 1,
-    WidthLowerBoundReconstruction = 2,
-    WidthUpperBoundReconstruction = 4,
-    ConditioningNotAdequateReconstruction = 8
+    ExternalHaloReconstruction = 1
 };
 struct JointContributorReplacement
 {

@@ -88,7 +88,7 @@ std::vector<std::pair<int, PostJointQScoreResult>> BuildPostJointQScores(
         for (const auto & replacement:saved.replacements)
             replacements.emplace(std::stoi(replacement.atom_id),&replacement);
     }
-    else if (workspace.audit.qualified_donor_count!=snapshot.atom_ids.size())
+    else if (workspace.audit.direct_contributor_count!=snapshot.atom_ids.size())
         throw std::invalid_argument("QScore is missing Joint contributor reconstruction.");
     std::map<int,ContributorModel> cache;
     const auto contributor_model=[&](const AtomObject & atom) -> const ContributorModel & {

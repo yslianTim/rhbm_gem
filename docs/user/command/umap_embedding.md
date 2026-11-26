@@ -30,7 +30,7 @@ Both modes still support CSV, metadata JSON, and bin summaries when UMAP is enab
 ## SQLite Model Contract
 
 The database must already exist, be a regular file, and use a supported SQLite
-schema (v27 only). Rerun `potential_analysis` into a new database for earlier schemas. `--model-key` must identify exactly one
+schema (v28 only). Rerun `potential_analysis` into a new database for earlier schemas. `--model-key` must identify exactly one
 model saved by `potential_analysis`; the command neither enumerates nor combines
 models.
 
@@ -102,7 +102,10 @@ finite raw/peeled pair from the same Joint run. Empty regions, missing
 responses, or two zero component magnitudes yield an unavailable value.
 The command reports missing required Signal or Tail values in metadata exclusions.
 The saved pairs reflect the contributor reconstruction applied by
-`potential_analysis`. The embedding command derives ratios from those pairs.
+`potential_analysis`, which uses accepted Fitting Target profiles and
+reconstructs External Halos from qualified donors. The embedding command
+derives ratios from those pairs and takes Joint A, width and charge features
+from the saved Joint endpoints.
 Atom labels remain available for CSV and plot annotations.
 
 Both commands compute from the same binary64 pairs; a neighbor contribution

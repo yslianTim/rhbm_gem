@@ -61,11 +61,11 @@ def main() -> int:
         assert not list(collision.glob("joint_*")), "Collision must fail before writing any result"
         saved = json.loads((root / "joint_result_example.json").read_text())
         with sqlite3.connect(database) as connection:
-            assert connection.execute("PRAGMA user_version").fetchone()[0] == 27
+            assert connection.execute("PRAGMA user_version").fetchone()[0] == 28
             payload = connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='example'").fetchone()[0]
             changed = json.loads(connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='changed'").fetchone()[0])
             stages = json.loads(connection.execute("SELECT result_json FROM model_stage_result WHERE key_tag='example'").fetchone()[0])
-            assert stages["version"] == 11
+            assert stages["version"] == 12
             assert len(stages["atoms"]) == 25
             assert all(set(atom) == {"id", "initial", "joint", "initial_native", "raw",
                                      "geometry", "peeling", "post_joint_local", "post_joint_qscore", "posterior"}
@@ -76,13 +76,13 @@ def main() -> int:
             assert all(atom["joint"]["source"]["method"] == 3 for atom in stages["atoms"])
             for atom in stages["atoms"]:
                 if atom["joint"]["source"]["role"] == 1:  # Output Target
-                    assert atom["peeling"]["mode"] == "original-grid-v2"
+                    assert atom["peeling"]["mode"] == "original-grid-v3"
                 else:
                     assert atom["peeling"] is None
                     assert atom["post_joint_local"] is None
             assert connection.execute("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('model_atom_local_potential','model_atom_posterior','model_atom_group_potential')").fetchone()[0] == 0
         assert saved == json.loads(payload)
-        assert saved["schema_version"] == 27
+        assert saved["schema_version"] == 28
         assert saved["metadata"]["units"]["contract"] == "joint-kernel-map-units-v2"
         assert saved["metadata"]["units"]["tau"] == "angstrom"
         assert "B" not in saved["metadata"]["units"]

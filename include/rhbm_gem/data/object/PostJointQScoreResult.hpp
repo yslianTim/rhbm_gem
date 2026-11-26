@@ -4,7 +4,7 @@
 
 namespace rhbm_gem {
 
-inline constexpr char PostJointQScoreContract[] = "joint-peeled-qscore-v2";
+inline constexpr char PostJointQScoreContract[] = "joint-peeled-qscore-v3";
 
 struct PostJointQScoreValues
 {

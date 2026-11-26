@@ -17,10 +17,10 @@ namespace core::detail {
 
 struct ReconstructionCoverageAudit
 {
-    std::size_t qualified_donor_count{};
-    std::size_t replaced_outputs{}, replaced_buffers{}, reconstructed_halos{}, unavailable{};
+    std::size_t direct_contributor_count{}, qualified_donor_count{};
+    std::size_t reconstructed_halos{}, unavailable{};
     std::size_t lower_bound{}, upper_bound{}, conditioning_rejected{}, overlapping_rejections{};
-    double collection_seconds{}, index_seconds{}, query_seconds{};
+    double assessment_seconds{}, collection_seconds{}, index_seconds{}, query_seconds{};
 };
 
 struct ReconstructionDonor

@@ -731,7 +731,7 @@ TEST(PureHaloSupportExclusionTest, PersistsVersionedDualDomainAndMedianProvenanc
     snapshot.contributor_reconstruction=core::detail::BuildContributorReconstruction(
         fixture.model,problem,snapshot,"pure-peeling-run").TakeSnapshot();
     const auto encoded=joint_result_io::Encode(snapshot);
-    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),27);
+    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),28);
     const auto encoded_root=boost::json::parse(encoded).as_object();
     const auto & median_json=encoded_root.at("contributor_reconstruction").as_object();
     EXPECT_EQ(median_json.at("neighbor_count").as_int64(),4);
@@ -1138,6 +1138,39 @@ TEST(PureHaloSupportExclusionTest, GridSubtractionCoversOverlapsHalosChargesAndS
                 .BuildPostFitPeelingBatch(std::vector<std::size_t>{0}),std::invalid_argument);
 
             snapshot.contributor_reconstruction.reset();
+            // Numerically valid fits may be excluded from donation on both
+            // conditioning and a width face. The ground-truth profile still
+            // uses their own Gaussian and signed charge.
+            for (auto & check:snapshot.evidence)
+                if (check.name=="global-width-calibration") check.threshold=std::max(width,.8);
+            for (auto & point:snapshot.target_evidence->point_atoms) point.local_conditioning="Warning";
+            auto direct=core::detail::BuildContributorReconstruction(model,problem,snapshot,"grid-reference");
+            EXPECT_EQ(direct.audit.direct_contributor_count,2u);
+            EXPECT_EQ(direct.audit.upper_bound,1u);
+            EXPECT_EQ(direct.audit.qualified_donor_count,0u);
+            EXPECT_EQ(direct.audit.unavailable,0u);
+            snapshot.contributor_reconstruction=direct.TakeSnapshot();
+            EXPECT_TRUE(snapshot.contributor_reconstruction->replacements.empty());
+            EXPECT_NO_THROW(core::detail::ValidateSavedContributorReconstruction(snapshot,&model));
+            const auto screened=postprocessing_test::MakeJointPostprocessingContext(map,model,problem,snapshot)
+                .BuildPostFitPeelingBatch(problem.OriginalInput().selection_domain->output_indices);
+            ASSERT_EQ(screened.size(),batch.size());
+            for (std::size_t i=0;i<screened.size();++i)
+            {
+                const auto & actual=screened[i].second.samples;
+                const auto & expected=batch[i].second.samples;
+                ASSERT_EQ(actual.size(),expected.size());
+                EXPECT_GT(actual.size(),10u);
+                for (std::size_t row=0;row<actual.size();++row)
+                {
+                    ASSERT_TRUE(actual[row].response) << actual[row].reason;
+                    EXPECT_EQ(actual[row].response,expected[row].response);
+                }
+            }
+        }
+        else
+        {
+            snapshot.contributor_reconstruction.reset();
             for (auto & point:snapshot.target_evidence->point_atoms) point.local_conditioning="Warning";
             snapshot.contributor_reconstruction=core::detail::BuildContributorReconstruction(
                 model,problem,snapshot,"grid-reference").TakeSnapshot();
@@ -1145,8 +1178,9 @@ TEST(PureHaloSupportExclusionTest, GridSubtractionCoversOverlapsHalosChargesAndS
                 JointCheckStatus::Unavailable,JointEvidenceScope::AssembledGlobal,{},{},
                 std::string(NoQualifiedReconstructionDonors)});
             const auto incomplete=postprocessing_test::MakeJointPostprocessingContext(map,model,problem,snapshot)
-                .BuildPostFitPeelingBatch(std::vector<std::size_t>{0});
-            EXPECT_TRUE(std::any_of(incomplete.front().second.samples.begin(),incomplete.front().second.samples.end(),
+                .BuildPostFitPeelingBatch(problem.OriginalInput().selection_domain->output_indices);
+            const auto & affected=incomplete.back().second.samples;
+            EXPECT_TRUE(std::any_of(affected.begin(),affected.end(),
                 [](const auto & sample){return !sample.response && sample.reason=="missing-contributor-state";}));
         }
     }

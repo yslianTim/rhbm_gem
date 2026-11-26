@@ -55,7 +55,7 @@ int main()
     WriteJointAnalysisResult(result, "consumer-joint.json", "consumer-joint.csv");
     std::ifstream json("consumer-joint.json");
     const std::string payload((std::istreambuf_iterator<char>(json)), {});
-    if (payload.find("\"schema_version\":27") == std::string::npos ||
+    if (payload.find("\"schema_version\":28") == std::string::npos ||
         payload.find("\"search_method\":\"gauss-seidel-bcd\"") == std::string::npos ||
         payload.find("joint-solver-provenance-v6") == std::string::npos ||
         payload.find("fixed-output-domain-buffer-expansion-v1") == std::string::npos)

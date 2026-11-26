@@ -429,12 +429,16 @@ TEST(JointComponentRuntimeTest, MedianWidthBoundProjectsAndCertifiesAllComponent
         atoms.push_back(std::move(atom));
     }
     const ModelObject model(std::move(atoms));
-    saved_box.contributor_reconstruction=core::detail::BuildContributorReconstruction(
-        model,problem,saved_box,"bounded-persistence").TakeSnapshot();
-    saved_box.evidence.push_back({std::string(JointContributorReconstructionEvidenceName),
-        JointCheckStatus::Unavailable,JointEvidenceScope::AssembledGlobal,{},{},std::string(NoQualifiedReconstructionDonors)});
+    auto direct=core::detail::BuildContributorReconstruction(model,problem,saved_box,"bounded-persistence");
+    EXPECT_EQ(direct.audit.direct_contributor_count,targets);
+    EXPECT_EQ(direct.audit.qualified_donor_count,0u);
+    EXPECT_EQ(direct.audit.unavailable,0u);
+    saved_box.contributor_reconstruction=direct.TakeSnapshot();
+    EXPECT_TRUE(saved_box.contributor_reconstruction->replacements.empty());
     const auto round_trip=rhbm_gem::joint_result_io::Decode(rhbm_gem::joint_result_io::Encode(saved_box));
     EXPECT_EQ(round_trip.assembled_state->log_tau,box.assembled_state->log_tau);
+    EXPECT_EQ(round_trip.contributor_reconstruction,saved_box.contributor_reconstruction);
+    EXPECT_FALSE(HasUnavailableJointContributorReconstruction(round_trip));
     saved_box.assembled_state->tau[0]=std::nextafter(std::exp(box.assembled_state->log_tau[0]),0.0);
     saved_box.assembled_state->tau.back()=std::nextafter(upper,std::numeric_limits<double>::infinity());
     EXPECT_NO_THROW(rhbm_gem::joint_result_io::Encode(saved_box));

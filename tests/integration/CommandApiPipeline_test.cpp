@@ -524,7 +524,7 @@ TEST(CommandApiPipelineTest, JointFailureAndUnavailableOutcomesPersistThroughApi
     request.selected_chain_ids={"A"};
     request.verbosity=0;
 
-    struct FailureCase
+    struct PipelineCase
     {
         const char * tag;
         rgc::detail::JointPostprocessingSnapshotHook hook;
@@ -532,11 +532,15 @@ TEST(CommandApiPipelineTest, JointFailureAndUnavailableOutcomesPersistThroughApi
         int cli_exit;
     };
     for(const auto & failure:{
-        FailureCase{"search-failure",&InjectJointSearchFailure,rgc::CommandOutcome::JointNotConverged,3},
-        FailureCase{"no-donor",&InjectJointNoDonors,rgc::CommandOutcome::JointDownstreamUnavailable,4}})
+        PipelineCase{"search-failure",&InjectJointSearchFailure,rgc::CommandOutcome::JointNotConverged,3},
+        PipelineCase{"no-donor",&InjectJointNoDonors,rgc::CommandOutcome::JointDownstreamUnavailable,4},
+        PipelineCase{"no-donor-no-halo",&InjectJointNoDonors,rgc::CommandOutcome::JointQualified,0}})
     {
         SCOPED_TRACE(failure.tag);
-        const bool qualified=failure.outcome==rgc::CommandOutcome::JointDownstreamUnavailable;
+        const bool qualified=failure.outcome!=rgc::CommandOutcome::JointNotConverged;
+        const bool peeling_available=failure.outcome==rgc::CommandOutcome::JointQualified;
+        request.selected_chain_ids=peeling_available ? std::vector<std::string>{"A","B"} :
+            std::vector<std::string>{"A"};
         const auto check_persistence=[&](const std::filesystem::path & database,const std::string & key) {
             SCOPED_TRACE(key);
             rg::DataRepository repository{database};
@@ -548,12 +552,15 @@ TEST(CommandApiPipelineTest, JointFailureAndUnavailableOutcomesPersistThroughApi
             EXPECT_EQ(rg::IsQualifiedJointAnalysisResult(*snapshot),qualified);
             if(qualified)
             {
-                EXPECT_TRUE(rg::HasUnavailableJointContributorReconstruction(*snapshot));
+                EXPECT_EQ(rg::HasUnavailableJointContributorReconstruction(*snapshot),!peeling_available);
                 ASSERT_TRUE(snapshot->contributor_reconstruction);
                 EXPECT_EQ(snapshot->contributor_reconstruction->qualified_donor_count,0u);
-                ASSERT_EQ(snapshot->contributor_reconstruction->replacements.size(),snapshot->atom_ids.size());
+                ASSERT_EQ(snapshot->contributor_reconstruction->replacements.size(),peeling_available ? 0u : 1u);
                 for (const auto & replacement:snapshot->contributor_reconstruction->replacements)
+                {
+                    EXPECT_EQ(replacement.role,rg::FittingRole::ExternalHalo);
                     EXPECT_EQ(replacement.source,rg::ReconstructionSource::Unavailable);
+                }
             }
             else
             {
@@ -572,9 +579,9 @@ TEST(CommandApiPipelineTest, JointFailureAndUnavailableOutcomesPersistThroughApi
                     EXPECT_EQ(qscore->status,rg::EvidenceStatus::Unavailable);
                     EXPECT_FALSE(qscore->reason.empty());
                 }
-                EXPECT_FALSE(view.GetPostFitPeeling());
-                EXPECT_FALSE(view.GetPostJointLocalResult());
-                EXPECT_FALSE(view.GetGroupMemberResult());
+                EXPECT_EQ(view.GetPostFitPeeling().has_value(),peeling_available);
+                EXPECT_EQ(view.GetPostJointLocalResult().has_value(),peeling_available);
+                if (!peeling_available) EXPECT_FALSE(view.GetGroupMemberResult());
             }
         };
 
@@ -595,7 +602,7 @@ TEST(CommandApiPipelineTest, JointFailureAndUnavailableOutcomesPersistThroughApi
             EXPECT_EQ(RunCli({"RHBM-GEM","potential_analysis",
                 "--model",model_path.string(),"--map",map_path.string(),
                 "--database",request.database_path.string(),"--save-key",request.saved_key_tag,
-                "--select-chain","A","--verbose","0"}),failure.cli_exit);
+                "--select-chain",peeling_available ? "A,B" : "A","--verbose","0"}),failure.cli_exit);
         }
         check_persistence(request.database_path,request.saved_key_tag);
     }
@@ -649,7 +656,7 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
         "--select-chain","A","--verbose","4"});
     const auto joint_log=testing::internal::GetCapturedStdout();
     ASSERT_EQ(cli_status,0) << joint_log;
-    EXPECT_NE(joint_log.find("Contributor reconstruction | donors=26"),std::string::npos);
+        EXPECT_NE(joint_log.find("Contributor reconstruction | direct=26 | donors=26"),std::string::npos);
     EXPECT_NE(joint_log.find("Original-grid Peeling workspace="),std::string::npos);
     EXPECT_NE(joint_log.find("Peeling Tail diagnostics | ratio_definition=l1-component-occupancy-v1 | ratio_available=25"),
         std::string::npos);
@@ -814,7 +821,7 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
     const std::string metadata_text{std::istreambuf_iterator<char>{metadata_file},std::istreambuf_iterator<char>{}};
     const auto metadata=boost::json::parse(metadata_text);
     EXPECT_EQ(metadata.at("estimator").as_string(),"joint-components");
-    EXPECT_EQ(metadata.at("peeling_mode").as_string(),"original-grid-v2");
+    EXPECT_EQ(metadata.at("peeling_mode").as_string(),"original-grid-v3");
     EXPECT_EQ(metadata.at("included_rows").as_int64(),static_cast<std::int64_t>(embedded_row_count));
 
     ASSERT_TRUE(rgc::RunCommand(umap).succeeded);

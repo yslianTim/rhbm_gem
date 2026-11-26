@@ -32,7 +32,9 @@ Browse runnable examples and helper assets in [`resources/README.md`](/resources
 Potential Analysis uses the Joint Component Estimator (JCE). Buffer Expansion
 can fit one additional atom to recover core observations in the fixed Output
 domain. The user's selection determines the analysis population. Results use
-**SQLite v27**. The repository accepts only the current database schema.
+**SQLite v28**. The repository accepts only the current database schema.
+Certified Fitting Targets contribute their own Joint profiles. Interior width
+and Adequate Local Conditioning qualify those points to donate to Halo reconstruction.
 
 ```sh
 RHBM-GEM potential_analysis -a model.cif -m map.mrc -d joint.sqlite -k example
@@ -49,11 +51,9 @@ did not qualify after saving diagnostics, `4` when Joint qualified but contribut
 reconstruction was unavailable, and `0` for a qualified Joint fit. See the
 [joint workflow contract](docs/developer/commands/potential_analysis.md#joint-component-workflow)
 for options and JSON/CSV output. JointStage stores the fitted endpoints. Plots, comparisons, Gaussian/outlier dumps and UMAP use the
-available saved data; missing uncertainty or peeling coverage is never replaced
-with zero. Fitting Targets with interior widths and Adequate Local Conditioning
-supply direct neighbor profiles and donate original Joint points. Other qualified
-Fitting Targets and External Halos use the componentwise median of up to four
-nearest donors. Joint JSON uses schema 27 and Stage JSON uses version 11.
+available saved data and preserve missing uncertainty or peeling coverage.
+External Halos use the componentwise median of up to four nearest donors.
+Joint JSON uses schema 28 and Stage JSON uses version 12.
 See [Joint Stage Integration](docs/developer/joint-stage-integration.md).
 
 ## License, Citation, and Third-Party Notices

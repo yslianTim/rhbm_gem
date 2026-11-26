@@ -97,33 +97,30 @@ can coexist with a qualified endpoint.
 
 ## Contributor reconstruction
 
-A Fitting Target can supply its own neighbor profile and donate its Joint point
-when the Joint, Target and component convergence and parameter-validity checks
-pass, A/tau/C are finite with A ≥ 0 and tau > 0, Local Conditioning is
-`Adequate`, and the accepted log width is interior. The [Width KKT boundary
+An Output or Buffer Target supplies its original Joint profile after passing
+Joint, Target and component convergence and parameter-validity checks,
+including finite A/tau/C, A ≥ 0, tau > 0 and width feasibility. From those
+same assessed points, a donor also requires `Adequate` Local Conditioning
+and an interior accepted log width. The [Width KKT boundary
 assessment](joint-component-numerics.md#projected-width-boundaries) classifies
-each atom independently of its block summary. Boundary and conditioning
-reasons can coexist. Point Quality and the accepted endpoint retain their
-existing meaning.
+each atom from its accepted log width. Joint evidence preserves the width
+interval and conditioning block IDs for tracing donor exclusions.
 
-A qualified fitting endpoint that fails either reconstruction quality check,
-or an External Halo, uses the componentwise median of up to four eligible
-original Joint points. Selection uses the contributor's own coordinates,
+An External Halo uses the componentwise median of up to four eligible
+original Joint points. Selection uses the Halo's own coordinates,
 Euclidean distance in Å, and Atom ID as the deterministic distance tie-breaker.
 The search has no radius or chemical-label filter. An immutable KD-tree serves
 the entire run, including QScore requests outside the Original Domain.
-A replaced fitting point retains its Output or Buffer role.
 
-The `quality-qualified-contributor-reconstruction-v1` snapshot records the
-qualified donor count and each replacement's identity, role, reasons, run,
-parameters and ordered donor IDs. The `rejection_reasons` bit mask assigns
-1 to an External Halo, 2 to the lower width bound, 4 to the upper width
-bound, and 8 to conditioning below Adequate. Direct contributors reuse
-their Joint points. If a replacement is needed and the donor pool is empty, its record
-reports unavailable with no parameters. The workflow preserves the qualified
-Joint endpoint, records `no-qualified-reconstruction-donors` and skips
-Peeling, Post-Joint Local and Grouping. A run whose contributors are all direct
-has no replacement records.
+The `donor-only-contributor-reconstruction-v1` snapshot records the donor
+count and Original-domain External Halo records. Each record stores identity,
+role, run, reason code 1, median parameters and ordered donor IDs. With
+zero donors and no External Halos, the empty replacement snapshot supports
+normal Original-grid Peeling. If an External Halo needs a median, its
+record reports unavailable with no parameters. The workflow preserves the
+certified endpoint, records `no-qualified-reconstruction-donors` and skips
+Peeling, Post-Joint Local and Grouping. An unavailable Extra-domain Halo
+affects its QScore comparison independently.
 
 ## Original-grid peeling
 
@@ -236,7 +233,7 @@ neighbors and queries the same donor population once per Extra-domain Halo.
 The QScore sample strategy and standard reference are retained. Each Output
 Target's own Joint reference uses its accepted A/tau/C. Missing neighbors
 make that comparison unavailable. Stage JSON records the ordered donor IDs of
-Extra-domain Halos under the `joint-peeled-qscore-v2` contract.
+Extra-domain Halos under the `joint-peeled-qscore-v3` contract.
 
 ## Invalidation
 
@@ -260,8 +257,8 @@ postprocessing contexts borrow their immutable inputs.
 ## Persistence
 
 [DataObject I/O](architecture/dataobject-io-architecture.md) owns version
-acceptance and the database lifecycle. SQLite v27 stores Joint Result
-JSON schema 27 and Stage Result JSON version 11. Joint JSON requires
+acceptance and the database lifecycle. SQLite v28 stores Joint Result
+JSON schema 28 and Stage Result JSON version 12. Joint JSON requires
 `fixed-output-domain-buffer-expansion-v1`, the current point validation
 contract, and `strict-v2` or `practical-v2` convergence criteria. Its state
 keys are `ac`, `tau`, `log_tau`, `eta_gradient` and `objective`.
@@ -302,7 +299,7 @@ diagnostics in `initial_native`, and samples and coordinates in `raw` and
 `geometry`. The `joint` record stores JointStage points, convergence and
 source identity. The optional source flag is `fixed_from_initial_stage`.
 The readers require the current versions and field names.
-`peeling` stores the paired observations and neighbor count under `original-grid-v2`.
+`peeling` stores the paired observations and neighbor count under `original-grid-v3`.
 `post_joint_local` stores charge-corrected fit evidence, and `posterior` stores
 Group member inference. Grid peeling requires
 its snapshot. Available responses require usable contributor reconstruction.

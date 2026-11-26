@@ -1473,7 +1473,7 @@ TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNo
     const auto metadata_lines=ReadLines(request.output_dir/"umap_embedding_model.csv.metadata.json");
     const auto metadata=boost::json::parse(metadata_lines.at(0));
     EXPECT_EQ(metadata.at("estimator").as_string(),"joint-components");
-    EXPECT_EQ(metadata.at("peeling_mode").as_string(),"original-grid-v2");
+    EXPECT_EQ(metadata.at("peeling_mode").as_string(),"original-grid-v3");
     EXPECT_EQ(metadata.at("peeling_ratio_definition").as_string(), "l1-component-occupancy-v1");
     EXPECT_EQ(metadata.at("peeling_ratio_range").as_array(), (boost::json::array{0, 1}));
     const auto & regions = metadata.at("peeling_ratio_regions").as_object();

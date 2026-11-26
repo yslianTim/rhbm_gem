@@ -272,7 +272,7 @@ TEST(JointComponentPartialSelectionTest, InitializationPreservesTargetHistoryAnd
         EXPECT_EQ(*fit.prediction,*prediction_before);
     EXPECT_EQ(saved.fitting_to_original_contributors,fit.problem->FittingToOriginalContributors());
     EXPECT_EQ(saved.fitting_to_original_rows,fit.problem->FittingToOriginalRows());
-    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),27);
+    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),28);
     const auto decoded=rhbm_gem::joint_result_io::Decode(encoded);
     ASSERT_TRUE(decoded.selection_domain); EXPECT_EQ(decoded.selection_domain->output_indices,(std::vector<std::size_t>{0}));
     ASSERT_TRUE(decoded.selection_domain->buffer_expansion);

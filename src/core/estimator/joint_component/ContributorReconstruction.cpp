@@ -36,8 +36,15 @@ double SquaredDistance(const std::array<double,3> & left,const std::array<double
 struct ContributorAssessment
 {
     std::vector<std::optional<std::array<double,3>>> joint_points;
-    std::vector<unsigned> reasons;
+    std::vector<unsigned> donor_exclusions;
+
+    bool IsDonorEligible(std::size_t atom) const
+    {
+        return joint_points[atom].has_value() && donor_exclusions[atom]==0;
+    }
 };
+
+enum DonorExclusion : unsigned { LowerWidth=1, UpperWidth=2, Conditioning=4 };
 
 using joint_component::WidthBoundaryStatus;
 using joint_component::WidthBounds;
@@ -77,7 +84,7 @@ ContributorAssessment AssessContributors(const JointAnalysisResult & result)
     const auto bounds=AcceptedWidthBounds(result);
     ContributorAssessment assessment;
     assessment.joint_points.resize(count);
-    assessment.reasons.resize(count,ExternalHaloReconstruction);
+    assessment.donor_exclusions.resize(count);
     std::vector<const JointAtomPointValidation *> evidence(count);
     for (const auto & point:result.target_evidence->point_atoms)
     {
@@ -115,11 +122,11 @@ ContributorAssessment AssessContributors(const JointAnalysisResult & result)
                 !joint_component::ValidJointPointParameters(a,tau,c,state.log_tau[local]) ||
                 !bounds.ContainsWithRoundoff(std::log(tau)))
                 throw std::invalid_argument("Invalid certified Joint contributor endpoint.");
-            unsigned reasons=0;
+            auto & exclusions=assessment.donor_exclusions[atom];
             switch (bounds.Classify(state.log_tau[local]))
             {
-            case WidthBoundaryStatus::LowerBound: reasons=WidthLowerBoundReconstruction; break;
-            case WidthBoundaryStatus::UpperBound: reasons=WidthUpperBoundReconstruction; break;
+            case WidthBoundaryStatus::LowerBound: exclusions|=LowerWidth; break;
+            case WidthBoundaryStatus::UpperBound: exclusions|=UpperWidth; break;
             case WidthBoundaryStatus::Unavailable:
                 throw std::invalid_argument("Invalid accepted Joint contributor width.");
             case WidthBoundaryStatus::Interior: break;
@@ -129,10 +136,9 @@ ContributorAssessment AssessContributors(const JointAnalysisResult & result)
                 if (quality.local_conditioning!="Warning" && quality.local_conditioning!="Unavailable" &&
                     quality.local_conditioning!="NotAssessed")
                     throw std::invalid_argument("Invalid Joint contributor conditioning evidence.");
-                reasons|=ConditioningNotAdequateReconstruction;
+                exclusions|=Conditioning;
             }
             assessment.joint_points[atom]=std::array{a,tau,c};
-            assessment.reasons[atom]=reasons;
         }
     }
     for (std::size_t atom=0;atom<count;++atom)
@@ -158,23 +164,24 @@ std::vector<ReconstructionDonor> CollectDonors(const JointAnalysisResult & resul
     std::vector<ReconstructionDonor> out;
     for (std::size_t atom=0;atom<result.atom_ids.size();++atom)
     {
-        if (assessment.reasons[atom]) continue;
+        if (!assessment.joint_points[atom]) continue;
         const auto & id=result.atom_ids[atom];
-        out.push_back({atom,id,model ? ContributorPosition(*model,id) : std::array<double,3>{},
-            *assessment.joint_points[atom]});
+        const auto position=model ? ContributorPosition(*model,id) : std::array<double,3>{};
+        if (assessment.IsDonorEligible(atom))
+            out.push_back({atom,id,position,*assessment.joint_points[atom]});
     }
     std::sort(out.begin(),out.end(),[](const auto & left,const auto & right) { return left.atom_id<right.atom_id; });
     return out;
 }
 
 JointContributorReplacement MakeReplacement(const JointAnalysisResult & result,std::size_t atom,
-    unsigned reasons,std::string_view run,const std::vector<const ReconstructionDonor *> & donors)
+    std::string_view run,const std::vector<const ReconstructionDonor *> & donors)
 {
     JointContributorReplacement replacement;
     replacement.contributor_index=atom;
     replacement.atom_id=result.atom_ids[atom];
     replacement.role=result.selection_domain->RoleOf(atom);
-    replacement.rejection_reasons=reasons;
+    replacement.rejection_reasons=ExternalHaloReconstruction;
     replacement.joint_run_id=run;
     replacement.donor_count=donors.size();
     if (donors.empty())
@@ -286,9 +293,11 @@ ContributorReconstructionBuildResult BuildContributorReconstruction(
 
     using Clock=std::chrono::steady_clock;
     auto phase=Clock::now();
-    auto assessment=AssessContributors(result);
-    auto donors=CollectDonors(result,assessment,&model);
     ContributorReconstructionBuildResult out;
+    auto assessment=AssessContributors(result);
+    out.audit.assessment_seconds=std::chrono::duration<double>(Clock::now()-phase).count();
+    phase=Clock::now();
+    auto donors=CollectDonors(result,assessment,&model);
     out.audit.collection_seconds=std::chrono::duration<double>(Clock::now()-phase).count();
     out.snapshot.emplace();
     auto & snapshot=*out.snapshot;
@@ -301,20 +310,22 @@ ContributorReconstructionBuildResult BuildContributorReconstruction(
     phase=Clock::now();
     for (std::size_t atom=0;atom<result.atom_ids.size();++atom)
     {
-        const auto reasons=assessment.reasons[atom];
-        if (!reasons) continue;
+        if (assessment.joint_points[atom])
+        {
+            ++out.audit.direct_contributor_count;
+            const auto exclusions=assessment.donor_exclusions[atom];
+            const bool lower=(exclusions&LowerWidth)!=0;
+            const bool upper=(exclusions&UpperWidth)!=0;
+            const bool conditioning=(exclusions&Conditioning)!=0;
+            out.audit.lower_bound+=lower;
+            out.audit.upper_bound+=upper;
+            out.audit.conditioning_rejected+=conditioning;
+            out.audit.overlapping_rejections+=(lower || upper) && conditioning;
+            continue;
+        }
         const auto nearest=out.donor_index->Query(ContributorPosition(model,result.atom_ids[atom]));
-        auto replacement=MakeReplacement(result,atom,reasons,joint_run_id,nearest);
-        const bool lower=(reasons&WidthLowerBoundReconstruction)!=0;
-        const bool upper=(reasons&WidthUpperBoundReconstruction)!=0;
-        const bool conditioning=(reasons&ConditioningNotAdequateReconstruction)!=0;
-        out.audit.lower_bound+=lower;
-        out.audit.upper_bound+=upper;
-        out.audit.conditioning_rejected+=conditioning;
-        out.audit.overlapping_rejections+=(lower || upper) && conditioning;
+        auto replacement=MakeReplacement(result,atom,joint_run_id,nearest);
         if (nearest.empty()) ++out.audit.unavailable;
-        else if (replacement.role==FittingRole::OutputTarget) ++out.audit.replaced_outputs;
-        else if (replacement.role==FittingRole::BufferTarget) ++out.audit.replaced_buffers;
         else ++out.audit.reconstructed_halos;
         snapshot.replacements.push_back(std::move(replacement));
     }
@@ -346,8 +357,7 @@ void ValidateSavedContributorReconstruction(const JointAnalysisResult & result,c
         return;
     }
     const auto assessment=AssessContributors(result);
-    const auto needed=static_cast<std::size_t>(std::count_if(assessment.reasons.begin(),assessment.reasons.end(),
-        [](unsigned reasons){return reasons!=0;}));
+    const auto needed=result.atom_ids.size()-result.selection_domain->FittingCount();
     if (!saved)
     {
         if (needed || unavailable) throw std::invalid_argument("Missing Joint contributor reconstruction.");
@@ -365,10 +375,9 @@ void ValidateSavedContributorReconstruction(const JointAnalysisResult & result,c
     std::optional<ReconstructionDonorIndex> index;
     if (model && needed && !donors.empty()) index.emplace(std::move(donors));
     auto record=saved->replacements.begin();
-    for (std::size_t atom=0;atom<assessment.reasons.size();++atom)
+    for (std::size_t atom=0;atom<assessment.joint_points.size();++atom)
     {
-        const auto reasons=assessment.reasons[atom];
-        if (!reasons) continue;
+        if (assessment.joint_points[atom]) continue;
         if (record->donor_atom_ids.size()!=donor_count)
             throw std::invalid_argument("Invalid Joint contributor donor count.");
         std::vector<const ReconstructionDonor *> selected;
@@ -385,7 +394,7 @@ void ValidateSavedContributorReconstruction(const JointAnalysisResult & result,c
                 selected.push_back(&*donor);
             }
         }
-        if (*record!=MakeReplacement(result,atom,reasons,saved->joint_run_id,selected))
+        if (*record!=MakeReplacement(result,atom,saved->joint_run_id,selected))
             throw std::invalid_argument("Invalid Joint contributor reconstruction provenance.");
         ++record;
     }

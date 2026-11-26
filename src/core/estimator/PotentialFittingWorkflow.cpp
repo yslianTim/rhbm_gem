@@ -280,12 +280,13 @@ bool RunJointStagePostprocessing(
     if (!options.quiet_mode)
     {
         std::ostringstream message;
-        message << "[Joint] Contributor reconstruction | donors=" << audit.qualified_donor_count
-            << " | replaced_outputs=" << audit.replaced_outputs << " | replaced_buffers=" << audit.replaced_buffers
+        message << "[Joint] Contributor reconstruction | direct=" << audit.direct_contributor_count
+            << " | donors=" << audit.qualified_donor_count
             << " | external_halos=" << audit.reconstructed_halos << " | unavailable=" << audit.unavailable
             << " | lower_bound=" << audit.lower_bound << " | upper_bound=" << audit.upper_bound
             << " | conditioning_rejected=" << audit.conditioning_rejected
             << " | overlapping_rejections=" << audit.overlapping_rejections
+            << " | assessment=" << audit.assessment_seconds << "s"
             << " | collection=" << audit.collection_seconds << "s | index=" << audit.index_seconds
             << "s | query=" << audit.query_seconds << 's';
         LogJointInfo(message.str());

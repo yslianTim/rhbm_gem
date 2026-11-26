@@ -205,7 +205,7 @@ std::vector<std::pair<int, PostFitPeelingResult>> JointPostprocessingContext::Bu
     const auto & joint_points=workspace.joint_points;
     const auto & reconstruction=result.contributor_reconstruction;
     if (joint_points.size()!=input.atom_ids.size() ||
-        (!reconstruction && workspace.audit.qualified_donor_count!=input.atom_ids.size()))
+        (!reconstruction && workspace.audit.direct_contributor_count!=input.atom_ids.size()))
         throw std::invalid_argument("Missing Joint Peeling contributor reconstruction.");
     std::size_t next_replacement{};
     for (std::size_t atom=0;atom<requested.size();++atom)

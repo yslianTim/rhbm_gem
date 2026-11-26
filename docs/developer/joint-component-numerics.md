@@ -131,7 +131,7 @@ reports its reason without replacing accepted state.
 
 ## Projected Width Boundaries
 
-For a bound at log width `eta_bound`, Width KKT and contributor eligibility
+For a bound at log width `eta_bound`, Width KKT and donor eligibility
 share the tolerance `64 * epsilon * max(1, abs(eta_bound))`. Slack is
 `eta - eta_min` at the lower bound and `eta_max - eta` at the upper bound.
 Feasibility permits roundoff at each applicable bound. If both active
@@ -158,6 +158,9 @@ and normalized spectra. Full-rank spectra warn when threshold-sensitive or
 classification. These read-only diagnostics assess local numerical geometry.
 They supply evidence to [Target Point Quality](joint-stage-integration.md#target-point-quality)
 and carry no global rank, covariance or statistical precision certificate.
+The conditioning classification is mapped from each diagnostic block to its
+core atoms. Certified Fitting Targets retain their own profiles for neighbor
+prediction. The mapped conditioning evidence screens donors for Halo reconstruction.
 
 See [ConstrainedAcLeastSquares.cpp](../../src/core/estimator/joint_component/ConstrainedAcLeastSquares.cpp),
 [TiledDerivative.cpp](../../src/core/estimator/joint_component/TiledDerivative.cpp),

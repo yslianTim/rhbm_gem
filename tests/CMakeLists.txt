@@ -318,7 +318,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
 endif()
 
 set(joint_persistence_test_patterns
-    DataObjectPersistenceTest.JointCurrentSchemaV27*
+    DataObjectPersistenceTest.JointCurrentSchemaV28*
     DataObjectPersistenceTest.JointResultsRoundTripCopyClearAndReplaceAtomically
     DataObjectPersistenceTest.JointSolverProvenanceRoundTripsAndMissingFieldIsRejected
     DataObjectPersistenceTest.BcdFailureEvidenceAndSweepCountsRoundTrip
@@ -330,7 +330,7 @@ set(joint_persistence_test_patterns
     DataObjectPersistenceTest.JointMetadataRejectsInvalidValuesAndOldDocumentsWithoutWrites
     DataObjectPersistenceTest.JointSelectionMetadataValidationAndCsvRoles
     DataObjectPersistenceTest.JointNeutralRoundTripPreservesCurrentJointAndStageResults
-    DataObjectPersistenceTest.StageResultJsonV11OnlyAcceptsCurrentRoundTrip
+    DataObjectPersistenceTest.StageResultJsonV12OnlyAcceptsCurrentRoundTrip
     DataObjectPersistenceTest.CanonicalNativeDiagnosticsAndMissingStatesRoundTripExactly
     DataObjectPersistenceTest.UncertifiedCandidateDiagnosticsRoundTripWithoutEnteringScientificExports
     DataObjectPersistenceTest.CandidateDiagnosticsRejectInvalidOrUntrustedCheckpointParameters

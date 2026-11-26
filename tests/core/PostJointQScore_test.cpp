@@ -97,7 +97,7 @@ TEST(PostJointQScoreTest, OverlappingGaussianAndChargeUseOnePeeledDataset)
     }
 }
 
-TEST(PostJointQScoreTest, ReplacesFittingNeighborWithoutChangingItsOwnJointReference)
+TEST(PostJointQScoreTest, ScreensDonorWithoutChangingItsChargeProfileOrJointReference)
 {
     auto f=Make({{{0,0,0},{2,.6,.1}},{{1.2,0,0},{2.3,.55,-.3}}});
     const auto original=f.results.front().second.scores;
@@ -107,10 +107,14 @@ TEST(PostJointQScoreTest, ReplacesFittingNeighborWithoutChangingItsOwnJointRefer
     f.snapshot.target_evidence->point_atoms.at(1).local_conditioning="Warning";
     f.halos=BuildContributorReconstruction(*f.model,*f.problem,f.snapshot,"qscore-test-run");
     f.snapshot.contributor_reconstruction=f.halos.TakeSnapshot();
+    EXPECT_EQ(f.halos.audit.direct_contributor_count,2u);
+    EXPECT_EQ(f.halos.audit.qualified_donor_count,1u);
+    EXPECT_TRUE(f.snapshot.contributor_reconstruction->replacements.empty());
     f.model->EditAnalysis().ApplyJointResult(f.snapshot,"qscore-test-run");
     f.Calculate();
     ASSERT_TRUE(f.results.front().second.scores);
-    EXPECT_NE(f.results.front().second.scores->standard,original->standard);
+    EXPECT_EQ(f.results.front().second.scores->standard,original->standard);
+    EXPECT_EQ(f.results.front().second.scores->joint,original->joint);
     EXPECT_EQ(f.results.front().second.halo_count,0u);
     EXPECT_EQ(AtomLocalPotentialView::For(*f.model->FindAtomPtr(2)).GetJointStageModel().ToVector(),accepted);
     ExpectOracle(f);
@@ -167,6 +171,21 @@ TEST(PostJointQScoreTest, ExtraDomainHaloUsesQualifiedLocalDonorsWithoutChanging
     const auto missing=BuildPostJointQScores(*f.map,*f.model,*f.problem,f.snapshot,&stale,f.metrics);
     EXPECT_FALSE(missing.front().second.scores);
     EXPECT_EQ(missing.front().second.reason,"contributor-unavailable");
+
+    f.snapshot.contributor_reconstruction.reset();
+    f.snapshot.target_evidence->point_atoms.front().local_conditioning="Warning";
+    f.halos=BuildContributorReconstruction(*f.model,*f.problem,f.snapshot,"qscore-test-run");
+    EXPECT_EQ(f.halos.audit.direct_contributor_count,1u);
+    EXPECT_EQ(f.halos.audit.unavailable,0u);
+    EXPECT_EQ(f.halos.audit.qualified_donor_count,0u);
+    f.snapshot.contributor_reconstruction=f.halos.TakeSnapshot();
+    f.model->EditAnalysis().ApplyJointResult(f.snapshot,"qscore-test-run");
+    f.Calculate();
+    EXPECT_TRUE(f.snapshot.contributor_reconstruction->replacements.empty());
+    EXPECT_FALSE(HasUnavailableJointContributorReconstruction(f.snapshot));
+    EXPECT_FALSE(f.results.front().second.scores);
+    EXPECT_EQ(f.results.front().second.reason,"contributor-unavailable");
+    EXPECT_EQ(f.results.front().second.missing_contributor_count,1u);
 }
 
 TEST(PostJointQScoreTest, MissingInvalidAndBoundaryDataHaveExplicitReasons)
