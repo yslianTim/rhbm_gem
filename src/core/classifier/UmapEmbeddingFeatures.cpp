@@ -312,8 +312,8 @@ std::optional<PreparedUmapInput> BuildAndStandardizeInput(
             if (kFeatureDefinitions[feature].include_in_umap && !std::isfinite(row.features[feature]))
             {
                 std::string reason{ "unavailable: " + std::string(kFeatureDefinitions[feature].name) };
-                if (feature == 3 && !row.tail_peeling_ratio_assessment.reason.empty())
-                    reason += " (" + row.tail_peeling_ratio_assessment.reason + ")";
+                if (feature == 3 && !row.tail_peeling_ratio_unavailable_reason.empty())
+                    reason += " (" + row.tail_peeling_ratio_unavailable_reason + ")";
                 ++exclusions[reason];
                 valid = false;
                 Logger::Log(LogLevel::Warning,

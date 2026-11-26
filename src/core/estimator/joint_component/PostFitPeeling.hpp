@@ -12,7 +12,6 @@
 namespace rhbm_gem::core::detail {
 struct HaloMedianBuildResult;
 
-inline constexpr double PostJointCandidateRadius = 2.0;
 std::vector<PostJointGridObservation> CollectPostJointGridObservations(
     const MapObject &, const JointProblemInput &, std::size_t target,
     const std::array<double,3> & target_position);
@@ -59,8 +58,6 @@ struct JointPostprocessingMetrics
     std::size_t tail_raw_sample_count{};
     std::size_t tail_valid_sample_count{};
     std::size_t tail_unavailable_sample_count{};
-    double tail_raw_response_sum{};
-    double tail_peeling_response_sum{};
     std::map<std::string, std::size_t> tail_coverage_distribution;
     std::map<std::string, std::size_t> tail_unavailable_reasons;
     std::size_t estimated_context_lookup_bytes{};

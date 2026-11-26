@@ -366,20 +366,18 @@ bool RunJointStagePostprocessing(
         if (estimate.source.method != EstimateMethod::JointComponents || estimate.source.role != FittingRole::OutputTarget)
             continue;
         joint_targets.push_back(atom);
-        const auto assessment = local.AssessLocalFittingPeelingRatio(1.0, 2.0);
+        const auto assessment = local.AssessLocalFittingPeelingRatio(PeelingRegion::Tail);
         ++postprocessing_metrics.tail_target_count;
         postprocessing_metrics.tail_raw_sample_count += assessment.total_samples;
         postprocessing_metrics.tail_valid_sample_count += assessment.valid_samples;
         postprocessing_metrics.tail_unavailable_sample_count +=
             assessment.total_samples - assessment.valid_samples;
-        postprocessing_metrics.tail_raw_response_sum += assessment.raw_response_sum;
-        postprocessing_metrics.tail_peeling_response_sum += assessment.peeled_response_sum;
         if (assessment.ratio) ++postprocessing_metrics.tail_ratio_available_targets;
         if (!assessment.reason.empty()) ++postprocessing_metrics.tail_unavailable_reasons[assessment.reason];
         if (!assessment.total_samples)
         {
             ++postprocessing_metrics.tail_no_sample_targets;
-            ++postprocessing_metrics.tail_coverage_distribution["no-tail-samples"];
+            ++postprocessing_metrics.tail_coverage_distribution["no-region-samples"];
         }
         else if (assessment.valid_samples == assessment.total_samples)
         {
@@ -466,7 +464,7 @@ void CompletePotentialFittingWorkflow(
             << " | unavailable=" << postprocessing_metrics.halo_median_unavailable_halos;
         LogJointInfo(message.str());
         std::ostringstream tail_message;
-        tail_message << "[Joint] Peeling | targets="
+        tail_message << "[Joint] Peeling Tail | targets="
             << postprocessing_metrics.tail_target_count
             << " | valid_samples=" << postprocessing_metrics.tail_valid_sample_count << '/'
             << postprocessing_metrics.tail_raw_sample_count
@@ -477,10 +475,9 @@ void CompletePotentialFittingWorkflow(
             << postprocessing_metrics.tail_no_sample_targets << " no-samples";
         LogJointInfo(tail_message.str());
         std::ostringstream tail_detail;
-        tail_detail << "[Joint] Peeling diagnostics | ratio_available="
+        tail_detail << "[Joint] Peeling Tail diagnostics | ratio_definition=" << PeelingRatioDefinition
+            << " | ratio_available="
             << postprocessing_metrics.tail_ratio_available_targets
-            << " | raw_sum=" << postprocessing_metrics.tail_raw_response_sum
-            << " | peeled_sum=" << postprocessing_metrics.tail_peeling_response_sum
             << " | missing_contributor_samples=" << postprocessing_metrics.missing_contributor_samples;
         for (const auto & [bucket, count] : postprocessing_metrics.tail_coverage_distribution)
             tail_detail << " | coverage_" << bucket << '=' << count;

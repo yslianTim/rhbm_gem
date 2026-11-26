@@ -2,8 +2,6 @@
 
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
-#include <rhbm_gem/data/object/JointAnalysisResult.hpp>
-#include <rhbm_gem/data/object/ModelAnalysisView.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/algorithm/KDTreeAlgorithm.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
@@ -44,7 +42,6 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(const ModelObje
 {
     auto atom_list{ model_object.GetSelectedAtoms() };
     if (atom_list.empty()) return {};
-    const auto & joint_result = model_object.GetAnalysisView().GetJointResult();
 
     std::vector<AtomObject *> non_hydrogen_atoms;
     non_hydrogen_atoms.reserve(model_object.GetAtomList().size());
@@ -83,18 +80,9 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(const ModelObje
         const double missing=std::numeric_limits<double>::quiet_NaN();
 
         const auto signal_peeling_ratio{
-            local_view.AssessLocalFittingPeelingRatio(0.0, 1.0).ratio
+            local_view.AssessLocalFittingPeelingRatio(PeelingRegion::Signal).ratio
         };
-        auto tail_assessment{ local_view.AssessLocalFittingPeelingRatio(1.0, 2.0) };
-        if (!tail_assessment.ratio && !local_view.GetPostFitPeeling() && joint_result)
-        {
-            if (!IsQualifiedJointAnalysisResult(*joint_result))
-                tail_assessment.reason = "joint-qualification-failed";
-            else if (joint_result->selection_domain &&
-                joint_result->selection_domain->FittingCount() < joint_result->atom_ids.size() &&
-                !joint_result->halo_median_reconstruction)
-                tail_assessment.reason = "halo-median-reconstruction-unavailable";
-        }
+        auto tail_assessment{ local_view.AssessLocalFittingPeelingRatio(PeelingRegion::Tail) };
 
         const auto neighbors{ KDTreeAlgorithm<AtomObject>::RangeSearch(
             non_hydrogen_kd_tree_root.get(), atom, 2.0)
@@ -135,7 +123,7 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(const ModelObje
             point ? point->GetWidth() : missing,
             point ? point->GetOffset() : missing,
         };
-        row.tail_peeling_ratio_assessment = std::move(tail_assessment);
+        row.tail_peeling_ratio_unavailable_reason = std::move(tail_assessment.reason);
         rows.emplace_back(std::move(row));
     }
     return rows;

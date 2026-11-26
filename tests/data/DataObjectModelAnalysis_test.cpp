@@ -1174,94 +1174,250 @@ TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewSeparatesSelectedAndAllS
     }
 }
 
-TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewComputesPeelingRatioInInclusiveDistanceRange)
+namespace {
+
+class PeelingRatioTest : public ::testing::Test
 {
-    auto model = data_test::MakeModelWithBond();
-    const auto & atom = *model->GetAtomList().front();
-    auto editor = model->EditAnalysis();
-    rg::LocalStageEstimate joint;
-    joint.source = {rg::EstimateMethod::JointComponents, {}, "component", "ratio-run", rg::FittingRole::OutputTarget};
-    editor.SetAtomJointStageEstimate(atom, joint);
-    const auto view = rg::AtomLocalPotentialView::For(atom);
-    using joint_component_test::postprocessing::MakeGridObservation;
-    rg::PostFitPeelingResult peeling;
-    peeling.source = view.GetJointStageEstimate().source;
-    peeling.samples = {
-        {5, {}, MakeGridObservation(0, 0, .5, 10, atom.GetPosition())},
-        {2, {}, MakeGridObservation(1, 1, 1., 8, atom.GetPosition())},
-        {1, {}, MakeGridObservation(2, 2, 1.5, 4, atom.GetPosition())},
-        {3, {}, MakeGridObservation(3, 3, 2., 8, atom.GetPosition())}};
-    editor.SetAtomPostFitPeeling(atom, peeling);
+protected:
+    std::unique_ptr<rg::ModelObject> model{ data_test::MakeModelWithBond() };
+    const rg::AtomObject & atom{ *model->GetAtomList().front() };
+    rg::AtomLocalPotentialView view{ rg::AtomLocalPotentialView::For(atom) };
 
-    const auto ratio = view.AssessLocalFittingPeelingRatio(1.0, 2.0).ratio;
-    ASSERT_TRUE(ratio);
-    EXPECT_DOUBLE_EQ(*ratio, 0.7);
-    const auto boundary_ratio = view.AssessLocalFittingPeelingRatio(1.0, 1.0).ratio;
-    ASSERT_TRUE(boundary_ratio);
-    EXPECT_DOUBLE_EQ(*boundary_ratio, 0.75);
-    EXPECT_FALSE(view.AssessLocalFittingPeelingRatio(2.1, 2.2).ratio);
+    void SetUp() override
+    {
+        rg::LocalStageEstimate joint;
+        joint.source = {rg::EstimateMethod::JointComponents, {}, "component", "ratio-run", rg::FittingRole::OutputTarget};
+        joint.point = rg::GaussianModel3D{2.0, 0.5, 0.1};
+        joint.convergence = rg::JointCheckStatus::Passed;
+        model->EditAnalysis().SetAtomJointStageEstimate(atom, joint);
+    }
 
-    peeling.samples[1].observation.map_value = 0;
-    editor.SetAtomPostFitPeeling(atom, peeling);
-    EXPECT_EQ(view.AssessLocalFittingPeelingRatio(1.0, 1.0).reason, "invalid-zero-denominator");
-    peeling.samples[1].response.reset();
-    peeling.samples[1].reason = "outside-joint-domain";
-    editor.SetAtomPostFitPeeling(atom, peeling);
-    EXPECT_EQ(view.AssessLocalFittingPeelingRatio(1.0, 2.0).reason,
-        "tail-coverage-incomplete:outside-joint-domain");
+    rg::PeelingSampleEstimate MakeSample(std::size_t row, double square, double raw, double peeled) const
+    {
+        auto observation = joint_component_test::postprocessing::MakeGridObservation(
+            row, row, std::sqrt(square), raw, atom.GetPosition());
+        observation.squared_distance = square;
+        return {peeled, {}, observation};
+    }
+
+    void SetPairs(const std::vector<std::pair<double, double>> & pairs)
+    {
+        rg::PostFitPeelingResult peeling;
+        peeling.source = view.GetJointStageEstimate().source;
+        for (const auto & [raw, peeled] : pairs)
+            peeling.samples.push_back(MakeSample(peeling.samples.size(), 0.25, raw, peeled));
+        model->EditAnalysis().SetAtomPostFitPeeling(atom, std::move(peeling));
+    }
+};
+
+} // namespace
+
+TEST_F(PeelingRatioTest, ComputesMagnitudeWeightedOccupancyForSignedPairs)
+{
+    struct Case
+    {
+        const char * name;
+        std::vector<std::pair<double, double>> pairs;
+        std::optional<double> expected;
+    };
+    const Case cases[]{
+        {"A: positive decomposition", {{10, 4}}, 0.6},
+        {"B: over-peeling", {{10, -5}}, 0.75},
+        {"C: negative neighbor", {{10, 14}}, 2.0 / 9.0},
+        {"D: zero raw", {{0, -5}}, 0.5},
+        {"E: cancellation in raw and peeled", {{10, 4}, {-10, -4}}, 0.6},
+        {"F: cancellation across neighbors", {{10, 4}, {10, 16}}, 0.375},
+        {"G: different voxel magnitudes", {{10, 0}, {100, 90}}, 2.0 / 11.0},
+        {"H: zero components", {{0, 0}, {0, 0}, {0, 0}}, std::nullopt},
+        {"zero net neighbor including within-voxel cancellation", {{3, 3}, {-2, -2}}, 0.0},
+        {"zero peeled", {{10, 0}, {-20, 0}}, 1.0},
+        {"scale invariant", {{80, 32}, {80, 128}}, 0.375},
+        {"sign invariant", {{-10, -4}, {-10, -16}}, 0.375},
+        {"order invariant", {{100, 90}, {10, 0}}, 2.0 / 11.0}
+    };
+    for (const auto & [name, pairs, expected] : cases)
+    {
+        SCOPED_TRACE(name);
+        SetPairs(pairs);
+        const auto assessment = view.AssessLocalFittingPeelingRatio(rg::PeelingRegion::Signal);
+        EXPECT_EQ(assessment.total_samples, pairs.size());
+        EXPECT_EQ(assessment.valid_samples, pairs.size());
+        if (expected)
+        {
+            ASSERT_TRUE(assessment.ratio) << assessment.reason;
+            EXPECT_DOUBLE_EQ(*assessment.ratio, *expected);
+        }
+        else
+        {
+            EXPECT_FALSE(assessment.ratio);
+            EXPECT_EQ(assessment.reason, "zero-component-magnitude");
+        }
+    }
 }
 
-TEST(DataObjectModelAnalysisTest, PeelingRatioAssessmentReportsUnavailableCauses)
+TEST_F(PeelingRatioTest, HandlesExtremeBinary64PairsAndPreservesSmallDifferences)
 {
-    auto model{ data_test::MakeModelWithBond() };
-    auto * atom{ model->GetAtomList().at(0).get() };
-    auto analysis{ model->EditAnalysis() };
-    analysis.SetAtomLocalSamplingEntries(*atom, {
-        LocalPotentialSample{ 4.0, SamplingPoint{ 1.5 } }
-    });
-    const auto view{ rg::AtomLocalPotentialView::For(*atom) };
+    const double max = std::numeric_limits<double>::max();
+    const double tiny = std::numeric_limits<double>::denorm_min();
+    const double min_normal = std::numeric_limits<double>::min();
+    const double previous = std::nextafter(max, 0.0);
+    const double unit_below_one = std::nextafter(1.0, 0.0);
+    const auto check = [this, min_normal](const std::vector<std::pair<double, double>> & pairs, double expected)
+    {
+        SetPairs(pairs);
+        const auto assessment = view.AssessLocalFittingPeelingRatio(rg::PeelingRegion::Signal);
+        ASSERT_TRUE(assessment.ratio) << assessment.reason;
+        EXPECT_GE(*assessment.ratio, 0.0);
+        EXPECT_LE(*assessment.ratio, 1.0);
+        if (expected < min_normal || expected == 1.0)
+            EXPECT_EQ(*assessment.ratio, expected);
+        else
+            EXPECT_DOUBLE_EQ(*assessment.ratio, expected);
+    };
+    check({{max, -max}}, 2.0 / 3.0);
+    check({{max, -max}, {-max, max}, {max, max}}, 4.0 / 7.0);
+    check({{max, max}, {max, max}, {max, 0}}, 1.0 / 3.0);
+    check({{tiny, 0}}, 1.0);
+    check({{tiny, -tiny}}, 2.0 / 3.0);
+    check({{max, previous}}, (max - previous) / max);
+    check({{1.0, unit_below_one}}, 1.0 - unit_below_one);
+    check({{max, max}, {min_normal, 0}}, 0.0);
+    check({{max, max}, {0, tiny}, {max, 0}}, 0.5);
+    check({{2.0, 2.0}, {tiny, 0}, {tiny, 0}}, tiny);
+    check({{2.0, 2.0}, {tiny, 0}}, 0.0);
+    check({{1.5, 1.5}, {tiny, 0}}, tiny);
+    const double below_one = std::nextafter(1.0, 0.0);
+    check({{below_one, 0}, {1.0 - below_one, 1.0 - below_one}}, below_one);
+    check({{max, 0}, {tiny, tiny}}, 1.0);
+}
 
-    auto assessment{ view.AssessLocalFittingPeelingRatio(1.0, 2.0) };
-    EXPECT_EQ(assessment.total_samples, 1u);
+TEST_F(PeelingRatioTest, RegionsPartitionCandidateSquaredDistances)
+{
+    const double inf = std::numeric_limits<double>::infinity();
+    const std::array distances{0.0, 0.25, std::nextafter(1.0, 0.0), 1.0,
+        std::nextafter(1.0, inf), std::nextafter(4.0, 0.0), 4.0, std::nextafter(4.0, inf)};
+    const auto signal = rg::PeelingRegion::Signal;
+    const auto tail = rg::PeelingRegion::Tail;
+    rg::PostFitPeelingResult peeling;
+    peeling.source = view.GetJointStageEstimate().source;
+    for (std::size_t i = 0; i < distances.size(); ++i)
+    {
+        const double square = distances[i];
+        EXPECT_EQ(rg::GetPeelingRegionBounds(signal).ContainsSquaredDistance(square), i < 4);
+        EXPECT_EQ(rg::GetPeelingRegionBounds(tail).ContainsSquaredDistance(square), i >= 4 && i < 7);
+        if (i < 7) peeling.samples.push_back(MakeSample(i, square, 10.0, i < 4 ? 4.0 : -5.0));
+    }
+    auto editor = model->EditAnalysis();
+    editor.SetAtomPostFitPeeling(atom, peeling);
+    const auto signal_assessment = view.AssessLocalFittingPeelingRatio(signal);
+    const auto tail_assessment = view.AssessLocalFittingPeelingRatio(tail);
+    EXPECT_EQ(signal_assessment.total_samples, 4u);
+    EXPECT_EQ(tail_assessment.total_samples, 3u);
+    EXPECT_EQ(signal_assessment.total_samples + tail_assessment.total_samples, peeling.samples.size());
+    ASSERT_TRUE(signal_assessment.ratio && tail_assessment.ratio);
+    EXPECT_DOUBLE_EQ(*signal_assessment.ratio, 0.6);
+    EXPECT_DOUBLE_EQ(*tail_assessment.ratio, 0.75);
+
+    for (const auto [square, included] : {std::pair{1.0, signal}, std::pair{4.0, tail}})
+    {
+        peeling.samples = {MakeSample(0, square, 10.0, 4.0)};
+        editor.SetAtomPostFitPeeling(atom, peeling);
+        EXPECT_EQ(view.AssessLocalFittingPeelingRatio(included).ratio, 0.6);
+        const auto other = view.AssessLocalFittingPeelingRatio(included == signal ? tail : signal);
+        EXPECT_EQ(other.total_samples, 0u);
+        EXPECT_FALSE(other.ratio);
+        EXPECT_EQ(other.reason, "no-region-samples");
+    }
+}
+
+TEST_F(PeelingRatioTest, EnforcesCoverageWithinEachRegion)
+{
+    const auto signal = rg::PeelingRegion::Signal;
+    const auto tail = rg::PeelingRegion::Tail;
+    auto editor = model->EditAnalysis();
+    rg::PostFitPeelingResult peeling;
+    peeling.source = view.GetJointStageEstimate().source;
+    peeling.samples = {MakeSample(0, 0.25, 10.0, 4.0), MakeSample(1, 1.0, 10.0, 4.0),
+        MakeSample(2, 2.25, 10.0, -5.0), MakeSample(3, 4.0, 10.0, -5.0)};
+    for (const auto [invalid_index, incomplete, complete, reason] : {
+        std::tuple{1u, signal, tail, "missing-contributor-state"},
+        std::tuple{3u, tail, signal, "outside-joint-domain"}})
+    {
+        auto partial = peeling;
+        partial.samples[invalid_index].response.reset();
+        partial.samples[invalid_index].reason = reason;
+        editor.SetAtomPostFitPeeling(atom, partial);
+        const auto assessment = view.AssessLocalFittingPeelingRatio(incomplete);
+        EXPECT_FALSE(assessment.ratio);
+        EXPECT_EQ(assessment.total_samples, 2u);
+        EXPECT_EQ(assessment.valid_samples, 1u);
+        EXPECT_EQ(assessment.reason, std::string("peeling-coverage-incomplete:") + reason);
+        EXPECT_TRUE(view.AssessLocalFittingPeelingRatio(complete).ratio);
+    }
+}
+
+TEST_F(PeelingRatioTest, InvalidGridPairsAndProvenanceAreRejectedByEditor)
+{
+    auto editor = model->EditAnalysis();
+    rg::PostFitPeelingResult peeling;
+    peeling.source = view.GetJointStageEstimate().source;
+    peeling.samples = {MakeSample(0, 1.0, 10.0, 4.0)};
+    auto malformed = peeling;
+    for (const auto invalid : {std::numeric_limits<double>::infinity(),
+        -std::numeric_limits<double>::infinity(), std::numeric_limits<double>::quiet_NaN()})
+    {
+        malformed.samples[0].observation.squared_distance = invalid;
+        EXPECT_THROW(editor.SetAtomPostFitPeeling(atom, malformed), std::invalid_argument);
+        malformed = peeling;
+        malformed.samples[0].observation.map_value = invalid;
+        EXPECT_THROW(editor.SetAtomPostFitPeeling(atom, malformed), std::invalid_argument);
+        malformed = peeling;
+        malformed.samples[0].response = invalid;
+        EXPECT_THROW(editor.SetAtomPostFitPeeling(atom, malformed), std::invalid_argument);
+        malformed = peeling;
+    }
+    for (const double square : {-0.25, std::nextafter(4.0, 5.0)})
+    {
+        malformed.samples[0].observation.squared_distance = square;
+        EXPECT_THROW(editor.SetAtomPostFitPeeling(atom, malformed), std::invalid_argument);
+    }
+    malformed = peeling;
+    malformed.samples.push_back(malformed.samples[0]);
+    EXPECT_THROW(editor.SetAtomPostFitPeeling(atom, malformed), std::invalid_argument);
+    malformed = peeling;
+    malformed.source.run_id = "different-run";
+    EXPECT_THROW(editor.SetAtomPostFitPeeling(atom, malformed), std::invalid_argument);
+    EXPECT_FALSE(view.GetPostFitPeeling());
+}
+
+TEST_F(PeelingRatioTest, MissingPeelingReportsJointAndHaloReasonsWithoutInterpolatedFallback)
+{
+    auto editor = model->EditAnalysis();
+    editor.SetAtomLocalSamplingEntries(atom, {LocalPotentialSample{4.0, SamplingPoint{1.5}}});
+    const auto tail = rg::PeelingRegion::Tail;
+    auto assessment = view.AssessLocalFittingPeelingRatio(tail);
+    EXPECT_EQ(assessment.total_samples, 0u);
     EXPECT_EQ(assessment.reason, "missing-peeling-result");
     EXPECT_FALSE(assessment.ratio);
 
-    rg::LocalStageEstimate failed_joint;
-    failed_joint.source = { rg::EstimateMethod::JointComponents, "CA", "component", "failed-run", rg::FittingRole::OutputTarget };
-    failed_joint.reason = "joint-endpoint-not-qualified";
-    failed_joint.convergence = rg::JointCheckStatus::Failed;
-    analysis.SetAtomJointStageEstimate(*atom, failed_joint);
-    analysis.SetAtomLocalSamplingEntries(*atom, {
-        LocalPotentialSample{ 4.0, SamplingPoint{ 1.5 } }
-    });
-    assessment = view.AssessLocalFittingPeelingRatio(1.0, 2.0);
+    rg::JointAnalysisResult snapshot;
+    snapshot.initialization.valid = true;
+    snapshot.search_completed = true;
+    snapshot.runtime_convergence = snapshot.target_runtime_convergence = rg::JointCheckStatus::Passed;
+    snapshot.atom_ids = {std::to_string(atom.GetSerialID()), "halo"};
+    snapshot.selection_domain.emplace().output_indices = {0};
+    editor.SetJointResult(std::move(snapshot));
+    assessment = view.AssessLocalFittingPeelingRatio(tail);
+    EXPECT_EQ(assessment.reason, "halo-median-reconstruction-unavailable");
+    EXPECT_FALSE(assessment.ratio);
+
+    auto joint = view.GetJointStageEstimate();
+    joint.point.reset();
+    joint.convergence = rg::JointCheckStatus::Failed;
+    editor.SetAtomJointStageEstimate(atom, joint);
+    assessment = view.AssessLocalFittingPeelingRatio(tail);
     EXPECT_EQ(assessment.reason, "joint-qualification-failed");
-}
-
-TEST(
-    DataObjectModelAnalysisTest,
-    AtomLocalPotentialViewRejectsInvalidPeelingRatioDistanceRange)
-{
-    auto model{ data_test::MakeModelWithBond() };
-    auto * atom{ model->GetAtomList().at(0).get() };
-    const auto view{ rg::AtomLocalPotentialView::For(*atom) };
-
-    EXPECT_THROW(
-        view.AssessLocalFittingPeelingRatio(-0.1, 1.0),
-        std::invalid_argument);
-    EXPECT_THROW(
-        view.AssessLocalFittingPeelingRatio(2.0, 1.0),
-        std::invalid_argument);
-    EXPECT_THROW(
-        view.AssessLocalFittingPeelingRatio(
-            std::numeric_limits<double>::quiet_NaN(),
-            1.0),
-        std::invalid_argument);
-    EXPECT_THROW(
-        view.AssessLocalFittingPeelingRatio(
-            0.0,
-            std::numeric_limits<double>::infinity()),
-        std::invalid_argument);
+    EXPECT_FALSE(assessment.ratio);
 }
 
 TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewSeparatesSamplingAndPeeledObservations)
@@ -2009,6 +2165,7 @@ TEST(DataObjectModelAnalysisTest, NativeDiagnosticsAndJointSamplesAreIndependent
     EXPECT_FALSE(view.GetInitialStageGaussianResult().diagnostics);
     stage.source.method = rg::EstimateMethod::JointComponents;
     stage.source.role = rg::FittingRole::OutputTarget;
+    stage.convergence = rg::JointCheckStatus::Passed;
     editor.SetAtomJointStageEstimate(atom, stage);
     editor.SetAtomLocalSamplingEntries(atom, {{2, {.1, {0,0,0}, true}}, {4, {.2, {1,0,0}, true}}});
     rg::PostFitPeelingResult peeling;
@@ -2018,10 +2175,10 @@ TEST(DataObjectModelAnalysisTest, NativeDiagnosticsAndJointSamplesAreIndependent
         {2, {}, joint_component_test::postprocessing::MakeGridObservation(1,1,.2,4,atom.GetPosition())}};
     peeling.neighbor_count = 3;
     editor.SetAtomPostFitPeeling(atom, peeling);
-    EXPECT_DOUBLE_EQ(*view.AssessLocalFittingPeelingRatio(0, 1).ratio, .5);
+    EXPECT_DOUBLE_EQ(*view.AssessLocalFittingPeelingRatio(rg::PeelingRegion::Signal).ratio, .5);
     EXPECT_EQ(view.GetPeeledObservationEntries()[1].response, 2);
     ASSERT_TRUE(view.GetPostFitPeeling());
     EXPECT_EQ(view.GetPostFitPeeling()->neighbor_count, 3u);
     rg::ModelObject copied(*model);
-    EXPECT_DOUBLE_EQ(*rg::AtomLocalPotentialView::For(*copied.FindAtomPtr(atom.GetSerialID())).AssessLocalFittingPeelingRatio(0,1).ratio, .5);
+    EXPECT_DOUBLE_EQ(*rg::AtomLocalPotentialView::For(*copied.FindAtomPtr(atom.GetSerialID())).AssessLocalFittingPeelingRatio(rg::PeelingRegion::Signal).ratio, .5);
 }

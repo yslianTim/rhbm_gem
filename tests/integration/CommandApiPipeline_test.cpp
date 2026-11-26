@@ -3,7 +3,9 @@
 #include <boost/json.hpp>
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -643,6 +645,8 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
     const auto joint_log=testing::internal::GetCapturedStdout();
     ASSERT_EQ(cli_status,0) << joint_log;
     EXPECT_NE(joint_log.find("Original-grid Peeling workspace="),std::string::npos);
+    EXPECT_NE(joint_log.find("Peeling Tail diagnostics | ratio_definition=l1-component-occupancy-v1 | ratio_available=25"),
+        std::string::npos);
 
     rg::DataRepository repository{database_path};
     const auto loaded=repository.LoadModel(key);
@@ -658,6 +662,11 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
         rgc::EstimateJointComponents(*reference_map,*reference_model));
     ASSERT_TRUE(rg::IsQualifiedJointAnalysisResult(reference));
     ExpectJointNumericalResultPreserved(reference,stored);
+    rgc::FitOptions fit_options;
+    fit_options.thread_size = 1;
+    fit_options.quiet_mode = true;
+    rgc::detail::JointPostprocessingMetrics metrics;
+    rgc::detail::RunPotentialFittingWorkflowForSelection(*reference_map, *reference_model, fit_options, &metrics);
     ASSERT_TRUE(rg::IsQualifiedJointAnalysisResult(stored));
     ASSERT_TRUE(stored.selection_domain);
     EXPECT_EQ(stored.selection_domain->contributor_policy,"buffer-expansion-external-halo-exclusion-v1");
@@ -732,7 +741,18 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
     for(const auto * atom:loaded->GetSelectedAtoms())
     {
         const auto view=rg::AtomLocalPotentialView::For(*atom);
-        const auto assessment=view.AssessLocalFittingPeelingRatio(1.0,2.0);
+        const auto in_memory=rg::AtomLocalPotentialView::For(*reference_model->FindAtomPtr(atom->GetSerialID()));
+        for (const auto region : {rg::PeelingRegion::Signal, rg::PeelingRegion::Tail})
+        {
+            const auto before = in_memory.AssessLocalFittingPeelingRatio(region);
+            const auto after = view.AssessLocalFittingPeelingRatio(region);
+            EXPECT_EQ(before.total_samples, after.total_samples);
+            EXPECT_EQ(before.valid_samples, after.valid_samples);
+            EXPECT_EQ(before.reason, after.reason);
+            ASSERT_TRUE(before.ratio && after.ratio);
+            EXPECT_EQ(std::bit_cast<std::uint64_t>(*before.ratio), std::bit_cast<std::uint64_t>(*after.ratio));
+        }
+        const auto assessment=view.AssessLocalFittingPeelingRatio(rg::PeelingRegion::Tail);
         tail_raw_sample_count+=assessment.total_samples;
         tail_valid_sample_count+=assessment.valid_samples;
         if(assessment.total_samples && assessment.valid_samples==assessment.total_samples)
@@ -747,6 +767,11 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
     EXPECT_EQ(complete_tail_target_count,25u);
     EXPECT_EQ(tail_valid_sample_count,tail_raw_sample_count);
     EXPECT_EQ(valid_tail_ratios.size(),25u);
+    EXPECT_EQ(metrics.tail_target_count, target_count);
+    EXPECT_EQ(metrics.tail_raw_sample_count, tail_raw_sample_count);
+    EXPECT_EQ(metrics.tail_valid_sample_count, tail_valid_sample_count);
+    EXPECT_EQ(metrics.tail_full_coverage_targets, complete_tail_target_count);
+    EXPECT_EQ(metrics.tail_ratio_available_targets, valid_tail_ratios.size());
     RecordProperty("joint_target_count",static_cast<int>(target_count));
     RecordProperty("buffer_contributor_count",static_cast<int>(stored.selection_domain->buffer_indices.size()));
     RecordProperty("tail_complete_targets",static_cast<long long>(complete_tail_target_count));
@@ -799,9 +824,9 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
     {
         const auto * atom=reloaded_again->FindAtomPtr(serial_id);
         ASSERT_NE(atom,nullptr);
-        const auto ratio=rg::AtomLocalPotentialView::For(*atom).AssessLocalFittingPeelingRatio(1.0,2.0).ratio;
+        const auto ratio=rg::AtomLocalPotentialView::For(*atom).AssessLocalFittingPeelingRatio(rg::PeelingRegion::Tail).ratio;
         ASSERT_TRUE(ratio);
-        EXPECT_DOUBLE_EQ(*ratio,expected_ratio);
+        EXPECT_EQ(std::bit_cast<std::uint64_t>(*ratio),std::bit_cast<std::uint64_t>(expected_ratio));
     }
 
     const auto small_maps_dir=directory.path()/"small-maps";

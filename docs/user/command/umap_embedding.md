@@ -38,13 +38,14 @@ UMAP uses the selected Output Targets. At least three rows must have all three
 required features: neighbor distance sum, closest-neighbor distance and tail
 peeling ratio. Missing required values exclude the row with a reported reason;
 fewer than three remaining rows fails the command. Missing ancillary values are
-written as empty CSV fields. A zero response denominator or incomplete Joint
-original-grid coverage makes a peeling ratio unavailable, not zero.
+written as empty CSV fields. Empty regions, incomplete Original-grid coverage,
+and zero total component magnitude yield an unavailable ratio.
 
 The adjacent `.csv.metadata.json` records estimator, feature names, peeling mode,
 map normalization (null when unknown), standardization, included/excluded row
 counts and exclusions by reason. Its `column_semantics`
-field identifies `amplitude joint` as Gaussian amplitude A, `width joint` as the
+field identifies the two raw ratio columns and describes `amplitude joint`
+as Gaussian amplitude A, `width joint` as the
 shared Gaussian/charge-kernel width tau, and `offset joint` as the charge-kernel
 coefficient C. The `standardization` field reports `mad-robust-scaling` for
 both embeddings. `standardization_parameters` records the center, scale,
@@ -73,16 +74,46 @@ distinct atoms at the same position have distance zero. A selected hydrogen atom
 also queries non-hydrogen neighbors. This feature always excludes hydrogen
 candidates; no eligible neighbor makes the feature unavailable.
 
-Each peeling ratio uses the same valid sample population in its raw and peeled
-sums. Samples must have finite distances in the inclusive range, finite raw and
-peeled responses, and a provable raw/peeled identity. The saved PostFit result pairs raw and peeled
-responses by original grid identity. A missing or mismatched sample makes the strict
-ratio unavailable, with the reason recorded in the metadata exclusions. The
-ratio is `1 - peeled sum / raw sum`; a zero raw denominator remains unavailable.
-For Joint rows, the saved Tail Peeling Ratio is derived from paired raw and
-label-free peeled samples. Halo reconstruction uses qualified Output and Buffer points
-selected by geometry; residue, element, atom name, and group labels do not
-enter that ratio. Those labels remain available for CSV and plot annotations.
+The **L1 Component Occupancy Peeling Ratio** uses the saved Original-grid
+voxel values `y` and their paired peeled responses `p` before own-charge
+correction. Signal uses `0 ≤ r² ≤ 1 Å²` (0 through 1 Å). Tail uses
+`1 < r² ≤ 4 Å²` (above 1 through 2 Å). The 1 Å boundary belongs to Signal
+and the 2 Å boundary belongs to Tail.
+
+```text
+neighbor_magnitude = sum_v |y_v - p_v|
+peeled_magnitude   = sum_v |p_v|
+peeling_ratio      = neighbor_magnitude / (neighbor_magnitude + peeled_magnitude)
+```
+
+The numerator uses the modeled net neighbor contribution at each voxel.
+Contributions from multiple neighbors can cancel within a voxel. The ratio
+describes the relative magnitudes of the two modeled components and
+naturally lies in [0, 1]. Signed responses and a zero signed raw sum are
+valid. Cancellation can make the denominator differ from `sum_v |y_v|`.
+The peeled response may contain target signal, model residuals, map noise,
+and neighbor reconstruction error. Physical electron density and occupancy
+probabilities require separate evidence. A zero ratio indicates zero
+observable net neighbor magnitude in the region. A one indicates zero
+peeled magnitude. Over-peeling severity cannot be inferred from the ratio alone.
+
+Each region requires every Original-grid observation to have a valid,
+finite raw/peeled pair from the same Joint run. Empty regions, missing
+responses, or two zero component magnitudes yield an unavailable value.
+The command reports missing required Tail values in the metadata exclusions
+and writes a missing Signal value as an empty field on retained rows.
+Qualified Output and Buffer points supply geometry-local Halo reconstruction.
+Atom labels remain available for CSV and plot annotations.
+
+Existing v26 SQLite models with Original-grid pairs can be used directly.
+Both commands compute from the same binary64 pairs; a neighbor contribution
+that rounded away when forming the peeled value cannot be recovered from
+those pairs. The metadata field `peeling_ratio_definition` identifies
+`l1-component-occupancy-v1`, with the bounds in `peeling_ratio_range` and
+`peeling_ratio_regions`. `peeling_mode` identifies how the samples were
+produced. The same CSV column names now carry the raw occupancy ratios
+identified by this metadata. The MAD scaling recorded in `standardization`
+applies to selected UMAP inputs. The [0, 1] bound applies to the raw ratios.
 
 `amplitude joint`, `width joint`, and `offset joint` read the saved `Second.point`.
 These are Joint A/tau/C values with tau in angstroms. Post-Joint Local and

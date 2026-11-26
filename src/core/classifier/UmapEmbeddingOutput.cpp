@@ -4,6 +4,7 @@
 
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
+#include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
 
 #include <boost/json.hpp>
 
@@ -82,14 +83,31 @@ bool WriteEmbedding(
     boost::json::object exclusions;
     for (const auto & [reason, count] : prepared.exclusions) exclusions[reason] = count;
 
+    const auto region_metadata = [](PeelingRegion region)
+    {
+        const auto bounds = GetPeelingRegionBounds(region);
+        return boost::json::object{
+            { "min_distance", bounds.min_distance },
+            { "max_distance", bounds.max_distance },
+            { "min_inclusive", bounds.min_inclusive },
+            { "max_inclusive", bounds.max_inclusive }
+        };
+    };
     std::ofstream metadata(output_path.string() + ".metadata.json");
     boost::json::object metadata_fields{
         { "estimator", "joint-components" },
         { "features", features },
         { "second_umap_features", second_umap_features },
         { "peeling_mode", "original-grid-v1" },
+        { "peeling_ratio_definition", PeelingRatioDefinition },
+        { "peeling_ratio_range", boost::json::array{ 0, 1 } },
+        { "peeling_ratio_regions", boost::json::object{
+            { "signal", region_metadata(PeelingRegion::Signal) },
+            { "tail", region_metadata(PeelingRegion::Tail) } } },
         { "map_normalization", map_normalization },
         { "column_semantics", boost::json::object{
+            { kLocalFittingFeatureNames[2], "Signal L1 Component Occupancy Peeling Ratio" },
+            { kLocalFittingFeatureNames[3], "Tail L1 Component Occupancy Peeling Ratio" },
             { kLocalFittingFeatureNames[4], "Joint Gaussian amplitude A" },
             { kLocalFittingFeatureNames[5], "Joint shared Gaussian/charge-kernel width tau" },
             { kLocalFittingFeatureNames[6], "Joint charge-kernel coefficient C" } } },

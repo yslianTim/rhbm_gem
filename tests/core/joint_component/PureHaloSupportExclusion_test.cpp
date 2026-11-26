@@ -643,7 +643,7 @@ TEST(PureHaloSupportExclusionTest, PeelingIsInvariantToExtraContributorChemicalL
         auto peeling=postprocessing_test::BuildPostFitPeelingSamples(context, std::vector<std::size_t>{0}).at(1);
         fixture.model.EditAnalysis().ApplyPostFitPeelingsBatch({{1,peeling}});
         const auto tail=AtomLocalPotentialView::For(*fixture.model.FindAtomPtr(1))
-            .AssessLocalFittingPeelingRatio(1.0,2.0).ratio;
+            .AssessLocalFittingPeelingRatio(PeelingRegion::Tail).ratio;
         const auto local=context.BuildPostJointLocalSamples(1,peeling);
         return Output{std::move(peeling.samples),local.samples,tail};
     };
@@ -1566,8 +1566,27 @@ TEST(PureHaloSupportExclusionTest, NonpositiveGridCorrectionsAreNotFailuresOrPha
     EXPECT_EQ(result.effective_sample_count,0u);
     EXPECT_TRUE(result.sample_failures.empty());
     EXPECT_FALSE(result.information);
-    fixture.model.EditAnalysis().SetAtomPostFitPeeling(*fixture.model.FindAtomPtr(1),peeling);
-    EXPECT_NO_THROW(fixture.model.EditAnalysis().SetAtomPostJointLocalResult(*fixture.model.FindAtomPtr(1),result));
+    auto editor=fixture.model.EditAnalysis();
+    const auto & atom=*fixture.model.FindAtomPtr(1);
+    const auto view=AtomLocalPotentialView::For(atom);
+    editor.SetAtomPostFitPeeling(atom,peeling);
+    const auto signal=view.AssessLocalFittingPeelingRatio(PeelingRegion::Signal).ratio;
+    ASSERT_TRUE(signal);
+    EXPECT_NO_THROW(editor.SetAtomPostJointLocalResult(atom,result));
+    EXPECT_EQ(view.AssessLocalFittingPeelingRatio(PeelingRegion::Signal).ratio,signal);
+
+    // Exercise a failed own-charge correction with the same qualified peeling pairs.
+    auto endpoint=view.GetJointStageEstimate();
+    endpoint.point=endpoint.point->WithOffset(std::numeric_limits<double>::max());
+    editor.SetAtomJointStageEstimate(atom,endpoint);
+    editor.SetAtomPostFitPeeling(atom,peeling);
+    const auto failed=core::detail::FitPostJointLocalTarget(context,fixture.model,1,peeling,options,metrics);
+    EXPECT_EQ(failed.status,EvidenceStatus::Unavailable);
+    EXPECT_TRUE(std::any_of(failed.sample_failures.begin(),failed.sample_failures.end(),[](const auto & sample) {
+        return sample.reason=="nonfinite-fixed-charge-response";
+    }));
+    EXPECT_NO_THROW(editor.SetAtomPostJointLocalResult(atom,failed));
+    EXPECT_EQ(view.AssessLocalFittingPeelingRatio(PeelingRegion::Signal).ratio,signal);
 }
 
 TEST(PureHaloSupportExclusionTest, CoarseGridEqualRadiusObservationsFailIndependentLocalRank)

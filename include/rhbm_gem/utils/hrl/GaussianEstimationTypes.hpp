@@ -68,15 +68,37 @@ struct PostFitPeelingResult
     std::vector<PeelingSampleEstimate> samples;
 };
 
+inline constexpr double PostJointCandidateRadius{2.0};
+inline constexpr char PeelingRatioDefinition[]{"l1-component-occupancy-v1"};
+
+enum class PeelingRegion { Signal, Tail };
+
+struct PeelingRegionBounds
+{
+    double min_distance, max_distance;
+    bool min_inclusive;
+    static constexpr bool max_inclusive{true};
+
+    constexpr bool ContainsSquaredDistance(double squared_distance) const
+    {
+        const double min_squared = min_distance * min_distance;
+        return squared_distance <= max_distance * max_distance &&
+            (min_inclusive ? squared_distance >= min_squared : squared_distance > min_squared);
+    }
+};
+
+constexpr PeelingRegionBounds GetPeelingRegionBounds(PeelingRegion region)
+{
+    constexpr double signal_radius{1.0};
+    return region == PeelingRegion::Signal ? PeelingRegionBounds{0.0, signal_radius, true} :
+        PeelingRegionBounds{signal_radius, PostJointCandidateRadius, false};
+}
+
 struct PeelingRatioAssessment
 {
     std::optional<double> ratio;
     std::size_t total_samples{};
     std::size_t valid_samples{};
-    std::size_t peeling_samples{};
-    double raw_response_sum{};
-    double peeled_response_sum{};
-    double valid_raw_response_sum{};
     std::string reason;
 };
 

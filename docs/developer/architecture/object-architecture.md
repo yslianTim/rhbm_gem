@@ -110,11 +110,12 @@ InitialStage selection decision. It omits row/global voxel identity, unavailable
 reasons and provenance; use `GetPostFitPeeling()` (the entry's `PostFitPeeling()`)
 for that full evidence.
 
-`AssessLocalFittingPeelingRatio()` uses Original-grid `map_value` sums when a
-Peeling result exists. Without one, its diagnostic `raw_response_sum` and sample
-count use all interpolated Sampling Entries in the distance range, including
-unselected points; the ratio remains unavailable. These diagnostic sources are
-different and must not be compared as though both were voxel sums.
+`AssessLocalFittingPeelingRatio(PeelingRegion)` uses the saved Original-grid
+`map_value` and peeled responses to assess L1 Component Occupancy and report
+total and valid observation counts. Signal includes the 1 Å boundary and Tail
+starts above it and includes 2 Å. Missing Peeling yields an unavailable
+assessment with zero Original-grid counts. See the
+[JointStage integration contract](../joint-stage-integration.md#original-grid-peeling).
 
 Views are lightweight value objects containing a non-owning model or atom reference. Consumers, including painters, store them by value rather than allocating them through `unique_ptr`.
 

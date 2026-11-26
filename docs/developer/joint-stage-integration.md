@@ -147,6 +147,18 @@ ordering without interpolation. The projection's `is_selected=true` is only a
 container convention. Use `GetPostFitPeeling()` for complete observations,
 Original row/global voxel identity, unavailable reasons and provenance.
 
+JointStage uses `AssessLocalFittingPeelingRatio(PeelingRegion::Tail)` for
+coverage and ratio availability diagnostics after publishing Peeling.
+`umap_embedding` uses the same assessment for Signal `[0, 1]` Å and
+Tail `(1, 2]` Å. Classification compares squared distances from the stored
+observations. A complete region contributes every binary64 raw/peeled pair
+to `sum(|raw - peeled|) / (sum(|raw - peeled|) + sum(|peeled|))`, with
+independently scaled component sums. This derived diagnostic is available
+when Joint evidence qualifies, coverage is complete, and the sum of component
+magnitudes is positive. It uses the pairs before own-charge correction,
+independently of Local solver row selection and fitting status. Ratio
+calculation leaves the Joint, Local and Group qualification rules in place.
+
 ## Post-Joint Local and Group Fitting
 
 Post-Joint Local uses selected, converged Joint Targets and current peeling

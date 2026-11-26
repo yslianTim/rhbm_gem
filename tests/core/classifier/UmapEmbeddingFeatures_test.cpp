@@ -71,7 +71,7 @@ TEST(UmapEmbeddingFeaturesTest, FiltersRequiredFeaturesAndUsesMadScalingInRowOrd
         row.features = feature_values[index];
         rows.push_back(std::move(row));
     }
-    rows[1].tail_peeling_ratio_assessment.reason = "fixture-tail-missing";
+    rows[1].tail_peeling_ratio_unavailable_reason = "fixture-tail-missing";
     auto atom_without_features{ std::make_unique<AtomObject>() };
     atom_without_features->SetSerialID(5);
     atom_without_features->SetElement(Element::OXYGEN);
@@ -152,6 +152,33 @@ TEST(UmapEmbeddingFeaturesTest, UsesPositiveDeviationMedianWhenMostValuesRepeat)
         EXPECT_DOUBLE_EQ(prepared->feature_rows[row].features[0], inputs[row]);
         EXPECT_NEAR(prepared->features.values[row * 3], inputs[row] * kInverseMadFactor / 2, 1e-15);
         EXPECT_DOUBLE_EQ(prepared->features.values[row * 3 + 2], 0.0);
+    }
+}
+
+TEST(UmapEmbeddingFeaturesTest, AppliesZeroMadFallbackToBoundedTailRatios)
+{
+    const std::array ratios{0.25, 0.25, 0.25, 0.375, 0.75};
+    std::vector<std::unique_ptr<AtomObject>> atoms;
+    std::vector<LocalFittingFeatureRow> rows(ratios.size());
+    for (std::size_t i = 0; i < ratios.size(); ++i)
+    {
+        auto atom = std::make_unique<AtomObject>();
+        rows[i].serial_id = static_cast<int>(i + 1);
+        rows[i].features[3] = ratios[i];
+        atom->SetSerialID(rows[i].serial_id);
+        atoms.push_back(std::move(atom));
+    }
+    const ModelObject model{std::move(atoms)};
+    std::string error;
+    const auto prepared = BuildAndStandardizeInput(model, std::move(rows), "tail-zero-mad", 3, error);
+    ASSERT_TRUE(prepared) << error;
+    EXPECT_EQ(prepared->features.zero_mad_fallback_features,
+        (std::vector<std::string_view>{"tail peeling ratio"}));
+    for (std::size_t i = 0; i < ratios.size(); ++i)
+    {
+        EXPECT_EQ(prepared->feature_rows[i].features[3], ratios[i]);
+        EXPECT_NEAR(prepared->features.values[i * 3 + 2],
+            (ratios[i] - 0.25) * kInverseMadFactor / 0.3125, 1e-15);
     }
 }
 

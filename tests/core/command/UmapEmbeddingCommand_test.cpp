@@ -514,7 +514,9 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
         "amplitude joint", "width joint", "offset joint" }));
     EXPECT_FALSE(metadata.as_object().contains("spatial_feature_normalization"));
     const auto & column_semantics{ metadata.at("column_semantics").as_object() };
-    EXPECT_EQ(column_semantics.size(), 3u);
+    EXPECT_EQ(column_semantics.size(), 5u);
+    EXPECT_EQ(column_semantics.at("signal peeling ratio").as_string(), "Signal L1 Component Occupancy Peeling Ratio");
+    EXPECT_EQ(column_semantics.at("tail peeling ratio").as_string(), "Tail L1 Component Occupancy Peeling Ratio");
     EXPECT_EQ(column_semantics.at("amplitude joint").as_string(),
         "Joint Gaussian amplitude A");
     EXPECT_EQ(column_semantics.at("width joint").as_string(),
@@ -1338,7 +1340,14 @@ TEST(UmapEmbeddingCommandTest, ExcludesMissingRequiredFeaturesAndAllowsMissingAn
         const auto request=MakeRequest(path,dir.path()/std::to_string(scenario));
         EXPECT_TRUE(RunCommand(request).succeeded);
         EXPECT_TRUE(std::filesystem::exists(request.output_dir/"umap_embedding_model.csv.metadata.json"));
-        EXPECT_EQ(ReadLines(request.output_dir/"umap_embedding_model.csv").size(), scenario == 1 ? 8u : 9u);
+        const auto rows = ReadLines(request.output_dir/"umap_embedding_model.csv");
+        ASSERT_EQ(rows.size(), scenario == 1 ? 8u : 9u);
+        if (scenario == 2)
+        {
+            const auto first_row = SplitFields(rows.at(1));
+            EXPECT_TRUE(first_row.at(5).empty());
+            EXPECT_FALSE(first_row.at(6).empty());
+        }
     }
 }
 
@@ -1357,7 +1366,7 @@ TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNo
         for(int k=0;k<12;++k)
         {
             const int serial=model->GetAtomList()[a]->GetSerialID();
-            const int x=3*serial+(k==0 ? 2:k==1 ? 6:0);
+            const int x=3*serial+(k==0 ? 4:k==1 ? 8:0);
             const int y=k<2 ? 10:10+k%5+1;
             const int z=k<2 ? 10:10+k/5+1;
             const double dx=.25*(x-3*serial),dy=.25*(y-10),dz=.25*(z-10);
@@ -1434,7 +1443,9 @@ TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNo
         {
             const auto & support=input.support[contributor][i];
             const auto grid=std::stoull(input.row_ids[support.row]);
-            peeling.samples.push_back({raw[i] * (1.0 - ratio[i]), {},
+            const double peeled = serial == 3 ? input.observations[support.row] * (i == 0 ? -0.5 : 1.25) :
+                raw[i] * (1.0 - ratio[i]);
+            peeling.samples.push_back({peeled, {},
                 {support.row,grid,support.squared_distance,input.observations[support.row],grid_geometry.GetGridPosition(grid)}});
         }
         if(atom->GetSerialID()==2) {peeling.samples[1].response.reset(); peeling.samples[1].reason="outside-joint-domain";}
@@ -1447,10 +1458,23 @@ TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNo
     ASSERT_TRUE(RunCommand(request).succeeded);
     const auto csv=ReadLines(request.output_dir/"umap_embedding_model.csv");
     ASSERT_EQ(csv.size(),21); // twenty valid targets + header; one Halo and one coverage exclusion.
+    const auto signed_target = std::find_if(csv.begin() + 1, csv.end(),
+        [](const auto & row) { return row.starts_with("3,"); });
+    ASSERT_NE(signed_target, csv.end());
+    const auto signed_fields = SplitFields(*signed_target);
+    EXPECT_DOUBLE_EQ(std::stod(signed_fields.at(5)), 0.75);
+    EXPECT_DOUBLE_EQ(std::stod(signed_fields.at(6)), 1.0 / 6.0);
     const auto metadata_lines=ReadLines(request.output_dir/"umap_embedding_model.csv.metadata.json");
     const auto metadata=boost::json::parse(metadata_lines.at(0));
     EXPECT_EQ(metadata.at("estimator").as_string(),"joint-components");
     EXPECT_EQ(metadata.at("peeling_mode").as_string(),"original-grid-v1");
+    EXPECT_EQ(metadata.at("peeling_ratio_definition").as_string(), "l1-component-occupancy-v1");
+    EXPECT_EQ(metadata.at("peeling_ratio_range").as_array(), (boost::json::array{0, 1}));
+    const auto & regions = metadata.at("peeling_ratio_regions").as_object();
+    EXPECT_EQ(regions.at("signal").as_object(), (boost::json::object{
+        {"min_distance", 0.0}, {"max_distance", 1.0}, {"min_inclusive", true}, {"max_inclusive", true}}));
+    EXPECT_EQ(regions.at("tail").as_object(), (boost::json::object{
+        {"min_distance", 1.0}, {"max_distance", 2.0}, {"min_inclusive", false}, {"max_inclusive", true}}));
     EXPECT_NE(metadata.at("column_semantics").at("offset joint").as_string().find("charge-kernel coefficient C"),
         std::string::npos);
     const auto & map_normalization{ metadata.at("map_normalization").as_object() };
@@ -1462,5 +1486,5 @@ TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNo
     EXPECT_EQ(metadata.at("features").as_array().size(),3);
     EXPECT_FALSE(metadata.at("exclusions").as_object().empty());
     EXPECT_EQ(metadata.at("exclusions").as_object().at(
-        "unavailable: tail peeling ratio (tail-coverage-incomplete:outside-joint-domain)").as_int64(),1);
+        "unavailable: tail peeling ratio (peeling-coverage-incomplete:outside-joint-domain)").as_int64(),1);
 }

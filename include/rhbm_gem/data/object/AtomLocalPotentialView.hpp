@@ -40,8 +40,8 @@ public:
     // Projects available Original-grid peeled observations without interpolation.
     // Use GetPostFitPeeling() for full evidence, unavailable reasons and provenance.
     LocalPotentialSampleList GetPeeledObservationEntries() const;
-    PeelingRatioAssessment AssessLocalFittingPeelingRatio(
-        double distance_min, double distance_max) const;
+    // Uses complete Original-grid raw/peeled pairs before own-charge correction.
+    PeelingRatioAssessment AssessLocalFittingPeelingRatio(PeelingRegion region) const;
     double GetInitialStageAlphaR() const;
 
 private:

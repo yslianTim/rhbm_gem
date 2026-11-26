@@ -750,9 +750,9 @@ TEST(JointComponentPartialSelectionTest, PostFitPeelingUsesOriginalGridAndPreser
         EXPECT_NEAR(*sample.response,observation.map_value-prediction,1e-12);
     }
     editor.SetAtomPostFitPeeling(*atom, output);
-    ASSERT_TRUE(view.AssessLocalFittingPeelingRatio(0, 1).ratio);
-    EXPECT_GT(*view.AssessLocalFittingPeelingRatio(0, 1).ratio, 0);
-    EXPECT_TRUE(view.AssessLocalFittingPeelingRatio(0, 3).ratio);
+    ASSERT_TRUE(view.AssessLocalFittingPeelingRatio(rhbm_gem::PeelingRegion::Signal).ratio);
+    EXPECT_GT(*view.AssessLocalFittingPeelingRatio(rhbm_gem::PeelingRegion::Signal).ratio, 0);
+    EXPECT_TRUE(view.AssessLocalFittingPeelingRatio(rhbm_gem::PeelingRegion::Tail).ratio);
     EXPECT_EQ(view.GetJointStageModel().ToVector(), before);
     const auto & after = view.GetSamplingEntriesView();
     for (std::size_t i = 0; i < raw.size(); ++i)
