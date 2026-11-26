@@ -53,6 +53,7 @@ struct FeatureModelOptions
 {
     std::size_t atom_count{ 8 };
     bool constant_features{ false };
+    bool constant_joint_parameters{ false };
     bool exact_affine_values{ false };
     bool affine_transform{ false };
     bool include_analysis{ true };
@@ -206,7 +207,8 @@ std::unique_ptr<rg::ModelObject> BuildFeatureModel(
         input.selection_domain->output_indices.push_back(input.atom_ids.size());
         input.atom_ids.push_back(std::to_string(atom->GetSerialID()));
         auto & support = input.support.emplace_back();
-        const double amplitude = MakeGaussianResult(atom->GetSerialID(), 1, options).mdpde.GetModel().GetAmplitude();
+        const int amplitude_serial{ options.constant_joint_parameters ? 1 : atom->GetSerialID() };
+        const double amplitude = MakeGaussianResult(amplitude_serial, 1, options).mdpde.GetModel().GetAmplitude();
         const double width{ FeatureJointWidth(atom->GetSerialID(), options.vary_joint_widths) };
         for (int k = 0; k < 12; ++k)
         {
@@ -500,8 +502,13 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
     EXPECT_EQ(kOutputColumnCount, 17u);
     const auto metadata_lines{ ReadLines(output_path.string() + ".metadata.json") };
     const auto metadata{ boost::json::parse(metadata_lines.at(0)) };
-    EXPECT_EQ(metadata.at("standardization").as_string(),
-        "population-z-score; constant columns zero");
+    EXPECT_EQ(metadata.at("standardization").as_string(), "mad-robust-scaling");
+    EXPECT_EQ(metadata.at("standardization_parameters"), (boost::json::object{
+        { "center", "median" }, { "scale", "normalized-mad" },
+        { "normal_consistency_factor", 1.482602218505602 },
+        { "zero_mad_policy", "nonzero-deviation-median" }, { "constant_feature_policy", "zero" } }));
+    EXPECT_TRUE(metadata.at("first_umap_zero_mad_fallback_features").as_array().empty());
+    EXPECT_TRUE(metadata.at("second_umap_zero_mad_fallback_features").is_array());
     EXPECT_EQ(metadata.at("second_umap_features").as_array(), (boost::json::array{
         "amplitude joint median of bin", "width joint median of bin", "offset joint median of bin",
         "amplitude joint", "width joint", "offset joint" }));
@@ -957,6 +964,37 @@ TEST(UmapEmbeddingCommandTest, RejectsAllConstantSelectedFeatures)
     EXPECT_EQ(command_test::CountFilesWithExtension(output_dir, ".csv"), 0u);
 }
 
+TEST(UmapEmbeddingCommandTest, ReportsFirstFallbackAndReplacesSecondOutputWhenJointColumnsAreConstant)
+{
+    command_test::ScopedTempDir temp_dir{ "umap_embedding_second_constant" };
+    const auto database{ temp_dir.path() / "analysis.sqlite" };
+    const auto output_dir{ temp_dir.path() / "output" };
+    const auto request{ MakeRequest(database, output_dir) };
+    SeedFeatureDatabase(database, "model");
+    ASSERT_TRUE(RunCommand(request).succeeded);
+    const auto second_summary{ output_dir / "umap_embedding_model_second_umap_mean_shift_bins.csv" };
+    ASSERT_GT(ReadLines(second_summary).size(), 1u);
+
+    FeatureModelOptions options;
+    options.atom_count = 9;
+    options.constant_joint_parameters = true;
+    SeedFeatureDatabase(database, "model", options);
+    ASSERT_TRUE(RunCommand(request).succeeded);
+
+    const auto output{ output_dir / "umap_embedding_model.csv" };
+    const auto rows{ ReadLines(output) };
+    ASSERT_EQ(rows.size(), 10u);
+    for (std::size_t row = 1; row < rows.size(); ++row)
+        EXPECT_TRUE(rows[row].ends_with(",,"));
+    EXPECT_EQ(ReadLines(second_summary).size(), 1u);
+    EXPECT_FALSE(std::filesystem::exists(output_dir / "umap_embedding_model_second_umap.pdf"));
+    EXPECT_FALSE(std::filesystem::exists(output_dir / "umap_embedding_model_second_umap_mean_shift.pdf"));
+    const auto metadata{ boost::json::parse(ReadLines(output.string() + ".metadata.json").at(0)) };
+    EXPECT_EQ(metadata.at("first_umap_zero_mad_fallback_features").as_array(),
+        (boost::json::array{ "neighbor distance sum in 2A" }));
+    EXPECT_TRUE(metadata.at("second_umap_zero_mad_fallback_features").as_array().empty());
+}
+
 TEST(UmapEmbeddingCommandTest, RejectsInvalidOptions)
 {
     command_test::ScopedTempDir temp_dir{ "umap_embedding_options" };
@@ -1165,7 +1203,7 @@ TEST(UmapEmbeddingCommandTest, SameSeedAndSettingsProduceIdenticalOutput)
     }
 }
 
-TEST(UmapEmbeddingCommandTest, ZScoreMakesPositiveAffineFeatureChangesInvariant)
+TEST(UmapEmbeddingCommandTest, MadScalingMakesPositiveAffineFeatureChangesInvariant)
 {
     command_test::ScopedTempDir temp_dir{ "umap_embedding_affine" };
     const auto base_database{ temp_dir.path() / "base.sqlite" };

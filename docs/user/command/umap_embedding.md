@@ -46,8 +46,12 @@ map normalization (null when unknown), standardization, included/excluded row
 counts and exclusions by reason. Its `column_semantics`
 field identifies `amplitude joint` as Gaussian amplitude A, `width joint` as the
 shared Gaussian/charge-kernel width tau, and `offset joint` as the charge-kernel
-coefficient C. The JSON field `standardization` describes the population
-Z-score used for the selected features in both embeddings.
+coefficient C. The `standardization` field reports `mad-robust-scaling` for
+both embeddings. `standardization_parameters` records the center, scale,
+normal-consistency factor, and policies for zero MAD and constant columns.
+`first_umap_zero_mad_fallback_features` and
+`second_umap_zero_mad_fallback_features` list the columns that used the
+nonzero-deviation median in each run.
 
 For each selected atom, the command reconstructs these 7 local-fitting features:
 
@@ -131,16 +135,37 @@ CLI option.
 
 ## Processing and Output
 
-The first UMAP standardizes each selected feature with a population Z-score.
-The variance is the sum of squared deviations divided by the retained row count.
-A constant selected column is replaced with zeros and reported as a warning.
-If all three selected columns are constant, the command fails before writing
-outputs.
+Both UMAP runs scale each enabled column using its atom rows. The first
+uses all retained rows after required-feature validation, and the second
+uses the full column after median imputation. The median `m` is the middle
+value for odd counts and the midpoint of the two middle values for even
+counts. The median absolute deviation (MAD) is `median(abs(x - m))`. When
+MAD is positive, scaling uses:
 
-Unlike the legacy CSV input path, features are restored directly from SQLite as
-full `double` values and are not quantized to two decimal places. The output
-uses round-trip-safe floating-point precision for continuous features and UMAP
-coordinates.
+```text
+z = (x - m) / (1.482602218505602 * MAD)
+```
+
+When MAD is zero and the column varies, the denominator uses the same
+factor times the median of strictly positive absolute deviations.
+This `NonzeroDeviationMedian` policy emits a warning for the column and
+has different robustness properties from standard MAD. Constant columns
+become zero. The first UMAP warns for constant columns and fails if every
+enabled column is constant.
+
+The command validates that standardization preserves the required floating-point
+range and produces finite values before either UMAP run. It checks a
+bounding-box upper bound for the Euclidean sum of squared differences and
+checks for gaps whose squares would be below the normal double range. These
+checks can reject extreme inputs even when the bounding-box diagonal is
+unattainable by any pair of rows or other columns would separate a close pair.
+The command reports numerical failures with the UMAP stage, model key,
+column, and reason.
+
+MAD scaling retains finite outliers without clipping. Those rows can have
+large standardized distances. CSV feature values come directly from the
+original reconstructed rows and are written with round-trip-safe precision,
+as are the UMAP coordinates.
 
 The per-atom CSV has 17 columns in order: `serial id,residue,spot`, the seven
 reconstructed features, `umap x,umap y`, `mean shift x,mean shift y`, then
@@ -209,31 +234,33 @@ same statistics for the three Joint parameters A, tau, and C.
 `bin number` identifies the summary row. The geometric bin center and bin
 number are excluded from the second feature matrix.
 
-All 11 second-embedding features are enabled by default, in this order.
+The second embedding defines ten candidate columns in this order. The six
+enabled columns appear in the feature matrix and `second_umap_features`
+metadata in the same order.
 
-1. `amplitude joint median of bin`
-2. `width joint median of bin`
-3. `offset joint median of bin`
-4. `neighbor distance sum in 2A median of bin`
-5. `distance to closest neighbor median of bin`
-6. `signal peeling ratio median of bin`
-7. `tail peeling ratio median of bin`
-8. `neighbor distance sum in 2A`
-9. `signal peeling ratio`
-10. `width joint`
-11. `offset joint`
+| Candidate | Source | Local feature index | Enabled |
+| --- | --- | --- | --- |
+| `neighbor distance sum in 2A median of bin` | First bin median | 0 | No |
+| `distance to closest neighbor median of bin` | First bin median | 1 | No |
+| `signal peeling ratio median of bin` | First bin median | 2 | No |
+| `tail peeling ratio median of bin` | First bin median | 3 | No |
+| `amplitude joint median of bin` | First bin median | 4 | Yes |
+| `width joint median of bin` | First bin median | 5 | Yes |
+| `offset joint median of bin` | First bin median | 6 | Yes |
+| `amplitude joint` | Atom | 4 | Yes |
+| `width joint` | Atom | 5 | Yes |
+| `offset joint` | Atom | 6 | Yes |
 
 To select a subset, edit `include_in_umap` in `kSecondUmapFeatureDefinitions` in
-`src/core/classifier/UmapEmbeddingFeatures.cpp` and rebuild. At least one feature
-must be enabled. The feature matrix and the JSON field `second_umap_features`
-contain only enabled features, in the order above.
+`src/core/classifier/UmapEmbeddingFeatures.cpp` and rebuild with at least one
+feature enabled.
 
-For each enabled column, the command fills missing values with the median of
-the finite atom rows, then applies a population Z-score. A bin with more atoms
-contributes its median once per atom to imputation and standardization. A
-constant or entirely missing column becomes zeros. The per-atom CSV reports
-the original Joint parameters and each bin summary reports the three Joint
-medians before imputation.
+For each enabled column, the command fills missing or non-finite values with
+the median of the finite atom rows, then applies the shared MAD scaler to
+the full column. A bin contributes its median once per atom to both
+imputation and scaling. An entirely missing column is filled with zeros
+and reported in a warning. The per-atom CSV and bin summaries use the
+original Joint parameters and the bin medians before imputation.
 
 Both UMAP runs use the same request settings. The command then applies
 mean shift to the second embedding. The updated coordinates are used for the

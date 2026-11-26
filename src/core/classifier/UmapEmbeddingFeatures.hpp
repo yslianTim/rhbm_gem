@@ -12,6 +12,8 @@
 
 namespace rhbm_gem::core::classifier {
 
+inline constexpr double kMadNormalConsistencyFactor{ 1.482602218505602 };
+
 struct PreparedUmapInput
 {
     std::vector<LocalFittingFeatureRow> feature_rows;
@@ -38,11 +40,10 @@ void PopulateUmapBinFeatureMedians(
 
 UmapFeatureMatrix BuildSecondUmapFeatures(
     const std::vector<LocalFittingFeatureRow> & rows,
-    const UmapBinning & first_binning);
+    const UmapBinning & first_binning,
+    std::string_view model_key_tag);
 
 std::vector<std::string_view> GetUmapFeatureNames();
 std::vector<std::string_view> GetSecondUmapFeatureNames();
-
-double MedianOfValues(std::vector<double> & values);
 
 } // namespace rhbm_gem::core::classifier

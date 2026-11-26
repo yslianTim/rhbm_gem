@@ -13,6 +13,7 @@
 #include <fstream>
 #include <iomanip>
 #include <limits>
+#include <utility>
 
 namespace rhbm_gem::core::classifier {
 
@@ -63,6 +64,12 @@ bool WriteEmbedding(
     for (const auto name : GetUmapFeatureNames()) features.emplace_back(name);
     boost::json::array second_umap_features;
     for (const auto name : GetSecondUmapFeatureNames()) second_umap_features.emplace_back(name);
+    boost::json::array first_zero_mad_fallback_features;
+    for (const auto name : prepared.features.zero_mad_fallback_features)
+        first_zero_mad_fallback_features.emplace_back(name);
+    boost::json::array second_zero_mad_fallback_features;
+    for (const auto name : second.zero_mad_fallback_features)
+        second_zero_mad_fallback_features.emplace_back(name);
     boost::json::value map_normalization;
     if (const auto & normalization{ prepared.map_normalization }; normalization)
     {
@@ -86,7 +93,15 @@ bool WriteEmbedding(
             { kLocalFittingFeatureNames[4], "Joint Gaussian amplitude A" },
             { kLocalFittingFeatureNames[5], "Joint shared Gaussian/charge-kernel width tau" },
             { kLocalFittingFeatureNames[6], "Joint charge-kernel coefficient C" } } },
-        { "standardization", "population-z-score; constant columns zero" },
+        { "standardization", "mad-robust-scaling" },
+        { "standardization_parameters", boost::json::object{
+            { "center", "median" },
+            { "scale", "normalized-mad" },
+            { "normal_consistency_factor", kMadNormalConsistencyFactor },
+            { "zero_mad_policy", "nonzero-deviation-median" },
+            { "constant_feature_policy", "zero" } } },
+        { "first_umap_zero_mad_fallback_features", std::move(first_zero_mad_fallback_features) },
+        { "second_umap_zero_mad_fallback_features", std::move(second_zero_mad_fallback_features) },
         { "included_rows", prepared.feature_rows.size() },
         { "excluded_rows", prepared.excluded_rows },
         { "exclusions", exclusions }

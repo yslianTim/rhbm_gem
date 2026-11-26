@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <map>
 #include <optional>
+#include <string_view>
 #include <vector>
 
 namespace rhbm_gem::core::classifier {
@@ -18,6 +19,7 @@ struct UmapFeatureMatrix
 {
     std::vector<double> values;
     std::size_t column_count{};
+    std::vector<std::string_view> zero_mad_fallback_features{};
 };
 
 struct UmapBin
@@ -53,6 +55,7 @@ struct UmapEmbeddingResult
     std::vector<double> coordinates;
     std::vector<double> mean_shift_coordinates;
     UmapBinning binning;
+    std::vector<std::string_view> zero_mad_fallback_features{};
 };
 
 } // namespace rhbm_gem::core::classifier

@@ -215,8 +215,9 @@ bool ExecutePreparedRequest(
         first.binning = classifier::BinMeanShiftEmbedding(
             prepared.feature_rows, first.mean_shift_coordinates, first_scale);
         classifier::PopulateUmapBinFeatureMedians(prepared.feature_rows, first.binning);
-        const auto second_features{ classifier::BuildSecondUmapFeatures(
-            prepared.feature_rows, first.binning) };
+        auto second_features{ classifier::BuildSecondUmapFeatures(
+            prepared.feature_rows, first.binning, request.model_key_tag) };
+        second.zero_mad_fallback_features = std::move(second_features.zero_mad_fallback_features);
         if (second_features.values.empty())
         {
             Logger::Log(LogLevel::Warning,

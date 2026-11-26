@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <boost/json.hpp>
 
 #include "core/classifier/UmapEmbeddingAlgorithm.hpp"
 #include "core/classifier/UmapEmbeddingFeatures.hpp"
@@ -42,7 +43,7 @@ TEST(UmapEmbeddingOutputTest, MissingSecondEmbeddingLeavesEmptyCoordinatesAndHea
     first.binning = BinMeanShiftEmbedding(
         prepared.feature_rows, first.mean_shift_coordinates, GetUmapSpatialScale(first.coordinates));
     PopulateUmapBinFeatureMedians(prepared.feature_rows, first.binning);
-    ASSERT_TRUE(BuildSecondUmapFeatures(prepared.feature_rows, first.binning).values.empty());
+    ASSERT_TRUE(BuildSecondUmapFeatures(prepared.feature_rows, first.binning, "model").values.empty());
     const UmapEmbeddingResult second;
 
     std::ofstream(second_summary) << "previous summary\n";
@@ -110,14 +111,18 @@ TEST(UmapEmbeddingOutputTest, CountsElementRatiosInSecondMeanShiftBins)
         row.residue = "ALA";
         row.spot = "CA";
     }
+    prepared.feature_rows.back().features[4] = 1.0;
 
     UmapEmbeddingResult first;
     first.coordinates = { 0.0, 0.0, 1.0, 0.0, 2.0, 0.0, 3.0, 0.0, 4.0, 0.0, 5.0, 0.0, 6.0, 0.0 };
     first.mean_shift_coordinates = first.coordinates;
     first.binning = BinMeanShiftEmbedding(
         prepared.feature_rows, first.mean_shift_coordinates, GetUmapSpatialScale(first.coordinates));
+    PopulateUmapBinFeatureMedians(prepared.feature_rows, first.binning);
 
     UmapEmbeddingResult second;
+    second.zero_mad_fallback_features = BuildSecondUmapFeatures(
+        prepared.feature_rows, first.binning, "model").zero_mad_fallback_features;
     second.coordinates = first.coordinates;
     second.mean_shift_coordinates = { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 6.0, 0.0 };
     second.binning = BinMeanShiftEmbedding(
@@ -125,6 +130,11 @@ TEST(UmapEmbeddingOutputTest, CountsElementRatiosInSecondMeanShiftBins)
 
     std::string error;
     ASSERT_TRUE(WriteEmbeddingOutputs(output_path, prepared, first, second, error)) << error;
+    std::ifstream metadata_file{ output_path.string() + ".metadata.json" };
+    std::string metadata_line;
+    ASSERT_TRUE(std::getline(metadata_file, metadata_line));
+    EXPECT_EQ(boost::json::parse(metadata_line).at("second_umap_zero_mad_fallback_features").as_array(),
+        (boost::json::array{ "amplitude joint median of bin", "amplitude joint" }));
     std::ifstream bins{ second_summary };
     std::string line;
     ASSERT_TRUE(std::getline(bins, line));

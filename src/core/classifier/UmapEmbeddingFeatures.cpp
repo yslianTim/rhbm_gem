@@ -10,7 +10,9 @@
 #include <cmath>
 #include <limits>
 #include <numeric>
+#include <span>
 #include <stdexcept>
+#include <tuple>
 #include <utility>
 
 namespace rhbm_gem::core::classifier {
@@ -95,54 +97,181 @@ std::vector<std::string_view> CollectSelectedFeatureNames(const auto & definitio
     return names;
 }
 
-struct PopulationZScore
+double MedianOfValues(std::vector<double> & values)
 {
-    int exponent;
-    long double reference;
-    long double mean;
-    long double deviation;
-
-    double Standardize(double value) const
-    {
-        if (deviation == 0) return 0.0;
-        const auto scaled{ std::scalbn(static_cast<long double>(value), -exponent) };
-        return static_cast<double>(((scaled - reference) - mean) / deviation);
-    }
-};
-
-std::optional<PopulationZScore> CalculatePopulationZScore(
-    std::size_t row_count, const auto & value_at)
-{
-    double minimum{ value_at(0) };
-    double maximum{ minimum };
-    for (std::size_t row = 1; row < row_count; ++row)
-    {
-        const double value{ value_at(row) };
-        minimum = std::min(minimum, value);
-        maximum = std::max(maximum, value);
-    }
-    const double magnitude{ std::max(std::abs(minimum), std::abs(maximum)) };
-    const int exponent{ magnitude == 0 ? 0 : std::ilogb(magnitude) };
-    const auto scale{ [exponent](double value)
-    {
-        return std::scalbn(static_cast<long double>(value), -exponent);
-    } };
-    // Scale before subtracting or squaring. Center at the point in range nearest zero
-    // to retain differences among nearby values without subtracting a large offset from small ones.
-    const long double reference{ scale(std::clamp(0.0, minimum, maximum)) };
-    long double mean{};
-    long double sum_squared_differences{};
-    for (std::size_t row = 0; row < row_count; ++row)
-    {
-        const long double centered{ scale(value_at(row)) - reference };
-        const long double delta{ centered - mean };
-        mean += delta / static_cast<long double>(row + 1);
-        sum_squared_differences += delta * (centered - mean);
-    }
-    const auto variance{ sum_squared_differences / static_cast<long double>(row_count) };
-    if (!std::isfinite(variance) || variance < 0) return std::nullopt;
-    return PopulationZScore{ exponent, reference, mean, std::sqrt(variance) };
+    std::sort(values.begin(), values.end());
+    const auto middle{ values.size() / 2 };
+    return std::midpoint(values[(values.size() - 1) / 2], values[middle]);
 }
+
+auto FindMiddleValues(std::span<long double> values)
+{
+    const auto middle{ values.begin() + static_cast<std::ptrdiff_t>(values.size() / 2) };
+    std::nth_element(values.begin(), middle, values.end());
+    const auto lower{ values.size() % 2 == 0
+        ? *std::max_element(values.begin(), middle) : *middle };
+    return std::pair{ lower, *middle };
+}
+
+class MadRobustScaler
+{
+public:
+    MadRobustScaler(
+        std::span<const LocalFittingFeatureRow> rows,
+        std::string_view stage,
+        std::string_view model_key_tag)
+        : rows_{ rows }, stage_{ stage }, model_key_tag_{ model_key_tag }, scratch_(rows.size())
+    {
+    }
+
+    // Returns whether the original (or imputed) column varies.
+    bool ScaleColumn(
+        std::string_view name,
+        std::size_t column,
+        UmapFeatureMatrix & matrix,
+        const auto & input_at)
+    {
+        const auto output_at{ [&](std::size_t row) -> double &
+        {
+            return matrix.values[row * matrix.column_count + column];
+        } };
+        const auto column_location{ [&]
+        {
+            return "model key '" + std::string(model_key_tag_) + "', column '" + std::string(name) + "'";
+        } };
+        const auto error_at{ [&](std::optional<std::size_t> row, std::string_view reason)
+        {
+            return std::runtime_error(std::string(stage_) + " MAD scaling for "
+                + (row ? FormatFeatureLocation(model_key_tag_, rows_[*row].serial_id, name) : column_location())
+                + ": " + std::string(reason) + ".");
+        } };
+
+        for (std::size_t row = 0; row < rows_.size(); ++row) scratch_[row] = input_at(row);
+        const auto [minimum, maximum]{ std::minmax_element(scratch_.begin(), scratch_.end()) };
+        if (*minimum == *maximum)
+        {
+            for (std::size_t row = 0; row < rows_.size(); ++row) output_at(row) = 0.0;
+            return false;
+        }
+
+        // Normalize before subtracting. Only a subnormal (or zero) scaled value
+        // can lose bits. Check those values even when long double has binary64 range.
+        const int exponent{ std::ilogb(std::max(std::abs(*minimum), std::abs(*maximum))) };
+        const long double multiplier{ -exponent < std::numeric_limits<long double>::max_exponent
+            ? std::scalbn(1.0L, -exponent) : 0.0L };
+        const auto scale{ [=](long double value)
+        {
+            return multiplier == 0 ? std::scalbn(value, -exponent) : value * multiplier;
+        } };
+        for (std::size_t row = 0; row < rows_.size(); ++row)
+        {
+            const auto raw{ scratch_[row] };
+            const auto scaled{ scale(raw) };
+            if (raw != 0 && std::abs(scaled) < std::numeric_limits<long double>::min()
+                && std::scalbn(scaled, exponent) != raw)
+            {
+                throw error_at(row, "column exponent scaling loses a nonzero value or its precision");
+            }
+            scratch_[row] = scaled;
+        }
+
+        // Keep the midpoint as two endpoints plus half their gap. Rounding
+        // the center to a single value can erase half-ULP differences at large offsets.
+        const auto [lower, upper]{ FindMiddleValues(scratch_) };
+        const auto gap{ upper - lower };
+        const auto half_gap{ gap * 0.5L };
+        if (half_gap * 2 != gap)
+            throw error_at(std::nullopt, "median midpoint underflows in scaled coordinates");
+        const auto centered{ [=](long double value)
+        {
+            return value <= lower ? (value - lower) - half_gap : (value - upper) + half_gap;
+        } };
+        for (auto & value : scratch_) value = std::abs(centered(value));
+
+        auto [mad_lower, mad_upper]{ FindMiddleValues(scratch_) };
+        const bool use_positive_deviations{ mad_upper == 0 };
+        if (use_positive_deviations)
+        {
+            const auto positive_end{ std::remove(scratch_.begin(), scratch_.end(), 0.0L) };
+            std::tie(mad_lower, mad_upper) = FindMiddleValues(
+                std::span{ scratch_.begin(), positive_end });
+        }
+        const auto mad{ std::midpoint(mad_lower, mad_upper) };
+        if (mad < std::numeric_limits<long double>::min())
+            throw error_at(std::nullopt, "MAD scale underflows in scaled coordinates");
+        const auto denominator{ kMadNormalConsistencyFactor * mad };
+
+        constexpr auto max_double{ std::numeric_limits<double>::max() };
+        const double min_gap{ std::sqrt(std::numeric_limits<double>::min()) };
+        // Above this magnitude, even the smaller spacing at a power-of-two
+        // boundary is at least min_gap.
+        const double min_magnitude{ 2 * min_gap / std::numeric_limits<double>::epsilon() };
+        double smallest{}, largest{};
+        bool check_small_gaps{};
+        for (std::size_t row = 0; row < rows_.size(); ++row)
+        {
+            const auto deviation{ centered(scale(input_at(row))) };
+            const auto ratio{ deviation / denominator };
+            if (!std::isfinite(ratio) || std::abs(ratio) > max_double)
+                throw error_at(row, "standardized value exceeds the finite double range");
+            const auto value{ static_cast<double>(ratio) };
+            if (value == 0 && deviation != 0)
+                throw error_at(row, "nonzero standardized value underflows to zero");
+            output_at(row) = value;
+            smallest = std::min(smallest, value);
+            largest = std::max(largest, value);
+            check_small_gaps |= value != 0 && std::abs(value) < min_magnitude;
+        }
+
+        const auto distance_error{ [&](std::string_view reason)
+        {
+            return std::runtime_error(std::string(stage_) + " Euclidean distance safety for "
+                + column_location() + ": cannot certify squared distances (" + std::string(reason) + ").");
+        } };
+        // knncolle sums squared double differences in feature order.
+        // Halve first to check the span without overflow, then round the
+        // squared terms and running sum upward to bound both separate and fused operations.
+        if (largest * 0.5 - smallest * 0.5 > std::sqrt(max_double) * 0.5)
+            throw distance_error("bounding-box span is too large");
+        constexpr auto infinity{ std::numeric_limits<double>::infinity() };
+        const double span{ largest - smallest };
+        const auto squared_span{ std::nextafter(span * span, infinity) };
+        if (squared_span >= max_double - squared_distance_bound_)
+            throw distance_error("bounding-box squared diagonal is too large");
+        squared_distance_bound_ = std::nextafter(squared_distance_bound_ + squared_span, infinity);
+        if (!std::isfinite(squared_distance_bound_))
+            throw distance_error("bounding-box squared diagonal is too large");
+
+        if (check_small_gaps)
+        {
+            // Only unusual magnitudes need a sort to check the closest distinct
+            // coordinates. A subnormal square can lose precision or round to zero.
+            for (std::size_t row = 0; row < rows_.size(); ++row) scratch_[row] = output_at(row);
+            std::sort(scratch_.begin(), scratch_.end());
+            for (std::size_t row = 1; row < scratch_.size(); ++row)
+            {
+                const auto delta{ scratch_[row] - scratch_[row - 1] };
+                if (delta > 0 && delta < min_gap)
+                    throw distance_error("a nonzero coordinate gap squares below the normal double range");
+            }
+        }
+
+        if (use_positive_deviations)
+        {
+            matrix.zero_mad_fallback_features.push_back(name);
+            Logger::Log(LogLevel::Warning, std::string(stage_) + " feature '" + std::string(name)
+                + "' has zero MAD and varies; using nonzero-deviation median scaling.");
+        }
+        return true;
+    }
+
+private:
+    std::span<const LocalFittingFeatureRow> rows_;
+    std::string_view stage_;
+    std::string_view model_key_tag_;
+    std::vector<long double> scratch_;
+    double squared_distance_bound_{};
+};
 
 } // namespace
 
@@ -214,24 +343,29 @@ std::optional<PreparedUmapInput> BuildAndStandardizeInput(
         return std::nullopt;
     }
 
-    std::array<PopulationZScore, kInputFeatureCount> standardizers{};
+    UmapFeatureMatrix features{
+        std::vector<double>(feature_rows.size() * kSelectedFeatureCount), kSelectedFeatureCount, {} };
     std::vector<std::string_view> constant_features;
-    for (std::size_t feature = 0; feature < kInputFeatureCount; ++feature)
+    try
     {
-        if (!kFeatureDefinitions[feature].include_in_umap) continue;
-        const auto standardizer{ CalculatePopulationZScore(feature_rows.size(),
-            [&](std::size_t row) { return feature_rows[row].features[feature]; }) };
-        if (!standardizer)
+        MadRobustScaler scaler{ feature_rows, "First UMAP", model_key_tag };
+        std::size_t column{};
+        for (std::size_t feature = 0; feature < kInputFeatureCount; ++feature)
         {
-            error_message = "column '" + std::string(kFeatureDefinitions[feature].name)
-                + "' could not be standardized to finite values.";
-            return std::nullopt;
+            const auto & definition{ kFeatureDefinitions[feature] };
+            if (!definition.include_in_umap) continue;
+            if (!scaler.ScaleColumn(definition.name, column, features,
+                [&](std::size_t row) { return feature_rows[row].features[feature]; }))
+            {
+                constant_features.push_back(definition.name);
+            }
+            ++column;
         }
-        standardizers[feature] = *standardizer;
-        if (standardizer->deviation == 0)
-        {
-            constant_features.push_back(kFeatureDefinitions[feature].name);
-        }
+    }
+    catch (const std::runtime_error & error)
+    {
+        error_message = error.what();
+        return std::nullopt;
     }
     if (constant_features.size() == kSelectedFeatureCount)
     {
@@ -240,36 +374,11 @@ std::optional<PreparedUmapInput> BuildAndStandardizeInput(
         return std::nullopt;
     }
 
-    std::vector<double> standardized_features(
-        feature_rows.size() * kSelectedFeatureCount);
-    for (std::size_t observation = 0; observation < feature_rows.size(); ++observation)
-    {
-        std::size_t selected_feature{ 0 };
-        for (std::size_t feature = 0; feature < kInputFeatureCount; ++feature)
-        {
-            if (!kFeatureDefinitions[feature].include_in_umap) continue;
-            const double standardized_value{ standardizers[feature].Standardize(
-                feature_rows[observation].features[feature]) };
-            if (!std::isfinite(standardized_value))
-            {
-                error_message = FormatFeatureLocation(
-                    model_key_tag,
-                    feature_rows[observation].serial_id,
-                    kFeatureDefinitions[feature].name)
-                    + ": Z-score is not finite.";
-                return std::nullopt;
-            }
-            standardized_features[
-                observation * kSelectedFeatureCount + selected_feature] = standardized_value;
-            ++selected_feature;
-        }
-    }
-
     PreparedUmapInput prepared;
     prepared.feature_rows = std::move(feature_rows);
     prepared.configured_spot_indices = std::move(configured_spot_indices);
     prepared.elements = std::move(elements);
-    prepared.features = { std::move(standardized_features), kSelectedFeatureCount };
+    prepared.features = std::move(features);
     prepared.constant_features = std::move(constant_features);
     prepared.effective_neighbors = std::min(
         requested_neighbors,
@@ -279,13 +388,6 @@ std::optional<PreparedUmapInput> BuildAndStandardizeInput(
     const auto & joint{ model_object.GetAnalysisView().GetJointResult() };
     if (joint) prepared.map_normalization = joint->metadata.map_normalization;
     return prepared;
-}
-
-double MedianOfValues(std::vector<double> & values)
-{
-    std::sort(values.begin(), values.end());
-    const auto middle{ values.size() / 2 };
-    return std::midpoint(values[(values.size() - 1) / 2], values[middle]);
 }
 
 void PopulateUmapBinFeatureMedians(
@@ -311,12 +413,15 @@ void PopulateUmapBinFeatureMedians(
 
 UmapFeatureMatrix BuildSecondUmapFeatures(
     const std::vector<LocalFittingFeatureRow> & rows,
-    const UmapBinning & first_binning)
+    const UmapBinning & first_binning,
+    std::string_view model_key_tag)
 {
     constexpr auto feature_count{ kSecondSelectedFeatureCount };
     constexpr auto missing{ std::numeric_limits<double>::quiet_NaN() };
-    if (rows.empty()) return { {}, feature_count };
-    std::vector<double> features(rows.size() * feature_count, missing);
+    UmapFeatureMatrix features{ {}, feature_count, {} };
+    if (rows.empty()) return features;
+    features.values.resize(rows.size() * feature_count, missing);
+    MadRobustScaler scaler{ rows, "Second UMAP", model_key_tag };
     bool has_variable_feature{};
     std::vector<double> finite_values;
     finite_values.reserve(rows.size());
@@ -331,18 +436,18 @@ UmapFeatureMatrix BuildSecondUmapFeatures(
             {
                 const double value{ bin.feature_medians[definition.source_index].value_or(missing) };
                 for (const auto point : bin.points)
-                    features[point * feature_count + column] = value;
+                    features.values[point * feature_count + column] = value;
             }
         }
         else
         {
             for (std::size_t point = 0; point < rows.size(); ++point)
-                features[point * feature_count + column] = rows[point].features[definition.source_index];
+                features.values[point * feature_count + column] = rows[point].features[definition.source_index];
         }
 
         const auto value_at{ [&](std::size_t point) -> double &
         {
-            return features[point * feature_count + column];
+            return features.values[point * feature_count + column];
         } };
         finite_values.clear();
         for (std::size_t point = 0; point < rows.size(); ++point)
@@ -371,25 +476,11 @@ UmapFeatureMatrix BuildSecondUmapFeatures(
                 if (!std::isfinite(value)) value = fill;
             }
         }
-        const auto standardizer{ CalculatePopulationZScore(rows.size(), value_at) };
-        if (!standardizer)
-        {
-            throw std::runtime_error("Column '" + name + "' could not be standardized to finite values.");
-        }
-        has_variable_feature |= standardizer->deviation > 0;
-        for (std::size_t point = 0; point < rows.size(); ++point)
-        {
-            auto & value{ value_at(point) };
-            value = standardizer->Standardize(value);
-            if (!std::isfinite(value))
-            {
-                throw std::runtime_error("Column '" + name + "' has a non-finite Z-score.");
-            }
-        }
+        has_variable_feature |= scaler.ScaleColumn(definition.name, column, features, value_at);
         ++column;
     }
-    if (!has_variable_feature) features.clear();
-    return { std::move(features), feature_count };
+    if (!has_variable_feature) features.values.clear();
+    return features;
 }
 
 } // namespace rhbm_gem::core::classifier
