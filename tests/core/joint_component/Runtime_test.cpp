@@ -332,7 +332,7 @@ TEST(JointComponentRuntimeTest, MedianWidthBoundProjectsAndCertifiesAllComponent
             input.observations.push_back(amplitude*basis.gaussian+charge*basis.charge);
         }
         auto & donor=init.atoms.emplace_back();
-        donor.id=input.atom_ids.back(); donor.target=true;
+        donor.id=input.atom_ids.back(); donor.role=rhbm_gem::FittingRole::OutputTarget;
         donor.mdpde={amplitude,width,charge};
         donor.original_tau=width; donor.used_tau=width; donor.seed_source="fitted";
         donor.native_status=static_cast<int>(RHBMEstimationStatus::SUCCESS);
@@ -341,10 +341,10 @@ TEST(JointComponentRuntimeTest, MedianWidthBoundProjectsAndCertifiesAllComponent
         init.tau.push_back(width);
     }
     auto & selection=input.selection_domain.emplace();
-    selection.target_indices.resize(targets);
-    std::iota(selection.target_indices.begin(),selection.target_indices.end(),0);
-    selection.contributor_policy=std::string(PureHaloSupportExclusionContributorPolicy);
-    selection.pure_halo_support_exclusion=JointPureHaloSupportExclusionProvenance{
+    selection.output_indices.resize(targets);
+    std::iota(selection.output_indices.begin(),selection.output_indices.end(),0);
+    selection.contributor_policy=std::string(BufferExpansionContributorPolicy);
+    selection.buffer_expansion=JointBufferExpansionProvenance{
         input.observations.size(),input.observations.size(),0,0,0,0};
     const core::JointProblem problem(std::move(input));
 
@@ -463,9 +463,9 @@ RecoveryAssemblyRun RunRecoveryAssembly(bool inject,bool persistent=false,std::s
 {
     RecoveryAssemblyRun out;
     auto input=joint_component_test::SyntheticJointWorkload("chain",2);
-    input.selection_domain.emplace(); input.selection_domain->target_indices={0,1};
-    input.selection_domain->contributor_policy=std::string(rhbm_gem::PureHaloSupportExclusionContributorPolicy);
-    input.selection_domain->pure_halo_support_exclusion=rhbm_gem::JointPureHaloSupportExclusionProvenance{
+    input.selection_domain.emplace(); input.selection_domain->output_indices={0,1};
+    input.selection_domain->contributor_policy=std::string(rhbm_gem::BufferExpansionContributorPolicy);
+    input.selection_domain->buffer_expansion=rhbm_gem::JointBufferExpansionProvenance{
         input.observations.size(),input.observations.size(),0,0,0,0};
     const core::JointProblem problem(std::move(input));
     n::BcdExecutionPolicy policy; policy.width_bounds.upper=std::log(2.2);

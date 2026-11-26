@@ -53,9 +53,9 @@ private:
     struct Impl;
     std::unique_ptr<Impl> m_impl;
 };
-std::array<double,3> GeometryLocalTargetMedian(
+std::array<double,3> GeometryLocalFittingMedian(
     const std::vector<const HaloMedianTargetDonor *> &);
-std::vector<HaloMedianTargetDonor> QualifiedJointTargetDonors(
+std::vector<HaloMedianTargetDonor> QualifiedJointFittingDonors(
     const ModelObject &,const JointProblem &,const JointAnalysisResult &);
 // Builds the immutable post-Joint Halo reconstruction snapshot. Only target
 // point evidence from this JointAnalysisResult may enter the donor pool.

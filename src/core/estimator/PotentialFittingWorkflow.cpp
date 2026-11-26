@@ -61,7 +61,7 @@ PostJointLocalResult FitPostJointLocalTarget(
     result.source = joint.source;
     result.sample_count = peeling.samples.size();
     result.status = EvidenceStatus::Ineligible;
-    if (joint.source.method != EstimateMethod::JointComponents || joint.source.role != FittingRole::Target)
+    if (joint.source.method != EstimateMethod::JointComponents || joint.source.role != FittingRole::OutputTarget)
     { result.reason = "not-a-joint-target"; return result; }
     if (!joint.point) { result.reason = "missing-joint-endpoint"; return result; }
     result.fixed_charge = {joint.point->GetOffset(), joint.point->GetWidth()};
@@ -220,21 +220,25 @@ void RunPotentialFittingWorkflowForSelection(
     auto & postprocessing_metrics = supplied_metrics ? *supplied_metrics : local_metrics;
     postprocessing_metrics = {};
     const auto construction_start = std::chrono::steady_clock::now();
-    const auto problem = BuildPureHaloSupportExclusionProblem(map, model);
+    const auto problem = BuildJointProblem(map, model);
     const auto construction_seconds = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - construction_start).count();
     if (!options.quiet_mode)
     {
-        const auto & input = problem.Input();
-        const auto targets = input.selection_domain ? input.selection_domain->target_indices.size() : 0;
+        const auto & domain=*problem.OriginalInput().selection_domain;
+        const auto & counts=*domain.buffer_expansion;
         std::ostringstream message;
-        message << "[Joint] Problem ready | observations=" << input.observations.size()
-            << " | targets=" << targets
-            << " | halo=" << input.atom_ids.size() - targets;
+        message << "[Joint] Problem ready | output_targets=" << domain.output_indices.size()
+            << " | buffer_targets=" << domain.buffer_indices.size()
+            << " | fitting_targets=" << domain.FittingCount()
+            << " | external_halos=" << counts.external_halos
+            << " | original_rows=" << counts.original_rows
+            << " | fitting_rows=" << counts.fit_rows
+            << " | recovered_rows=" << counts.recovered_rows;
         LogJointInfo(message.str());
         std::ostringstream detail;
         detail << "[Joint] Problem build elapsed=" << construction_seconds << 's'
-            << " | contributors=" << input.atom_ids.size();
+            << " | contributors=" << problem.OriginalInput().atom_ids.size();
         LogJointDebug(detail.str());
     }
     const auto initial_stage_start = std::chrono::steady_clock::now();
@@ -266,8 +270,8 @@ bool RunJointStagePostprocessing(
     bool halo_reconstruction_unavailable{};
     std::optional<HaloMedianBuildResult> halo_median_build;
     const auto & original=problem.OriginalInput();
-    const auto target_count=original.selection_domain ? original.selection_domain->target_indices.size() : 0;
-    const bool original_has_halos=original.atom_ids.size()>target_count;
+    const auto external_halos=original.atom_ids.size()-original.selection_domain->FittingCount();
+    const bool original_has_halos=external_halos!=0;
     try
     {
         halo_median_build=BuildHaloMedianReconstruction(model,problem,snapshot,joint_run_id);
@@ -281,7 +285,7 @@ bool RunJointStagePostprocessing(
         if (std::string_view(error.what()) != "halo-median-no-valid-targets") throw;
         if (original_has_halos)
         {
-            postprocessing_metrics.halo_median_unavailable_halos=original.atom_ids.size()-target_count;
+            postprocessing_metrics.halo_median_unavailable_halos=external_halos;
             snapshot.evidence.push_back({std::string(JointHaloMedianReconstructionEvidenceName),
                 JointCheckStatus::Unavailable,JointEvidenceScope::AssembledGlobal,{}, {},error.what()});
             halo_reconstruction_unavailable=true;
@@ -345,7 +349,7 @@ bool RunJointStagePostprocessing(
     postprocessing_metrics.rss_after_context_bytes = joint_component::CurrentRssBytes();
     phase_start = std::chrono::steady_clock::now();
     auto peeling_updates = postprocessing.BuildPostFitPeelingBatch(
-        std::span<const std::size_t>(original.selection_domain->target_indices));
+        std::span<const std::size_t>(original.selection_domain->output_indices));
     model.EditAnalysis().ApplyPostFitPeelingsBatch(std::move(peeling_updates));
     if (postprocessing_metrics.missing_contributor_samples)
     {
@@ -359,7 +363,7 @@ bool RunJointStagePostprocessing(
     {
         const auto local = AtomLocalPotentialView::For(*atom);
         const auto & estimate = local.GetJointStageEstimate();
-        if (estimate.source.method != EstimateMethod::JointComponents || estimate.source.role != FittingRole::Target)
+        if (estimate.source.method != EstimateMethod::JointComponents || estimate.source.role != FittingRole::OutputTarget)
             continue;
         joint_targets.push_back(atom);
         const auto assessment = local.AssessLocalFittingPeelingRatio(1.0, 2.0);
@@ -405,7 +409,7 @@ bool RunJointStagePostprocessing(
     {
         const auto local = AtomLocalPotentialView::For(*atom);
         const auto & estimate = local.GetJointStageEstimate();
-        if (estimate.source.method != EstimateMethod::JointComponents || estimate.source.role != FittingRole::Target ||
+        if (estimate.source.method != EstimateMethod::JointComponents || estimate.source.role != FittingRole::OutputTarget ||
             estimate.source.component_id.empty()) continue;
         const auto & peeling = local.GetPostFitPeeling();
         PostJointLocalResult result;
@@ -524,7 +528,7 @@ std::string BuildJointTargetSpotSummary(const ModelObject & model_object)
         const auto view = AtomLocalPotentialView::For(*atom);
         const auto * estimate = view.IsAvailable() ? &view.GetJointStageEstimate() : nullptr;
         const bool joint = estimate && estimate->source.method == EstimateMethod::JointComponents;
-        if (joint && estimate->source.role != FittingRole::Target) continue;
+        if (joint && estimate->source.role != FittingRole::OutputTarget) continue;
         auto & samples = spots[spot];
         if (!joint) { ++samples.unavailable; continue; }
         if (estimate->convergence != JointCheckStatus::Passed || !estimate->point)

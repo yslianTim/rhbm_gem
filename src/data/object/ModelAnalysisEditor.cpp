@@ -303,7 +303,7 @@ void ModelAnalysisEditor::ApplyPostFitPeelingsBatch(
         if (!entry)
             throw std::invalid_argument("Post-fit peeling atom has no Joint stage.");
         const auto & stage = entry->JointStageEstimate();
-        if (stage.source.method != EstimateMethod::JointComponents || stage.source.role != FittingRole::Target ||
+        if (stage.source.method != EstimateMethod::JointComponents || stage.source.role != FittingRole::OutputTarget ||
             stage.source.atom_id != std::to_string(id) || stage.source.component_id.empty() || stage.source.run_id.empty())
             throw std::invalid_argument("Post-fit peeling source is not a Joint target: atom=" +
                 std::to_string(id) + ", method=" + std::to_string(static_cast<int>(stage.source.method)) +

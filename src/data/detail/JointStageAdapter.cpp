@@ -9,10 +9,10 @@ namespace rhbm_gem::data_internal {
 std::map<int, LocalStageEstimate> BuildJointStageEstimates(
     const JointAnalysisResult & result, const std::string & run_id)
 {
-    if(result.parameterization_contract!=JointPureHaloSupportExclusionParameterizationContract ||
-        !result.selection_domain ||
-        result.selection_domain->contributor_policy!=PureHaloSupportExclusionContributorPolicy)
-        throw std::invalid_argument("Invalid target-only Pure Exclusion result contract.");
+    if(result.parameterization_contract!=JointBufferExpansionParameterizationContract ||
+        !result.selection_domain || !result.selection_domain->IsValid(result.atom_ids.size()) ||
+        result.selection_domain->contributor_policy!=BufferExpansionContributorPolicy)
+        throw std::invalid_argument("Invalid Joint Buffer Expansion result contract.");
     std::map<int, LocalStageEstimate> estimates;
     std::vector<int> identities;
     for (std::size_t i = 0; i < result.atom_ids.size(); ++i)
@@ -23,10 +23,7 @@ std::map<int, LocalStageEstimate> BuildJointStageEstimates(
             throw std::invalid_argument("Invalid or duplicate joint atom identity.");
         identities.push_back(serial);
         auto & estimate = estimates[serial];
-        estimate.source = {EstimateMethod::JointComponents, id, {}, run_id, FittingRole::NotRecorded};
-        const auto & targets = result.selection_domain->target_indices;
-        estimate.source.role = std::binary_search(targets.begin(), targets.end(), i) ?
-            FittingRole::Target : FittingRole::Halo;
+        estimate.source = {EstimateMethod::JointComponents, id, {}, run_id, result.selection_domain->RoleOf(i)};
         estimate.reason = "missing-component-state";
         estimate.convergence = JointCheckStatus::Unavailable;
     }
@@ -49,10 +46,19 @@ std::map<int, LocalStageEstimate> BuildJointStageEstimates(
             if (global >= identities.size() || !assigned.insert(global).second)
                 throw std::invalid_argument("Invalid or duplicate joint component mapping.");
             auto & estimate = estimates.at(identities[global]);
+            if (!IsFittingTarget(estimate.source.role))
+                throw std::invalid_argument("External Halo present in a fitted component.");
             estimate.source.component_id = component.id;
             const auto found=state_indices.find(global);
             if(found==state_indices.end())
                 throw std::invalid_argument("Joint target component is missing its state mapping.");
+            if(component.state && estimate.source.role==FittingRole::BufferTarget &&
+                (!component.target_evidence || component.target_runtime_convergence!=JointCheckStatus::Passed ||
+                component.runtime_convergence!=JointCheckStatus::Passed))
+            {
+                estimate.reason="buffer-component-not-certified";
+                continue;
+            }
             if(component.target_evidence)
             {
                 const auto point=point_evidence.find(global);

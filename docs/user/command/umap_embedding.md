@@ -30,11 +30,11 @@ Both modes still support CSV, metadata JSON, and bin summaries when UMAP is enab
 ## SQLite Model Contract
 
 The database must already exist, be a regular file, and use a supported SQLite
-schema (v25 only). `--model-key` must identify exactly one
+schema (v26 only). `--model-key` must identify exactly one
 model saved by `potential_analysis`; the command neither enumerates nor combines
 models.
 
-UMAP uses the original fitted Joint Targets and excludes Halo contributors. At least three rows must have all three
+UMAP uses the selected Output Targets. At least three rows must have all three
 required features: neighbor distance sum, closest-neighbor distance and tail
 peeling ratio. Missing required values exclude the row with a reported reason;
 fewer than three remaining rows fails the command. Missing ancillary values are
@@ -76,7 +76,7 @@ responses by original grid identity. A missing or mismatched sample makes the st
 ratio unavailable, with the reason recorded in the metadata exclusions. The
 ratio is `1 - peeled sum / raw sum`; a zero raw denominator remains unavailable.
 For Joint rows, the saved Tail Peeling Ratio is derived from paired raw and
-label-free peeled samples. Halo reconstruction uses qualified Target points
+label-free peeled samples. Halo reconstruction uses qualified Output and Buffer points
 selected by geometry; residue, element, atom name, and group labels do not
 enter that ratio. Those labels remain available for CSV and plot annotations.
 

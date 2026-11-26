@@ -146,7 +146,7 @@ JointInitialization MakeFeatureInitialization(
         initialization.tau[index] = width;
         JointInitializationAtom atom;
         atom.id = input.atom_ids[index];
-        atom.target = true;
+        atom.role=rhbm_gem::FittingRole::OutputTarget;
         atom.mdpde[1] = width;
         atom.ols[1] = width;
         atom.alpha = 0.5;
@@ -200,10 +200,10 @@ std::unique_ptr<rg::ModelObject> BuildFeatureModel(
 
     JointProblemInput input;
     input.selection_domain.emplace();
-    input.selection_domain->contributor_policy = std::string(rg::PureHaloSupportExclusionContributorPolicy);
+    input.selection_domain->contributor_policy = std::string(rg::BufferExpansionContributorPolicy);
     for (const auto & atom : model->GetAtomList())
     {
-        input.selection_domain->target_indices.push_back(input.atom_ids.size());
+        input.selection_domain->output_indices.push_back(input.atom_ids.size());
         input.atom_ids.push_back(std::to_string(atom->GetSerialID()));
         auto & support = input.support.emplace_back();
         const double amplitude = MakeGaussianResult(atom->GetSerialID(), 1, options).mdpde.GetModel().GetAmplitude();
@@ -219,8 +219,8 @@ std::unique_ptr<rg::ModelObject> BuildFeatureModel(
         }
     }
     const auto row_count = input.row_ids.size();
-    input.selection_domain->pure_halo_support_exclusion =
-        rg::JointPureHaloSupportExclusionProvenance{row_count, row_count, 0, 0, 0, 0};
+    input.selection_domain->buffer_expansion =
+        rg::JointBufferExpansionProvenance{row_count, row_count, 0, 0, 0, 0};
     const auto initialization = MakeFeatureInitialization(input, count, options.vary_joint_widths);
     const JointProblem problem(std::move(input));
     auto snapshot = CaptureJointAnalysisResult(FitJointComponentsInitialized(problem, initialization));
@@ -1315,7 +1315,7 @@ TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNo
     {
         original.atom_ids.push_back(std::to_string(model->GetAtomList()[a]->GetSerialID()));
         original.support.emplace_back();
-        if(a!=0) original.selection_domain->target_indices.push_back(a);
+        if(a!=0) original.selection_domain->output_indices.push_back(a);
         for(int k=0;k<12;++k)
         {
             const int serial=model->GetAtomList()[a]->GetSerialID();
@@ -1333,20 +1333,20 @@ TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNo
     const auto original_rows=original.row_ids.size();
     const auto fit_rows=original_rows-original.support.front().size();
     const auto excluded_rows=original_rows-fit_rows;
-    original.selection_domain->contributor_policy=std::string(rg::PureHaloSupportExclusionContributorPolicy);
-    original.selection_domain->pure_halo_support_exclusion=
-        rg::JointPureHaloSupportExclusionProvenance{original_rows,fit_rows,excluded_rows,1,1,0};
+    original.selection_domain->contributor_policy=std::string(rg::BufferExpansionContributorPolicy);
+    original.selection_domain->buffer_expansion=
+        rg::JointBufferExpansionProvenance{original_rows,fit_rows,excluded_rows,1,1,0};
 
     JointProblemInput fitting;
     fitting.selection_domain.emplace();
-    fitting.selection_domain->contributor_policy=std::string(rg::PureHaloSupportExclusionContributorPolicy);
-    fitting.selection_domain->pure_halo_support_exclusion=
-        rg::JointPureHaloSupportExclusionProvenance{original_rows,fit_rows,excluded_rows,0,0,0};
+    fitting.selection_domain->contributor_policy=std::string(rg::BufferExpansionContributorPolicy);
+    fitting.selection_domain->buffer_expansion=
+        rg::JointBufferExpansionProvenance{original_rows,fit_rows,excluded_rows,0,0,0};
     std::vector<std::size_t> original_to_fitting_row(original_rows,fit_rows);
     std::vector<std::size_t> fitting_to_original_rows;
     for(std::size_t atom=1;atom<original.atom_ids.size();++atom)
     {
-        fitting.selection_domain->target_indices.push_back(fitting.atom_ids.size());
+        fitting.selection_domain->output_indices.push_back(fitting.atom_ids.size());
         fitting.atom_ids.push_back(original.atom_ids[atom]);
         fitting.support.emplace_back();
         for(const auto & support:original.support[atom])
@@ -1364,7 +1364,7 @@ TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNo
 
     const auto initialization = MakeFeatureInitialization(fitting, 20);
 
-    const auto fitting_to_original_contributors=original.selection_domain->target_indices;
+    const auto fitting_to_original_contributors=original.selection_domain->output_indices;
     const auto problem=JointProblem(std::move(fitting)).WithReconstructionDomain(
         std::move(original),fitting_to_original_contributors,std::move(fitting_to_original_rows));
     auto snapshot=CaptureJointAnalysisResult(FitJointComponentsInitialized(problem,initialization));
@@ -1383,7 +1383,7 @@ TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNo
     for(const auto & atom:model->GetAtomList())
     {
         const auto view=rg::AtomLocalPotentialView::For(*atom);
-        if(view.GetJointStageEstimate().source.role!=rg::FittingRole::Target) continue;
+        if(view.GetJointStageEstimate().source.role!=rg::FittingRole::OutputTarget) continue;
         rg::PostFitPeelingResult peeling; peeling.source=view.GetJointStageEstimate().source;
         const auto contributor=static_cast<std::size_t>(std::find(snapshot.atom_ids.begin(),snapshot.atom_ids.end(),
             std::to_string(atom->GetSerialID()))-snapshot.atom_ids.begin());

@@ -177,7 +177,7 @@ InitialStage initialization through downstream fitting.
 
 ## Joint component workflow
 
-See [Runtime](../joint-component-runtime.md) for the Target-only fitting
+See [Runtime](../joint-component-runtime.md) for Buffer Expansion, the fitting
 problem and endpoint qualification, [Numerics](../joint-component-numerics.md)
 for the block solver, and [Stage Integration](../joint-stage-integration.md)
 for downstream data and result availability.
@@ -187,7 +187,7 @@ rhbm_gem::core::PotentialAnalysisRequest request;
 request.model_file_path = "model.cif";
 request.map_file_path = "map.mrc";
 request.selected_chain_ids = {"A"};
-request.database_path = "joint.sqlite"; // SQLite schema v25
+request.database_path = "joint.sqlite"; // SQLite schema v26
 request.saved_key_tag = "example";
 auto completed = rhbm_gem::core::RunCommand(request);
 ```

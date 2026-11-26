@@ -92,10 +92,10 @@ JointProblem PureExclusionChain(std::size_t atoms)
 {
     auto input=joint_component_test::SyntheticJointWorkload("chain",static_cast<int>(atoms));
     input.selection_domain.emplace();
-    input.selection_domain->contributor_policy=std::string(rhbm_gem::PureHaloSupportExclusionContributorPolicy);
-    input.selection_domain->target_indices.resize(atoms);
-    std::iota(input.selection_domain->target_indices.begin(),input.selection_domain->target_indices.end(),0);
-    input.selection_domain->pure_halo_support_exclusion=rhbm_gem::JointPureHaloSupportExclusionProvenance{
+    input.selection_domain->contributor_policy=std::string(rhbm_gem::BufferExpansionContributorPolicy);
+    input.selection_domain->output_indices.resize(atoms);
+    std::iota(input.selection_domain->output_indices.begin(),input.selection_domain->output_indices.end(),0);
+    input.selection_domain->buffer_expansion=rhbm_gem::JointBufferExpansionProvenance{
         input.observations.size(),input.observations.size(),0,0,0,0};
     return JointProblem(std::move(input));
 }
@@ -466,7 +466,7 @@ TEST(JointBcdSearchTest, HardCaseIncrementalObjectiveAndReplayQualification)
     near_singular.observations.assign(5,0.0);
     near_singular.support={{{0,.1},{1,.5},{2,1.0},{3,1.5},{4,2.0}},
         {{0,.1+1e-8},{1,.5-1e-8},{2,1.0+1e-8},{3,1.5-1e-8},{4,2.0+1e-8}}};
-    near_singular.selection_domain.emplace(); near_singular.selection_domain->target_indices={0,1};
+    near_singular.selection_domain.emplace(); near_singular.selection_domain->output_indices={0,1};
     for(std::size_t row=0;row<near_singular.observations.size();++row)
     {
         const auto first=n::EvaluateKernel(near_singular.support[0][row].squared_distance,.7,2.5);

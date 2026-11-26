@@ -64,7 +64,8 @@ EstimateSource Source(const V & v)
         method!=EstimateMethod::JointComponents)
         throw std::invalid_argument("Unknown estimate method.");
     return {method,Read<std::string>(o,"atom"),Read<std::string>(o,"component"),Read<std::string>(o,"run"),
-        Enum<FittingRole>(o.at("role"),2),has_fixed_source && Read<bool>(o,"fixed_from_initial_stage")};
+        Enum<FittingRole>(o.at("role"),static_cast<int>(FittingRole::ExternalHalo)),
+        has_fixed_source && Read<bool>(o,"fixed_from_initial_stage")};
 }
 V Pack(const PostJointQScoreResult & q)
 {
@@ -508,7 +509,7 @@ void Validate(const ModelObject & model)
         {
             if(!joint_snapshot) throw std::invalid_argument("Original-grid peeling requires its Joint snapshot.");
             if(joint_snapshot->selection_domain &&
-                joint_snapshot->atom_ids.size()>joint_snapshot->selection_domain->target_indices.size() &&
+                joint_snapshot->atom_ids.size()>joint_snapshot->selection_domain->FittingCount() &&
                 !joint_snapshot->halo_median_reconstruction &&
                 std::any_of(e->PostFitPeeling()->samples.begin(),e->PostFitPeeling()->samples.end(),
                     [](const auto & sample){return sample.response.has_value();}))
@@ -550,7 +551,7 @@ void Validate(const ModelObject & model)
             const auto * entry=data.FindAtomLocalEntry(*atom);
             if(!entry) continue;
             const auto & stage=entry->JointStageEstimate();
-            if(stage.source.method!=EstimateMethod::JointComponents || stage.source.role!=FittingRole::Target) continue;
+            if(stage.source.method!=EstimateMethod::JointComponents || stage.source.role!=FittingRole::OutputTarget) continue;
             ++target_count;
             if(stage.source.run_id.empty() || stage.source.run_id!=summary->source_id)
                 throw std::invalid_argument("Joint group source mismatch.");
@@ -652,6 +653,14 @@ void Validate(const ModelObject & model)
         }
     }
     if(!data.joint_result) return;
+    if(data.joint_result->initialization.data_scope=="contributor-local-sampling-may-read-outside-target-domain")
+        for(const auto & atom:data.joint_result->initialization.atoms)
+        {
+            const auto * entry=data.FindAtomLocalEntry(*model.FindAtomPtr(std::stoi(atom.id)));
+            if(entry && entry->InitialStageEstimate().source.role!=FittingRole::NotRecorded &&
+                entry->InitialStageEstimate().source.role!=atom.role)
+                throw std::invalid_argument("Joint initialization and InitialStage roles differ.");
+        }
     if(!IsQualifiedJointAnalysisResult(*data.joint_result)) return;
     const auto mapped=data_internal::BuildJointStageEstimates(*data.joint_result,"");
     for(const auto & [id,expected]:mapped)

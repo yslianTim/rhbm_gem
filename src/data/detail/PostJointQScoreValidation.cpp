@@ -43,7 +43,7 @@ std::string PostJointQScoreValidation::Validate(const PostJointQScoreResult & q,
     const auto found=m_expected.find(atom.GetSerialID());
     if (!m_snapshot || found==m_expected.end() || atom.GetElement()==Element::HYDROGEN ||
         q.contract!=PostJointQScoreContract || !SameSource(q.source,stage.source) ||
-        q.source.method!=EstimateMethod::JointComponents || q.source.role!=FittingRole::Target ||
+        q.source.method!=EstimateMethod::JointComponents || q.source.role!=FittingRole::OutputTarget ||
         q.source.atom_id!=std::to_string(atom.GetSerialID()) || q.source.run_id.empty() ||
         q.source.component_id.empty() || q.source.fixed_from_initial_stage)
         return "QScore source/contract mismatch.";
@@ -82,14 +82,14 @@ std::string PostJointQScoreValidation::Validate(const PostJointQScoreResult & q,
                 return "QScore missing saved Halo provenance.";
         }
         else if (halo->joint_run_id!=q.source.run_id || halo->contract!=HaloMedianReconstructionContractVersion ||
-            halo->donor_policy!=GeometryLocalTargetMedianDonorPolicy)
+            halo->donor_policy!=GeometryLocalFittingMedianDonorPolicy)
             return "QScore saved Halo provenance mismatch.";
     }
     int previous{};
     for (const auto & halo:q.extra_halos)
     {
         if (halo.atom_id<=previous || m_contributors.contains(std::to_string(halo.atom_id)) ||
-            halo.donor_atom_ids.size()!=std::min(GeometryLocalTargetMedianNeighborCount,m_donors.size()) ||
+            halo.donor_atom_ids.size()!=std::min(GeometryLocalFittingMedianNeighborCount,m_donors.size()) ||
             halo.donor_atom_ids.empty()) return "Invalid QScore extra Halo coverage.";
         previous=halo.atom_id;
         const AtomObject * object=nullptr;

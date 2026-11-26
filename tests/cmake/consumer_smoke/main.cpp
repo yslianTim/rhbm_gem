@@ -34,11 +34,11 @@ int main()
     result.fitting_to_original_rows = {0};
     result.available_row_mask = {true};
     result.selection_domain = JointSelectionDomain{};
-    result.selection_domain->target_indices = {0};
+    result.selection_domain->output_indices = {0};
     result.selection_domain->contributor_policy =
-        std::string(PureHaloSupportExclusionContributorPolicy);
-    result.selection_domain->pure_halo_support_exclusion =
-        JointPureHaloSupportExclusionProvenance{1, 1, 0, 0, 0, 0};
+        std::string(BufferExpansionContributorPolicy);
+    result.selection_domain->buffer_expansion =
+        JointBufferExpansionProvenance{1, 1, 0, 0, 0, 0};
     result.metadata.software = JointSoftwareProvenance{
         "consumer-smoke", std::string(64, '0'), std::string(64, '0'), std::string(64, '0')};
     result.metadata.solver = JointSolverProvenance{};
@@ -55,10 +55,10 @@ int main()
     WriteJointAnalysisResult(result, "consumer-joint.json", "consumer-joint.csv");
     std::ifstream json("consumer-joint.json");
     const std::string payload((std::istreambuf_iterator<char>(json)), {});
-    if (payload.find("\"schema_version\":25") == std::string::npos ||
+    if (payload.find("\"schema_version\":26") == std::string::npos ||
         payload.find("\"search_method\":\"gauss-seidel-bcd\"") == std::string::npos ||
         payload.find("joint-solver-provenance-v6") == std::string::npos ||
-        payload.find("target-only-pure-halo-support-exclusion-v1") == std::string::npos)
+        payload.find("fixed-output-domain-buffer-expansion-v1") == std::string::npos)
         return 3;
 
     std::vector<std::unique_ptr<AtomObject>> atoms;
@@ -78,7 +78,7 @@ int main()
         return 6;
     const auto & source = local.GetJointStageEstimate().source;
     if (source.method != EstimateMethod::JointComponents || source.atom_id != "1" ||
-        source.run_id != "consumer-smoke" || source.role != FittingRole::Target ||
+        source.run_id != "consumer-smoke" || source.role != FittingRole::OutputTarget ||
         local.GetInitialStageEstimate().source.method != EstimateMethod::Unspecified)
         return 5;
 

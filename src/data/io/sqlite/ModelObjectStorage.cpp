@@ -825,6 +825,16 @@ void ValidateJointAtoms(const ModelObject & model, const JointAnalysisResult & r
     const std::set<std::string> contributors(result.atom_ids.begin(),result.atom_ids.end());
     if (!std::includes(expected.begin(),expected.end(),contributors.begin(),contributors.end()))
         throw std::invalid_argument("Joint result atom identities do not match the saved model.");
+    const auto & domain=*result.selection_domain;
+    if (!domain.buffer_indices.empty() || result.initialization.data_scope!="caller-provided-widths")
+    {
+        std::set<std::string> selected,outputs;
+        for (const auto * atom:model.GetSelectedAtoms())
+            if (atom->GetElement()!=Element::HYDROGEN) selected.insert(std::to_string(atom->GetSerialID()));
+        for (const auto index:domain.output_indices) outputs.insert(result.atom_ids[index]);
+        if (selected!=outputs)
+            throw std::invalid_argument("Joint Output roles do not match the saved model selection.");
+    }
 }
 
 void SaveJointResult(SQLiteWrapper & database, const std::string & json, const std::string & key_tag)
@@ -878,8 +888,8 @@ void Save(
     const auto & joint=ModelAnalysisData::Of(input_model).joint_result;
     if(joint)
     {
-        ValidateJointAtoms(input_model,*joint);
         joint_json = joint_result_io::Encode(*joint);
+        ValidateJointAtoms(input_model,*joint);
     }
     const auto & model_obj=input_model;
     const auto neutral = stage_result_io::Encode(model_obj);

@@ -34,9 +34,9 @@ rhbm_gem::core::JointProblem CoupledPair()
         }
         input.row_ids.push_back(std::to_string(row)); input.observations.push_back(value);
     }
-    input.selection_domain.emplace(); input.selection_domain->target_indices={0,1};
-    input.selection_domain->contributor_policy=std::string(rhbm_gem::PureHaloSupportExclusionContributorPolicy);
-    input.selection_domain->pure_halo_support_exclusion=rhbm_gem::JointPureHaloSupportExclusionProvenance{
+    input.selection_domain.emplace(); input.selection_domain->output_indices={0,1};
+    input.selection_domain->contributor_policy=std::string(rhbm_gem::BufferExpansionContributorPolicy);
+    input.selection_domain->buffer_expansion=rhbm_gem::JointBufferExpansionProvenance{
         input.observations.size(),input.observations.size(),0,0,0,0};
     return rhbm_gem::core::JointProblem(std::move(input));
 }
@@ -236,8 +236,8 @@ TEST(JointComponentSweepBudgetTest, MultipleComponentsExtendAndStopIndependently
         input.row_ids.push_back("separate/"+single.row_ids[row]);
         input.observations.push_back(single.observations[row]);
     }
-    input.selection_domain->target_indices={0,1,2};
-    input.selection_domain->pure_halo_support_exclusion=rhbm_gem::JointPureHaloSupportExclusionProvenance{
+    input.selection_domain->output_indices={0,1,2};
+    input.selection_domain->buffer_expansion=rhbm_gem::JointBufferExpansionProvenance{
         input.observations.size(),input.observations.size(),0,0,0,0};
     const rhbm_gem::core::JointProblem problem(std::move(input));
     n::BcdExecutionPolicy policy; policy.width_bounds.upper=std::log(2.2);

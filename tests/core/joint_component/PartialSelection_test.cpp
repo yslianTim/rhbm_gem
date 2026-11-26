@@ -45,7 +45,7 @@ namespace sim=core::simulation;
 // Exhaust the whole map/catalogue independently of the builder's bounding boxes.
 void CheckReference(const rhbm_gem::MapObject & map,const rhbm_gem::ModelObject & model)
 {
-    const auto problem=core::BuildPureHaloSupportExclusionProblem(map,model); const auto & actual=problem.OriginalInput();
+    const auto problem=core::BuildJointProblem(map,model); const auto & actual=problem.OriginalInput();
     std::set<const rhbm_gem::AtomObject *> selected(model.GetSelectedAtoms().begin(),model.GetSelectedAtoms().end());
     std::vector<std::string> rows,ids; std::vector<double> observations;
     std::vector<std::vector<core::JointSupport>> support(model.GetAtomList().size());
@@ -66,16 +66,16 @@ void CheckReference(const rhbm_gem::MapObject & map,const rhbm_gem::ModelObject 
         rows.push_back(std::to_string(index)); observations.push_back(map.GetMapValue(index));
     }
     std::vector<std::size_t> targets;
-    std::size_t candidate_halos{},retained_halos{},zero_support_halos{};
+    std::size_t non_output_candidates{},external_halos{},zero_support_halos{};
     for(std::size_t a=0;a<support.size();++a)
     {
         const auto & atom=model.GetAtomList()[a];
         if(atom->GetElement()==Element::HYDROGEN) continue;
         if(!selected.contains(atom.get()))
         {
-            ++candidate_halos;
+            ++non_output_candidates;
             if(support[a].empty()) {++zero_support_halos; continue;}
-            ++retained_halos;
+            ++external_halos;
         }
         const auto k=ids.size(); ids.push_back(std::to_string(atom->GetSerialID()));
         if(selected.contains(atom.get())) targets.push_back(k);
@@ -87,15 +87,15 @@ void CheckReference(const rhbm_gem::MapObject & map,const rhbm_gem::ModelObject 
         }
     }
     EXPECT_EQ(actual.row_ids,rows); EXPECT_EQ(actual.observations,observations); EXPECT_EQ(actual.atom_ids,ids);
-    ASSERT_TRUE(actual.selection_domain); EXPECT_EQ(actual.selection_domain->target_indices,targets);
-    ASSERT_TRUE(actual.selection_domain->pure_halo_support_exclusion);
-    const auto & provenance=*actual.selection_domain->pure_halo_support_exclusion;
-    EXPECT_EQ(actual.selection_domain->contributor_policy,rhbm_gem::PureHaloSupportExclusionContributorPolicy);
+    ASSERT_TRUE(actual.selection_domain); EXPECT_EQ(actual.selection_domain->output_indices,targets);
+    ASSERT_TRUE(actual.selection_domain->buffer_expansion);
+    const auto & provenance=*actual.selection_domain->buffer_expansion;
+    EXPECT_EQ(actual.selection_domain->contributor_policy,rhbm_gem::BufferExpansionContributorPolicy);
     EXPECT_EQ(provenance.original_rows,rows.size());
     EXPECT_EQ(provenance.fit_rows,problem.Input().row_ids.size());
     EXPECT_EQ(provenance.excluded_rows,rows.size()-problem.Input().row_ids.size());
-    EXPECT_EQ(provenance.candidate_halos,candidate_halos);
-    EXPECT_EQ(provenance.retained_halos,retained_halos);
+    EXPECT_EQ(provenance.non_output_candidates,non_output_candidates);
+    EXPECT_EQ(provenance.external_halos,external_halos);
     EXPECT_EQ(provenance.zero_support_halos,zero_support_halos);
     double square=0; for(double value:observations) square+=value*value;
     EXPECT_NEAR(problem.ObservationScale(),std::max(1.,std::sqrt(square)),1e-12*problem.ObservationScale());
@@ -137,12 +137,12 @@ TEST(JointComponentPartialSelectionTest, BoundariesClippingAndNonrecursiveHalo)
     auto values=std::make_unique<double[]>(11*3*3); for(std::size_t i=0;i<99;++i) values[i]=i%2 ? -1:0;
     rhbm_gem::MapObject map({11,3,3},{.25,.7,1.1},{0,-.7,-1.1},std::move(values));
     CheckReference(map,model);
-    const auto p=core::BuildPureHaloSupportExclusionProblem(map,model);
+    const auto p=core::BuildJointProblem(map,model);
     EXPECT_EQ(p.OriginalInput().atom_ids,(std::vector<std::string>{"1","2","5"}));
-    ASSERT_TRUE(p.OriginalInput().selection_domain->pure_halo_support_exclusion);
-    EXPECT_EQ(p.OriginalInput().selection_domain->pure_halo_support_exclusion->candidate_halos,4u);
-    EXPECT_EQ(p.OriginalInput().selection_domain->pure_halo_support_exclusion->retained_halos,2u);
-    EXPECT_EQ(p.OriginalInput().selection_domain->pure_halo_support_exclusion->zero_support_halos,2u);
+    ASSERT_TRUE(p.OriginalInput().selection_domain->buffer_expansion);
+    EXPECT_EQ(p.OriginalInput().selection_domain->buffer_expansion->non_output_candidates,4u);
+    EXPECT_EQ(p.OriginalInput().selection_domain->buffer_expansion->external_halos,2u);
+    EXPECT_EQ(p.OriginalInput().selection_domain->buffer_expansion->zero_support_halos,2u);
     EXPECT_EQ(p.Input().atom_ids,(std::vector<std::string>{"1"}));
 }
 
@@ -165,12 +165,12 @@ TEST(JointComponentPartialSelectionTest, HaloBoundsPreserveExactBoundaryAndRejec
     rhbm_gem::MapObject map({21,21,21},{.5,.5,.5},{-5,-5,-5},std::move(values));
 
     CheckReference(map,model);
-    const auto problem=core::BuildPureHaloSupportExclusionProblem(map,model);
+    const auto problem=core::BuildJointProblem(map,model);
     EXPECT_EQ(problem.OriginalInput().atom_ids,(std::vector<std::string>{"1","2"}));
-    ASSERT_TRUE(problem.OriginalInput().selection_domain->pure_halo_support_exclusion);
-    const auto & provenance=*problem.OriginalInput().selection_domain->pure_halo_support_exclusion;
-    EXPECT_EQ(provenance.candidate_halos,2u);
-    EXPECT_EQ(provenance.retained_halos,1u);
+    ASSERT_TRUE(problem.OriginalInput().selection_domain->buffer_expansion);
+    const auto & provenance=*problem.OriginalInput().selection_domain->buffer_expansion;
+    EXPECT_EQ(provenance.non_output_candidates,2u);
+    EXPECT_EQ(provenance.external_halos,1u);
     EXPECT_EQ(provenance.zero_support_halos,1u);
 }
 
@@ -181,10 +181,10 @@ TEST(JointComponentPartialSelectionTest, SelectedTargetWithOneObservationIsAlway
     std::vector<std::unique_ptr<rhbm_gem::AtomObject>> atoms; atoms.push_back(std::move(atom));
     rhbm_gem::ModelObject model(std::move(atoms)); model.SelectAllAtoms();
     rhbm_gem::MapObject map({1,1,1},{1,1,1},{0,0,0});
-    const auto problem=core::BuildPureHaloSupportExclusionProblem(map,model);
+    const auto problem=core::BuildJointProblem(map,model);
     EXPECT_EQ(problem.Input().atom_ids,(std::vector<std::string>{"1"}));
     ASSERT_TRUE(problem.Input().selection_domain);
-    EXPECT_EQ(problem.Input().selection_domain->target_indices,(std::vector<std::size_t>{0}));
+    EXPECT_EQ(problem.Input().selection_domain->output_indices,(std::vector<std::size_t>{0}));
     EXPECT_EQ(problem.Input().support[0].size(),1u);
 }
 
@@ -195,7 +195,7 @@ TEST(JointComponentPartialSelectionTest, SelectedTargetWithZeroObservationsKeeps
     std::vector<std::unique_ptr<rhbm_gem::AtomObject>> atoms; atoms.push_back(std::move(atom));
     rhbm_gem::ModelObject model(std::move(atoms)); model.SelectAllAtoms();
     rhbm_gem::MapObject map({1,1,1},{1,1,1},{0,0,0});
-    EXPECT_THROW(core::BuildPureHaloSupportExclusionProblem(map,model),std::invalid_argument);
+    EXPECT_THROW(core::BuildJointProblem(map,model),std::invalid_argument);
 }
 
 TEST(JointComponentPartialSelectionTest, ContributorOrderIsIndependentOfModelTraversal)
@@ -214,8 +214,8 @@ TEST(JointComponentPartialSelectionTest, ContributorOrderIsIndependentOfModelTra
     };
     auto values=std::make_unique<double[]>(11);
     rhbm_gem::MapObject map({11,1,1},{.5,.5,.5},{-2.5,0,0},std::move(values));
-    const auto forward=core::BuildPureHaloSupportExclusionProblem(map,*make_model({1,2,3}));
-    const auto reverse=core::BuildPureHaloSupportExclusionProblem(map,*make_model({3,2,1}));
+    const auto forward=core::BuildJointProblem(map,*make_model({1,2,3}));
+    const auto reverse=core::BuildJointProblem(map,*make_model({3,2,1}));
     EXPECT_EQ(forward.OriginalInput().atom_ids,reverse.OriginalInput().atom_ids);
     EXPECT_EQ(forward.OriginalInput().row_ids,reverse.OriginalInput().row_ids);
     EXPECT_EQ(forward.OriginalInput().observations,reverse.OriginalInput().observations);
@@ -252,7 +252,7 @@ TEST(JointComponentPartialSelectionTest, InitializationPreservesTargetHistoryAnd
     }
     const auto fit=core::EstimateJointComponents(*f.map,*f.model);
     ASSERT_EQ(fit.initialization.atoms.size(),1); ASSERT_TRUE(fit.initialization.valid) << fit.initialization.reason;
-    EXPECT_TRUE(fit.initialization.atoms.front().target);
+    EXPECT_EQ(fit.initialization.atoms.front().role,rhbm_gem::FittingRole::OutputTarget);
     EXPECT_EQ(f.model->GetSelectedAtomCount(),1); EXPECT_EQ(f.model->GetSelectedAtoms()[0]->GetSerialID(),1);
     EXPECT_EQ(f.model->GetSelectedBonds(),selected_bonds);
     EXPECT_EQ(f.model->GetAnalysisView().CollectAtomGroupKeys(),groups);
@@ -272,15 +272,15 @@ TEST(JointComponentPartialSelectionTest, InitializationPreservesTargetHistoryAnd
         EXPECT_EQ(*fit.prediction,*prediction_before);
     EXPECT_EQ(saved.fitting_to_original_contributors,fit.problem->FittingToOriginalContributors());
     EXPECT_EQ(saved.fitting_to_original_rows,fit.problem->FittingToOriginalRows());
-    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),25);
+    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),26);
     const auto decoded=rhbm_gem::joint_result_io::Decode(encoded);
-    ASSERT_TRUE(decoded.selection_domain); EXPECT_EQ(decoded.selection_domain->target_indices,(std::vector<std::size_t>{0}));
-    ASSERT_TRUE(decoded.selection_domain->pure_halo_support_exclusion);
-    EXPECT_EQ(decoded.selection_domain->pure_halo_support_exclusion,saved.selection_domain->pure_halo_support_exclusion);
+    ASSERT_TRUE(decoded.selection_domain); EXPECT_EQ(decoded.selection_domain->output_indices,(std::vector<std::size_t>{0}));
+    ASSERT_TRUE(decoded.selection_domain->buffer_expansion);
+    EXPECT_EQ(decoded.selection_domain->buffer_expansion,saved.selection_domain->buffer_expansion);
     EXPECT_EQ(decoded.initialization.data_scope,"contributor-local-sampling-may-read-outside-target-domain");
     EXPECT_EQ(rhbm_gem::joint_result_io::Encode(decoded),encoded);
     auto missing_provenance=boost::json::parse(encoded).as_object();
-    missing_provenance.at("selection_domain").as_object()["pure_halo_support_exclusion"]=nullptr;
+    missing_provenance.at("selection_domain").as_object()["buffer_expansion"]=nullptr;
     EXPECT_THROW(rhbm_gem::joint_result_io::Decode(boost::json::serialize(missing_provenance)),std::invalid_argument);
     f.model->EditAnalysis().SetJointResult(saved);
 }
@@ -290,10 +290,10 @@ TEST(JointComponentPartialSelectionTest, CopyAndMoveCapturePreserveComponentPers
     auto fitting=joint_component_test::SyntheticJointWorkload("chain",20);
     auto original=fitting;
     rhbm_gem::JointSelectionDomain fitting_selection;
-    fitting_selection.contributor_policy=std::string(rhbm_gem::PureHaloSupportExclusionContributorPolicy);
-    fitting_selection.target_indices.resize(fitting.atom_ids.size());
-    std::iota(fitting_selection.target_indices.begin(),fitting_selection.target_indices.end(),0);
-    fitting_selection.pure_halo_support_exclusion=rhbm_gem::JointPureHaloSupportExclusionProvenance{
+    fitting_selection.contributor_policy=std::string(rhbm_gem::BufferExpansionContributorPolicy);
+    fitting_selection.output_indices.resize(fitting.atom_ids.size());
+    std::iota(fitting_selection.output_indices.begin(),fitting_selection.output_indices.end(),0);
+    fitting_selection.buffer_expansion=rhbm_gem::JointBufferExpansionProvenance{
         fitting.row_ids.size(),fitting.row_ids.size(),0,0,0,0};
     fitting.selection_domain=fitting_selection;
 
@@ -302,8 +302,8 @@ TEST(JointComponentPartialSelectionTest, CopyAndMoveCapturePreserveComponentPers
     original.observations.push_back(0.0);
     original.row_ids.push_back("halo-only-row");
     auto original_selection=fitting_selection;
-    for(auto & target:original_selection.target_indices) ++target;
-    original_selection.pure_halo_support_exclusion=rhbm_gem::JointPureHaloSupportExclusionProvenance{
+    for(auto & target:original_selection.output_indices) ++target;
+    original_selection.buffer_expansion=rhbm_gem::JointBufferExpansionProvenance{
         original.row_ids.size(),fitting.row_ids.size(),1,1,1,0};
     original.selection_domain=std::move(original_selection);
     core::JointProblem fitting_problem(std::move(fitting));
@@ -322,7 +322,7 @@ TEST(JointComponentPartialSelectionTest, CopyAndMoveCapturePreserveComponentPers
         atom.id=id;
         atom.mdpde[1]=.5;
         atom.native_status=static_cast<int>(rhbm_gem::RHBMEstimationStatus::SUCCESS);
-        atom.target=true;
+        atom.role=rhbm_gem::FittingRole::OutputTarget;
         atom.initial_stage_fit_qualified=true;
         atom.reason="valid-width";
         atom.used_tau=.5;
@@ -350,7 +350,7 @@ TEST(JointComponentPartialSelectionTest, CopyAndMoveCapturePreserveComponentPers
     }
     rhbm_gem::JointTargetEvidence target_evidence;
     target_evidence.original_rows=problem.Input().row_ids.size();
-    for(const auto atom:problem.Input().selection_domain->target_indices)
+    for(const auto atom:problem.Input().selection_domain->output_indices)
     {
         rhbm_gem::JointAtomPointValidation point;
         point.atom=atom;
@@ -441,7 +441,7 @@ TEST(JointComponentPartialSelectionTest, UnknownContributorPolicyCannotConstruct
     input.row_ids={"0"};
     input.selection_domain.emplace();
     input.selection_domain->contributor_policy="unsupported-contributor-policy";
-    input.selection_domain->target_indices={0};
+    input.selection_domain->output_indices={0};
 
     EXPECT_THROW(core::JointProblem(std::move(input)),std::invalid_argument);
 }
@@ -455,6 +455,7 @@ TEST(JointComponentPartialSelectionTest, OriginalBondSelectionIsPreserved)
         atom->SetElement(Element::CARBON); atom->SetChainID("A"); atom->SetComponentID("ALA"); atom->SetAtomID("CA");
     }
     model->SelectAllAtoms(); model->SetAtomSelected(2,false);
+    model->FindAtomPtr(2)->SetPosition(3.25,0,0);
     ASSERT_EQ(model->GetNumberOfBond(),1);
     for(bool selected:{true,false})
     {
@@ -490,7 +491,7 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsSelectedTargetsWithou
     SetExactMapForFixture(f);
     const auto selected = f.model->GetSelectedAtoms();
     const auto bonds = f.model->GetSelectedBonds();
-    const auto problem = core::BuildPureHaloSupportExclusionProblem(*f.map, *f.model);
+    const auto problem = core::BuildJointProblem(*f.map, *f.model);
     core::FitOptions options;
     options.quiet_mode = true;
     core::detail::RunPotentialFittingWorkflowForSelection(*f.map, *f.model, options);
@@ -508,8 +509,8 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsSelectedTargetsWithou
     for (std::size_t i = 0; i < result.atom_ids.size(); ++i)
     {
         const auto id = std::stoi(result.atom_ids[i]);
-        const bool target=std::binary_search(result.selection_domain->target_indices.begin(),
-            result.selection_domain->target_indices.end(),i);
+        const bool target=std::binary_search(result.selection_domain->output_indices.begin(),
+            result.selection_domain->output_indices.end(),i);
         const auto view = rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(id));
         if(target)
         {
@@ -525,7 +526,7 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsSelectedTargetsWithou
         if (stage.point && expected.point) EXPECT_EQ(stage.point->ToVector(), expected.point->ToVector());
         EXPECT_EQ(stage.uncertainty.status, rhbm_gem::EvidenceStatus::NotRun);
         EXPECT_FALSE(stage.uncertainty.covariance);
-        EXPECT_EQ(stage.source.role,target ? rhbm_gem::FittingRole::Target : rhbm_gem::FittingRole::Halo);
+        EXPECT_EQ(stage.source.role,target ? rhbm_gem::FittingRole::OutputTarget : rhbm_gem::FittingRole::ExternalHalo);
         EXPECT_EQ(view.GetPostFitPeeling().has_value(), target);
         EXPECT_EQ(view.GetPostJointLocalResult().has_value(), target);
         if (target)
@@ -569,8 +570,9 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsSelectedTargetsWithou
     ASSERT_NE(halo,contributors.contributors.end());
     ASSERT_EQ(halo->atom_id,21);
     ASSERT_LT(halo->contributor_index,problem.OriginalInput().atom_ids.size());
-    EXPECT_FALSE(halo->target);
-    const auto first_target_id=std::stoi(result.atom_ids[result.selection_domain->target_indices.front()]);
+    EXPECT_EQ(problem.OriginalInput().selection_domain->RoleOf(halo->contributor_index),
+        rhbm_gem::FittingRole::ExternalHalo);
+    const auto first_target_id=std::stoi(result.atom_ids[result.selection_domain->output_indices.front()]);
     const auto * first_target=f.model->FindAtomPtr(first_target_id);
     ASSERT_NE(first_target,nullptr);
     const auto first_target_view=rhbm_gem::AtomLocalPotentialView::For(*first_target);
@@ -593,16 +595,19 @@ TEST(JointComponentPartialSelectionTest, SharedWorkflowFitsSelectedTargetsWithou
 
 TEST(JointComponentPartialSelectionTest, StageAdapterUsesIdentityAndClearsMissingStates)
 {
-    auto f = joint_partial_test::Make("all");
-    const auto problem=core::BuildPureHaloSupportExclusionProblem(*f.map,*f.model);
+    auto f = joint_partial_test::Make("partial");
+    const auto problem=core::BuildJointProblem(*f.map,*f.model);
     auto result=core::CaptureJointAnalysisResult(
-        joint_component_test::matched::joint_component::FitBoundedJointComponentsForTesting(problem,f.tau,2.0));
+        joint_component_test::matched::joint_component::FitBoundedJointComponentsForTesting(problem,{f.tau[0]},2.0));
     ASSERT_EQ(result.atom_ids.size(), 2);
     std::swap(result.atom_ids[0], result.atom_ids[1]);
     auto & component = result.components.front();
     ASSERT_TRUE(component.state);
-    component.atoms = {1, 0};
-    result.selection_domain->target_indices = {1};
+    component.atoms = {1};
+    if(component.layout) component.layout->full_atoms={1};
+    if(component.target_evidence) component.target_evidence->point_atoms.front().atom=1;
+    result.selection_domain->output_indices = {1};
+    result.fitting_to_original_contributors={1};
     f.model->EditAnalysis().ApplyJointStageEstimates(
         rhbm_gem::data_internal::BuildJointStageEstimates(result, "test-run"));
     const auto target = rhbm_gem::AtomLocalPotentialView::For(*f.model->FindAtomPtr(1));
@@ -610,7 +615,7 @@ TEST(JointComponentPartialSelectionTest, StageAdapterUsesIdentityAndClearsMissin
     EXPECT_DOUBLE_EQ(target.GetJointStageModel().GetAmplitude(), component.state->ac[0]);
     EXPECT_DOUBLE_EQ(target.GetJointStageModel().GetOffset(), component.state->ac[1]);
     EXPECT_DOUBLE_EQ(target.GetJointStageModel().GetWidth(), component.state->tau[0]);
-    EXPECT_EQ(halo.GetJointStageEstimate().source.role, rhbm_gem::FittingRole::Halo);
+    EXPECT_EQ(halo.GetJointStageEstimate().source.role, rhbm_gem::FittingRole::ExternalHalo);
     auto summary = core::BuildJointTargetSpotSummary(*f.model);
     EXPECT_NE(summary.find("joint-components"), std::string::npos);
     EXPECT_NE(summary.find("Joint Target estimate summary by Spot:"), std::string::npos);
@@ -667,7 +672,7 @@ TEST(JointComponentPartialSelectionTest, SummaryIncludesOnlyConvergedJointTarget
     second->SetSpot(Spot::CA);
     auto editor = f.model->EditAnalysis();
     LocalStageEstimate stage;
-    stage.source = {EstimateMethod::JointComponents, {}, "component", "summary-test", FittingRole::Target};
+    stage.source = {EstimateMethod::JointComponents, {}, "component", "summary-test", FittingRole::OutputTarget};
     stage.point = GaussianModel3D{2.0, 0.5, -1.0};
     stage.convergence = JointCheckStatus::Passed;
     editor.SetAtomJointStageEstimate(*first, stage);
@@ -706,7 +711,7 @@ TEST(JointComponentPartialSelectionTest, PostFitPeelingUsesOriginalGridAndPreser
 {
     auto f = joint_partial_test::Make("partial");
     SetExactMapForFixture(f);
-    const auto problem = core::BuildPureHaloSupportExclusionProblem(*f.map, *f.model);
+    const auto problem = core::BuildJointProblem(*f.map, *f.model);
     const auto fit=joint_component_test::matched::joint_component::FitBoundedJointComponentsForTesting(problem,{f.tau[0]},2.0);
     ASSERT_TRUE(fit.assembled_state) << fit.initialization.reason << " search=" << fit.search_completed
         << " components=" << fit.components.size()
@@ -764,7 +769,7 @@ TEST(JointComponentPartialSelectionTest, ExcludedFitRowsRemainInOriginalPeelingD
     auto f=joint_partial_test::Make("weak");
     f.model->FindAtomPtr(2)->SetPosition(4.5,0,0);
     SetExactMapForFixture(f);
-    const auto problem=core::BuildPureHaloSupportExclusionProblem(*f.map,*f.model);
+    const auto problem=core::BuildJointProblem(*f.map,*f.model);
     ASSERT_LT(problem.Input().row_ids.size(),problem.OriginalInput().row_ids.size());
     const auto fit=joint_component_test::matched::joint_component::FitBoundedJointComponentsForTesting(problem,{f.tau[0]},2.0);
     ASSERT_TRUE(fit.assembled_state) << fit.initialization.reason;
@@ -778,7 +783,7 @@ TEST(JointComponentPartialSelectionTest, ExcludedFitRowsRemainInOriginalPeelingD
         core::detail::BuildInterpolatedSamplingEntries(*f.map,points));
     const auto context=postprocessing_test::MakeJointPostprocessingContext(*f.map,*f.model,problem,snapshot);
     const auto peelings=postprocessing_test::BuildPostFitPeelingSamples(
-        context,problem.OriginalInput().selection_domain->target_indices);
+        context,problem.OriginalInput().selection_domain->output_indices);
     ASSERT_TRUE(peelings.contains(1));
     ASSERT_FALSE(peelings.at(1).samples.empty());
     EXPECT_TRUE(peelings.at(1).samples.front().response) << peelings.at(1).samples.front().reason;
@@ -791,7 +796,7 @@ TEST(JointComponentPartialSelectionTest, PeelingIgnoresContributorsOutsideActual
         std::array<double, 3>{.1, .1, .1}, std::array<double, 3>{-5.5, -3, -3},
         std::make_unique<double[]>(111 * 61 * 61));
     SetExactMapForFixture(f);
-    const auto problem = core::BuildPureHaloSupportExclusionProblem(*f.map, *f.model);
+    const auto problem = core::BuildJointProblem(*f.map, *f.model);
     const auto fit=joint_component_test::matched::joint_component::FitBoundedJointComponentsForTesting(problem,{f.tau[0]},2.0);
     ASSERT_TRUE(fit.assembled_state) << fit.initialization.reason;
     ASSERT_EQ(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
@@ -846,7 +851,7 @@ TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextPreservesGri
     f.model=std::make_unique<rhbm_gem::ModelObject>(std::move(atoms));
     f.model->SelectAllAtoms();
     SetExactMapForFixture(f);
-    const auto problem = core::BuildPureHaloSupportExclusionProblem(*f.map, *f.model);
+    const auto problem = core::BuildJointProblem(*f.map, *f.model);
     const auto snapshot = core::CaptureJointAnalysisResult(
         joint_component_test::matched::joint_component::FitBoundedJointComponentsForTesting(problem,f.tau,2.0));
     f.model->EditAnalysis().ApplyJointResult(snapshot, "shared-context-test");
@@ -865,10 +870,10 @@ TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextPreservesGri
     const auto context=postprocessing_test::MakeJointPostprocessingContext(
         *f.map, *f.model, problem, snapshot);
     const auto peelings = postprocessing_test::BuildPostFitPeelingSamples(context,
-        problem.OriginalInput().selection_domain->target_indices);
+        problem.OriginalInput().selection_domain->output_indices);
     ASSERT_EQ(peelings.size(), atom_ids.size());
     const auto peeling_batch = context.BuildPostFitPeelingBatch(
-        std::span<const std::size_t>(problem.OriginalInput().selection_domain->target_indices));
+        std::span<const std::size_t>(problem.OriginalInput().selection_domain->output_indices));
     ASSERT_EQ(peeling_batch.size(), peelings.size());
     auto map_entry = peelings.begin();
     for (const auto & [id, batch_peeling] : peeling_batch)
@@ -886,7 +891,7 @@ TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextPreservesGri
     EXPECT_EQ(map_entry, peelings.end());
 
     const auto standalone_peelings = postprocessing_test::BuildPostFitPeelingSamples(
-        *f.map, *f.model, problem, problem.Input().selection_domain->target_indices, &snapshot);
+        *f.map, *f.model, problem, problem.Input().selection_domain->output_indices, &snapshot);
     std::size_t target_position{};
     for (const auto * atom : f.model->GetSelectedAtoms())
     {
@@ -1013,13 +1018,6 @@ TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextPreservesGri
     expect_universe_rejected(std::move(missing_target_index),
         "Joint Peeling contributor universe identity mismatch.");
 
-    auto wrong_target_flag=universe;
-    found=target_contributor(wrong_target_flag.contributors);
-    ASSERT_NE(found,wrong_target_flag.contributors.end());
-    found->target=false;
-    expect_universe_rejected(std::move(wrong_target_flag),
-        "Joint Peeling contributor universe identity mismatch.");
-
     const auto insert_contributor=[](auto & contributors,core::detail::JointPeelingContributor contributor) {
         const auto found=std::lower_bound(contributors.begin(),contributors.end(),contributor.atom_id,
             [](const auto & current,int id){return current.atom_id<id;});
@@ -1027,7 +1025,7 @@ TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextPreservesGri
     };
     auto reconstruction_only=universe;
     insert_contributor(reconstruction_only.contributors,
-        {25,{0.0,0.0,0.0},std::numeric_limits<std::size_t>::max(),false,true});
+        {25,{0.0,0.0,0.0},std::numeric_limits<std::size_t>::max(),true});
     expect_universe_rejected(std::move(reconstruction_only),
         "Joint Peeling contributor universe identity mismatch.");
 
@@ -1037,7 +1035,7 @@ TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextPreservesGri
         SCOPED_TRACE(invalid_coordinate);
         auto invalid_geometry=universe;
         insert_contributor(invalid_geometry.contributors,
-            {35,{invalid_coordinate,0.0,0.0},std::numeric_limits<std::size_t>::max(),false,true});
+            {35,{invalid_coordinate,0.0,0.0},std::numeric_limits<std::size_t>::max(),true});
         expect_universe_rejected(std::move(invalid_geometry),
             "Invalid Joint Peeling contributor universe.");
     }
@@ -1045,7 +1043,7 @@ TEST(JointComponentPartialSelectionTest, SharedPostprocessingContextPreservesGri
     auto ineligible_geometry=universe;
     insert_contributor(ineligible_geometry.contributors,
         {35,{std::numeric_limits<double>::quiet_NaN(),std::numeric_limits<double>::infinity(),
-            -std::numeric_limits<double>::infinity()},std::numeric_limits<std::size_t>::max(),false,false});
+            -std::numeric_limits<double>::infinity()},std::numeric_limits<std::size_t>::max(),false});
     expect_universe_rejected(std::move(ineligible_geometry),
         "Joint Peeling contributor universe identity mismatch.");
 }
@@ -1054,7 +1052,7 @@ TEST(JointComponentPartialSelectionTest, PostJointEvidenceAssessmentEnforcesAvai
 {
     using namespace rhbm_gem;
     LocalStageEstimate joint;
-    joint.source = {EstimateMethod::JointComponents, "1", "component", "validation-run", FittingRole::Target};
+    joint.source = {EstimateMethod::JointComponents, "1", "component", "validation-run", FittingRole::OutputTarget};
     joint.point = GaussianModel3D{2.0, 0.5, -0.1};
     joint.convergence = JointCheckStatus::Passed;
     const std::array<double,4> distances{.1,.3,.5,1.2};
@@ -1126,7 +1124,7 @@ TEST(JointComponentPartialSelectionTest, PostJointEvidenceAssessmentEnforcesAvai
     EXPECT_FALSE(assess(result, unqualified, &peeling).valid);
     bad = result; bad.source.run_id = "different-run";
     EXPECT_FALSE(assessCurrent(bad).valid);
-    auto halo = joint; halo.source.role = FittingRole::Halo;
+    auto halo = joint; halo.source.role = FittingRole::ExternalHalo;
     EXPECT_FALSE(assess(result, halo, &peeling).valid);
     bad = result; bad.fit.mdpde = {GaussianModel3D{
         std::numeric_limits<double>::quiet_NaN(), 0.48, 0.0}, {}};
@@ -1197,7 +1195,7 @@ TEST(JointComponentPartialSelectionTest, GroupPosteriorUsesPostJointLocalInforma
     for (int i = 1; i <= 5; ++i)
     {
         LocalStageEstimate stage;
-        stage.source = {EstimateMethod::JointComponents, std::to_string(i), "component", "local-test-run", FittingRole::Target};
+        stage.source = {EstimateMethod::JointComponents, std::to_string(i), "component", "local-test-run", FittingRole::OutputTarget};
         stage.point = GaussianModel3D(2 + i*0.2, 0.5 + 0.02*(i*i % 7), -0.1*i);
         stage.convergence = JointCheckStatus::Passed;
         stages[i] = std::move(stage);
@@ -1368,7 +1366,7 @@ TEST(JointComponentPartialSelectionTest, TargetOnlyPostprocessingRetainsFullCont
 {
     auto f = joint_partial_test::Make("partial");
     SetExactMapForFixture(f);
-    const auto problem = core::BuildPureHaloSupportExclusionProblem(*f.map, *f.model);
+    const auto problem = core::BuildJointProblem(*f.map, *f.model);
     const auto fit=joint_component_test::matched::joint_component::FitBoundedJointComponentsForTesting(problem,{f.tau[0]},2.0);
     ASSERT_TRUE(fit.assembled_state) << fit.initialization.reason << " search=" << fit.search_completed
         << " components=" << fit.components.size()
@@ -1474,7 +1472,7 @@ TEST(JointComponentPartialSelectionTest, JointInitialStageParallelWorkersPreserv
 {
     const auto run = [](int thread_count) {
         auto fixture = joint_partial_test::Make("all");
-        const auto problem = core::BuildPureHaloSupportExclusionProblem(*fixture.map, *fixture.model);
+        const auto problem = core::BuildJointProblem(*fixture.map, *fixture.model);
         const auto workset = core::detail::BuildInitialStageWorkset(*fixture.model, problem);
         fixture.model->EditAnalysis().InitializeFromSelection();
         core::RunPotentialSamplingWorkflow(*fixture.map, *fixture.model,
@@ -1507,7 +1505,7 @@ TEST(JointComponentPartialSelectionTest, JointInitialStageParallelWorkersPreserv
             EXPECT_DOUBLE_EQ(actual.alpha, expected.alpha);
             EXPECT_EQ(actual.sample_count, expected.sample_count);
             EXPECT_EQ(actual.native_status, expected.native_status);
-            EXPECT_EQ(actual.target, expected.target);
+            EXPECT_EQ(actual.role, expected.role);
             EXPECT_EQ(actual.initial_stage_fit_qualified, expected.initial_stage_fit_qualified);
             EXPECT_EQ(actual.reason, expected.reason);
             EXPECT_EQ(actual.original_tau, expected.original_tau);
@@ -1548,7 +1546,7 @@ TEST(JointComponentPartialSelectionTest, CompleteModelWidthSensitivityPropagates
     auto f=joint_partial_test::Make("all");
     f.model->FindAtomPtr(1)->SetPosition(.13,.14,.12);
     SetExactMapForFixture(f);
-    const auto problem=core::BuildPureHaloSupportExclusionProblem(*f.map,*f.model);
+    const auto problem=core::BuildJointProblem(*f.map,*f.model);
     const auto fitted=joint_component_test::matched::joint_component::FitBoundedJointComponentsForTesting(problem,f.tau,2.0);
     ASSERT_EQ(fitted.RuntimeConvergence(),JointCheckStatus::Passed);
     const auto baseline=core::CaptureJointAnalysisResult(fitted);
@@ -1572,7 +1570,7 @@ TEST(JointComponentPartialSelectionTest, CompleteModelWidthSensitivityPropagates
         }
         const auto context=postprocessing_test::MakeJointPostprocessingContext(*f.map,*f.model,problem,snapshot);
         Output out;
-        out.peeling=postprocessing_test::BuildPostFitPeelingSamples(context,problem.Input().selection_domain->target_indices);
+        out.peeling=postprocessing_test::BuildPostFitPeelingSamples(context,problem.Input().selection_domain->output_indices);
         out.samples=context.BuildPostJointLocalSamples(1,out.peeling.at(1));
         core::FitOptions options; options.quiet_mode=true;
         core::detail::JointPostprocessingMetrics metrics;
@@ -1660,7 +1658,7 @@ TEST(JointComponentPartialSelectionTest, GroupInferenceUsesQualifiedLocalMeasure
     for(int id=1;id<=5;++id)
     {
         LocalStageEstimate stage;
-        stage.source={EstimateMethod::JointComponents,std::to_string(id),"component","width-group",FittingRole::Target};
+        stage.source={EstimateMethod::JointComponents,std::to_string(id),"component","width-group",FittingRole::OutputTarget};
         stage.point=GaussianModel3D{id==1 ? 0. : 2.,id==1 ? .015 : .5,0.};
         stage.convergence=JointCheckStatus::Passed; stages[id]=stage;
     }

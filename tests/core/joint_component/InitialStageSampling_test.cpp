@@ -66,10 +66,10 @@ TEST(InitialStageSamplingTest, DefaultExactlyMatchesExplicitInitialStageSampling
 {
     auto map=Map(); auto explicit_sampling=Model(); auto current=Model();
     FitOptions options; options.quiet_mode=true;
-    const auto explicit_workset=d::BuildInitialStageWorkset(*explicit_sampling,BuildPureHaloSupportExclusionProblem(map,*explicit_sampling));
+    const auto explicit_workset=d::BuildInitialStageWorkset(*explicit_sampling,BuildJointProblem(map,*explicit_sampling));
     RunPotentialSamplingWorkflow(map,*explicit_sampling,explicit_workset.contributors,1,{},true);
     const auto explicit_init=d::FitInitialStageFromPreparedSamples(*explicit_sampling,explicit_workset,options);
-    const auto new_workset=d::BuildInitialStageWorkset(*current,BuildPureHaloSupportExclusionProblem(map,*current));
+    const auto new_workset=d::BuildInitialStageWorkset(*current,BuildJointProblem(map,*current));
     const auto new_init=d::RunInitialStage(map,*current,new_workset,options);
     SameInitialization(explicit_init,new_init);
     for (std::size_t i=0;i<2;++i)
@@ -85,7 +85,7 @@ TEST(InitialStageSamplingTest, DeterministicAcrossWorkersAndRepeatedRuns)
     {
         FitOptions options; options.quiet_mode=true; options.initial_stage_sampling_method=method;
         auto serial=Model(); auto parallel=Model();
-        const auto problem=BuildPureHaloSupportExclusionProblem(map,*serial);
+        const auto problem=BuildJointProblem(map,*serial);
         const auto sw=d::BuildInitialStageWorkset(*serial,problem);
         const auto pw=d::BuildInitialStageWorkset(*parallel,problem);
         const auto baseline=d::RunInitialStage(map,*serial,sw,options);
@@ -158,7 +158,7 @@ TEST(InitialStageSamplingTest, SpiralInitializesWidthsAndLeavesQScoreUnchanged)
     const auto default_samples=BuildAtomInterpolatedMapSamples(map,*atoms[0]);
     FitOptions options; options.quiet_mode=true;
     options.initial_stage_sampling_method=SphereSamplingMethod::SpiralDeterministic;
-    const auto workset=d::BuildInitialStageWorkset(*model,BuildPureHaloSupportExclusionProblem(map,*model));
+    const auto workset=d::BuildInitialStageWorkset(*model,BuildJointProblem(map,*model));
     const auto initialization=d::RunInitialStage(map,*model,workset,options);
     ASSERT_TRUE(initialization.valid);
     ASSERT_EQ(initialization.atoms.size(),atoms.size());

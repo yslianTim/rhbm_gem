@@ -41,8 +41,10 @@ void WriteJointAnalysisResult(const JointAnalysisResult & result,
         {
             const auto [component,component_index]=mapping[atom];
             const auto * median_halo=median_halos[atom];
-            const bool target=std::binary_search(result.selection_domain->target_indices.begin(),
-                result.selection_domain->target_indices.end(),atom);
+            const auto role=result.selection_domain->RoleOf(atom);
+            const bool target=IsFittingTarget(role);
+            const char * selection_role=role==FittingRole::OutputTarget ? "output-target" :
+                role==FittingRole::BufferTarget ? "buffer-target" : "external-halo";
             std::size_t state_index=component_index;
             bool state_mapping_valid=component!=nullptr;
             if(component && component->layout)
@@ -65,9 +67,9 @@ void WriteJointAnalysisResult(const JointAnalysisResult & result,
             const bool export_point=target && component && component->state && state_mapping_valid;
             const bool state_available=median_halo || export_point;
             const char * parameterization=median_halo ? "HaloMedianReconstructed" : target ?
-                state_available ? "JointEstimated" : "TargetOnlyUnestimated" :
+                state_available ? "JointEstimated" : "FittingTargetUnestimated" :
                 "HaloReconstructionUnavailable";
-            const std::string stop_reason=median_halo ? "geometry-local-target-median" : !target ?
+            const std::string stop_reason=median_halo ? "geometry-local-fitting-median" : !target ?
                 "halo-reconstruction-unavailable" : component ? component->stop_reason : result.initialization.reason;
             const auto runtime_convergence=median_halo ? JointCheckStatus::NotRun :
                 component && export_point ? component->runtime_convergence : JointCheckStatus::Unavailable;
@@ -86,7 +88,7 @@ void WriteJointAnalysisResult(const JointAnalysisResult & result,
             csv_file << ',' << state_available << ',' << (component && component->search_completed)
                 << ',' << CsvText(stop_reason)
                 << ',' << joint_result_io::StatusText(runtime_convergence)
-                << ',' << (target ? "target" : "halo") << ',' << parameterization
+                << ',' << selection_role << ',' << parameterization
                 << ',' << CsvText("") << ',' << joint_result_io::StatusText(target_convergence)
                 << ',' << (target ? point_quality : "NotApplicable") << '\n';
         }

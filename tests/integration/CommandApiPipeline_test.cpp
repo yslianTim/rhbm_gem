@@ -281,8 +281,8 @@ TEST(CommandApiPipelineTest, DirectPotentialFittingExcludesHydrogenAndKeepsSelec
     const auto & joint = model->GetAnalysisView().GetJointResult();
     ASSERT_TRUE(joint);
     ASSERT_TRUE(joint->selection_domain);
-    ASSERT_EQ(joint->selection_domain->target_indices.size(), 1u);
-    EXPECT_EQ(joint->atom_ids.at(joint->selection_domain->target_indices.front()), "1");
+    ASSERT_EQ(joint->selection_domain->output_indices.size(), 1u);
+    EXPECT_EQ(joint->atom_ids.at(joint->selection_domain->output_indices.front()), "1");
     EXPECT_TRUE(joint->initialization.valid);
     EXPECT_FALSE(rg::IsQualifiedJointAnalysisResult(*joint));
 
@@ -330,7 +330,7 @@ TEST(CommandApiPipelineTest, JointPersistsSmallSelectionCalibrationFailureAndExp
     EXPECT_EQ(api_result.outcome,expected_outcome);
     ASSERT_TRUE(saved.metadata.map_normalization); ASSERT_TRUE(saved.metadata.software);
     ASSERT_TRUE(saved.selection_domain);
-    EXPECT_EQ(saved.selection_domain->target_indices,(std::vector<std::size_t>{0,1}));
+    EXPECT_EQ(saved.selection_domain->output_indices,(std::vector<std::size_t>{0,1}));
     EXPECT_EQ(saved.atom_ids.front(), "1");
     EXPECT_EQ(saved.atom_ids[1], "2");
     const auto has_contributor = [&saved](const std::string & id)
@@ -360,9 +360,9 @@ TEST(CommandApiPipelineTest, JointPersistsSmallSelectionCalibrationFailureAndExp
     {
         return atom.GetElement() != Element::HYDROGEN && atom.GetChainID() == "A";
     });
-    const auto target_problem=rgc::BuildPureHaloSupportExclusionProblem(*map,*model);
+    const auto target_problem=rgc::BuildJointProblem(*map,*model);
     EXPECT_EQ(saved.row_ids,target_problem.OriginalInput().row_ids);
-    EXPECT_EQ(target_problem.Input().selection_domain->target_indices,
+    EXPECT_EQ(target_problem.Input().selection_domain->output_indices,
         (std::vector<std::size_t>{0,1}));
 
     {
@@ -660,37 +660,26 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
     ExpectJointNumericalResultPreserved(reference,stored);
     ASSERT_TRUE(rg::IsQualifiedJointAnalysisResult(stored));
     ASSERT_TRUE(stored.selection_domain);
-    EXPECT_EQ(stored.selection_domain->contributor_policy,"pure-halo-support-exclusion-v1");
-    ASSERT_TRUE(stored.halo_median_reconstruction);
-    const auto & halo_reconstruction=*stored.halo_median_reconstruction;
-    EXPECT_EQ(halo_reconstruction.contract,rg::HaloMedianReconstructionContractVersion);
-    EXPECT_EQ(halo_reconstruction.neighbor_count,rg::GeometryLocalTargetMedianNeighborCount);
-    EXPECT_EQ(halo_reconstruction.donor_policy,rg::GeometryLocalTargetMedianDonorPolicy);
-    EXPECT_EQ(halo_reconstruction.joint_run_id,
-        rg::AtomLocalPotentialView::For(*loaded->FindAtomPtr(1))
-            .GetJointStageEstimate().source.run_id);
-    ASSERT_EQ(halo_reconstruction.halos.size(),1u);
-    EXPECT_EQ(halo_reconstruction.halos.front().source,rg::HaloMedianSource::GeometryLocalTargetMedian);
-    EXPECT_EQ(halo_reconstruction.halos.front().donor_atom_ids.size(),halo_reconstruction.halos.front().donor_count);
-    EXPECT_LE(halo_reconstruction.halos.front().donor_count,rg::GeometryLocalTargetMedianNeighborCount);
-    EXPECT_EQ(stored.selection_domain->target_indices.size(),25u);
-    EXPECT_EQ(stored.atom_ids.size(),26u);
-    const auto halo_id=std::find(stored.atom_ids.begin(),stored.atom_ids.end(),"26");
-    ASSERT_NE(halo_id,stored.atom_ids.end());
-    const auto halo_index=static_cast<std::size_t>(std::distance(stored.atom_ids.begin(),halo_id));
-    EXPECT_EQ(std::find(stored.selection_domain->target_indices.begin(),
-        stored.selection_domain->target_indices.end(),halo_index),
-        stored.selection_domain->target_indices.end());
-    ASSERT_NE(loaded->FindAtomPtr(1),nullptr);
-    ASSERT_NE(loaded->FindAtomPtr(2),nullptr);
-    ASSERT_NE(loaded->FindAtomPtr(26),nullptr);
+    EXPECT_EQ(stored.selection_domain->contributor_policy,"buffer-expansion-external-halo-exclusion-v1");
+    EXPECT_FALSE(stored.halo_median_reconstruction);
+    EXPECT_EQ(stored.selection_domain->output_indices.size(),25u);
+    ASSERT_EQ(stored.atom_ids.size(),26u);
+    ASSERT_EQ(stored.selection_domain->buffer_indices.size(),1u);
+    const auto buffer_index=stored.selection_domain->buffer_indices.front();
+    EXPECT_EQ(stored.atom_ids.at(buffer_index),"26");
+    const auto buffer=rg::AtomLocalPotentialView::For(*loaded->FindAtomPtr(26));
+    EXPECT_EQ(buffer.GetJointStageEstimate().source.role,rg::FittingRole::BufferTarget);
+    EXPECT_TRUE(buffer.GetJointStageEstimate().point);
+    EXPECT_FALSE(buffer.GetPostFitPeeling());
+    EXPECT_FALSE(buffer.GetPostJointLocalResult());
+    EXPECT_FALSE(buffer.GetPostJointQScore());
     const auto target_one=loaded->FindAtomPtr(1)->GetPosition();
     const auto target_two=loaded->FindAtomPtr(2)->GetPosition();
-    const auto halo_position=loaded->FindAtomPtr(26)->GetPosition();
+    const auto buffer_position=loaded->FindAtomPtr(26)->GetPosition();
     EXPECT_DOUBLE_EQ(std::hypot(target_one[0]-target_two[0],target_one[1]-target_two[1],
         target_one[2]-target_two[2]),1.0);
-    EXPECT_LT(std::hypot(target_one[0]-halo_position[0],target_one[1]-halo_position[1],
-        target_one[2]-halo_position[2]),2.5);
+    EXPECT_LT(std::hypot(target_one[0]-buffer_position[0],target_one[1]-buffer_position[1],
+        target_one[2]-buffer_position[2]),2.5);
     ASSERT_TRUE(stored.metadata.solver);
     EXPECT_EQ(stored.metadata.solver->search_method,"gauss-seidel-bcd");
     EXPECT_EQ(stored.metadata.solver->bcd_local_search,"active-set-lm");
@@ -720,7 +709,7 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
     {
         const auto local=rg::AtomLocalPotentialView::For(*atom);
         const auto & second=local.GetJointStageEstimate();
-        if(second.source.method!=rg::EstimateMethod::JointComponents || second.source.role!=rg::FittingRole::Target)
+        if(second.source.method!=rg::EstimateMethod::JointComponents || second.source.role!=rg::FittingRole::OutputTarget)
             continue;
         ++target_count;
         EXPECT_TRUE(second.point);
@@ -759,7 +748,7 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
     EXPECT_EQ(tail_valid_sample_count,tail_raw_sample_count);
     EXPECT_EQ(valid_tail_ratios.size(),25u);
     RecordProperty("joint_target_count",static_cast<int>(target_count));
-    RecordProperty("halo_contributor_count",static_cast<int>(stored.atom_ids.size()-target_count));
+    RecordProperty("buffer_contributor_count",static_cast<int>(stored.selection_domain->buffer_indices.size()));
     RecordProperty("tail_complete_targets",static_cast<long long>(complete_tail_target_count));
     RecordProperty("tail_raw_samples",static_cast<long long>(tail_raw_sample_count));
     RecordProperty("tail_valid_samples",static_cast<long long>(tail_valid_sample_count));

@@ -54,7 +54,7 @@ std::string ValidatePostFitPeelingResult(const PostFitPeelingResult & peeling,
     const std::array<double,3> * target_position)
 {
     if (peeling.mode!="original-grid-v1" || !SameSource(peeling.source,joint.source) ||
-        joint.source.method!=EstimateMethod::JointComponents || joint.source.role!=FittingRole::Target)
+        joint.source.method!=EstimateMethod::JointComponents || joint.source.role!=FittingRole::OutputTarget)
         return "Post-Joint grid source/contract mismatch.";
     std::set<std::size_t> grids;
     std::optional<std::size_t> previous;
@@ -111,7 +111,7 @@ PostJointLocalEvidenceAssessment AssessPostJointLocalResult(
     const PostFitPeelingResult * peeling)
 {
     const auto atom_identity = std::to_string(atom_id);
-    if (joint.source.method != EstimateMethod::JointComponents || joint.source.role != FittingRole::Target ||
+    if (joint.source.method != EstimateMethod::JointComponents || joint.source.role != FittingRole::OutputTarget ||
         joint.source.atom_id != atom_identity || joint.source.component_id.empty() || joint.source.run_id.empty() ||
         !SameSource(result.source, joint.source))
         return Invalid("Post-Joint local result source mismatch.");

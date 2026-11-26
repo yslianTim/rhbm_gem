@@ -20,7 +20,8 @@ inline Fixture Make(const std::string & name)
 {
     Fixture f;
     std::vector<double> x=name=="bridge" ? std::vector<double>{-2.8,2.8,0} :
-        name=="weak" ? std::vector<double>{0,4.8} : std::vector<double>{0,1.2};
+        name=="weak" ? std::vector<double>{0,4.8} :
+        name=="partial" ? std::vector<double>{0,3.25} : std::vector<double>{0,1.2};
     std::vector<std::unique_ptr<rhbm_gem::AtomObject>> atoms;
     for(std::size_t i=0;i<x.size();++i)
     {

@@ -57,7 +57,7 @@ inline std::map<int, PostFitPeelingResult> BuildPostFitPeelingSamples(
     if (!outputs && !selection)
         throw std::invalid_argument("Pure Exclusion peeling requires a target selection.");
     const std::span<const std::size_t> selected=outputs ? *outputs :
-        std::span<const std::size_t>(selection->target_indices);
+        std::span<const std::size_t>(selection->output_indices);
     return BuildPostFitPeelingSamples(context,selected);
 }
 

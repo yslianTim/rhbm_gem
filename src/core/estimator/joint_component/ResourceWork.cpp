@@ -63,7 +63,8 @@ std::optional<std::size_t> EstimateSnapshotBytes(const JointProblemInput & input
     }
     if(input.selection_domain)
     {
-        if(!AddProduct(total,input.selection_domain->target_indices.capacity(),sizeof(std::size_t))) return {};
+        if(!AddProduct(total,input.selection_domain->output_indices.capacity(),sizeof(std::size_t)) ||
+            !AddProduct(total,input.selection_domain->buffer_indices.capacity(),sizeof(std::size_t))) return {};
     }
     return total;
 }
@@ -121,7 +122,8 @@ const char * MemoryStatusName(MemoryStatus status)
 }
 MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_t budget)
 {
-    MemoryEstimate out; out.shape=shape; out.stage=stage; out.resident_bytes=shape.resident_bytes; out.budget_bytes=budget;
+    MemoryEstimate out; out.shape=shape; out.stage=stage; out.resident_bytes=shape.resident_bytes;
+    out.budget_bytes=std::min(budget,JointMemoryHardLimitBytes);
     std::size_t temporary{};
     const auto rows=shape.component_observations,atoms=shape.component_atoms,entries=shape.component_support_entries;
     const auto blocks=shape.component_blocks,affected=shape.affected_row_entries;
@@ -233,7 +235,7 @@ MemoryEstimate PlanMemory(const MemoryShape & shape,MemoryStage stage,std::size_
     if(!ok) {Overflow(out); return out;}
     out.temporary_bytes=temporary;
     if(!CheckedAddBytes(out.resident_bytes,out.temporary_bytes,out.estimated_peak_bytes)) {Overflow(out); return out;}
-    if(out.estimated_peak_bytes>budget) {out.status=MemoryStatus::Reject; out.reason="estimated-peak-exceeds-budget";}
+    if(out.estimated_peak_bytes>out.budget_bytes) {out.status=MemoryStatus::Reject; out.reason="estimated-peak-exceeds-budget";}
     return out;
 }
 std::optional<std::size_t> CurrentRssBytes()

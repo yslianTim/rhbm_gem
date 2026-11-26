@@ -29,8 +29,10 @@ Browse runnable examples and helper assets in [`resources/README.md`](/resources
 
 ## Joint component workflow
 
-Potential Analysis uses the Joint Component Estimator (JCE). Results use
-**SQLite v25**. The repository accepts only the current database schema.
+Potential Analysis uses the Joint Component Estimator (JCE). Buffer Expansion
+can fit one additional atom to recover core observations in the fixed Output
+domain. The user's selection determines the analysis population. Results use
+**SQLite v26**. The repository accepts only the current database schema.
 
 ```sh
 RHBM-GEM potential_analysis -a model.cif -m map.mrc -d joint.sqlite -k example
@@ -48,9 +50,9 @@ reconstruction was unavailable, and `0` for a qualified Joint fit. See the
 [joint workflow contract](docs/developer/commands/potential_analysis.md#joint-component-workflow)
 for options and JSON/CSV output. JointStage stores the fitted endpoints. Plots, comparisons, Gaussian/outlier dumps and UMAP use the
 available saved data; missing uncertainty or peeling coverage is never replaced
-with zero. Qualified Target A/tau/C points provide geometry-local kNN-4 Halo
-medians for downstream peeling. The current formats are Joint JSON schema 25
-and Stage JSON version 9. See [Joint Stage Integration](docs/developer/joint-stage-integration.md).
+with zero. Qualified Output and Buffer A/tau/C points provide geometry-local kNN-4 Halo
+medians for downstream peeling. The current formats are Joint JSON schema 26
+and Stage JSON version 10. See [Joint Stage Integration](docs/developer/joint-stage-integration.md).
 
 ## License, Citation, and Third-Party Notices
 

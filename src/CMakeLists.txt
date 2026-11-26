@@ -36,6 +36,7 @@ target_sources(rhbm_gem PRIVATE
     core/estimator/joint_component/ComponentAssembly.cpp
     core/estimator/joint_component/TargetEvidence.cpp
     core/estimator/joint_component/JointComponentEstimator.cpp
+    core/estimator/joint_component/BufferExpansion.cpp
     core/estimator/GaussianEstimator.cpp
     core/estimator/joint_component/JointCliProgressReporter.cpp
     core/estimator/PotentialFittingWorkflow.cpp

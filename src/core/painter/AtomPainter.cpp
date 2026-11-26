@@ -203,7 +203,7 @@ void AtomPainter::PaintAtomSamplingDataSummary(const std::string & name)
         const auto entry_view{ AtomLocalPotentialView::For(*atom_object) };
         if (!entry_view.IsAvailable()) continue;
         const auto & stage = entry_view.GetJointStageEstimate();
-        if (stage.source.method != EstimateMethod::JointComponents || stage.source.role != FittingRole::Target) continue;
+        if (stage.source.method != EstimateMethod::JointComponents || stage.source.role != FittingRole::OutputTarget) continue;
         canvas->Clear(); canvas->cd();
         auto builder=std::make_unique<PotentialPlotBuilder>(atom_object);
         auto sampling_graph=builder->CreateDistanceToResponseGraph(DistanceResponseSource::AllSampling);

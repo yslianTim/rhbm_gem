@@ -17,8 +17,8 @@ c::JointProblem MakeProblem(std::size_t atoms)
 {
     c::JointProblemInput input; input.observations={0.0}; input.row_ids={"row-0"};
     input.support.resize(atoms); input.atom_ids.reserve(atoms);
-    input.selection_domain.emplace(); input.selection_domain->target_indices.resize(atoms);
-    std::iota(input.selection_domain->target_indices.begin(),input.selection_domain->target_indices.end(),0);
+    input.selection_domain.emplace(); input.selection_domain->output_indices.resize(atoms);
+    std::iota(input.selection_domain->output_indices.begin(),input.selection_domain->output_indices.end(),0);
     for(std::size_t atom=0;atom<atoms;++atom)
     {
         input.atom_ids.push_back("atom-"+std::to_string(atom));
@@ -95,7 +95,7 @@ TEST(JointTargetEvidenceTest, ComponentLocalAndAssembledEvidenceAgreeForNonconti
     input.atom_ids={"a","b","c","d"}; input.row_ids={"r0","r1","r2"};
     input.observations={0.,0.,0.};
     input.support={{{0,.1}},{{1,.1}},{{2,.1}},{{1,.2}}};
-    input.selection_domain.emplace(); input.selection_domain->target_indices={1,3};
+    input.selection_domain.emplace(); input.selection_domain->output_indices={1,3};
     const c::JointProblem problem(std::move(input));
     const auto & data=c::JointProblemAccess::Get(problem);
     const auto view=std::find_if(data.partition.components.begin(),data.partition.components.end(),[](const auto & component) {

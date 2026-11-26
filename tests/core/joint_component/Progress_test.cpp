@@ -58,7 +58,7 @@ core::JointProblemInput MakeObservableInput()
     input.atom_ids = {"1"};
     input.support.resize(1);
     input.selection_domain.emplace();
-    input.selection_domain->target_indices = {0};
+    input.selection_domain->output_indices = {0};
     for (int k = 0; k < 40; ++k)
     {
         const double square = .003 * k * k;

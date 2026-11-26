@@ -734,7 +734,7 @@ TEST(DataObjectModelAnalysisTest, PotentialPlotHistogramsPreserveAvailableGridBi
     ASSERT_TRUE(hist);
     EXPECT_DOUBLE_EQ(hist->GetEntries(), 0.0);
     rg::LocalStageEstimate joint;
-    joint.source = {rg::EstimateMethod::JointComponents, {}, "component", "plot-run", rg::FittingRole::Target};
+    joint.source = {rg::EstimateMethod::JointComponents, {}, "component", "plot-run", rg::FittingRole::OutputTarget};
     analysis.SetAtomJointStageEstimate(*atom, joint);
     using joint_component_test::postprocessing::MakeGridObservation;
     rg::PostFitPeelingResult peeling;
@@ -777,11 +777,11 @@ TEST(DataObjectModelAnalysisTest, PotentialPlotHistogramsHandleUnavailableEstima
     EXPECT_EQ(missing.CreateDistanceToPeeledResponseHistogram(key), nullptr);
 
     rg::LocalStageEstimate joint;
-    joint.source.role = rg::FittingRole::Halo;
+    joint.source.role = rg::FittingRole::ExternalHalo;
     joint.point = rg::GaussianModel3D{2., .5, 0.};
     model->EditAnalysis().SetAtomJointStageEstimate(*model->GetAtomList()[0], joint);
     EXPECT_EQ(plot.CreateAtomGausEstimateHistogram(key, 0), nullptr);
-    joint.source.role = rg::FittingRole::Target;
+    joint.source.role = rg::FittingRole::OutputTarget;
     joint.point = rg::GaussianModel3D{std::numeric_limits<double>::quiet_NaN(), .5, 0.};
     model->EditAnalysis().SetAtomJointStageEstimate(*model->GetAtomList()[0], joint);
     EXPECT_EQ(plot.CreateAtomGausEstimateHistogram(key, 0), nullptr);
@@ -852,7 +852,7 @@ TEST(DataObjectModelAnalysisTest, PotentialPlotCandleSharesRawRangeWithoutLosing
     auto analysis{ model->EditAnalysis() };
     EXPECT_EQ(rg::painter_internal::ComputePeeledResponsePlotRange(view, keys, 0., 2.), std::make_tuple(-.5, .5));
     rg::LocalStageEstimate joint;
-    joint.source = {rg::EstimateMethod::JointComponents, {}, "component", "plot-run", rg::FittingRole::Target};
+    joint.source = {rg::EstimateMethod::JointComponents, {}, "component", "plot-run", rg::FittingRole::OutputTarget};
     analysis.SetAtomJointStageEstimate(*atom, joint);
     using joint_component_test::postprocessing::MakeGridObservation;
     rg::PostFitPeelingResult peeling;
@@ -921,7 +921,7 @@ TEST(DataObjectModelAnalysisTest, PotentialPlotGausPainterWritesCandleForExtreme
     analysis.InitializeFromSelection();
     auto * atom{ model->GetAtomList().front().get() };
     rg::LocalStageEstimate joint;
-    joint.source = {rg::EstimateMethod::JointComponents, {}, "component", "plot-run", rg::FittingRole::Target};
+    joint.source = {rg::EstimateMethod::JointComponents, {}, "component", "plot-run", rg::FittingRole::OutputTarget};
     joint.point = rg::GaussianModel3D{2., .5, -.25};
     analysis.SetAtomJointStageEstimate(*atom, joint);
     analysis.SetAtomLocalSamplingEntries(*atom, {{2., SamplingPoint{.25}}});
@@ -961,7 +961,7 @@ TEST(DataObjectModelAnalysisTest, PotentialPlotEstimateHistogramKeepsFiniteBasel
     auto model{ MakePotentialPlotModel() };
     const auto group_key{ model->GetAnalysisView().CollectAtomGroupKeys().front() };
     rg::LocalStageEstimate joint;
-    joint.source.role = rg::FittingRole::Target;
+    joint.source.role = rg::FittingRole::OutputTarget;
     joint.point = rg::GaussianModel3D{2., .5, -.25};
     model->EditAnalysis().SetAtomJointStageEstimate(*model->GetAtomList()[0], joint);
     rg::PotentialPlotBuilder plot(model.get());
@@ -1180,7 +1180,7 @@ TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewComputesPeelingRatioInIn
     const auto & atom = *model->GetAtomList().front();
     auto editor = model->EditAnalysis();
     rg::LocalStageEstimate joint;
-    joint.source = {rg::EstimateMethod::JointComponents, {}, "component", "ratio-run", rg::FittingRole::Target};
+    joint.source = {rg::EstimateMethod::JointComponents, {}, "component", "ratio-run", rg::FittingRole::OutputTarget};
     editor.SetAtomJointStageEstimate(atom, joint);
     const auto view = rg::AtomLocalPotentialView::For(atom);
     using joint_component_test::postprocessing::MakeGridObservation;
@@ -1227,7 +1227,7 @@ TEST(DataObjectModelAnalysisTest, PeelingRatioAssessmentReportsUnavailableCauses
     EXPECT_FALSE(assessment.ratio);
 
     rg::LocalStageEstimate failed_joint;
-    failed_joint.source = { rg::EstimateMethod::JointComponents, "CA", "component", "failed-run", rg::FittingRole::Target };
+    failed_joint.source = { rg::EstimateMethod::JointComponents, "CA", "component", "failed-run", rg::FittingRole::OutputTarget };
     failed_joint.reason = "joint-endpoint-not-qualified";
     failed_joint.convergence = rg::JointCheckStatus::Failed;
     analysis.SetAtomJointStageEstimate(*atom, failed_joint);
@@ -1290,7 +1290,7 @@ TEST(DataObjectModelAnalysisTest, AtomLocalPotentialViewSeparatesSamplingAndPeel
 #endif
 
     rg::LocalStageEstimate joint;
-    joint.source = {rg::EstimateMethod::JointComponents, {}, "component", "sampling-run", rg::FittingRole::Target};
+    joint.source = {rg::EstimateMethod::JointComponents, {}, "component", "sampling-run", rg::FittingRole::OutputTarget};
     analysis.SetAtomJointStageEstimate(*atom, joint);
     using joint_component_test::postprocessing::MakeGridObservation;
     rg::PostFitPeelingResult peeling;
@@ -1799,7 +1799,7 @@ TEST(DataObjectModelAnalysisTest, StageAvailabilitySeparatesMissingAndZeroAmplit
     rg::LocalStageEstimate estimate;
     estimate.point = rg::GaussianModel3D{0.0, 0.5, -0.2};
     estimate.source.method = rg::EstimateMethod::JointComponents;
-    estimate.source.role = rg::FittingRole::Target;
+    estimate.source.role = rg::FittingRole::OutputTarget;
     estimate.reason.clear();
     editor.SetAtomJointStageEstimate(atom, estimate);
     EXPECT_TRUE(view.HasJointStageModel());
@@ -1832,7 +1832,7 @@ TEST(DataObjectModelAnalysisTest, JointUpdatesInvalidateDependentResultsAcrossTh
     for (const auto & atom : model->GetAtomList())
     {
         auto & stage = stages[atom->GetSerialID()];
-        stage.source = {rg::EstimateMethod::JointComponents, {}, "component", "same-run", rg::FittingRole::Target};
+        stage.source = {rg::EstimateMethod::JointComponents, {}, "component", "same-run", rg::FittingRole::OutputTarget};
         stage.point = rg::GaussianModel3D{2, .5, -.1};
         stage.reason.clear();
     }
@@ -1905,7 +1905,7 @@ TEST(DataObjectModelAnalysisTest, PostJointLocalResultHasIndependentJointEndpoin
     editor.InitializeFromSelection();
     const auto & atom = *model->GetSelectedAtoms().front();
     rg::LocalStageEstimate joint;
-    joint.source = {rg::EstimateMethod::JointComponents, {}, "component", "run-1", rg::FittingRole::Target};
+    joint.source = {rg::EstimateMethod::JointComponents, {}, "component", "run-1", rg::FittingRole::OutputTarget};
     joint.point = rg::GaussianModel3D{2, .5, -.1};
     joint.convergence = rg::JointCheckStatus::Passed;
     editor.SetAtomJointStageEstimate(atom, joint);
@@ -2008,7 +2008,7 @@ TEST(DataObjectModelAnalysisTest, NativeDiagnosticsAndJointSamplesAreIndependent
     EXPECT_EQ(view.GetInitialStageGaussianResult().mdpde.GetModel().ToVector(), stage.point->ToVector());
     EXPECT_FALSE(view.GetInitialStageGaussianResult().diagnostics);
     stage.source.method = rg::EstimateMethod::JointComponents;
-    stage.source.role = rg::FittingRole::Target;
+    stage.source.role = rg::FittingRole::OutputTarget;
     editor.SetAtomJointStageEstimate(atom, stage);
     editor.SetAtomLocalSamplingEntries(atom, {{2, {.1, {0,0,0}, true}}, {4, {.2, {1,0,0}, true}}});
     rg::PostFitPeelingResult peeling;

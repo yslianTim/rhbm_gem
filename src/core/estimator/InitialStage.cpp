@@ -30,8 +30,10 @@ InitialStageWorkset BuildInitialStageWorkset(ModelObject & model, const JointPro
         if (!atom || std::to_string(atom->GetSerialID()) != input.atom_ids[i])
             throw std::invalid_argument("Unknown joint contributor identity.");
         workset.contributors.push_back(atom);
-        const auto & targets = input.selection_domain->target_indices;
-        workset.target_mask.push_back(std::binary_search(targets.begin(), targets.end(), i));
+        const auto role=input.selection_domain->RoleOf(i);
+        if (!IsFittingTarget(role))
+            throw std::invalid_argument("Joint workset includes an External Halo.");
+        workset.roles.push_back(role);
     }
     return workset;
 }
@@ -40,7 +42,7 @@ void ApplyJointSeedFallback(JointInitialization & initialization)
 {
     std::vector<double> donors;
     for(const auto & atom:initialization.atoms)
-        if(atom.target && atom.reason=="valid-width" && atom.original_tau &&
+        if(atom.role==FittingRole::OutputTarget && atom.reason=="valid-width" && atom.original_tau &&
             std::isfinite(*atom.original_tau) && *atom.original_tau>0)
             donors.push_back(*atom.original_tau);
     std::sort(donors.begin(),donors.end());
@@ -50,11 +52,11 @@ void ApplyJointSeedFallback(JointInitialization & initialization)
     for(std::size_t i=0;i<initialization.atoms.size();++i)
     {
         auto & atom=initialization.atoms[i];
-        if(atom.target && !(std::isfinite(initialization.tau[i]) && initialization.tau[i]>0) && !donors.empty())
+        if(IsFittingTarget(atom.role) && !(std::isfinite(initialization.tau[i]) && initialization.tau[i]>0) && !donors.empty())
         {initialization.tau[i]=median; atom.seed_source="median-fallback"; atom.donor_count=donors.size();}
         const bool valid=std::isfinite(initialization.tau[i]) && initialization.tau[i]>0;
         if(valid) atom.used_tau=initialization.tau[i];
-        if(atom.target) initialization.valid &= valid;
+        if(IsFittingTarget(atom.role)) initialization.valid &= valid;
     }
     if(initialization.reason.empty())
         initialization.reason=initialization.valid ? "valid-widths" : "invalid-widths";
@@ -71,7 +73,7 @@ LocalGaussianResult FitInitialStageAtom(const AtomObject & atom, const FitOption
 JointInitialization FitInitialStageFromPreparedSamples(
     ModelObject & model, const InitialStageWorkset & workset, const FitOptions & options)
 {
-    if (workset.target_mask.size() != workset.contributors.size())
+    if (workset.roles.size() != workset.contributors.size())
         throw std::invalid_argument("InitialStage workset role count mismatch.");
     JointInitialization initialization;
     initialization.data_scope = "contributor-local-sampling-may-read-outside-target-domain";
@@ -89,7 +91,7 @@ JointInitialization FitInitialStageFromPreparedSamples(
         auto * atom = workset.contributors[index];
         auto & record = initialization.atoms[index];
         record.id = std::to_string(atom->GetSerialID());
-        record.target = workset.target_mask[index];
+        record.role = workset.roles[index];
         record.ols.fill(nan);
         record.mdpde = record.ols;
         record.alpha = nan;
@@ -153,7 +155,7 @@ JointInitialization FitInitialStageFromPreparedSamples(
                 editor.SetAtomInitialStageGaussianResult(*atom, std::move(estimates[slot]));
                 const auto view = AtomLocalPotentialView::For(*atom);
                 auto estimate = view.GetInitialStageEstimate();
-                estimate.source.role = record.target ? FittingRole::Target : FittingRole::Halo;
+                estimate.source.role = record.role;
                 editor.SetAtomInitialStageEstimate(*atom, estimate);
                 const auto & local = view.GetInitialStageGaussianResult();
                 const auto ols = local.ols.GetModel().ToVector(), mdpde = local.mdpde.GetModel().ToVector();
@@ -171,21 +173,13 @@ JointInitialization FitInitialStageFromPreparedSamples(
                         RHBMSolveQualification::Unqualified;
                 }
                 tau = local.mdpde.GetModel().GetWidth();
-                if (!record.target && record.initial_stage_qualification == RHBMSolveQualification::Unqualified)
-                {
-                    if (record.initial_stage_recovery)
-                        record.reason = "initial-stage-recovery-unqualified:" + record.initial_stage_recovery->reason;
-                    else if (record.native_status)
-                        record.reason = "initial-stage-native-unqualified:" + std::to_string(*record.native_status);
-                    else
-                        record.reason = "initial-stage-result-unavailable";
-                }
-                else record.reason = std::isfinite(tau) && tau > 0 ? "valid-width" : "invalid-width";
+                record.reason = std::isfinite(tau) && tau > 0 ? "valid-width" : "invalid-width";
             }
             catch (const std::exception & error)
             {
                 LocalStageEstimate missing;
                 missing.reason = std::string("initialization-exception: ") + error.what();
+                missing.source.role = record.role;
                 editor.SetAtomInitialStageEstimate(*atom, missing);
                 record.reason = missing.reason;
             }

@@ -1,6 +1,7 @@
 # Joint Component Estimator runtime
 
-Joint Components fits selected non-hydrogen Targets. Read
+Joint Components fits selected non-hydrogen Output Targets and up to one
+unselected non-hydrogen Buffer Target. Read
 [Numerics](joint-component-numerics.md) for the block solver and
 [Stage Integration](joint-stage-integration.md) for result publication,
 postprocessing and persistence.
@@ -23,7 +24,7 @@ The solver uses `eta = log(tau)`. Inside support,
 `dK/deta = -sqrt(2/pi)/tau * exp(-r²/(2 tau²))`, with the center branch
 using `-sqrt(2/pi)/tau`. Thus `dF/deta = tau * dF/dtau`.
 
-For observed voxel value `y_v`, the Target-only, equal-weight objective is
+For observed voxel value `y_v`, the equal-weight objective over all Fitting Targets is
 
 ```text
 F = sum_{v in V_fit} (sum_i f_i(r_vi) - y_v)² / (2 s²)
@@ -38,17 +39,23 @@ kernel coefficient units. The objective has no prior or regularization.
 ## Original and Fitting Domains
 
 The Original Domain is the union of map voxels within the inclusive 2.5 Å
-support of the selected Targets, deduplicated by global grid index. It records
+support of the Output Targets, deduplicated by global grid index. It records
 raw voxel values, atom identities and squared-distance support incidences.
-An unselected non-hydrogen atom is a Halo if it has support on these rows.
+An unselected non-hydrogen atom with support on these rows is a candidate.
+For each Output Target, Buffer Expansion divides the number of core voxels
+blocked only by a candidate by the full number of core voxels within 0.5 Å,
+then sums the fractions across Output Targets. A candidate needs a positive
+score, at least three singly blocked support voxels and distinct squared
+distances under the relative comparison tolerance. Tied scores use ascending
+atom serial order. The highest scoring eligible candidate becomes the Buffer.
 
-Pure Halo-Support Exclusion removes every Original row with recorded Halo
-support, including the `r² = 6.25 Å²` boundary. The retained observations form
-the Fitting Domain with compact Target and row indices mapped back to the
-Original Domain. Fitting uses the retained raw `y_v` directly. Halo supplies
-the geometric mask and has no Joint coefficients or gradients. The builder
-rejects an empty Fitting Domain or a Target that loses all support. The
-Original Domain remains available for postprocessing.
+All rows touched by an External Halo are excluded, including the support
+boundary at `r² = 6.25 Å²`. Rows with zero blockers stay available, and only the
+chosen Buffer's singly blocked rows are recovered. The Fitting Domain uses
+compact contributor and row indices mapped to the Original Domain. Fitting
+reads the retained voxel values directly and estimates coefficients only for
+Output and Buffer Targets. The builder rejects an empty Fitting Domain or a
+Fitting Target without support after expansion.
 
 ## Structural components
 
@@ -67,14 +74,14 @@ remain unavailable. There is no assembly-wide A/C reprofile.
 
 ## Initialization and global width bound
 
-The workflow obtains Target width seeds through
+The workflow obtains Output and Buffer width seeds through
 [InitialStage](joint-stage-integration.md#initialstage).
 Native InitialStage OLS/MDPDE diagnostics supply initialization evidence.
 The published InitialStage point and the JointStage endpoint have independent
 records. Per-atom qualification and recovery accompany the Joint snapshot.
 Calibration uses finite positive native-qualified or recovered-qualified
-Target MDPDE widths, excluding median fallbacks and initialization exceptions.
-It requires at least 20 qualified donors and at least 95% Target coverage.
+Output Target MDPDE widths, excluding median fallbacks and initialization exceptions.
+It requires at least 20 qualified donors and at least 95% Output coverage.
 Calibration computes `q50 = median(donor widths)` with
 `array_helper::ComputeMedian()`. The upper bound is `tau_max = 4 × q50`.
 Map-backed fitting also uses `tau_min = 0.25 × h` on an orthogonal grid with
@@ -85,7 +92,7 @@ of the map's stored cell lengths. Use the smallest spacing as `h`. Other grids
 and geometry-free initialized fits use the upper bound alone, with the reason
 recorded in `global-width-lower-bound` evidence.
 All components use the same log-width interval for bounded LM, projected Width
-KKT, Endpoint Verification and Independent Replay. Only the working Target
+KKT, Endpoint Verification and Independent Replay. Working Fitting Target
 seeds are projected into the interval. The original initialization and
 InitialStage evidence are retained. An invalid or unavailable required bound
 prevents Joint search. A saved lower-bound fit records the spacing, floor,
@@ -171,9 +178,10 @@ diagnostics alone cannot qualify an endpoint.
 workspace for problem and structural construction, BCD preparation, global
 streaming evaluation, endpoint verification and Local Conditioning. It
 accounts for support incidence, affected rows, mapping storage and largest
-block workspace. Production preflights enforce the 3,200,000,000-byte
-planning budget. The header also declares a 4,000,000,000-byte hard estimate
-constant, currently unused by the planner. Observed RSS is a separate
+block workspace. Construction includes both snapshots, the maximum
+additional support for one Buffer, and selection scratch for blockers and
+scores. Production preflights use a 3,200,000,000-byte planning budget with
+a 4,000,000,000-byte ceiling on estimates. Observed RSS is a separate
 measurement. Overflow or over-budget stages can fail
 preflight before allocation. Global evaluation streams support entries
 without global design factors or global covariance. Local factors and

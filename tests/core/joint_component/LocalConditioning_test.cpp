@@ -112,7 +112,7 @@ TEST(JointLocalConditioningTest, IllConditioningWarnsOnPointQualityWithoutChangi
     input.observations.assign(5,0.0);
     input.support={{{0,.1},{1,.5},{2,1.0},{3,1.5},{4,2.0}},
         {{0,.1+1e-8},{1,.5-1e-8},{2,1.0+1e-8},{3,1.5-1e-8},{4,2.0+1e-8}}};
-    input.selection_domain.emplace(); input.selection_domain->target_indices={0,1};
+    input.selection_domain.emplace(); input.selection_domain->output_indices={0,1};
     const rhbm_gem::core::JointProblem problem(std::move(input));
     rhbm_gem::JointState state; state.ac={1.0,.2,1.4,-.1}; state.tau={.7,.7};
     state.log_tau={std::log(.7),std::log(.7)}; state.eta_gradient={0.,0.}; state.objective=0.;

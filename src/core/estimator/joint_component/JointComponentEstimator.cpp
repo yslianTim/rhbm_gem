@@ -1,5 +1,6 @@
 #include "core/estimator/joint_component/JointComponentEstimator.hpp"
 #include "core/estimator/joint_component/Problem.hpp"
+#include "core/estimator/joint_component/BufferExpansion.hpp"
 #include "core/estimator/joint_component/WidthCalibration.hpp"
 #include "core/estimator/InitialStage.hpp"
 #include "core/command/detail/SimulationGeometry.hpp"
@@ -7,6 +8,7 @@
 
 #include "core/estimator/GaussianEstimator.hpp"
 #include <rhbm_gem/utils/math/EigenHelper.hpp>
+#include <rhbm_gem/utils/domain/Logger.hpp>
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/AtomLocalPotentialView.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
@@ -389,11 +391,21 @@ JointProblem JointProblem::WithReconstructionDomain(
         fitting_to_original_contributors.size()!=fitting.atom_ids.size() ||
         fitting_to_original_rows.size()!=fitting.row_ids.size())
         throw std::invalid_argument("Invalid Joint reconstruction domain dimensions.");
+    const auto & selection=original.selection_domain;
+    if (fitting.selection_domain && fitting.selection_domain->contributor_policy==BufferExpansionContributorPolicy &&
+        (!selection || !selection->IsValid(original.atom_ids.size()) ||
+        selection->contributor_policy!=BufferExpansionContributorPolicy ||
+        !selection->MatchesFittingContributors(fitting_to_original_contributors) ||
+        fitting.selection_domain->FittingCount()!=fitting.atom_ids.size()))
+        throw std::invalid_argument("Invalid Joint reconstruction contributor roles.");
     for (std::size_t atom=0;atom<fitting.atom_ids.size();++atom)
     {
         const auto original_atom=fitting_to_original_contributors[atom];
         if (original_atom>=original.atom_ids.size() || fitting.atom_ids[atom]!=original.atom_ids[original_atom])
             throw std::invalid_argument("Invalid fitting-to-original contributor mapping.");
+        if (selection && fitting.selection_domain &&
+            selection->RoleOf(original_atom)!=fitting.selection_domain->RoleOf(atom))
+            throw std::invalid_argument("Fitting-to-original contributor roles disagree.");
     }
     for (std::size_t row=0;row<fitting.row_ids.size();++row)
     {
@@ -421,8 +433,8 @@ namespace {
 struct SelectedObservationClosure
 {
     JointProblemInput original;
-    std::vector<std::size_t> target_indices;
-    std::size_t candidate_halos{},retained_halos{},zero_support_halos{};
+    std::vector<std::size_t> output_indices;
+    std::size_t non_output_candidates{};
 };
 
 SelectedObservationClosure BuildSelectedObservationClosure(const MapObject & map,const ModelObject & model)
@@ -464,31 +476,21 @@ SelectedObservationClosure BuildSelectedObservationClosure(const MapObject & map
     std::sort(rows.begin(),rows.end()); rows.erase(std::unique(rows.begin(),rows.end()),rows.end());
     const auto target_bounds=BoundsForRows(map,rows);
 
-    std::size_t contributors=selected.size(),support_entries{},target_support_entries{},maximum_atom_support{};
-    std::size_t candidate_halos{},retained_halos{},zero_support_halos{};
+    std::size_t contributors=selected.size(),support_entries{},target_support_entries{};
+    std::size_t maximum_atom_support{},maximum_halo_support{};
     std::vector<std::size_t> atom_support_counts;
     atom_support_counts.reserve(atoms.size());
     for(const auto * atom:atoms)
     {
         const bool selected_target=selected.contains(atom);
-        if(!selected_target && !n::CheckedAddBytes(candidate_halos,1,candidate_halos))
-            throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
         std::size_t memberships{};
-        if(!selected_target && !MayOverlapTargetRows(*atom,target_bounds))
-        {
-            if(!n::CheckedAddBytes(zero_support_halos,1,zero_support_halos))
-                throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
-        }
-        else
+        if(selected_target || MayOverlapTargetRows(*atom,target_bounds))
         {
             VisitSupport(map,*atom,[&](auto index,double) {
                 if(std::binary_search(rows.begin(),rows.end(),index) &&
                     !n::CheckedAddBytes(memberships,1,memberships))
                     throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
             });
-            if(!selected_target && memberships==0 &&
-                !n::CheckedAddBytes(zero_support_halos,1,zero_support_halos))
-                throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
         }
         atom_support_counts.push_back(memberships);
         maximum_atom_support=std::max(maximum_atom_support,memberships);
@@ -499,30 +501,40 @@ SelectedObservationClosure BuildSelectedObservationClosure(const MapObject & map
                 throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
             continue;
         }
-        if(memberships>0 && (!n::CheckedAddBytes(retained_halos,1,retained_halos) ||
-            !n::CheckedAddBytes(contributors,1,contributors) ||
-            !n::CheckedAddBytes(support_entries,memberships,support_entries)))
-            throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
+        if(memberships>0)
+        {
+            maximum_halo_support=std::max(maximum_halo_support,memberships);
+            if(!n::CheckedAddBytes(contributors,1,contributors) ||
+                !n::CheckedAddBytes(support_entries,memberships,support_entries))
+                throw std::runtime_error("resource-limit:build-joint-problem:size-overflow");
+        }
     }
     n::MemoryShape shape; shape.problem_scope=true; shape.component_atoms=selected.size();
     shape.component_observations=rows.size(); shape.component_support_entries=support_entries;
     std::size_t free_columns{};
-    if(!n::CheckedMultiplyBytes(selected.size(),2,free_columns))
+    std::size_t fitting_atoms{},fitting_support_entries{};
+    const auto buffer_scratch=maximum_halo_support ? n::EstimateBufferSelectionScratchBytes(rows.size(),contributors) :
+        std::optional<std::size_t>{0};
+    if(!buffer_scratch ||
+        !n::CheckedAddBytes(selected.size(),static_cast<std::size_t>(maximum_halo_support!=0),fitting_atoms) ||
+        !n::CheckedAddBytes(target_support_entries,maximum_halo_support,fitting_support_entries) ||
+        !n::CheckedMultiplyBytes(fitting_atoms,2,free_columns))
         RejectBuildPreflight(shape,"size-overflow");
+    shape.component_atoms=fitting_atoms;
     shape.component_free_columns=free_columns;
-    std::size_t planned_snapshot{};
+    std::size_t planned_snapshot=*buffer_scratch;
     std::size_t identity_characters{},identity_scratch{},identity_map_entries{};
     const auto identity_node=sizeof(std::string)+4*sizeof(void *)+32;
     if(!AddEstimatedBytes(identity_characters,contributors,32) || !AddEstimatedBytes(identity_characters,rows.size(),32) ||
         !AddEstimatedBytes(identity_scratch,rows.size(),identity_node+32) ||
         !AddEstimatedBytes(identity_scratch,contributors,2*sizeof(std::string)+identity_node+64) ||
         !AddEstimatedBytes(identity_scratch,maximum_atom_support,sizeof(std::size_t)+4*sizeof(void *)+32) ||
-        !n::CheckedAddBytes(contributors,selected.size(),identity_map_entries) ||
+        !n::CheckedAddBytes(contributors,fitting_atoms,identity_map_entries) ||
         !AddEstimatedBytes(planned_snapshot,identity_characters,2*sizeof(char)))
         RejectBuildPreflight(shape,"size-overflow");
     std::size_t all_support_entries{},all_identity_entries{};
-    if(!n::CheckedAddBytes(support_entries,target_support_entries,all_support_entries) ||
-        !n::CheckedAddBytes(contributors,selected.size(),all_identity_entries))
+    if(!n::CheckedAddBytes(support_entries,fitting_support_entries,all_support_entries) ||
+        !n::CheckedAddBytes(contributors,fitting_atoms,all_identity_entries))
         RejectBuildPreflight(shape,"size-overflow");
     shape.identity_validation_bytes=identity_scratch;
     if(!AddEstimatedBytes(planned_snapshot,rows.size(),2*sizeof(double)) ||
@@ -530,11 +542,11 @@ SelectedObservationClosure BuildSelectedObservationClosure(const MapObject & map
         !AddEstimatedBytes(planned_snapshot,all_identity_entries,sizeof(std::string)) ||
         !AddEstimatedBytes(planned_snapshot,rows.size(),2*sizeof(std::string)) ||
         !AddEstimatedBytes(planned_snapshot,all_support_entries,sizeof(JointSupport)) ||
-        !AddEstimatedBytes(planned_snapshot,selected.size(),sizeof(std::size_t)) ||
+        !AddEstimatedBytes(planned_snapshot,fitting_atoms,3*sizeof(std::size_t)) ||
         !AddEstimatedBytes(planned_snapshot,rows.size(),2*sizeof(std::size_t)) ||
         !AddEstimatedBytes(planned_snapshot,rows.size(),sizeof(std::uint8_t)) ||
-        !AddEstimatedBytes(planned_snapshot,selected.size(),sizeof(std::vector<n::LocalSupportIndex>)) ||
-        !AddEstimatedBytes(planned_snapshot,target_support_entries,sizeof(n::LocalSupportIndex)) ||
+        !AddEstimatedBytes(planned_snapshot,fitting_atoms,sizeof(std::vector<n::LocalSupportIndex>)) ||
+        !AddEstimatedBytes(planned_snapshot,fitting_support_entries,sizeof(n::LocalSupportIndex)) ||
         !AddEstimatedBytes(planned_snapshot,identity_map_entries,sizeof(std::size_t)) ||
         !n::CheckedAddBytes(planned_snapshot,builder_resident,planned_snapshot))
         RejectBuildPreflight(shape,"size-overflow");
@@ -543,8 +555,15 @@ SelectedObservationClosure BuildSelectedObservationClosure(const MapObject & map
         n::JointMemoryPlanningBudgetBytes);
     if(build_estimate.status!=n::MemoryStatus::Pass)
         RejectBuildPreflight(shape,build_estimate.reason.c_str());
+    if(Logger::GetLogLevel()==LogLevel::Debug) n::LogMemoryEstimate(build_estimate);
 
+    input.row_ids.reserve(rows.size());
+    input.observations.reserve(rows.size());
+    input.atom_ids.reserve(contributors);
+    input.support.reserve(contributors);
+    closure.output_indices.reserve(selected.size());
     for(auto index:rows) {input.row_ids.push_back(std::to_string(index)); input.observations.push_back(map.GetMapValue(index));}
+    int previous_serial{};
     for(std::size_t atom_index=0;atom_index<atoms.size();++atom_index)
     {
         const auto * atom=atoms[atom_index];
@@ -560,72 +579,90 @@ SelectedObservationClosure BuildSelectedObservationClosure(const MapObject & map
         });
         if(selected_target || !support.empty())
         {
-            if(selected_target) closure.target_indices.push_back(input.atom_ids.size());
-            input.atom_ids.push_back(std::to_string(atom->GetSerialID()));
+            const auto serial=atom->GetSerialID();
+            if(serial<=previous_serial)
+                throw std::invalid_argument("Invalid or duplicate Joint contributor serial ID.");
+            previous_serial=serial;
+            if(selected_target) closure.output_indices.push_back(input.atom_ids.size());
+            input.atom_ids.push_back(std::to_string(serial));
             input.support.push_back(std::move(support));
         }
     }
-    closure.candidate_halos=candidate_halos;
-    closure.retained_halos=retained_halos;
-    closure.zero_support_halos=zero_support_halos;
+    closure.non_output_candidates=atoms.size()-selected.size();
     return closure;
 }
 }
 
-JointProblem BuildPureHaloSupportExclusionProblem(const MapObject & map,const ModelObject & model)
+JointProblem BuildJointProblem(const MapObject & map,const ModelObject & model)
 {
     auto closure=BuildSelectedObservationClosure(map,model);
-    const auto & source=closure.original;
-    const auto & targets=closure.target_indices;
-    std::vector<bool> retained(source.observations.size(),true);
-    for (std::size_t atom=0;atom<source.support.size();++atom)
-    {
-        if (std::binary_search(targets.begin(),targets.end(),atom)) continue;
-        for (const auto & support:source.support[atom])
-        {
-            if (support.row>=retained.size()) throw std::invalid_argument("Invalid Halo support incidence.");
-            retained[support.row]=false;
-        }
-    }
+    auto & original=closure.original;
+    const auto selection_start=Clock::now();
+    auto expansion=n::SelectBuffer(original,closure.output_indices);
+    const double selection_seconds=Seconds(selection_start);
+    const auto & retained=expansion.retained_rows;
     const auto retained_count=static_cast<std::size_t>(std::count(retained.begin(),retained.end(),true));
-    if (!retained_count) throw std::invalid_argument("Pure Halo exclusion leaves an empty fitting domain.");
+    if (!retained_count) throw std::invalid_argument("External Halo exclusion leaves an empty fitting domain.");
+
+    auto & original_domain=original.selection_domain.emplace();
+    original_domain.contributor_policy=std::string(BufferExpansionContributorPolicy);
+    original_domain.output_indices=std::move(closure.output_indices);
+    if(expansion.buffer) original_domain.buffer_indices.push_back(*expansion.buffer);
+    const auto buffer_count=original_domain.buffer_indices.size();
+    const auto fitting_count=original_domain.FittingCount();
+    const auto excluded_count=original.observations.size()-retained_count;
+    const auto overlapping_non_outputs=original.atom_ids.size()-original_domain.output_indices.size();
+    original_domain.buffer_expansion=JointBufferExpansionProvenance{
+        original.observations.size(),retained_count,excluded_count,closure.non_output_candidates,
+        original.atom_ids.size()-fitting_count,closure.non_output_candidates-overlapping_non_outputs,
+        expansion.recovered_rows};
+
     JointProblemInput fitting;
-    fitting.selection_domain.emplace();
-    fitting.selection_domain->contributor_policy=std::string(PureHaloSupportExclusionContributorPolicy);
-    fitting.selection_domain->pure_halo_support_exclusion=JointPureHaloSupportExclusionProvenance{
-        source.observations.size(),retained_count,source.observations.size()-retained_count,0,0,0};
+    auto & fitting_domain=fitting.selection_domain.emplace();
+    fitting_domain.contributor_policy=std::string(BufferExpansionContributorPolicy);
+    fitting_domain.buffer_expansion=JointBufferExpansionProvenance{
+        original.observations.size(),retained_count,excluded_count,buffer_count,0,0,expansion.recovered_rows};
+
     std::vector<std::size_t> fitting_rows;
     fitting_rows.reserve(retained_count);
-    std::vector<std::size_t> original_to_fitting(source.observations.size(),std::numeric_limits<std::size_t>::max());
+    fitting.row_ids.reserve(retained_count);
+    fitting.observations.reserve(retained_count);
+    std::vector<std::size_t> original_to_fitting(original.observations.size(),std::numeric_limits<std::size_t>::max());
     for (std::size_t row=0;row<retained.size();++row) if (retained[row])
     {
         original_to_fitting[row]=fitting_rows.size();
         fitting_rows.push_back(row);
-        fitting.row_ids.push_back(source.row_ids[row]);
-        fitting.observations.push_back(source.observations[row]);
+        fitting.row_ids.push_back(original.row_ids[row]);
+        fitting.observations.push_back(original.observations[row]);
     }
-    fitting.atom_ids.reserve(targets.size());
-    fitting.support.reserve(targets.size());
-    fitting.selection_domain->target_indices.resize(targets.size());
-    std::iota(fitting.selection_domain->target_indices.begin(),fitting.selection_domain->target_indices.end(),0);
-    for (const auto original_atom:targets)
+    std::vector<std::size_t> fitting_to_original_contributors;
+    fitting_to_original_contributors.reserve(fitting_count);
+    fitting.atom_ids.reserve(fitting_count);
+    fitting.support.reserve(fitting_count);
+    fitting_domain.output_indices.reserve(original_domain.output_indices.size());
+    fitting_domain.buffer_indices.reserve(buffer_count);
+    for (std::size_t atom=0;atom<original.atom_ids.size();++atom)
     {
-        fitting.atom_ids.push_back(source.atom_ids[original_atom]);
-        std::vector<JointSupport> support;
-        support.reserve(source.support[original_atom].size());
-        for (const auto entry:source.support[original_atom]) if (retained[entry.row])
+        const auto role=original_domain.RoleOf(atom);
+        if(!IsFittingTarget(role)) continue;
+        auto & indices=role==FittingRole::OutputTarget ? fitting_domain.output_indices : fitting_domain.buffer_indices;
+        indices.push_back(fitting.atom_ids.size());
+        fitting_to_original_contributors.push_back(atom);
+        fitting.atom_ids.push_back(original.atom_ids[atom]);
+        auto & support=fitting.support.emplace_back();
+        support.reserve(original.support[atom].size());
+        for (const auto entry:original.support[atom]) if (retained[entry.row])
             support.push_back({original_to_fitting[entry.row],entry.squared_distance});
-        if (support.empty()) throw std::invalid_argument("Pure Halo exclusion removes all observations for a Target.");
-        fitting.support.push_back(std::move(support));
+        if (support.empty()) throw std::invalid_argument("External Halo exclusion removes all observations for a Fitting Target.");
     }
-    auto original=std::move(closure.original);
-    original.selection_domain.emplace();
-    original.selection_domain->contributor_policy=std::string(PureHaloSupportExclusionContributorPolicy);
-    original.selection_domain->target_indices=targets;
-    original.selection_domain->pure_halo_support_exclusion=JointPureHaloSupportExclusionProvenance{
-        original.observations.size(),retained_count,original.observations.size()-retained_count,
-        closure.candidate_halos,closure.retained_halos,closure.zero_support_halos};
-    std::vector<std::size_t> fitting_to_original_contributors=targets;
+    if(Logger::GetLogLevel()==LogLevel::Debug)
+    {
+        const auto buffer_support=buffer_count ? fitting.support[fitting_domain.buffer_indices.front()].size() : 0;
+        Logger::Log(LogLevel::Debug,"[Joint] Buffer Expansion | elapsed="+std::to_string(selection_seconds)+
+            "s | original_incidence="+std::to_string(*n::CountSupportEntries(original))+
+            " | fitting_incidence="+std::to_string(*n::CountSupportEntries(fitting))+
+            " | buffer_support="+std::to_string(buffer_support));
+    }
     return JointProblem(std::move(fitting)).WithReconstructionDomain(
         std::move(original),std::move(fitting_to_original_contributors),std::move(fitting_rows));
 }
@@ -649,13 +686,14 @@ JointFitResult detail::FitJointComponentsInitializedWithProgress(
         return out;
     };
     if(!input.selection_domain ||
-        input.selection_domain->contributor_policy!=PureHaloSupportExclusionContributorPolicy)
-        return invalid("joint-initialization-unavailable:missing-pure-exclusion-policy");
+        input.selection_domain->contributor_policy!=BufferExpansionContributorPolicy)
+        return invalid("joint-initialization-unavailable:missing-buffer-expansion-policy");
     if(initialization.atoms.size()!=input.atom_ids.size() || initialization.tau.size()!=input.atom_ids.size())
         return invalid("joint-initialization-unavailable:target-mapping-mismatch");
     if(!initialization.valid) return invalid(initialization.reason);
     for(std::size_t atom=0;atom<input.atom_ids.size();++atom)
-        if(initialization.atoms[atom].id!=input.atom_ids[atom] || !initialization.atoms[atom].target)
+        if(initialization.atoms[atom].id!=input.atom_ids[atom] ||
+            initialization.atoms[atom].role!=input.selection_domain->RoleOf(atom))
             return invalid("joint-initialization-unavailable:target-mapping-mismatch");
 
     const auto calibration=joint_component::CalibrateGlobalWidth(initialization);
@@ -682,7 +720,7 @@ JointFitResult detail::FitJointComponentsInitializedWithProgress(
             std::to_string(calibration.qualified_donor_count)+"/"+std::to_string(calibration.target_count)});
     out.evidence.push_back({"qualified-initial-stage-donor-coverage",JointCheckStatus::Passed,
         JointEvidenceScope::AssembledGlobal,calibration.qualified_donor_coverage,0.95,
-        "target-only-qualified-initial-stage-widths"});
+        "output-only-qualified-initial-stage-widths"});
     out.evidence.push_back({"bounded-initialization-projection",JointCheckStatus::Passed,
         JointEvidenceScope::AssembledGlobal,static_cast<double>(bounded.projection_count),{},
         "projected-target-widths="+std::to_string(bounded.projection_count)+
@@ -693,7 +731,7 @@ JointFitResult detail::FitJointComponentsInitializedWithProgress(
             JointEvidenceScope::AssembledGlobal,width_grid.spacing,tau_min,"isotropic-voxel-spacing-k0.25"});
         out.evidence.push_back({"lower-bound-initialization-projection",JointCheckStatus::Passed,
             JointEvidenceScope::AssembledGlobal,static_cast<double>(bounded.lower_projection_count),{},
-            "target-only-width-seeds"});
+            "fitting-target-width-seeds"});
     }
     else
         out.evidence.push_back({"global-width-lower-bound",JointCheckStatus::NotRun,
@@ -817,8 +855,8 @@ JointAnalysisResult CaptureJointAnalysisResultImpl(Fit && fit,JointAnalysisMetad
     if (!fit.problem) throw std::invalid_argument("Cannot capture joint result without problem identities.");
     const auto & fitting_input=fit.problem->Input();
     const auto & original_input=fit.problem->OriginalInput();
-    const bool pure_exclusion_policy=fitting_input.selection_domain &&
-        fitting_input.selection_domain->contributor_policy==PureHaloSupportExclusionContributorPolicy;
+    const bool buffer_expansion_policy=fitting_input.selection_domain &&
+        fitting_input.selection_domain->contributor_policy==BufferExpansionContributorPolicy;
     const auto captured_runtime=fit.RuntimeConvergence();
     const auto captured_target_runtime=fit.TargetRuntimeConvergence();
     if constexpr(std::is_rvalue_reference_v<Fit &&>) fit.prediction.reset();
@@ -829,12 +867,12 @@ JointAnalysisResult CaptureJointAnalysisResultImpl(Fit && fit,JointAnalysisMetad
     out.metadata=std::move(metadata);
     if(!fit.solver_provenance.search_method.empty())
         out.metadata.solver=CaptureTransfer<Fit>(fit.solver_provenance);
-    out.atom_ids=pure_exclusion_policy ? original_input.atom_ids : fitting_input.atom_ids;
-    out.row_ids=pure_exclusion_policy ? original_input.row_ids : fitting_input.row_ids;
-    out.selection_domain=pure_exclusion_policy ? original_input.selection_domain : fitting_input.selection_domain;
-    if(pure_exclusion_policy)
+    out.atom_ids=buffer_expansion_policy ? original_input.atom_ids : fitting_input.atom_ids;
+    out.row_ids=buffer_expansion_policy ? original_input.row_ids : fitting_input.row_ids;
+    out.selection_domain=buffer_expansion_policy ? original_input.selection_domain : fitting_input.selection_domain;
+    if(buffer_expansion_policy)
     {
-        out.parameterization_contract=std::string(JointPureHaloSupportExclusionParameterizationContract);
+        out.parameterization_contract=std::string(JointBufferExpansionParameterizationContract);
         out.fitting_row_ids=fitting_input.row_ids;
         out.fitting_to_original_contributors=fit.problem->FittingToOriginalContributors();
         out.fitting_to_original_rows=fit.problem->FittingToOriginalRows();
@@ -847,7 +885,7 @@ JointAnalysisResult CaptureJointAnalysisResultImpl(Fit && fit,JointAnalysisMetad
         const auto target_runtime=component.TargetRuntimeConvergence();
         JointAnalysisComponent saved;
         static_cast<JointComponentData &>(saved)=CaptureTransfer<Fit>(component);
-        if(pure_exclusion_policy)
+        if(buffer_expansion_policy)
             RemapComponentForOriginalDomain(saved,fit.problem->FittingToOriginalContributors(),
                 fit.problem->FittingToOriginalRows());
         saved.runtime_convergence=runtime;
@@ -855,16 +893,16 @@ JointAnalysisResult CaptureJointAnalysisResultImpl(Fit && fit,JointAnalysisMetad
         out.components.push_back(std::move(saved));
     }
     out.assembled_state=CaptureTransfer<Fit>(fit.assembled_state); out.objective=fit.objective;
-    if(pure_exclusion_policy)
+    if(buffer_expansion_policy)
     {
         out.available_row_mask.assign(original_input.row_ids.size(),false);
         if(fit.available_row_mask.size()!=fit.problem->FittingToOriginalRows().size())
-            throw std::invalid_argument("Invalid Pure Exclusion fitting row mask.");
+            throw std::invalid_argument("Invalid Joint fitting row mask.");
         for(std::size_t row=0;row<fit.available_row_mask.size();++row)
         {
             const auto original_row=fit.problem->FittingToOriginalRows()[row];
             if(original_row>=out.available_row_mask.size())
-                throw std::invalid_argument("Invalid Pure Exclusion fitting row mapping.");
+                throw std::invalid_argument("Invalid Joint fitting row mapping.");
             out.available_row_mask[original_row]=fit.available_row_mask[row];
         }
     }
@@ -873,7 +911,7 @@ JointAnalysisResult CaptureJointAnalysisResultImpl(Fit && fit,JointAnalysisMetad
     out.search_completed=fit.search_completed; out.observation_scale=fit.observation_scale;
     out.runtime_convergence=captured_runtime;
     out.target_evidence=CaptureTransfer<Fit>(fit.target_evidence);
-    if(pure_exclusion_policy)
+    if(buffer_expansion_policy)
         RemapTargetEvidence(out.target_evidence,fit.problem->FittingToOriginalContributors(),original_input.row_ids.size());
     out.target_runtime_convergence=captured_target_runtime;
     return out;
@@ -891,20 +929,21 @@ JointInitialization joint_component::InitializeContributors(MapObject & map,Mode
     const auto initialization = detail::RunInitialStage(map, initializer, workset, options);
     for (std::size_t i = 0; i < workset.contributors.size(); ++i)
     {
-        if (!workset.target_mask[i] || initialization.atoms[i].reason != "valid-width") continue;
+        if (initialization.atoms[i].reason != "valid-width") continue;
         const auto * source = workset.contributors[i];
         const auto * target = model.FindAtomPtr(source->GetSerialID());
         const auto view = AtomLocalPotentialView::For(*source);
         model.EditAnalysis().SetAtomLocalSamplingEntries(*target, view.GetSamplingEntriesView());
         model.EditAnalysis().SetAtomInitialStageGaussianResult(*target,
             view.GetInitialStageGaussianResult());
+        model.EditAnalysis().SetAtomInitialStageEstimate(*target,view.GetInitialStageEstimate());
     }
     return initialization;
 }
 JointFitResult EstimateJointComponents(MapObject & map,ModelObject & model)
 {
     const auto construction_start=Clock::now();
-    const auto problem=BuildPureHaloSupportExclusionProblem(map,model);
+    const auto problem=BuildJointProblem(map,model);
     const double construction_seconds=Seconds(construction_start);
     const auto initialization_start=Clock::now();
     auto initialization=n::InitializeContributors(map,model,problem);

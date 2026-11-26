@@ -19,7 +19,7 @@ JointInitialization QualifiedInitialization(std::size_t count)
         const double width=static_cast<double>(i+1);
         initialization.tau.push_back(width);
         JointInitializationAtom atom;
-        atom.id=std::to_string(i+1); atom.target=true;
+        atom.id=std::to_string(i+1); atom.role=rhbm_gem::FittingRole::OutputTarget;
         atom.mdpde={1.0,width,0.0};
         atom.original_tau=width; atom.seed_source="fitted";
         atom.native_status=static_cast<int>(RHBMEstimationStatus::SUCCESS);
@@ -34,7 +34,7 @@ JointInitialization QualifiedInitialization(std::size_t count)
 TEST(WidthCalibrationTest, SelectsOnlyQualifiedTargetInitialStageWidths)
 {
     auto input=QualifiedInitialization(121);
-    input.atoms[0].target=false;
+    input.atoms[0].role=rhbm_gem::FittingRole::ExternalHalo;
     input.atoms[1].initial_stage_qualification=RHBMSolveQualification::Unqualified;
     input.atoms[2].seed_source="median-fallback";
     for(const auto i:{3u,7u})

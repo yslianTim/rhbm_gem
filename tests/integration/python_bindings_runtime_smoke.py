@@ -253,8 +253,9 @@ def assert_joint_workflow() -> None:
         export.output_dir = root
         assert m.RunCommand(export).succeeded
         saved = json.loads((root / "joint_result_model.json").read_text())
-        assert saved["schema_version"] == 25
-        assert saved["selection_domain"]["target_indices"] == list(range(25))
+        assert saved["schema_version"] == 26
+        assert saved["selection_domain"]["output_indices"] == list(range(25))
+        assert saved["selection_domain"]["buffer_indices"] == []
         assert saved["atom_ids"] == [str(index) for index in range(1, 26)]
         assert saved["metadata"]["model_sha256"] == model_hash
         assert saved["metadata"]["map_sha256"] == map_hash
@@ -265,7 +266,7 @@ def assert_joint_workflow() -> None:
         assert len(saved["metadata"]["software"]["build_sha256"]) == 64
         assert "regular_certificate" not in saved
         assert all("regular_certificate" not in component for component in saved["components"])
-        assert saved["parameterization_contract"] == "target-only-pure-halo-support-exclusion-v1"
+        assert saved["parameterization_contract"] == "fixed-output-domain-buffer-expansion-v1"
         assert saved["assembled_state"] is not None
         assert "fixed_halos" not in saved
         if saved["halo_median_reconstruction"] is not None:

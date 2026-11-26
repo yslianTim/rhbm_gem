@@ -13,7 +13,6 @@
 namespace rhbm_gem {
 
 enum class EstimateMethod { Unspecified = 0, LocalMDPDE = 1, JointComponents = 3 };
-enum class FittingRole { NotRecorded, Target, Halo };
 
 struct EstimateSource
 {

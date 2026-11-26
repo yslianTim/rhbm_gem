@@ -22,7 +22,6 @@ struct JointPeelingContributor
     int atom_id{};
     std::array<double,3> position{};
     std::size_t contributor_index{};
-    bool target{};
     bool reconstruction_eligible{};
 };
 

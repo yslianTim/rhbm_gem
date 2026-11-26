@@ -46,7 +46,7 @@ struct JointAnalysisComponent : JointComponentData
 // audit/restart bundle. Convergence is captured and never inferred by storage.
 struct JointAnalysisResult
 {
-    std::string parameterization_contract{JointPureHaloSupportExclusionParameterizationContract};
+    std::string parameterization_contract{JointBufferExpansionParameterizationContract};
     JointAnalysisMetadata metadata;
     std::vector<std::string> atom_ids, row_ids;
     std::vector<std::string> fitting_row_ids;

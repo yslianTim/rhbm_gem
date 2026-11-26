@@ -46,7 +46,7 @@ void ExpectOracle(Fixture & f)
             else
             {
                 const GeometryLocalTargetDonorIndex index(f.halos.target_donors);
-                const auto median=GeometryLocalTargetMedian(index.Query(atom->GetPositionRef()));
+                const auto median=GeometryLocalFittingMedian(index.Query(atom->GetPositionRef()));
                 point=GaussianModel3D{median[0],median[1],median[2]};
             }
             response-=Response(point,std::sqrt(square));
@@ -118,7 +118,8 @@ TEST(PostJointQScoreTest, InclusiveSampleSupportAndDistantNeighborsAndHydrogen)
             {{0,0,-3.2},{2,.6,.1},false},{{.8,0,0},{2,.6,10},false,true}});
         ExpectOracle(f);
         EXPECT_EQ(f.results.front().second.contributor_count,2u);
-        EXPECT_EQ(f.results.front().second.halo_count,2u);
+        EXPECT_EQ(f.results.front().second.halo_count,z==2.5 ? 1u : 2u);
+        EXPECT_EQ(f.metrics.qscore_targets,1u);
         EXPECT_TRUE(f.results.front().second.extra_halos.empty());
     }
 }

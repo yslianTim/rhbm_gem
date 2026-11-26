@@ -122,7 +122,7 @@ RowMask HaloSupportExclusionRows(const rhbm_gem::core::JointProblemInput & input
         throw std::invalid_argument("Invalid original joint observation domain.");
 
     RowMask retained(input.observations.size(), 1);
-    const auto & targets = input.selection_domain->target_indices;
+    const auto & targets = input.selection_domain->output_indices;
     for (std::size_t contributor = 0; contributor < input.support.size(); ++contributor)
     {
         if (std::binary_search(targets.begin(), targets.end(), contributor)) continue;
@@ -186,7 +186,7 @@ MaskedInput BuildMaskedInput(const rhbm_gem::core::JointProblemInput & source,
     if (input.observations.empty())
         throw std::invalid_argument("Masked fitting domain contains no observations.");
 
-    const auto & targets = source.selection_domain->target_indices;
+    const auto & targets = source.selection_domain->output_indices;
     std::vector<bool> is_target(source.atom_ids.size());
     for (const auto target : targets) is_target.at(target) = true;
     std::vector<std::size_t> source_to_masked(source.atom_ids.size(), std::numeric_limits<std::size_t>::max());
@@ -205,7 +205,7 @@ MaskedInput BuildMaskedInput(const rhbm_gem::core::JointProblemInput & source,
     }
 
     input.selection_domain.emplace();
-    input.selection_domain->target_indices.reserve(targets.size());
+    input.selection_domain->output_indices.reserve(targets.size());
     for (const auto target : targets)
     {
         if (source.support.at(target).size() == 0 ||
@@ -213,7 +213,7 @@ MaskedInput BuildMaskedInput(const rhbm_gem::core::JointProblemInput & source,
                 [&](const auto & edge) { return retained_rows[edge.row] != 0; }))
             throw std::invalid_argument("Masked fitting domain leaves target without observations: " +
                 source.atom_ids.at(target));
-        input.selection_domain->target_indices.push_back(source_to_masked.at(target));
+        input.selection_domain->output_indices.push_back(source_to_masked.at(target));
     }
     return result;
 }
@@ -222,10 +222,10 @@ CoverageSummary AnalyzeCoverage(const rhbm_gem::core::JointProblemInput & input,
     std::span<const std::uint8_t> retained_rows, std::span<const double> target_halo_distances,
     std::span<const double> observation_halo_distances)
 {
-    if (!input.selection_domain || input.selection_domain->target_indices.empty() ||
+    if (!input.selection_domain || input.selection_domain->output_indices.empty() ||
         retained_rows.size() != input.observations.size() ||
         observation_halo_distances.size() != input.observations.size() ||
-        target_halo_distances.size() != input.selection_domain->target_indices.size())
+        target_halo_distances.size() != input.selection_domain->output_indices.size())
         throw std::invalid_argument("Invalid halo exclusion coverage dimensions.");
 
     CoverageSummary result;
@@ -245,7 +245,7 @@ CoverageSummary AnalyzeCoverage(const rhbm_gem::core::JointProblemInput & input,
         ++result.observation_halo_distance_bins[bin];
     }
 
-    const auto & targets = input.selection_domain->target_indices;
+    const auto & targets = input.selection_domain->output_indices;
     for (std::size_t target = 0; target < targets.size(); ++target)
     {
         auto & coverage = result.targets[target];

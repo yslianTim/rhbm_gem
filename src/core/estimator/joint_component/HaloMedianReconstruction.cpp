@@ -86,15 +86,6 @@ bool QualifiedTarget(const JointAnalysisResult & result,std::size_t atom)
         found->local_conditioning=="Adequate";
 }
 
-bool SameSelectionDomain(const JointSelectionDomain & left,const JointSelectionDomain & right)
-{
-    const bool same_pure=left.pure_halo_support_exclusion.has_value()==right.pure_halo_support_exclusion.has_value() &&
-        (!left.pure_halo_support_exclusion || *left.pure_halo_support_exclusion==*right.pure_halo_support_exclusion);
-    return left.contract==right.contract && left.target_indices==right.target_indices &&
-        left.observation_radius==right.observation_radius && left.support_radius==right.support_radius &&
-        left.contributor_policy==right.contributor_policy && same_pure;
-}
-
 bool ValidPoint(const GaussianModel3D & point)
 {
     return std::isfinite(point.GetAmplitude()) && point.GetAmplitude()>=0 &&
@@ -129,7 +120,7 @@ std::vector<const HaloMedianTargetDonor *> GeometryLocalTargetDonorIndex::Query(
     const auto & nodes=m_impl->nodes;
     if (nodes.empty()) return {};
     TargetNode query{nullptr,position};
-    const auto count=std::min(GeometryLocalTargetMedianNeighborCount,nodes.size());
+    const auto count=std::min(GeometryLocalFittingMedianNeighborCount,nodes.size());
     const auto nearest=KDTreeAlgorithm<TargetNode>::KNearestNeighbors(m_impl->tree.get(),&query,count);
     if (nearest.empty()) return {};
     double radius{};
@@ -149,7 +140,7 @@ std::vector<const HaloMedianTargetDonor *> GeometryLocalTargetDonorIndex::Query(
     return selected;
 }
 
-std::array<double,3> GeometryLocalTargetMedian(
+std::array<double,3> GeometryLocalFittingMedian(
     const std::vector<const HaloMedianTargetDonor *> & donors)
 {
     return Median(donors);
@@ -163,20 +154,19 @@ JointHaloMedianSnapshot HaloMedianBuildResult::TakeSnapshot()
     return result;
 }
 
-std::vector<HaloMedianTargetDonor> QualifiedJointTargetDonors(
+std::vector<HaloMedianTargetDonor> QualifiedJointFittingDonors(
     const ModelObject & model,const JointProblem & problem,const JointAnalysisResult & result)
 {
     const auto & input=problem.OriginalInput();
-    if (!input.selection_domain || input.selection_domain->target_indices.empty())
+    if (!input.selection_domain || input.selection_domain->output_indices.empty())
         throw std::invalid_argument("halo-median-no-selection");
-    if (result.atom_ids!=input.atom_ids || !result.selection_domain ||
-        !SameSelectionDomain(*result.selection_domain,*input.selection_domain))
+    if (result.atom_ids!=input.atom_ids || result.selection_domain!=input.selection_domain)
         throw std::invalid_argument("halo-median-joint-run-identity-mismatch");
     const auto points=TargetPoints(result);
     std::vector<HaloMedianTargetDonor> out;
-    for (const auto target:input.selection_domain->target_indices)
+    for (std::size_t target=0;target<input.atom_ids.size();++target)
     {
-        if (!QualifiedTarget(result,target)) continue;
+        if (!IsFittingTarget(input.selection_domain->RoleOf(target)) || !QualifiedTarget(result,target)) continue;
         const auto found=points.find(target);
         if (found==points.end() || !ValidPoint(found->second)) continue;
         const auto atom_id=input.atom_ids[target];
@@ -198,16 +188,16 @@ HaloMedianBuildResult BuildHaloMedianReconstruction(
     std::string_view joint_run_id)
 {
     const auto & input=problem.OriginalInput();
-    if (!input.selection_domain || input.selection_domain->target_indices.empty())
+    if (!input.selection_domain || input.selection_domain->output_indices.empty())
         throw std::invalid_argument("halo-median-no-selection");
     HaloMedianBuildResult out;
-    out.target_donors=QualifiedJointTargetDonors(model,problem,result);
+    out.target_donors=QualifiedJointFittingDonors(model,problem,result);
     if(out.target_donors.empty()) throw std::invalid_argument("halo-median-no-valid-targets");
     out.snapshot.emplace();
     auto & snapshot=*out.snapshot;
     snapshot.joint_run_id=std::string(joint_run_id);
-    snapshot.neighbor_count=GeometryLocalTargetMedianNeighborCount;
-    snapshot.donor_policy=std::string(GeometryLocalTargetMedianDonorPolicy);
+    snapshot.neighbor_count=GeometryLocalFittingMedianNeighborCount;
+    snapshot.donor_policy=std::string(GeometryLocalFittingMedianDonorPolicy);
     std::vector<const HaloMedianTargetDonor *> all_donors;
     all_donors.reserve(out.target_donors.size());
     for(const auto & donor:out.target_donors) all_donors.push_back(&donor);
@@ -216,22 +206,21 @@ HaloMedianBuildResult BuildHaloMedianReconstruction(
     out.audit.valid_target_count=all_donors.size();
     const GeometryLocalTargetDonorIndex donor_index(out.target_donors);
 
-    const auto & targets=input.selection_domain->target_indices;
     for (std::size_t atom=0;atom<input.atom_ids.size();++atom)
     {
-        if (std::binary_search(targets.begin(),targets.end(),atom)) continue;
+        if (input.selection_domain->RoleOf(atom)!=FittingRole::ExternalHalo) continue;
         const auto * object=model.FindAtomPtr(std::stoi(input.atom_ids[atom]));
         if (!object) throw std::invalid_argument("halo-median-unknown-halo");
         const auto donors=donor_index.Query(object->GetPosition());
         if (donors.empty()) throw std::invalid_argument("halo-median-no-valid-targets");
-        const auto median=GeometryLocalTargetMedian(donors);
+        const auto median=GeometryLocalFittingMedian(donors);
         JointHaloMedianReconstruction halo;
         halo.halo_contributor_index=atom;
         halo.atom_id=input.atom_ids[atom];
         halo.amplitude=median[0];
         halo.width=median[1];
         halo.charge=median[2];
-        halo.source=HaloMedianSource::GeometryLocalTargetMedian;
+        halo.source=HaloMedianSource::GeometryLocalFittingMedian;
         halo.donor_count=donors.size();
         halo.joint_run_id=std::string(joint_run_id);
         halo.contract=std::string(HaloMedianReconstructionContractVersion);

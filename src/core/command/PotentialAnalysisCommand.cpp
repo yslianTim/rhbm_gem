@@ -225,9 +225,6 @@ bool ExecutePreparedRequest(
             ", runtime_convergence="+std::string(joint_result_io::StatusText(component.runtime_convergence))+
             ", target_runtime_convergence="+std::string(joint_result_io::StatusText(component.target_runtime_convergence)));
     }
-    const auto targets=fit.selection_domain->target_indices.size();
-    Logger::Log(LogLevel::Info,"Joint targets="+std::to_string(targets)+", halo="+
-        std::to_string(fit.atom_ids.size()-targets));
     Logger::Log(LogLevel::Info,"Joint result saved: search_completed="+std::to_string(fit.search_completed)+
         ", available_components="+std::to_string(available)+"/"+std::to_string(fit.components.size())+
         ", runtime_convergence="+std::string(joint_result_io::StatusText(fit.runtime_convergence))+

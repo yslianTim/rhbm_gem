@@ -274,7 +274,7 @@ void RunGausEstimatesDumping(
             const auto entry=AtomLocalPotentialView::For(*atom);
             if (!entry.IsAvailable()) continue;
             const auto & joint=entry.GetJointStageEstimate();
-            if (joint.source.method!=EstimateMethod::JointComponents || joint.source.role!=FittingRole::Target) continue;
+            if (joint.source.method!=EstimateMethod::JointComponents || joint.source.role!=FittingRole::OutputTarget) continue;
             const bool available = joint.point && joint.convergence == JointCheckStatus::Passed;
             outfile << atom->GetSerialID() << ',';
             if(available) outfile << joint.point->GetAmplitude();

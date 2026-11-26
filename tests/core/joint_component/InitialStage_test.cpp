@@ -74,7 +74,7 @@ TEST(InitialStageTest, ExactProductionBaselineAndCertifiedEndpoint)
     const auto baseline=Baseline();
     auto model=joint_component_test::InitialStageSyntheticModel(5.5);
     auto map=joint_component_test::InitialStageSyntheticMap(*model,.4);
-    const auto problem=BuildPureHaloSupportExclusionProblem(*map,*model);
+    const auto problem=BuildJointProblem(*map,*model);
     const auto workset=d::BuildInitialStageWorkset(*model,problem);
     model->EditAnalysis().InitializeFromSelection();
     FitOptions options; options.quiet_mode=true;
@@ -92,7 +92,7 @@ TEST(InitialStageTest, ExactProductionBaselineAndCertifiedEndpoint)
             EXPECT_EQ(atom.ols[k],j::value_to<double>(expected.at("ols").as_array()[k]));
             EXPECT_EQ(atom.mdpde[k],j::value_to<double>(expected.at("mdpde").as_array()[k]));
         }
-        EXPECT_TRUE(atom.target); EXPECT_TRUE(atom.initial_stage_fit_qualified);
+        EXPECT_EQ(atom.role,FittingRole::OutputTarget); EXPECT_TRUE(atom.initial_stage_fit_qualified);
         EXPECT_EQ(atom.initial_stage_qualification,RHBMSolveQualification::NativeSuccess);
         EXPECT_EQ(atom.reason,"valid-width"); EXPECT_EQ(atom.seed_source,"fitted");
         EXPECT_EQ(atom.original_tau,atom.mdpde[1]); EXPECT_EQ(atom.used_tau,atom.mdpde[1]);
@@ -188,7 +188,7 @@ TEST(InitialStageTest, ExactRawSamplingAcrossWorkersAndCrowdedSelection)
         auto model=joint_component_test::InitialStageSyntheticModel(separation);
         auto map=joint_component_test::InitialStageSyntheticMap(*model,.4);
         model->EditAnalysis().InitializeFromSelection();
-        const auto workset=d::BuildInitialStageWorkset(*model,BuildPureHaloSupportExclusionProblem(*map,*model));
+        const auto workset=d::BuildInitialStageWorkset(*model,BuildJointProblem(*map,*model));
         std::vector<LocalPotentialSampleList> serial;
         RunPotentialSamplingWorkflow(*map,*model,workset.contributors,1,{},true);
         for(const auto * atom:workset.contributors)
@@ -231,7 +231,7 @@ TEST(InitialStageTest, MedianFallbackPreservesRawEvidenceAndExcludesCalibrationD
     JointInitialization init;
     for(int i=0;i<24;++i)
     {
-        JointInitializationAtom atom; atom.id=std::to_string(i); atom.target=true;
+        JointInitializationAtom atom; atom.id=std::to_string(i); atom.role=rhbm_gem::FittingRole::OutputTarget;
         atom.mdpde={1.,1.+.01*i,0.}; atom.ols={1.,.5,0.};
         atom.original_tau=atom.mdpde[1]; atom.reason="valid-width"; atom.seed_source="fitted";
         atom.native_status=static_cast<int>(RHBMEstimationStatus::SUCCESS);
@@ -250,7 +250,7 @@ TEST(InitialStageTest, MedianFallbackPreservesRawEvidenceAndExcludesCalibrationD
     const auto calibration=n::CalibrateGlobalWidth(init);
     EXPECT_EQ(calibration.qualified_donor_count,22u);
     EXPECT_EQ(calibration.unavailable_reason,"qualified-initial-stage-target-coverage-below-0.95");
-    init.atoms.back().target=false; init.tau.back()=0.;
+    init.atoms.back().role=rhbm_gem::FittingRole::ExternalHalo; init.tau.back()=0.;
     d::ApplyJointSeedFallback(init);
     EXPECT_TRUE(init.valid); EXPECT_EQ(init.tau.back(),0.);
     for(auto & atom:init.atoms) atom.reason="invalid-width";
@@ -263,7 +263,7 @@ TEST(InitialStageTest, WidthTruthRecoveryAndQualificationAtTwoVoxelSpacings)
     {
         auto model=joint_component_test::InitialStageSyntheticModel(5.5);
         auto map=joint_component_test::InitialStageSyntheticMap(*model,spacing);
-        const auto problem=BuildPureHaloSupportExclusionProblem(*map,*model);
+        const auto problem=BuildJointProblem(*map,*model);
         model->EditAnalysis().InitializeFromSelection();
         FitOptions options; options.quiet_mode=true;
         const auto workset=d::BuildInitialStageWorkset(*model,problem);

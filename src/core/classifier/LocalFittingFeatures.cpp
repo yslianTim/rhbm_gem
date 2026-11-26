@@ -78,7 +78,7 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(const ModelObje
             row.features.fill(std::numeric_limits<double>::quiet_NaN()); rows.push_back(std::move(row)); continue;
         }
         const auto & joint = local_view.GetJointStageEstimate();
-        if (joint.source.method == EstimateMethod::JointComponents && joint.source.role != FittingRole::Target) continue;
+        if (joint.source.method == EstimateMethod::JointComponents && joint.source.role != FittingRole::OutputTarget) continue;
         const auto & point = joint.point;
         const double missing=std::numeric_limits<double>::quiet_NaN();
 
@@ -91,7 +91,7 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(const ModelObje
             if (!IsQualifiedJointAnalysisResult(*joint_result))
                 tail_assessment.reason = "joint-qualification-failed";
             else if (joint_result->selection_domain &&
-                joint_result->selection_domain->target_indices.size() < joint_result->atom_ids.size() &&
+                joint_result->selection_domain->FittingCount() < joint_result->atom_ids.size() &&
                 !joint_result->halo_median_reconstruction)
                 tail_assessment.reason = "halo-median-reconstruction-unavailable";
         }

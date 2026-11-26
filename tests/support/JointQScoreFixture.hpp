@@ -70,9 +70,10 @@ inline Fixture Make(std::vector<Atom> specs={Atom{}},bool coarse_x=false,bool bo
     f.map=std::make_unique<MapObject>(dimensions,spacing,origin,std::move(values));
     const auto [height,offset]=GetReferenceGaussianParameters(*f.map);
     f.model->SetReferenceHeight(height); f.model->SetReferenceOffset(offset);
-    f.problem=std::make_unique<JointProblem>(BuildPureHaloSupportExclusionProblem(*f.map,*f.model));
+    f.problem=std::make_unique<JointProblem>(BuildJointProblem(*f.map,*f.model));
     std::vector<double> widths;
-    for (const auto & atom:specs) if (atom.target && !atom.hydrogen) widths.push_back(atom.point.GetWidth());
+    for (const auto & id:f.problem->Input().atom_ids)
+        widths.push_back(specs.at(static_cast<std::size_t>(std::stoi(id)-1)).point.GetWidth());
     f.snapshot=CaptureJointAnalysisResult(joint_component_test::matched::joint_component::FitBoundedJointComponentsForTesting(*f.problem,widths,2.0));
     if (!IsQualifiedJointAnalysisResult(f.snapshot)) throw std::runtime_error("Synthetic QScore endpoint not qualified.");
     // The bounded test adapter bypasses production donor-count calibration;
@@ -80,7 +81,7 @@ inline Fixture Make(std::vector<Atom> specs={Atom{}},bool coarse_x=false,bool bo
     f.snapshot.evidence.push_back({"global-width-calibration",JointCheckStatus::Passed,
         JointEvidenceScope::AssembledGlobal,.5,2.,"global-initial-stage-q50-k4; test-adapter-bound"});
     f.snapshot.evidence.push_back({"qualified-initial-stage-donor-coverage",JointCheckStatus::Passed,
-        JointEvidenceScope::AssembledGlobal,1.,.95,"target-only-qualified-initial-stage-widths"});
+        JointEvidenceScope::AssembledGlobal,1.,.95,"output-only-qualified-initial-stage-widths"});
     f.snapshot.metadata.grid_size=f.map->GetGridSize(); f.snapshot.metadata.grid_spacing=f.map->GetGridSpacing();
     f.snapshot.metadata.origin=f.map->GetOrigin();
     f.halos=BuildHaloMedianReconstruction(*f.model,*f.problem,f.snapshot,"qscore-test-run");

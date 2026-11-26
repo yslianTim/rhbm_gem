@@ -1,51 +1,86 @@
 #pragma once
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
 #include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 
 namespace rhbm_gem {
-inline constexpr std::string_view PureHaloSupportExclusionContributorPolicy="pure-halo-support-exclusion-v1";
-inline constexpr std::string_view JointPureHaloSupportExclusionParameterizationContract=
-    "target-only-pure-halo-support-exclusion-v1";
+enum class FittingRole { NotRecorded, OutputTarget, BufferTarget, ExternalHalo };
+inline constexpr bool IsFittingTarget(FittingRole role)
+{
+    return role==FittingRole::OutputTarget || role==FittingRole::BufferTarget;
+}
+
+inline constexpr std::string_view BufferExpansionContributorPolicy="buffer-expansion-external-halo-exclusion-v1";
+inline constexpr std::string_view JointBufferExpansionParameterizationContract=
+    "fixed-output-domain-buffer-expansion-v1";
 inline constexpr std::string_view HaloMedianReconstructionContractVersion=
-    "geometry-local-target-median-v1";
-inline constexpr std::size_t GeometryLocalTargetMedianNeighborCount=4;
-inline constexpr std::string_view GeometryLocalTargetMedianDonorPolicy=
-    "qualified-joint-target-points-knn4-unbounded-euclidean-angstrom-distance-atom-id-tie-v1";
-struct JointPureHaloSupportExclusionProvenance
+    "geometry-local-fitting-median-v1";
+inline constexpr std::size_t GeometryLocalFittingMedianNeighborCount=4;
+inline constexpr std::string_view GeometryLocalFittingMedianDonorPolicy=
+    "qualified-joint-fitting-points-knn4-unbounded-euclidean-angstrom-distance-atom-id-tie-v1";
+struct JointBufferExpansionProvenance
 {
     std::size_t original_rows{},fit_rows{},excluded_rows{};
-    std::size_t candidate_halos{},retained_halos{},zero_support_halos{};
-    bool operator==(const JointPureHaloSupportExclusionProvenance &) const = default;
+    std::size_t non_output_candidates{},external_halos{},zero_support_halos{};
+    std::size_t recovered_rows{};
+    bool operator==(const JointBufferExpansionProvenance &) const = default;
 };
 struct JointSelectionDomain
 {
-    std::string contract{"fixed-selected-voxel-closure-v1"};
-    std::vector<std::size_t> target_indices;
+    std::string contract{"fixed-output-voxel-closure-v2"};
+    // Both role sets use the contributor indices of the snapshot that owns them.
+    std::vector<std::size_t> output_indices,buffer_indices;
     double observation_radius{2.5},support_radius{2.5};
     std::string contributor_policy{"all-non-hydrogen"};
-    std::optional<JointPureHaloSupportExclusionProvenance> pure_halo_support_exclusion;
+    std::optional<JointBufferExpansionProvenance> buffer_expansion;
+    bool operator==(const JointSelectionDomain &) const = default;
+
+    FittingRole RoleOf(std::size_t atom) const
+    {
+        if(std::binary_search(output_indices.begin(),output_indices.end(),atom))
+            return FittingRole::OutputTarget;
+        if(!buffer_indices.empty() && buffer_indices.front()==atom) return FittingRole::BufferTarget;
+        return FittingRole::ExternalHalo;
+    }
+
+    std::size_t FittingCount() const { return output_indices.size()+buffer_indices.size(); }
+
+    bool MatchesFittingContributors(std::span<const std::size_t> mapping) const
+    {
+        if(mapping.size()!=FittingCount()) return false;
+        for(std::size_t i=0;i<mapping.size();++i)
+            if((i && mapping[i-1]>=mapping[i]) || !IsFittingTarget(RoleOf(mapping[i]))) return false;
+        return true;
+    }
+
     bool IsValid(std::size_t atoms) const
     {
-        if(contract!="fixed-selected-voxel-closure-v1" ||
+        if(contract!="fixed-output-voxel-closure-v2" ||
             (contributor_policy!="all-non-hydrogen" &&
-                contributor_policy!=PureHaloSupportExclusionContributorPolicy) ||
-            observation_radius!=2.5 || support_radius!=2.5 || target_indices.empty()) return false;
-        for(std::size_t i=0;i<target_indices.size();++i)
-            if(target_indices[i]>=atoms || (i && target_indices[i-1]>=target_indices[i])) return false;
-        if(contributor_policy=="all-non-hydrogen") return !pure_halo_support_exclusion;
-        if(contributor_policy==PureHaloSupportExclusionContributorPolicy)
+                contributor_policy!=BufferExpansionContributorPolicy) ||
+            observation_radius!=2.5 || support_radius!=2.5 || output_indices.empty()) return false;
+        for(std::size_t i=0;i<output_indices.size();++i)
+            if(output_indices[i]>=atoms || (i && output_indices[i-1]>=output_indices[i])) return false;
+        if(buffer_indices.size()>1 || (!buffer_indices.empty() &&
+            (buffer_indices.front()>=atoms || RoleOf(buffer_indices.front())!=FittingRole::BufferTarget)))
+            return false;
+        if(contributor_policy=="all-non-hydrogen") return !buffer_expansion;
+        if(contributor_policy==BufferExpansionContributorPolicy)
         {
-            if(!pure_halo_support_exclusion) return false;
-            const auto & policy=*pure_halo_support_exclusion;
+            if(!buffer_expansion) return false;
+            const auto & policy=*buffer_expansion;
             return policy.original_rows>=policy.fit_rows && policy.excluded_rows==policy.original_rows-policy.fit_rows &&
-                policy.retained_halos==atoms-target_indices.size() &&
-                policy.candidate_halos>=policy.retained_halos &&
-                policy.zero_support_halos==policy.candidate_halos-policy.retained_halos &&
+                policy.external_halos==atoms-FittingCount() &&
+                policy.non_output_candidates>=atoms-output_indices.size() &&
+                policy.zero_support_halos==policy.non_output_candidates-(atoms-output_indices.size()) &&
+                policy.recovered_rows<=policy.fit_rows &&
+                (policy.recovered_rows>0)==!buffer_indices.empty() &&
                 policy.fit_rows>0;
         }
         return false;
@@ -89,7 +124,8 @@ struct JointInitializationAtom
     double alpha{};
     std::size_t sample_count{};
     std::optional<int> native_status;
-    bool target{},initial_stage_fit_qualified{};
+    FittingRole role{FittingRole::NotRecorded};
+    bool initial_stage_fit_qualified{};
     std::string reason;
     std::optional<double> original_tau,used_tau;
     std::string seed_source{"not-recorded"};
@@ -121,13 +157,13 @@ inline bool IsQualifiedInitialStageEstimate(
         *native_status != static_cast<int>(RHBMEstimationStatus::SUCCESS) &&
         recovery && recovery->accepted;
 }
-enum class HaloMedianSource { GeometryLocalTargetMedian };
+enum class HaloMedianSource { GeometryLocalFittingMedian };
 struct JointHaloMedianReconstruction
 {
     std::size_t halo_contributor_index{};
     std::string atom_id;
     double amplitude{},width{},charge{};
-    HaloMedianSource source{HaloMedianSource::GeometryLocalTargetMedian};
+    HaloMedianSource source{HaloMedianSource::GeometryLocalFittingMedian};
     std::size_t donor_count{};
     std::string joint_run_id;
     std::string contract{HaloMedianReconstructionContractVersion};
@@ -141,8 +177,8 @@ struct JointHaloMedianSnapshot
     std::array<double,3> global_median{};
     std::size_t valid_target_count{};
     std::vector<JointHaloMedianReconstruction> halos;
-    std::size_t neighbor_count{GeometryLocalTargetMedianNeighborCount};
-    std::string donor_policy{GeometryLocalTargetMedianDonorPolicy};
+    std::size_t neighbor_count{GeometryLocalFittingMedianNeighborCount};
+    std::string donor_policy{GeometryLocalFittingMedianDonorPolicy};
     bool operator==(const JointHaloMedianSnapshot &) const = default;
 };
 struct JointInitialization

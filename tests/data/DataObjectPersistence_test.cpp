@@ -452,7 +452,7 @@ namespace {
 rg::JointAnalysisResult CurrentJointExample(bool with_halo=true)
 {
     rg::JointAnalysisResult result;
-    result.parameterization_contract=std::string(rg::JointPureHaloSupportExclusionParameterizationContract);
+    result.parameterization_contract=std::string(rg::JointBufferExpansionParameterizationContract);
     result.metadata.model_sha256=std::string(64,'a');
     result.metadata.map_sha256=std::string(64,'b');
     result.metadata.software=rg::JointSoftwareProvenance{"saved-version",std::string(64,'c'),
@@ -475,9 +475,9 @@ rg::JointAnalysisResult CurrentJointExample(bool with_halo=true)
     result.fitting_to_original_rows={0};
     result.available_row_mask={true,false};
     result.selection_domain=rg::JointSelectionDomain{};
-    result.selection_domain->target_indices={0};
-    result.selection_domain->contributor_policy=std::string(rg::PureHaloSupportExclusionContributorPolicy);
-    result.selection_domain->pure_halo_support_exclusion=rg::JointPureHaloSupportExclusionProvenance{
+    result.selection_domain->output_indices={0};
+    result.selection_domain->contributor_policy=std::string(rg::BufferExpansionContributorPolicy);
+    result.selection_domain->buffer_expansion=rg::JointBufferExpansionProvenance{
         2,1,1,with_halo ? 1u:0u,with_halo ? 1u:0u,0};
     result.initialization.valid=true;
     result.initialization.reason="valid-widths";
@@ -521,19 +521,19 @@ rg::JointAnalysisResult CurrentJointExample(bool with_halo=true)
         rg::JointEvidenceScope::AssembledGlobal,0.6,2.4,
         "global-initial-stage-q50-k4; qualified-donors=1/1"});
     result.evidence.push_back({"qualified-initial-stage-donor-coverage",rg::JointCheckStatus::Passed,
-        rg::JointEvidenceScope::AssembledGlobal,1.0,0.95,"target-only-qualified-initial-stage-widths"});
+        rg::JointEvidenceScope::AssembledGlobal,1.0,0.95,"output-only-qualified-initial-stage-widths"});
     return result;
 }
 rg::JointAnalysisResult SavedJointExample() { return CurrentJointExample(); }
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV25RoundTripsUnqualifiedResult)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV26RoundTripsUnqualifiedResult)
 {
     namespace io=rg::joint_result_io;
     const auto result=CurrentJointExample();
     const auto encoded=io::Encode(result);
     const auto object=boost::json::parse(encoded).as_object();
-    EXPECT_EQ(boost::json::value_to<int>(object.at("schema_version")),25);
+    EXPECT_EQ(boost::json::value_to<int>(object.at("schema_version")),26);
     for(const auto key:{"fixed_halos","layout","legacy_global_rank_evidence","ranks"})
         EXPECT_FALSE(object.contains(key));
     EXPECT_FALSE(object.at("costs").as_object().contains("search_reference_seconds"));
@@ -544,7 +544,7 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV25RoundTripsUnqualifiedResult
         EXPECT_FALSE(component.contains(key));
     EXPECT_FALSE(component.at("state").as_object().contains("nuisance_amplitudes"));
     const auto decoded=io::Decode(encoded);
-    EXPECT_EQ(decoded.parameterization_contract,rg::JointPureHaloSupportExclusionParameterizationContract);
+    EXPECT_EQ(decoded.parameterization_contract,rg::JointBufferExpansionParameterizationContract);
     EXPECT_EQ(decoded.runtime_convergence,rg::JointCheckStatus::Failed);
     ASSERT_TRUE(decoded.components.front().state);
     EXPECT_DOUBLE_EQ(decoded.components.front().state->ac.front(),2.123456789012345);
@@ -557,12 +557,12 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV25RoundTripsUnqualifiedResult
     EXPECT_EQ(decoded.metadata.solver->bcd_local_search,rg::BcdBoundedLocalSearchName);
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV25RejectsOtherVersionsAndRetiredFields)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV26RejectsOtherVersionsAndRetiredFields)
 {
     namespace io=rg::joint_result_io;
     const auto encoded=io::Encode(CurrentJointExample());
     const auto current=boost::json::parse(encoded).as_object();
-    for(const int version:{2,3,18,19,20,21,22,23,24,99})
+    for(const int version:{2,3,18,19,20,21,22,23,24,25,99})
     {
         auto unsupported=current;
         unsupported["schema_version"]=version;
@@ -585,7 +585,7 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV25RejectsOtherVersionsAndReti
     EXPECT_THROW(io::Decode(boost::json::serialize(retired)),std::invalid_argument);
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV25RejectsRetiredWidthCalibrationPolicy)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV26RejectsRetiredWidthCalibrationPolicy)
 {
     namespace io=rg::joint_result_io;
     auto current=boost::json::parse(io::Encode(CurrentJointExample())).as_object();
@@ -598,12 +598,12 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV25RejectsRetiredWidthCalibrat
     EXPECT_THROW(io::Decode(boost::json::serialize(current)),std::invalid_argument);
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV25UsesTauAndInitialStageKeys)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV26UsesTauAndInitialStageKeys)
 {
     namespace io=rg::joint_result_io;
     auto result=CurrentJointExample();
     rg::JointInitializationAtom atom;
-    atom.id="1"; atom.target=true; atom.original_tau=.5; atom.used_tau=.5;
+    atom.id="1"; atom.role=rhbm_gem::FittingRole::OutputTarget; atom.original_tau=.5; atom.used_tau=.5;
     atom.initial_stage_qualification=rg::RHBMSolveQualification::Unqualified;
     atom.initial_stage_recovery=rg::RHBMFailedOnlyRecoveryDiagnostics{};
     atom.initial_stage_recovery->reason="native-retry-failed";
@@ -668,7 +668,7 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV25UsesTauAndInitialStageKeys)
     EXPECT_THROW(io::Decode(boost::json::serialize(old_units)),std::invalid_argument);
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV25RoundTripsQualifiedTargetWithoutHalo)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV26RoundTripsQualifiedTargetWithoutHalo)
 {
     namespace io=rg::joint_result_io;
     auto result=CurrentJointExample(false);
@@ -694,7 +694,7 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV25RoundTripsQualifiedTargetWi
     EXPECT_FALSE(decoded.halo_median_reconstruction);
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV25RoundTripsGeometryLocalHaloMedian)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV26RoundTripsGeometryLocalHaloMedian)
 {
     namespace io=rg::joint_result_io;
     auto result=CurrentJointExample();
@@ -724,7 +724,7 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV25RoundTripsGeometryLocalHalo
     halo.amplitude=2.123456789012345;
     halo.width=0.5;
     halo.charge=-0.3;
-    halo.source=rg::HaloMedianSource::GeometryLocalTargetMedian;
+    halo.source=rg::HaloMedianSource::GeometryLocalFittingMedian;
     halo.donor_count=1;
     halo.joint_run_id=snapshot.joint_run_id;
     halo.donor_atom_ids={"1"};
@@ -734,12 +734,12 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV25RoundTripsGeometryLocalHalo
     ASSERT_TRUE(decoded.halo_median_reconstruction);
     ASSERT_EQ(decoded.halo_median_reconstruction->halos.size(),1u);
     EXPECT_EQ(decoded.halo_median_reconstruction->halos.front().source,
-        rg::HaloMedianSource::GeometryLocalTargetMedian);
+        rg::HaloMedianSource::GeometryLocalFittingMedian);
     EXPECT_EQ(decoded.halo_median_reconstruction->halos.front().donor_atom_ids,
         std::vector<std::string>{"1"});
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV25PreservesUnavailableAndNullableDiagnostics)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV26PreservesUnavailableAndNullableDiagnostics)
 {
     namespace io=rg::joint_result_io;
     auto unavailable=CurrentJointExample();
@@ -768,6 +768,7 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV25PreservesUnavailableAndNull
     auto nullable=CurrentJointExample();
     rg::JointInitializationAtom nullable_atom;
     nullable_atom.id="1";
+    nullable_atom.role=rg::FittingRole::OutputTarget;
     nullable.initialization.atoms.push_back(nullable_atom);
     nullable.components.front().state.reset();
     nullable.components.front().candidate_diagnostic=rg::JointCandidateDiagnostic{};
@@ -785,7 +786,7 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV25PreservesUnavailableAndNull
     EXPECT_FALSE(round_trip.initialization.atoms.front().initial_stage_recovery);
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV25RejectsRetiredDiagnosticsAndOldTargetContract)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV26RejectsRetiredDiagnosticsAndOldTargetContract)
 {
     namespace io=rg::joint_result_io;
     const auto current=boost::json::parse(io::Encode(CurrentJointExample())).as_object();
@@ -1082,6 +1083,8 @@ TEST(DataObjectPersistenceTest, JointCodecRejectsMalformedMappingsAndPreservesMi
     record.components[0].state.reset(); record.assembled_state.reset(); record.objective.reset();
     record.runtime_convergence=rg::JointCheckStatus::Unavailable;
     record.available_row_mask={false,true};
+    EXPECT_THROW(io::Encode(record),std::invalid_argument);
+    record.available_row_mask={false,false};
     const auto decoded=io::Decode(io::Encode(record));
     EXPECT_FALSE(decoded.objective); EXPECT_FALSE(decoded.components[0].state);
     EXPECT_EQ(decoded.available_row_mask,record.available_row_mask);
@@ -1119,7 +1122,7 @@ TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutE
     component.candidate_diagnostic=candidate;
 
     const auto json=boost::json::parse(io::Encode(record));
-    EXPECT_EQ(json.at("schema_version").as_int64(),25);
+    EXPECT_EQ(json.at("schema_version").as_int64(),26);
     const auto & saved_candidate=json.at("components").as_array()[0].at("candidate_diagnostic");
     EXPECT_EQ(saved_candidate.at("candidate_status").as_string(),"uncertified");
     EXPECT_EQ(saved_candidate.at("convergence_criteria_id").as_string(),"practical-v2");
@@ -1266,7 +1269,7 @@ TEST(DataObjectPersistenceTest, JointMetadataRejectsInvalidValuesAndOldDocuments
     malformed=boost::json::parse(io::Encode(record)).as_object();
     malformed.at("metadata").as_object().erase("map_sha256");
     EXPECT_THROW(io::Decode(boost::json::serialize(malformed)),std::exception);
-    auto old=boost::json::parse(io::Encode(record)).as_object(); old["schema_version"]=24;
+    auto old=boost::json::parse(io::Encode(record)).as_object(); old["schema_version"]=25;
     const auto old_text=boost::json::serialize(old);
     EXPECT_THROW(io::Decode(old_text),std::invalid_argument);
     data_test::ExecuteSql(path,"UPDATE model_joint_result SET result_json='"+old_text+"' WHERE key_tag='model';");
@@ -1290,10 +1293,10 @@ TEST(DataObjectPersistenceTest, JointSelectionMetadataValidationAndCsvRoles)
     for(int variant=0;variant<7;++variant)
     {
         auto bad=saved;
-        if(variant==0) bad.selection_domain->target_indices={0,0};
-        if(variant==1) bad.selection_domain->target_indices={1,0};
-        if(variant==2) bad.selection_domain->target_indices={2};
-        if(variant==3) bad.selection_domain->target_indices.clear();
+        if(variant==0) bad.selection_domain->output_indices={0,0};
+        if(variant==1) bad.selection_domain->output_indices={1,0};
+        if(variant==2) bad.selection_domain->output_indices={2};
+        if(variant==3) bad.selection_domain->output_indices.clear();
         if(variant==4) bad.selection_domain->support_radius=3;
         if(variant==5) bad.selection_domain->contract="other";
         if(variant==6) bad.initialization.data_scope="unknown";
@@ -1309,10 +1312,10 @@ TEST(DataObjectPersistenceTest, JointSelectionMetadataValidationAndCsvRoles)
     EXPECT_TRUE(line.ends_with(",SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,PointQuality"));
     std::getline(csv,line);
     EXPECT_EQ(std::count(line.begin(),line.end(),','),column_count);
-    EXPECT_TRUE(line.ends_with(",target,JointEstimated,\"\",failed,Unavailable"));
+    EXPECT_TRUE(line.ends_with(",output-target,JointEstimated,\"\",failed,Unavailable"));
     std::getline(csv,line);
     EXPECT_EQ(std::count(line.begin(),line.end(),','),column_count);
-    EXPECT_TRUE(line.ends_with(",halo,HaloReconstructionUnavailable,\"\",not-run,NotApplicable"));
+    EXPECT_TRUE(line.ends_with(",external-halo,HaloReconstructionUnavailable,\"\",not-run,NotApplicable"));
     auto raw=saved; raw.selection_domain.reset();
     EXPECT_THROW(rg::WriteJointAnalysisResult(raw,dir.path()/"raw.json",dir.path()/"raw.csv"),std::invalid_argument);
 }
@@ -1344,7 +1347,7 @@ TEST(DataObjectPersistenceTest, JointNeutralRoundTripPreservesCurrentJointAndSta
     EXPECT_FALSE(data_test::HasTable(dir.path()/"result.sqlite","model_atom_local_potential"));
 }
 
-TEST(DataObjectPersistenceTest, StageResultJsonV9OnlyAcceptsCurrentRoundTrip)
+TEST(DataObjectPersistenceTest, StageResultJsonV10OnlyAcceptsCurrentRoundTrip)
 {
     auto model=data_test::MakeModelWithBond();
     model->SelectAllAtoms();
@@ -1354,7 +1357,7 @@ TEST(DataObjectPersistenceTest, StageResultJsonV9OnlyAcceptsCurrentRoundTrip)
     initial.source.fixed_from_initial_stage=true;
     editor.SetAtomInitialStageEstimate(*model->FindAtomPtr(1),initial);
     const auto encoded=rg::stage_result_io::Encode(*model);
-    EXPECT_EQ(boost::json::parse(encoded).at("version").as_int64(),9);
+    EXPECT_EQ(boost::json::parse(encoded).at("version").as_int64(),10);
 
     auto restored=data_test::MakeModelWithBond();
     restored->SelectAllAtoms();
@@ -1364,7 +1367,7 @@ TEST(DataObjectPersistenceTest, StageResultJsonV9OnlyAcceptsCurrentRoundTrip)
     EXPECT_TRUE(rg::AtomLocalPotentialView::For(*restored->FindAtomPtr(1))
         .GetInitialStageEstimate().source.fixed_from_initial_stage);
 
-    for(const int version:{1,2,3,4,5,6,7,8,10})
+    for(const int version:{1,2,3,4,5,6,7,8,9,11})
     {
         auto old=boost::json::parse(encoded).as_object();
         old["version"]=version;
@@ -1419,7 +1422,7 @@ TEST(DataObjectPersistenceTest, CanonicalNativeDiagnosticsAndMissingStatesRoundT
     editor.SetAtomInitialStageEstimate(unavailable_atom,unavailable);
     editor.ClearTransientFitStates();
     rg::LocalStageEstimate missing; missing.source.method=rg::EstimateMethod::JointComponents;
-    missing.source.run_id="no-snapshot"; missing.reason="initialization-failed"; missing.source.role=rg::FittingRole::Halo;
+    missing.source.run_id="no-snapshot"; missing.reason="initialization-failed"; missing.source.role=rg::FittingRole::ExternalHalo;
     editor.SetAtomJointStageEstimate(unavailable_atom,missing);
     model->SelectAllAtoms(); editor.RebuildAtomGroupsFromSelection();
     const auto group=model->GetAnalysisView().CollectAtomGroupKeys().front();
@@ -1449,7 +1452,7 @@ TEST(DataObjectPersistenceTest, CanonicalNativeDiagnosticsAndMissingStatesRoundT
     EXPECT_DOUBLE_EQ(loaded->GetAnalysisView().GetAtomAlphaG(group),.87);
     EXPECT_FALSE(actual.fit_result); ASSERT_TRUE(actual.diagnostics); EXPECT_EQ(actual.diagnostics->iterations.iterations,17);
     EXPECT_EQ(actual.diagnostics->refinement->relative_coordinate_difference,fit.refinement->relative_coordinate_difference);
-    const auto document=boost::json::parse(expected).as_object(); EXPECT_EQ(document.at("version").as_int64(),9);
+    const auto document=boost::json::parse(expected).as_object(); EXPECT_EQ(document.at("version").as_int64(),10);
     EXPECT_FALSE(loaded->GetAnalysisView().GetJointResult());
 }
 

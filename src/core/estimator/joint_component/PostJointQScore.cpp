@@ -43,15 +43,10 @@ std::vector<std::pair<int, PostJointQScoreResult>> BuildPostJointQScores(
 {
     const auto start=std::chrono::steady_clock::now();
     if (!IsQualifiedJointAnalysisResult(snapshot) || snapshot.atom_ids!=problem.OriginalInput().atom_ids ||
-        !snapshot.selection_domain || snapshot.selection_domain->target_indices.empty())
+        !snapshot.selection_domain || snapshot.selection_domain->output_indices.empty())
         throw std::invalid_argument("QScore requires a qualified matching Joint snapshot.");
     const auto & original=problem.OriginalInput();
-    if (!original.selection_domain ||
-        snapshot.selection_domain->target_indices!=original.selection_domain->target_indices ||
-        snapshot.selection_domain->contract!=original.selection_domain->contract ||
-        snapshot.selection_domain->contributor_policy!=original.selection_domain->contributor_policy ||
-        snapshot.selection_domain->observation_radius!=original.selection_domain->observation_radius ||
-        snapshot.selection_domain->support_radius!=original.selection_domain->support_radius ||
+    if (snapshot.selection_domain!=original.selection_domain ||
         snapshot.row_ids!=original.row_ids || snapshot.metadata.grid_size!=map.GetGridSize() ||
         snapshot.metadata.grid_spacing!=map.GetGridSpacing() || snapshot.metadata.origin!=map.GetOrigin())
         throw std::invalid_argument("QScore map/Original-domain identity mismatch.");
@@ -62,13 +57,13 @@ std::vector<std::pair<int, PostJointQScoreResult>> BuildPostJointQScores(
             map.GetMapValue(grid)!=original.observations.at(row))
             throw std::invalid_argument("QScore Original observations differ from map.");
     }
-    const auto & target_indices=snapshot.selection_domain->target_indices;
-    const auto * first=model.FindAtomPtr(std::stoi(snapshot.atom_ids.at(target_indices.front())));
+    const auto & output_indices=snapshot.selection_domain->output_indices;
+    const auto * first=model.FindAtomPtr(std::stoi(snapshot.atom_ids.at(output_indices.front())));
     const auto run=AtomLocalPotentialView::For(*first).GetJointStageEstimate().source.run_id;
     if (run.empty()) throw std::invalid_argument("QScore requires Joint run identity.");
     const auto expected=data_internal::BuildJointStageEstimates(snapshot,run);
     const auto rebuilt_donors=halo_build ? std::vector<HaloMedianTargetDonor>{} :
-        QualifiedJointTargetDonors(model,problem,snapshot);
+        QualifiedJointFittingDonors(model,problem,snapshot);
     const auto & donors=halo_build ? halo_build->target_donors : rebuilt_donors;
     std::set<std::size_t> qualified_donors;
     if (snapshot.target_evidence)
@@ -98,8 +93,8 @@ std::vector<std::pair<int, PostJointQScoreResult>> BuildPostJointQScores(
     {
         const auto & saved=*snapshot.halo_median_reconstruction;
         if (saved.joint_run_id!=run || saved.contract!=HaloMedianReconstructionContractVersion ||
-            saved.donor_policy!=GeometryLocalTargetMedianDonorPolicy ||
-            saved.neighbor_count!=GeometryLocalTargetMedianNeighborCount || saved.valid_target_count!=donors.size())
+            saved.donor_policy!=GeometryLocalFittingMedianDonorPolicy ||
+            saved.neighbor_count!=GeometryLocalFittingMedianNeighborCount || saved.valid_target_count!=donors.size())
             throw std::invalid_argument("QScore Halo provenance mismatch.");
         for (const auto & halo:saved.halos) saved_halos.emplace(std::stoi(halo.atom_id),&halo);
     }
@@ -109,7 +104,7 @@ std::vector<std::pair<int, PostJointQScoreResult>> BuildPostJointQScores(
         if (const auto found=cache.find(id);found!=cache.end()) return found->second;
         auto & result=cache[id];
         const auto endpoint=expected.find(id);
-        if (endpoint!=expected.end() && endpoint->second.source.role==FittingRole::Target)
+        if (endpoint!=expected.end() && IsFittingTarget(endpoint->second.source.role))
         {
             const auto view=AtomLocalPotentialView::For(atom);
             if (view.IsAvailable() && SameEndpoint(view.GetJointStageEstimate(),endpoint->second))
@@ -120,14 +115,14 @@ std::vector<std::pair<int, PostJointQScoreResult>> BuildPostJointQScores(
         if (!donors_valid) return result;
         const auto nearest=donor_index.Query(atom.GetPositionRef());
         if (nearest.empty()) return result;
-        const auto median=GeometryLocalTargetMedian(nearest);
+        const auto median=GeometryLocalFittingMedian(nearest);
         std::vector<std::string> ids;
         for (const auto * donor:nearest) ids.push_back(donor->atom_id);
         if (const auto saved=saved_halos.find(id);saved!=saved_halos.end())
         {
             const auto & halo=*saved->second;
             if (halo.joint_run_id!=run || halo.contract!=HaloMedianReconstructionContractVersion ||
-                halo.source!=HaloMedianSource::GeometryLocalTargetMedian || halo.donor_atom_ids!=ids ||
+                halo.source!=HaloMedianSource::GeometryLocalFittingMedian || halo.donor_atom_ids!=ids ||
                 halo.donor_count!=ids.size() ||
                 std::array{halo.amplitude,halo.width,halo.charge}!=median)
                 throw std::invalid_argument("QScore saved Halo representative mismatch.");
@@ -142,8 +137,8 @@ std::vector<std::pair<int, PostJointQScoreResult>> BuildPostJointQScores(
         return result;
     };
     std::vector<std::pair<int,PostJointQScoreResult>> results;
-    results.reserve(target_indices.size());
-    for (const auto index:target_indices)
+    results.reserve(output_indices.size());
+    for (const auto index:output_indices)
     {
         const int id=std::stoi(snapshot.atom_ids.at(index));
         const auto & atom=*model.FindAtomPtr(id);

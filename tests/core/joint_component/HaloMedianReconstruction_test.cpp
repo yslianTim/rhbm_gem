@@ -45,14 +45,14 @@ Fixture MakeFixture()
     input.observations={0,0,0,0,0};
     input.support={{{0,0}},{{1,0}},{{2,0}},{{3,0}},{{4,0}}};
     input.selection_domain.emplace();
-    input.selection_domain->contributor_policy=std::string(PureHaloSupportExclusionContributorPolicy);
-    input.selection_domain->target_indices={0,1,2};
-    input.selection_domain->pure_halo_support_exclusion=JointPureHaloSupportExclusionProvenance{
+    input.selection_domain->contributor_policy=std::string(BufferExpansionContributorPolicy);
+    input.selection_domain->output_indices={0,1,2};
+    input.selection_domain->buffer_expansion=JointBufferExpansionProvenance{
         5,5,0,2,2,0};
     JointProblem problem(std::move(input));
 
     JointAnalysisResult result;
-    result.parameterization_contract=std::string(JointPureHaloSupportExclusionParameterizationContract);
+    result.parameterization_contract=std::string(JointBufferExpansionParameterizationContract);
     result.atom_ids=problem.Input().atom_ids;
     result.row_ids=problem.Input().row_ids;
     result.selection_domain=problem.Input().selection_domain;
@@ -99,13 +99,13 @@ TEST(HaloMedianReconstructionTest, ComputesSeparateComponentAndWidthAndChargeMed
     EXPECT_EQ(built.audit.valid_target_count,3u);
     EXPECT_EQ(built.audit.geometry_local_halos,2u);
     EXPECT_EQ(snapshot.neighbor_count,4u);
-    EXPECT_EQ(snapshot.donor_policy,GeometryLocalTargetMedianDonorPolicy);
-    EXPECT_EQ(snapshot.halos[0].source,HaloMedianSource::GeometryLocalTargetMedian);
+    EXPECT_EQ(snapshot.donor_policy,GeometryLocalFittingMedianDonorPolicy);
+    EXPECT_EQ(snapshot.halos[0].source,HaloMedianSource::GeometryLocalFittingMedian);
     EXPECT_DOUBLE_EQ(snapshot.halos[0].amplitude,3.0);
     EXPECT_DOUBLE_EQ(snapshot.halos[0].width,2.0);
     EXPECT_DOUBLE_EQ(snapshot.halos[0].charge,5.0);
     EXPECT_EQ(snapshot.halos[0].donor_count,3u);
-    EXPECT_EQ(snapshot.halos[1].source,HaloMedianSource::GeometryLocalTargetMedian);
+    EXPECT_EQ(snapshot.halos[1].source,HaloMedianSource::GeometryLocalFittingMedian);
     EXPECT_DOUBLE_EQ(snapshot.halos[1].amplitude,3.0);
     EXPECT_DOUBLE_EQ(snapshot.halos[1].width,2.0);
     EXPECT_DOUBLE_EQ(snapshot.halos[1].charge,5.0);
@@ -225,7 +225,7 @@ TEST(HaloMedianReconstructionTest, FullModelConditioningGuardsZeroContributionWi
             input.row_ids.push_back(std::to_string(input.observations.size()));
             input.observations.push_back(charge*n::EvaluateKernel(square,.7,2.5).charge);
         }
-        input.selection_domain.emplace(); input.selection_domain->target_indices={0};
+        input.selection_domain.emplace(); input.selection_domain->output_indices={0};
         JointProblem target(std::move(input));
         const auto & data=JointProblemAccess::Get(target);
         n::Vector eta=n::Vector::Constant(1,std::log(.7)),beta(2); beta<<0.,charge;
@@ -260,7 +260,7 @@ TEST(HaloMedianReconstructionTest, FullModelConditioningGuardsZeroContributionWi
         // Counterfactual gate bypass: a zero-contribution target's tau can change
         // another atom's median, even though its own model remains zero.
         f.result.target_evidence->point_atoms[0].local_conditioning="Adequate";
-        const auto admitted=QualifiedJointTargetDonors(f.model,f.problem,f.result);
+        const auto admitted=QualifiedJointFittingDonors(f.model,f.problem,f.result);
         EXPECT_EQ(admitted.size(),3u); // No amplitude-only exclusion in donor policy.
         if(charge==0)
         {
@@ -284,7 +284,7 @@ TEST(HaloMedianReconstructionTest, ConditioningExclusionPreservesSmallPoolProven
     {
         EXPECT_EQ(halo.donor_count,1u); EXPECT_EQ(halo.donor_atom_ids,(std::vector<std::string>{"3"}));
         EXPECT_EQ(halo.joint_run_id,"one-donor");
-        EXPECT_EQ(halo.source,HaloMedianSource::GeometryLocalTargetMedian);
+        EXPECT_EQ(halo.source,HaloMedianSource::GeometryLocalFittingMedian);
         EXPECT_DOUBLE_EQ(halo.width,3.0);
     }
     f.result.target_evidence->point_atoms[2].local_conditioning="Unavailable";

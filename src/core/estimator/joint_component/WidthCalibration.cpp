@@ -34,7 +34,7 @@ WidthBoundCalibration CalibrateGlobalWidth(const JointInitialization & initializ
     }
 
     for(std::size_t i=0;i<initialization.atoms.size();++i)
-        if(initialization.atoms[i].target &&
+        if(IsFittingTarget(initialization.atoms[i].role) &&
             (!std::isfinite(initialization.tau[i]) || !(initialization.tau[i]>0.0)))
         {
             result.unavailable_reason="invalid-target-initial-width";
@@ -45,7 +45,7 @@ WidthBoundCalibration CalibrateGlobalWidth(const JointInitialization & initializ
     donors.reserve(initialization.atoms.size());
     for(const auto & atom:initialization.atoms)
     {
-        if(!atom.target) continue;
+        if(atom.role!=FittingRole::OutputTarget) continue;
         ++result.target_count;
         const double tau=atom.mdpde[1];
         if(atom.seed_source!="median-fallback" && !atom.reason.starts_with("initialization-exception") &&
@@ -128,7 +128,7 @@ BoundedInitialization MakeBoundedInitialization(
     for(std::size_t i=0;i<initialization.atoms.size();++i)
     {
         const auto & atom=initialization.atoms[i];
-        if(!atom.target) continue;
+        if(!IsFittingTarget(atom.role)) continue;
         const double initial=initialization.tau[i];
         double bounded=initial;
         if(std::isfinite(initial) && initial>result.tau_max) bounded=result.tau_max;

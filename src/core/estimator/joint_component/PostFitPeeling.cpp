@@ -104,9 +104,8 @@ JointPeelingContributorUniverse BuildJointPeelingContributorUniverse(
         contributor.position=object->GetPosition();
         contributor.contributor_index=index;
         contributor.reconstruction_eligible=object->GetElement()!=Element::HYDROGEN;
-        contributor.target=input.selection_domain && std::binary_search(input.selection_domain->target_indices.begin(),
-            input.selection_domain->target_indices.end(),index);
-        if (universe.joint_run_id.empty() && contributor.target)
+        if (universe.joint_run_id.empty() && input.selection_domain &&
+            input.selection_domain->RoleOf(index)==FittingRole::OutputTarget)
         {
             const auto local=AtomLocalPotentialView::For(*object);
             if (local.IsAvailable()) universe.joint_run_id=local.GetJointStageEstimate().source.run_id;
@@ -137,18 +136,17 @@ JointPostprocessingContext::JointPostprocessingContext(
 {
     const auto & input = problem.OriginalInput();
     if (!input.selection_domain ||
-        input.selection_domain->contributor_policy!=PureHaloSupportExclusionContributorPolicy)
-        throw std::invalid_argument("Post-fit peeling requires a target-only Pure Exclusion problem.");
-    if (snapshot.parameterization_contract!=JointPureHaloSupportExclusionParameterizationContract)
-        throw std::invalid_argument("Post-fit peeling requires a target-only Pure Exclusion snapshot.");
+        input.selection_domain->contributor_policy!=BufferExpansionContributorPolicy)
+        throw std::invalid_argument("Post-fit peeling requires a Joint Buffer Expansion problem.");
+    if (snapshot.parameterization_contract!=JointBufferExpansionParameterizationContract)
+        throw std::invalid_argument("Post-fit peeling requires a Joint Buffer Expansion snapshot.");
     if (!IsQualifiedJointAnalysisResult(snapshot))
         throw std::invalid_argument("Post-fit peeling requires a qualified Joint endpoint.");
     if (snapshot.atom_ids != input.atom_ids)
         throw std::invalid_argument("Joint peeling snapshot identity mismatch.");
     if (snapshot.row_ids != input.row_ids)
         throw std::invalid_argument("Joint peeling snapshot identity mismatch.");
-    if (!snapshot.selection_domain ||
-        snapshot.selection_domain->contributor_policy!=PureHaloSupportExclusionContributorPolicy ||
+    if (snapshot.selection_domain!=input.selection_domain ||
         snapshot.available_row_mask.size()!=input.row_ids.size() ||
         snapshot.fitting_row_ids!=problem.Input().row_ids ||
         snapshot.fitting_to_original_contributors!=problem.FittingToOriginalContributors() ||
@@ -174,9 +172,7 @@ JointPostprocessingContext::JointPostprocessingContext(
         const auto index=contributor.contributor_index;
         if (index>=input.atom_ids.size() || std::stoi(input.atom_ids[index])!=contributor.atom_id)
             throw std::invalid_argument("Joint Peeling contributor universe identity mismatch.");
-        const bool target=std::binary_search(input.selection_domain->target_indices.begin(),
-            input.selection_domain->target_indices.end(),index);
-        if (contributor.target!=target || !contributor.reconstruction_eligible)
+        if (!contributor.reconstruction_eligible)
             throw std::invalid_argument("Joint Peeling contributor universe identity mismatch.");
         ++indexed_contributors;
     }
@@ -210,56 +206,55 @@ std::vector<std::pair<int, PostFitPeelingResult>> JointPostprocessingContext::Bu
     // a nonunique halo has no public atom-wise point estimate.
     std::vector<std::optional<GaussianModel3D>> represented(input.atom_ids.size());
     if(!result.selection_domain ||
-        result.selection_domain->contributor_policy!=PureHaloSupportExclusionContributorPolicy)
-        throw std::invalid_argument("Invalid Pure Exclusion peeling contract.");
-    const bool pure_has_halos=result.atom_ids.size()>result.selection_domain->target_indices.size();
-    if (pure_has_halos && !result.halo_median_reconstruction)
-        throw std::invalid_argument("Invalid Pure Exclusion peeling contract.");
-    if (!pure_has_halos && result.halo_median_reconstruction)
-        throw std::invalid_argument("Pure Exclusion Halo medians exist without original-domain Halos.");
+        result.selection_domain->contributor_policy!=BufferExpansionContributorPolicy)
+        throw std::invalid_argument("Invalid Joint peeling contract.");
+    const bool has_external_halos=result.atom_ids.size()>result.selection_domain->FittingCount();
+    if (has_external_halos && !result.halo_median_reconstruction)
+        throw std::invalid_argument("Invalid Joint peeling contract.");
+    if (!has_external_halos && result.halo_median_reconstruction)
+        throw std::invalid_argument("Joint Halo medians exist without original-domain Halos.");
     for(std::size_t atom=0;atom<requested.size();++atom)
-        if(!std::binary_search(result.selection_domain->target_indices.begin(),
-            result.selection_domain->target_indices.end(),atom)) requested[atom]=false;
+        if(result.selection_domain->RoleOf(atom)!=FittingRole::OutputTarget) requested[atom]=false;
     for (const auto & c : result.components) if (c.state)
     {
         const auto & full = c.layout ? c.layout->full_atoms : c.atoms;
         for (std::size_t k = 0; k < full.size(); ++k)
         {
-            if(full[k]>=represented.size() || represented[full[k]])
-                throw std::invalid_argument("Invalid target-only component mapping in peeling snapshot.");
+            if(full[k]>=represented.size() || represented[full[k]] ||
+                !IsFittingTarget(result.selection_domain->RoleOf(full[k])))
+                throw std::invalid_argument("Invalid fitting contributor mapping in peeling snapshot.");
             represented[full[k]] = GaussianModel3D{c.state->ac[2*k], c.state->tau[k], c.state->ac[2*k+1]};
         }
     }
-    if(pure_has_halos)
+    if(has_external_halos)
     {
         const auto & snapshot=*result.halo_median_reconstruction;
         if (snapshot.contract!=HaloMedianReconstructionContractVersion || snapshot.joint_run_id.empty() ||
-            snapshot.valid_target_count==0 || snapshot.neighbor_count!=GeometryLocalTargetMedianNeighborCount ||
-            snapshot.donor_policy!=GeometryLocalTargetMedianDonorPolicy)
-            throw std::invalid_argument("Invalid Pure Exclusion Halo median snapshot.");
+            snapshot.valid_target_count==0 || snapshot.neighbor_count!=GeometryLocalFittingMedianNeighborCount ||
+            snapshot.donor_policy!=GeometryLocalFittingMedianDonorPolicy)
+            throw std::invalid_argument("Invalid Joint Halo median snapshot.");
         const auto valid_median=[](double amplitude,double width,double charge) {
             return std::isfinite(amplitude) && amplitude>=0 && std::isfinite(width) && width>0 &&
                 std::isfinite(charge);
         };
         if (!valid_median(snapshot.global_median[0],snapshot.global_median[1],snapshot.global_median[2]))
-            throw std::invalid_argument("Invalid Pure Exclusion global Halo median.");
+            throw std::invalid_argument("Invalid Joint global Halo median.");
         std::size_t previous{};
         bool first=true;
         for (const auto & halo:snapshot.halos)
         {
             if (halo.halo_contributor_index>=represented.size() || (!first && halo.halo_contributor_index<=previous) ||
                 result.atom_ids[halo.halo_contributor_index]!=halo.atom_id ||
-                std::binary_search(result.selection_domain->target_indices.begin(),
-                    result.selection_domain->target_indices.end(),halo.halo_contributor_index) ||
+                result.selection_domain->RoleOf(halo.halo_contributor_index)!=FittingRole::ExternalHalo ||
                 halo.contract!=HaloMedianReconstructionContractVersion || halo.joint_run_id!=snapshot.joint_run_id ||
-                halo.source!=HaloMedianSource::GeometryLocalTargetMedian || halo.donor_count==0 ||
+                halo.source!=HaloMedianSource::GeometryLocalFittingMedian || halo.donor_count==0 ||
                 halo.donor_count>snapshot.neighbor_count || halo.donor_atom_ids.size()!=halo.donor_count ||
                 !valid_median(halo.amplitude,halo.width,halo.charge))
-                throw std::invalid_argument("Invalid Pure Exclusion Halo median reconstruction.");
+                throw std::invalid_argument("Invalid Joint Halo median reconstruction.");
             std::set<std::string> donor_ids;
             for (const auto & donor_id:halo.donor_atom_ids)
                 if (donor_id.empty() || !donor_ids.insert(donor_id).second)
-                    throw std::invalid_argument("Invalid Pure Exclusion Halo donor identity.");
+                    throw std::invalid_argument("Invalid Joint Halo donor identity.");
             previous=halo.halo_contributor_index;
             first=false;
             represented[halo.halo_contributor_index]=GaussianModel3D{halo.amplitude,halo.width,halo.charge};
@@ -270,16 +265,16 @@ std::vector<std::pair<int, PostFitPeelingResult>> JointPostprocessingContext::Bu
     std::string expected_joint_run_id;
     if (result.target_evidence)
     {
-        const auto target_index=result.selection_domain->target_indices.front();
+        const auto target_index=result.selection_domain->output_indices.front();
         const auto * target=m_model.FindAtomPtr(std::stoi(result.atom_ids[target_index]));
         const auto stage=AtomLocalPotentialView::For(*target).GetJointStageEstimate();
-        if (stage.source.method!=EstimateMethod::JointComponents || stage.source.role!=FittingRole::Target ||
+        if (stage.source.method!=EstimateMethod::JointComponents || stage.source.role!=FittingRole::OutputTarget ||
             stage.source.run_id.empty())
-            throw std::invalid_argument("Invalid Pure Exclusion Joint run provenance.");
+            throw std::invalid_argument("Invalid Joint run provenance.");
         expected_joint_run_id=stage.source.run_id;
         if (result.halo_median_reconstruction &&
             result.halo_median_reconstruction->joint_run_id!=expected_joint_run_id)
-            throw std::invalid_argument("Invalid Pure Exclusion Halo median run provenance.");
+            throw std::invalid_argument("Invalid Joint Halo median run provenance.");
         if (!m_contributors.joint_run_id.empty() && m_contributors.joint_run_id!=expected_joint_run_id)
             throw std::invalid_argument("Invalid Joint Peeling contributor universe run provenance.");
     }
@@ -298,7 +293,7 @@ std::vector<std::pair<int, PostFitPeelingResult>> JointPostprocessingContext::Bu
         {
             if (std::string_view(error.what())!="halo-median-no-valid-targets") throw;
             if (result.halo_median_reconstruction)
-                throw std::invalid_argument("Saved Pure Exclusion Halo medians have no qualified donors.");
+                throw std::invalid_argument("Saved Joint Halo medians have no qualified donors.");
         }
     }
     if (result.halo_median_reconstruction && halo_medians && halo_medians->snapshot)
@@ -309,7 +304,7 @@ std::vector<std::pair<int, PostFitPeelingResult>> JointPostprocessingContext::Bu
             saved.joint_run_id!=rebuilt.joint_run_id || saved.valid_target_count!=rebuilt.valid_target_count ||
             saved.global_median!=rebuilt.global_median || saved.neighbor_count!=rebuilt.neighbor_count ||
             saved.donor_policy!=rebuilt.donor_policy || saved.halos!=rebuilt.halos)
-            throw std::invalid_argument("Invalid Pure Exclusion Halo median run provenance.");
+            throw std::invalid_argument("Invalid Joint Halo median run provenance.");
     }
     // Evaluate every recorded support contribution once. Sparse row incidence
     // permits direct neighbor sums without cancelling the target's own signal
@@ -318,9 +313,8 @@ std::vector<std::pair<int, PostFitPeelingResult>> JointPostprocessingContext::Bu
     std::vector<std::vector<Contribution>> rows(input.row_ids.size());
     for (std::size_t atom=0;atom<input.atom_ids.size();++atom)
     {
-        const bool target=std::binary_search(result.selection_domain->target_indices.begin(),
-            result.selection_domain->target_indices.end(),atom);
-        if (target && !QualifiedTargetPoint(result,atom)) represented[atom].reset();
+        if (IsFittingTarget(result.selection_domain->RoleOf(atom)) && !QualifiedTargetPoint(result,atom))
+            represented[atom].reset();
         const auto & point=represented[atom];
         if (point && (!std::isfinite(point->GetAmplitude()) || point->GetAmplitude()<0 ||
             !std::isfinite(point->GetOffset()) || !std::isfinite(point->GetWidth()) || point->GetWidth()<=0))
@@ -416,13 +410,13 @@ PostJointLocalSamples JointPostprocessingContext::BuildPostJointLocalSamples(
         throw std::invalid_argument("Post-Joint sample target is outside the Joint problem.");
     const auto atom_index=atom_found->contributor_index;
     if (!input.selection_domain || !std::binary_search(
-            input.selection_domain->target_indices.begin(), input.selection_domain->target_indices.end(), atom_index))
+            input.selection_domain->output_indices.begin(), input.selection_domain->output_indices.end(), atom_index))
         throw std::invalid_argument("Post-Joint samples require a selected Joint target.");
 
     const auto atom = m_model.FindAtomPtr(atom_id);
     const auto local = AtomLocalPotentialView::For(*atom);
     const auto & stage = local.GetJointStageEstimate();
-    if (stage.source.role != FittingRole::Target || !stage.point ||
+    if (stage.source.role != FittingRole::OutputTarget || !stage.point ||
         !SameSource(stage.source, peeling.source))
         throw std::invalid_argument("Post-Joint sample endpoint source mismatch.");
     const auto & point = *stage.point;

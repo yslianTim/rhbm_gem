@@ -157,8 +157,8 @@ JointTargetEvidence AssessTargetPointState(const JointProblem & problem,const Jo
         if(not_assessed) return std::string("NotAssessed");
         return adequate ? std::string("Adequate") : std::string("Warning");
     };
-    const auto targets=input.selection_domain ? &input.selection_domain->target_indices : nullptr;
-    bool selection_targets_valid=targets!=nullptr;
+    const auto & selection=input.selection_domain;
+    bool selection_targets_valid=selection.has_value();
     JointCheckStatus all_parameter_status=JointCheckStatus::Passed;
     if(!dimensions || layout.full_atoms.empty()) all_parameter_status=JointCheckStatus::Unavailable;
     bool point_mapping_invalid=false;
@@ -185,12 +185,11 @@ JointTargetEvidence AssessTargetPointState(const JointProblem & problem,const Jo
         {point.point_quality="Available"; point.reason="numerically-converged-point";}
         out.point_atoms.push_back(std::move(point));
     }
-    JointCheckStatus target_status=targets ? convergence : JointCheckStatus::Unavailable;
-    if(targets)
-    {
+    JointCheckStatus target_status=selection ? convergence : JointCheckStatus::Unavailable;
+    const auto assess_targets=[&](const std::vector<std::size_t> & targets) {
         std::size_t point_cursor{},layout_cursor{};
-        if(!std::is_sorted(targets->begin(),targets->end())) selection_targets_valid=false;
-        for(const auto atom:*targets)
+        if(!std::is_sorted(targets.begin(),targets.end())) selection_targets_valid=false;
+        for(const auto atom:targets)
         {
             while(point_cursor<out.point_atoms.size() && out.point_atoms[point_cursor].atom<atom) ++point_cursor;
             while(layout_cursor<layout.full_atoms.size() && layout.full_atoms[layout_cursor]<atom) ++layout_cursor;
@@ -206,6 +205,11 @@ JointTargetEvidence AssessTargetPointState(const JointProblem & problem,const Jo
             target_status=MergeConvergenceStatus(target_status,found.component_convergence);
             target_status=MergeConvergenceStatus(target_status,found.parameter_validity);
         }
+    };
+    if(selection)
+    {
+        assess_targets(selection->output_indices);
+        assess_targets(selection->buffer_indices);
     }
     if(!layout_valid || (scope==JointEvidenceScope::AssembledGlobal && original_rows!=input.observations.size()))
     {

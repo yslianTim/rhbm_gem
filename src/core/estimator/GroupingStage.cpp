@@ -96,7 +96,7 @@ void RunGroupingStage(
         {
             const auto local = AtomLocalPotentialView::For(*atom);
             const auto & joint = local.GetJointStageEstimate();
-            if (joint.source.method != EstimateMethod::JointComponents || joint.source.role != FittingRole::Target) continue;
+            if (joint.source.method != EstimateMethod::JointComponents || joint.source.role != FittingRole::OutputTarget) continue;
             ++target_count;
             if (summary.source_id.empty()) summary.source_id = joint.source.run_id;
             else if (summary.source_id != joint.source.run_id)

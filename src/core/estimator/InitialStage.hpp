@@ -6,11 +6,11 @@
 #include <vector>
 
 namespace rhbm_gem::core::detail {
-// Contributors and target flags share the Joint Problem's fitting-domain order.
+// Contributors and their roles share the Joint Problem's fitting-domain order.
 struct InitialStageWorkset
 {
     std::vector<AtomObject *> contributors;
-    std::vector<bool> target_mask;
+    std::vector<FittingRole> roles;
 };
 
 InitialStageWorkset BuildInitialStageWorkset(ModelObject &, const JointProblem &);

@@ -134,7 +134,7 @@ TEST(JointComponentChecksTest, ImmutableComponentViewsMapDomainsWithoutCopyingPr
     observable.atom_ids={"target","halo","other"}; observable.row_ids={"r0","r1","r2"};
     observable.observations={1,2,3}; observable.support={{{0,0},{1,1}},{{0,1}},{{2,2}}};
     observable.selection_domain=rhbm_gem::JointSelectionDomain{};
-    observable.selection_domain->target_indices={0,2};
+    observable.selection_domain->output_indices={0,2};
     check(JointProblem(std::move(observable)));
 }
 

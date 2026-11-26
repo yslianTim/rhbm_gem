@@ -19,7 +19,7 @@ The analysis API exposes separate atom-local records for InitialStage and JointS
 
 ## InitialStage
 
-The initialization workset resolves contributor identities and Target roles
+The initialization workset resolves contributor identities and Output or Buffer roles
 in Fitting Domain order. InitialStage uses 20 deterministic shells at 0.05, 0.15, …, 1.95 Å,
 with ten points per shell. The internal `FitOptions::initial_stage_sampling_method`
 can select `SphereSamplingMethod::SpiralDeterministic`. The default is
@@ -42,8 +42,9 @@ Use `GetInitialStageEstimate()` for the atom's published estimate record and
 `GetInitialStageGaussianResult()` expose native fit evidence. Native MDPDE
 can retain a seed or an unqualified model while the published point is absent.
 
-Joint uses finite positive InitialStage MDPDE widths as seeds and the Target
-median to fill missing or invalid seeds when donors exist. InitialStage uses
+Joint uses finite positive InitialStage MDPDE widths as seeds. Missing or
+invalid seeds for either fitting role can use the median from Output donors.
+InitialStage uses
 the native local fit and records its qualification. The
 [width calibration](joint-component-runtime.md#initialization-and-global-width-bound)
 uses a stricter donor gate than seed fallback. See
@@ -51,14 +52,14 @@ uses a stricter donor gate than seed fallback. See
 
 ## Joint result ownership
 
-The snapshot retains the target-only state, Original and Fitting mappings,
+The snapshot retains the complete fitted state for Output and Buffer Targets, Original and Fitting mappings,
 available rows, component and Target evidence, conditioning, and candidate
 diagnostics. `IsQualifiedJointAnalysisResult` requires valid initialization,
 completed search and Passed runtime and Target convergence. Unqualified
 snapshots can be saved with diagnostics and reasons. The workflow skips
 publication and downstream fitting for them.
 
-The analysis editor publishes qualified Target A/tau/C and convergence with
+The analysis editor publishes qualified A/tau/C and convergence for both fitting roles with
 `ApplyJointResult`. Read the estimate and its evidence with
 `GetJointStageEstimate()`. Use `HasJointStageModel()` before reading the point
 with `GetJointStageModel()`. Source identity includes method, atom, component,
@@ -96,29 +97,29 @@ can coexist with a qualified endpoint.
 
 ## Halo reconstruction
 
-During fitting, Halo support supplies only the exclusion mask. After
-qualification, Halo receives a geometry-local median from up to four
-nearest eligible Target points by Euclidean distance in Å, with ties
+During fitting, External Halo support supplies the exclusion mask. After
+qualification, each External Halo receives a geometry-local median from up to four
+nearest eligible Fitting Target points by Euclidean distance in Å, with ties
 ordered by Atom ID. Donors must match the snapshot and selection, have
 Passed component convergence and parameter validity, have `Adequate`
 Local Conditioning, and provide finite valid A/tau/C and positions.
 Chemical labels play no role. The algorithm takes the median of each
 parameter separately and preserves signed charge.
 
-The `geometry-local-target-median-v1` record carries Halo identity, donor
+The `geometry-local-fitting-median-v1` record carries Halo identity, donor
 IDs, count, run and donor policy. The global donor median is recorded as
 evidence. Reconstruction remains outside the Joint objective. If retained
 Halo atoms have no valid donors, the workflow records
-`halo-median-no-valid-targets`, publishes the qualified Target endpoints and
+`halo-median-no-valid-targets`, publishes the qualified fitting endpoints and
 skips peeling and subsequent fits. No Halo is a valid case with no required
 reconstruction record.
 
 ## Original-grid peeling
 
-For each Target, collect Original support rows in increasing Original-row
+For each Output Target, collect Original support rows in increasing Original-row
 order at `r² ≤ 4 Å²`, including rows excluded from fitting. Subtract the
 direct contributions of every other supported non-hydrogen atom from the
-raw voxel response, using qualified Target or reconstructed Halo values
+raw voxel response, using qualified Output and Buffer points and reconstructed External Halo values
 and their actual 2.5 Å support. Each sparse contribution is evaluated once
 and shared across Targets. Direct non-self summation preserves the own
 signal. Missing contributor state makes that response unavailable.
@@ -225,14 +226,17 @@ postprocessing contexts borrow their immutable inputs.
 ## Persistence
 
 [DataObject I/O](architecture/dataobject-io-architecture.md) owns version
-acceptance and the database lifecycle. SQLite v25 stores Joint Result
-JSON schema 25 and Stage Result JSON version 9. Joint JSON requires
-`target-only-pure-halo-support-exclusion-v1`, the current point validation
+acceptance and the database lifecycle. SQLite v26 stores Joint Result
+JSON schema 26 and Stage Result JSON version 10. Joint JSON requires
+`fixed-output-domain-buffer-expansion-v1`, the current point validation
 contract, and `strict-v2` or `practical-v2` convergence criteria. Its state
 keys are `ac`, `tau`, `log_tau`, `eta_gradient` and `objective`.
 Initialization uses `tau`, `original_tau` and `used_tau`. Its atom records
 store `initial_stage_fit_qualified`, `initial_stage_qualification` and
-`initial_stage_recovery`. Candidate
+`initial_stage_recovery`. Initialization roles derive from the canonical
+`output_indices` and `buffer_indices` through the Fitting-to-Original mapping.
+Stage JSON stores the derived roles with the stage records and checks JointStage
+points against the fitted snapshot. Candidate
 diagnostics use `candidate_eta_gradient_inf_norm` and
 `global_eta_gradient_threshold` (the projected threshold). Units use
 `joint-kernel-map-units-v2` with tau in Å. Joint CSV orders parameters
@@ -242,7 +246,7 @@ Every saved Joint result, including pre-search failures, requires the
 configured solver identity. The reader rejects missing, unknown or mixed
 solver fields. Results that reach the solver require passing
 `global-width-calibration` evidence with policy `global-initial-stage-q50-k4`,
-the qualified Target donor count in the reason, the donor median as the
+the qualified Output donor count in the reason, the donor median as the
 value and `4 × q50` as the threshold. The codec validates the policy and
 threshold and checks each saved endpoint and candidate against that bound.
 
