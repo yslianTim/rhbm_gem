@@ -207,12 +207,15 @@ inline const Range & RequireAllFinite(
     const NameType & name,
     std::string_view context = {})
 {
-    detail::RequireArrayValues(
-        values,
-        [](const auto value) { return IsFinite(value); },
-        detail::ApplyContext(
-            detail::GetName(name) + " must contain only finite values.",
-            context));
+    for (const auto & value : values)
+    {
+        if (!IsFinite(value))
+        {
+            throw std::invalid_argument(detail::ApplyContext(
+                detail::GetName(name) + " must contain only finite values.",
+                context));
+        }
+    }
     return values;
 }
 

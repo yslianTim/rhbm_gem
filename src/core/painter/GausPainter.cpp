@@ -41,6 +41,7 @@
 #endif
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 #include <set>
 #include <iomanip>
@@ -1365,11 +1366,15 @@ void GausPainter::PaintAverageQScoreToSequenceSummary(
     (void)file_path;
     #endif
 
-    auto average_qscore{ model_object->GetStandardAverageQScore() };
+    const auto & atoms{ model_object->GetAtomList() };
+    const bool selected_average{ std::any_of(atoms.begin(), atoms.end(), [](const auto & atom)
+    {
+        return atom->GetElement() != Element::HYDROGEN && std::isnan(atom->GetStandardQScore());
+    }) };
     std::ostringstream average_qscore_message;
-    average_qscore_message << "Average Q-Score: "
+    average_qscore_message << (selected_average ? "Average Q-Score (selected atoms): " : "Average Q-Score: ")
                            << std::fixed << std::setprecision(3)
-                           << average_qscore;
+                           << model_object->GetStandardAverageQScore();
     Logger::Log(LogLevel::Info, average_qscore_message.str());
 }
 

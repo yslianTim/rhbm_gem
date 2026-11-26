@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
@@ -352,6 +353,23 @@ TEST(CommandScenariosTest, PotentialAnalysisCliSelectsCommaSeparatedTargetChains
     ASSERT_NE(model, nullptr);
     EXPECT_EQ(model->GetNumberOfAtom(), 8u);
     EXPECT_EQ(SelectedSerialIds(*model), (std::vector<int>{ 1, 2, 5, 6 }));
+
+    auto map{ ReadMap(map_path) };
+    map->MapValueArrayNormalization();
+    const auto [height, offset]{ GetReferenceGaussianParameters(*map) };
+    double selected_score_sum{};
+    for (const auto * atom : model->GetSelectedAtoms())
+    {
+        const auto expected{ CalculateQScoreForAtom(*atom, *map, *model, height, offset) };
+        EXPECT_DOUBLE_EQ(atom->GetStandardQScore(), expected);
+        selected_score_sum += expected;
+    }
+    EXPECT_DOUBLE_EQ(model->GetStandardAverageQScore(),
+        selected_score_sum / static_cast<double>(model->GetSelectedAtomCount()));
+    for (const int serial_id : { 3, 4, 7, 8 })
+    {
+        EXPECT_TRUE(std::isnan(model->FindAtomPtr(serial_id)->GetStandardQScore()));
+    }
 }
 
 TEST(CommandScenariosTest, PotentialAnalysisChainSelectionNormalizesAndKeepsModelOrder)

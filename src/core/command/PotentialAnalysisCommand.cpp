@@ -19,10 +19,10 @@
 #include <algorithm>
 #include <map>
 #include <cctype>
+#include <limits>
 #include <memory>
 #include <string>
 #include <unordered_set>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -162,18 +162,20 @@ bool ExecutePreparedRequest(
         const auto [reference_height, reference_offset]{
             GetReferenceGaussianParameters(*map_object)
         };
-        std::unordered_map<int, double> q_scores_by_serial_id;
-        const auto standard_average_qscore{
-            CalculateAverageQScores(
-                *map_object, *model_object,
-                reference_height, reference_offset, q_scores_by_serial_id)
-        };
         for (const auto & atom : model_object->GetAtomList())
         {
-            atom->SetStandardQScore(atom->GetElement() == Element::HYDROGEN ?
-                0.0 : q_scores_by_serial_id.at(atom->GetSerialID()));
+            atom->SetStandardQScore(std::numeric_limits<double>::quiet_NaN());
         }
-        model_object->SetStandardAverageQScore(standard_average_qscore);
+        double selected_score_sum{};
+        for (auto * atom : model_object->GetSelectedAtoms())
+        {
+            const auto score{ CalculateQScoreForAtom(
+                *atom, *map_object, *model_object, reference_height, reference_offset) };
+            atom->SetStandardQScore(score);
+            selected_score_sum += score;
+        }
+        model_object->SetStandardAverageQScore(
+            selected_score_sum / static_cast<double>(model_object->GetSelectedAtomCount()));
         model_object->SetReferenceHeight(reference_height);
         model_object->SetReferenceOffset(reference_offset);
     }

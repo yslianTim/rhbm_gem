@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <array>
+#include <limits>
 #include <optional>
 #include <set>
 #include <stdexcept>
@@ -469,6 +470,7 @@ void SaveAtomObjectList(
             statement_db.Bind<double>(16, atom_object->GetPosition().at(2));
             statement_db.Bind<int>(17, static_cast<int>(atom_object->GetComponentKey()));
             statement_db.Bind<int>(18, static_cast<int>(atom_object->GetAtomKey()));
+            // SQLite stores NaN as NULL.
             statement_db.Bind<double>(19, atom_object->GetStandardQScore());
         });
     }
@@ -719,7 +721,8 @@ std::vector<std::unique_ptr<AtomObject>> LoadAtomObjectList(
             database.GetColumn<double>(14));
         atom_object->SetComponentKey(database.GetColumn<ComponentKey>(15));
         atom_object->SetAtomKey(database.GetColumn<AtomKey>(16));
-        atom_object->SetStandardQScore(database.GetColumn<double>(17));
+        atom_object->SetStandardQScore(database.IsNull(17) ?
+            std::numeric_limits<double>::quiet_NaN() : database.GetColumn<double>(17));
         atom_object_list.emplace_back(std::move(atom_object));
     }
     return atom_object_list;

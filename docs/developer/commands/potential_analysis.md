@@ -93,8 +93,9 @@ The anonymous-namespace `NormalizeAndValidateRequest(...)` phase handles field v
 - optionally switches the model object into simulation mode
 - skips map normalization for simulation requests and always attempts it for
   other requests
-- computes Q-scores and fits the target selection without removing atoms from
-  the model
+- computes the standard Q-score and its average over the selected non-hydrogen
+  atoms. Unscored atoms have a NULL standard Q-score in SQLite. The full model
+  supplies neighbors for Q-score sampling and Halo contributors for fitting
 - delegates sampling to `MapSampler`, whose default uses deterministic
   Fibonacci points
 - excludes hydrogen from all potential-fitting targets, neighbor masks and

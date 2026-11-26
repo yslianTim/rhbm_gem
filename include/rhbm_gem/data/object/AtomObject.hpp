@@ -80,6 +80,7 @@ public:
     std::string GetIndicator() const { return m_indicator; }
     double GetOccupancy() const { return m_occupancy; }
     double GetTemperature() const { return m_temperature; }
+    // Potential analysis represents uncomputed scores as NaN.
     double GetStandardQScore() const { return m_standard_qscore; }
     std::array<double, 3> GetPosition() const { return m_position; }
     const std::array<double, 3> & GetPositionRef() const { return m_position; }
