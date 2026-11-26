@@ -51,6 +51,13 @@ void AtomObject::SetComponentID(const std::string & value)
     m_residue = ChemicalDataHelper::GetResidueFromString(m_component_id, false);
 }
 
+void AtomObject::SetSerialID(int value)
+{
+    if (m_owner_model && value!=m_serial_id)
+        throw std::invalid_argument("Cannot change the serial ID of an atom owned by a model.");
+    m_serial_id=value;
+}
+
 void AtomObject::SetAtomID(const std::string & value)
 {
     m_atom_id = value;
@@ -59,9 +66,13 @@ void AtomObject::SetAtomID(const std::string & value)
 
 void AtomObject::SetElement(Element value)
 {
-    if ((m_element==Element::HYDROGEN)!=(value==Element::HYDROGEN) && m_owner_model!=nullptr)
-        m_owner_model->EditAnalysis().ClearPostJointQScores();
+    const bool contributor_membership_changed=(m_element==Element::HYDROGEN)!=(value==Element::HYDROGEN);
     m_element=value;
+    if (contributor_membership_changed && m_owner_model)
+    {
+        m_owner_model->EditAnalysis().Clear();
+        m_owner_model->InvalidateDerivedState();
+    }
 }
 
 void AtomObject::SetPosition(double x, double y, double z)

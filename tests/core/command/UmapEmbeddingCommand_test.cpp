@@ -590,6 +590,7 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
             atom->SetElement(Element::HYDROGEN);
         }
     }
+    geometry_model->EditAnalysis().InitializeFromSelection();
     const auto hydrogen_rows{
         rg::core::classifier::BuildLocalFittingFeatureRows(*geometry_model)
     };

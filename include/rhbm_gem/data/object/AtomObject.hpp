@@ -42,7 +42,7 @@ public:
     AtomObject(const AtomObject & other);
 
     void SetSpecialAtomFlag(bool value) { m_is_special_atom = value; }
-    void SetSerialID(int value) { m_serial_id = value; }
+    void SetSerialID(int value);
     void SetSequenceID(int value) { m_residue_id = value; }
     void SetComponentID(const std::string & value);
     void SetComponentKey(ComponentKey value) { m_component_key = value; }

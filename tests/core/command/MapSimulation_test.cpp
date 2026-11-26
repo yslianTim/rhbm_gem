@@ -195,8 +195,12 @@ TEST_F(MapSimulationTest, PreparedAtomsDistinguishTableChargesFallbacksAndNeutra
         EXPECT_FALSE(atom.charge_lookup);
     }
     // The preparation vector does not collapse atoms with the same serial identifier.
-    model->GetAtomList()[1]->SetSerialID(model->GetAtomList()[0]->GetSerialID());
-    const auto duplicate_serial{ simulation::PrepareSimulationAtomList(*model, request) };
+    std::vector<std::unique_ptr<AtomObject>> duplicate_atoms;
+    for (const auto & atom:model->GetAtomList())
+        duplicate_atoms.push_back(std::make_unique<AtomObject>(*atom));
+    duplicate_atoms[1]->SetSerialID(duplicate_atoms[0]->GetSerialID());
+    const ModelObject duplicate_model(std::move(duplicate_atoms));
+    const auto duplicate_serial{ simulation::PrepareSimulationAtomList(duplicate_model, request) };
     EXPECT_EQ(duplicate_serial.atom_list[0].serial_id, duplicate_serial.atom_list[1].serial_id);
     EXPECT_NE(duplicate_serial.atom_list[0].charge_used, duplicate_serial.atom_list[1].charge_used);
 }

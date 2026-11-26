@@ -245,7 +245,9 @@ Group results and snapshot. Replacing or clearing the snapshot invalidates
 dependent grid evidence. Peeling changes invalidate Local and Group
 results, and Local changes invalidate affected Groups. Independent InitialStage
 raw sample edits leave grid evidence intact. Atom position edits clear
-analysis and spatial caches.
+analysis and spatial caches, as does a change between hydrogen and
+non-hydrogen membership. Assign atom serial IDs before attaching atoms to
+the model. The model and bond identities depend on those IDs.
 
 Published live results bind to the source map's observation revision.
 Replacing, clearing or normalizing that map invalidates the bound analysis

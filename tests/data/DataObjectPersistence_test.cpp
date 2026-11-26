@@ -1624,7 +1624,14 @@ TEST(DataObjectPersistenceTest, JointPeeledQScoresInvalidateWithSourcesButSurviv
     EXPECT_FALSE(rg::AtomLocalPotentialView::For(*copy.FindAtomPtr(1)).GetPostJointQScore());
     auto hydrogen=*f.model;
     hydrogen.FindAtomPtr(1)->SetElement(Element::HYDROGEN);
-    EXPECT_FALSE(rg::AtomLocalPotentialView::For(*hydrogen.FindAtomPtr(1)).GetPostJointQScore());
+    EXPECT_FALSE(hydrogen.GetAnalysisView().GetJointResult());
+    EXPECT_FALSE(rg::AtomLocalPotentialView::For(*hydrogen.FindAtomPtr(1)).IsAvailable());
+    auto identity=*f.model;
+    auto * donor=identity.FindAtomPtr(1);
+    EXPECT_NO_THROW(donor->SetSerialID(1));
+    EXPECT_THROW(donor->SetSerialID(2),std::invalid_argument);
+    EXPECT_EQ(identity.FindAtomPtr(1),donor);
+    EXPECT_TRUE(rg::AtomLocalPotentialView::For(*donor).GetPostJointQScore());
     auto geometry=*f.model;
     geometry.FindAtomPtr(1)->SetPosition(.1,0,0);
     EXPECT_FALSE(rg::AtomLocalPotentialView::For(*geometry.FindAtomPtr(1)).IsAvailable());
