@@ -9,7 +9,7 @@ execution stages.
 1. **InitialStage** samples contributors and fits native OLS/MDPDE estimates,
    including local alpha training and width seeds.
 2. **JointStage** runs the [Joint Component Estimator](joint-component-runtime.md)
-   and certifies the endpoint. A qualified snapshot feeds Halo reconstruction,
+   and certifies the endpoint. A qualified snapshot feeds contributor reconstruction,
    Original-grid peeling, charge correction and Post-Joint Local MDPDE.
 3. **GroupingStage** uses eligible Post-Joint Local evidence for group alpha
    training, group MDPDE, WEB posterior inference and publication. It runs only
@@ -63,8 +63,8 @@ The analysis editor publishes qualified A/tau/C and convergence for both fitting
 `ApplyJointResult`. Read the estimate and its evidence with
 `GetJointStageEstimate()`. Use `HasJointStageModel()` before reading the point
 with `GetJointStageModel()`. Source identity includes method, atom, component,
-run and role. Missing or unqualified points remain unavailable. Halo
-reconstruction has separate provenance. Local and Group results are stored
+run and role. Missing or unqualified points remain unavailable. Contributor reconstruction
+uses separate provenance and preserves both fitting roles. Local and Group results are stored
 alongside the JointStage estimate and consume evidence from the same run.
 
 ## Target Point Quality
@@ -95,32 +95,43 @@ parameter and selection checks, and at assembly also requires complete
 fitting-row availability and mapping consistency. A Point Quality warning
 can coexist with a qualified endpoint.
 
-## Halo reconstruction
+## Contributor reconstruction
 
-During fitting, External Halo support supplies the exclusion mask. After
-qualification, each External Halo receives a geometry-local median from up to four
-nearest eligible Fitting Target points by Euclidean distance in Å, with ties
-ordered by Atom ID. Donors must match the snapshot and selection, have
-Passed component convergence and parameter validity, have `Adequate`
-Local Conditioning, and provide finite valid A/tau/C and positions.
-Chemical labels play no role. The algorithm takes the median of each
-parameter separately and preserves signed charge.
+A Fitting Target can supply its own neighbor profile and donate its Joint point
+when the Joint, Target and component convergence and parameter-validity checks
+pass, A/tau/C are finite with A ≥ 0 and tau > 0, Local Conditioning is
+`Adequate`, and the accepted log width is interior. The [Width KKT boundary
+assessment](joint-component-numerics.md#projected-width-boundaries) classifies
+each atom independently of its block summary. Boundary and conditioning
+reasons can coexist. Point Quality and the accepted endpoint retain their
+existing meaning.
 
-The `geometry-local-fitting-median-v1` record carries Halo identity, donor
-IDs, count, run and donor policy. The global donor median is recorded as
-evidence. Reconstruction remains outside the Joint objective. If retained
-Halo atoms have no valid donors, the workflow records
-`halo-median-no-valid-targets`, publishes the qualified fitting endpoints and
-skips peeling and subsequent fits. No Halo is a valid case with no required
-reconstruction record.
+A qualified fitting endpoint that fails either reconstruction quality check,
+or an External Halo, uses the componentwise median of up to four eligible
+original Joint points. Selection uses the contributor's own coordinates,
+Euclidean distance in Å, and Atom ID as the deterministic distance tie-breaker.
+The search has no radius or chemical-label filter. An immutable KD-tree serves
+the entire run, including QScore requests outside the Original Domain.
+A replaced fitting point retains its Output or Buffer role.
+
+The `quality-qualified-contributor-reconstruction-v1` snapshot records the
+qualified donor count and each replacement's identity, role, reasons, run,
+parameters and ordered donor IDs. The `rejection_reasons` bit mask assigns
+1 to an External Halo, 2 to the lower width bound, 4 to the upper width
+bound, and 8 to conditioning below Adequate. Direct contributors reuse
+their Joint points. If a replacement is needed and the donor pool is empty, its record
+reports unavailable with no parameters. The workflow preserves the qualified
+Joint endpoint, records `no-qualified-reconstruction-donors` and skips
+Peeling, Post-Joint Local and Grouping. A run whose contributors are all direct
+has no replacement records.
 
 ## Original-grid peeling
 
 For each Output Target, collect Original support rows in increasing Original-row
 order at `r² ≤ 4 Å²`, including rows excluded from fitting. Subtract the
 direct contributions of every other supported non-hydrogen atom from the
-raw voxel response, using qualified Output and Buffer points and reconstructed External Halo values
-and their actual 2.5 Å support. Each sparse contribution is evaluated once
+raw voxel response using each neighbor’s reconstruction profile
+and its recorded 2.5 Å support. Each sparse contribution is evaluated once
 and shared across Targets. Direct non-self summation preserves the own
 signal. Missing contributor state makes that response unavailable.
 
@@ -218,9 +229,18 @@ Component-average plots retain equal-weight arithmetic parameter averages
 across available groups, so their C is the mean of group charge medians,
 not the pooled eligible-atom median.
 
+## Post-Joint QScore
+
+Post-Joint QScore uses the same reconstruction records for Original-domain
+neighbors and queries the same donor population once per Extra-domain Halo.
+The QScore sample strategy and standard reference are retained. Each Output
+Target's own Joint reference uses its accepted A/tau/C. Missing neighbors
+make that comparison unavailable. Stage JSON records the ordered donor IDs of
+Extra-domain Halos under the `joint-peeled-qscore-v2` contract.
+
 ## Invalidation
 
-Changing a Joint stage endpoint invalidates its run's peeling, Local and
+Changing a Joint stage endpoint invalidates its run's Peeling, QScore, Local and
 Group results and snapshot. Replacing or clearing the snapshot invalidates
 dependent grid evidence. Peeling changes invalidate Local and Group
 results, and Local changes invalidate affected Groups. Independent InitialStage
@@ -238,8 +258,8 @@ postprocessing contexts borrow their immutable inputs.
 ## Persistence
 
 [DataObject I/O](architecture/dataobject-io-architecture.md) owns version
-acceptance and the database lifecycle. SQLite v26 stores Joint Result
-JSON schema 26 and Stage Result JSON version 10. Joint JSON requires
+acceptance and the database lifecycle. SQLite v27 stores Joint Result
+JSON schema 27 and Stage Result JSON version 11. Joint JSON requires
 `fixed-output-domain-buffer-expansion-v1`, the current point validation
 contract, and `strict-v2` or `practical-v2` convergence criteria. Its state
 keys are `ac`, `tau`, `log_tau`, `eta_gradient` and `objective`.
@@ -251,8 +271,8 @@ Stage JSON stores the derived roles with the stage records and checks JointStage
 points against the fitted snapshot. Candidate
 diagnostics use `candidate_eta_gradient_inf_norm` and
 `global_eta_gradient_threshold` (the projected threshold). Units use
-`joint-kernel-map-units-v2` with tau in Å. Joint CSV orders parameters
-`A,tau,C`.
+`joint-kernel-map-units-v2` with tau in Å. Joint CSV keeps accepted fitting parameters in `A,tau,C`
+and exports replacement parameters in dedicated reconstruction columns.
 
 Every saved Joint result, including pre-search failures, requires the
 configured solver identity. The reader rejects missing, unknown or mixed
@@ -280,11 +300,12 @@ diagnostics in `initial_native`, and samples and coordinates in `raw` and
 `geometry`. The `joint` record stores JointStage points, convergence and
 source identity. The optional source flag is `fixed_from_initial_stage`.
 The readers require the current versions and field names.
-`peeling` stores the paired observations and neighbor count.
+`peeling` stores the paired observations and neighbor count under `original-grid-v2`.
 `post_joint_local` stores charge-corrected fit evidence, and `posterior` stores
 Group member inference. Grid peeling requires
-its snapshot. Available Halo-subtracted responses require reconstruction
-provenance. Validation checks ordered unique `original_row` and `grid`
+its snapshot. Available responses require usable contributor reconstruction.
+JSON validates each replacement against accepted endpoint evidence, then SQLite
+save and load verify nearest donor order against the model's atom coordinates. Validation checks ordered unique `original_row` and `grid`
 identities, snapshot row mapping and voxel geometry, response/reason pairs,
 source/run identity, and Local failure-row identities and counts. It
 replays the correction for available Local records. `fixed_charge` must
@@ -299,13 +320,13 @@ the JSON text, preserving endpoint coefficients and their median on
 round-trip. Empty groups cannot acquire a zero fallback or successful
 inference; member posterior C remains zero and its charge uncertainty,
 like the prior's, remains NaN. Unsupported database/JSON versions are rejected
-without migration or inferred charge repair. Nullable diagnostics,
+without migration. Rerun `potential_analysis` into a new database. Nullable diagnostics,
 missing states and unavailable reconstruction are representable outcomes.
 
 See [PotentialFittingWorkflow.cpp](../../src/core/estimator/PotentialFittingWorkflow.cpp),
 [InitialStage.cpp](../../src/core/estimator/InitialStage.cpp),
 [TargetEvidence.cpp](../../src/core/estimator/joint_component/TargetEvidence.cpp),
-[HaloMedianReconstruction.cpp](../../src/core/estimator/joint_component/HaloMedianReconstruction.cpp),
+[ContributorReconstruction.cpp](../../src/core/estimator/joint_component/ContributorReconstruction.cpp),
 [PostFitPeeling.cpp](../../src/core/estimator/joint_component/PostFitPeeling.cpp),
 [GroupingStage.cpp](../../src/core/estimator/GroupingStage.cpp)
 and [PostJointLocalValidation.cpp](../../src/data/detail/PostJointLocalValidation.cpp).

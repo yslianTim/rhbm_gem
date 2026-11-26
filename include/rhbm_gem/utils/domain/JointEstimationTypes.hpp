@@ -19,11 +19,11 @@ inline constexpr bool IsFittingTarget(FittingRole role)
 inline constexpr std::string_view BufferExpansionContributorPolicy="buffer-expansion-external-halo-exclusion-v1";
 inline constexpr std::string_view JointBufferExpansionParameterizationContract=
     "fixed-output-domain-buffer-expansion-v1";
-inline constexpr std::string_view HaloMedianReconstructionContractVersion=
-    "geometry-local-fitting-median-v1";
+inline constexpr std::string_view ContributorReconstructionContractVersion=
+    "quality-qualified-contributor-reconstruction-v1";
 inline constexpr std::size_t GeometryLocalFittingMedianNeighborCount=4;
-inline constexpr std::string_view GeometryLocalFittingMedianDonorPolicy=
-    "qualified-joint-fitting-points-knn4-unbounded-euclidean-angstrom-distance-atom-id-tie-v1";
+inline constexpr std::string_view ContributorReconstructionDonorPolicy=
+    "interior-adequate-joint-fitting-points-knn4-unbounded-euclidean-angstrom-distance-atom-id-tie-v1";
 struct JointBufferExpansionProvenance
 {
     std::size_t original_rows{},fit_rows{},excluded_rows{};
@@ -157,29 +157,37 @@ inline bool IsQualifiedInitialStageEstimate(
         *native_status != static_cast<int>(RHBMEstimationStatus::SUCCESS) &&
         recovery && recovery->accepted;
 }
-enum class HaloMedianSource { GeometryLocalFittingMedian };
-struct JointHaloMedianReconstruction
+enum class ReconstructionSource { JointPoint, GeometryLocalFittingMedian, Unavailable };
+enum ReconstructionRejectionReason : unsigned
 {
-    std::size_t halo_contributor_index{};
+    ExternalHaloReconstruction = 1,
+    WidthLowerBoundReconstruction = 2,
+    WidthUpperBoundReconstruction = 4,
+    ConditioningNotAdequateReconstruction = 8
+};
+struct JointContributorReplacement
+{
+    std::size_t contributor_index{};
     std::string atom_id;
+    FittingRole role{FittingRole::NotRecorded};
+    unsigned rejection_reasons{};
     double amplitude{},width{},charge{};
-    HaloMedianSource source{HaloMedianSource::GeometryLocalFittingMedian};
+    ReconstructionSource source{ReconstructionSource::GeometryLocalFittingMedian};
     std::size_t donor_count{};
     std::string joint_run_id;
-    std::string contract{HaloMedianReconstructionContractVersion};
+    std::string contract{ContributorReconstructionContractVersion};
     std::vector<std::string> donor_atom_ids;
-    bool operator==(const JointHaloMedianReconstruction &) const = default;
+    bool operator==(const JointContributorReplacement &) const = default;
 };
-struct JointHaloMedianSnapshot
+struct JointContributorReconstructionSnapshot
 {
-    std::string contract{HaloMedianReconstructionContractVersion};
+    std::string contract{ContributorReconstructionContractVersion};
     std::string joint_run_id;
-    std::array<double,3> global_median{};
-    std::size_t valid_target_count{};
-    std::vector<JointHaloMedianReconstruction> halos;
+    std::size_t qualified_donor_count{};
+    std::vector<JointContributorReplacement> replacements;
     std::size_t neighbor_count{GeometryLocalFittingMedianNeighborCount};
-    std::string donor_policy{GeometryLocalFittingMedianDonorPolicy};
-    bool operator==(const JointHaloMedianSnapshot &) const = default;
+    std::string donor_policy{ContributorReconstructionDonorPolicy};
+    bool operator==(const JointContributorReconstructionSnapshot &) const = default;
 };
 struct JointInitialization
 {

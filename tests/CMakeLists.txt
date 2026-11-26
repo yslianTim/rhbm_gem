@@ -184,7 +184,7 @@ set(JOINT_COMPONENT_CONTRACT_TEST_SOURCES
     core/joint_component/Observation_test.cpp
     core/joint_component/CompactAssessment_test.cpp
     core/joint_component/Components_test.cpp
-    core/joint_component/HaloMedianReconstruction_test.cpp
+    core/joint_component/ContributorReconstruction_test.cpp
     core/joint_component/PureHaloSupportExclusion_test.cpp
 )
 
@@ -318,7 +318,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
 endif()
 
 set(joint_persistence_test_patterns
-    DataObjectPersistenceTest.JointCurrentSchemaV26*
+    DataObjectPersistenceTest.JointCurrentSchemaV27*
     DataObjectPersistenceTest.JointResultsRoundTripCopyClearAndReplaceAtomically
     DataObjectPersistenceTest.JointSolverProvenanceRoundTripsAndMissingFieldIsRejected
     DataObjectPersistenceTest.BcdFailureEvidenceAndSweepCountsRoundTrip
@@ -330,7 +330,7 @@ set(joint_persistence_test_patterns
     DataObjectPersistenceTest.JointMetadataRejectsInvalidValuesAndOldDocumentsWithoutWrites
     DataObjectPersistenceTest.JointSelectionMetadataValidationAndCsvRoles
     DataObjectPersistenceTest.JointNeutralRoundTripPreservesCurrentJointAndStageResults
-    DataObjectPersistenceTest.StageResultJsonV10OnlyAcceptsCurrentRoundTrip
+    DataObjectPersistenceTest.StageResultJsonV11OnlyAcceptsCurrentRoundTrip
     DataObjectPersistenceTest.CanonicalNativeDiagnosticsAndMissingStatesRoundTripExactly
     DataObjectPersistenceTest.UncertifiedCandidateDiagnosticsRoundTripWithoutEnteringScientificExports
     DataObjectPersistenceTest.CandidateDiagnosticsRejectInvalidOrUntrustedCheckpointParameters

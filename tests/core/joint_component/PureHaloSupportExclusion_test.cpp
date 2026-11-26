@@ -7,7 +7,7 @@
 
 #include "core/estimator/gaussian_fit/PreparedLocalGaussianFit.hpp"
 #include "core/sampling/MapInterpolation.hpp"
-#include "core/estimator/joint_component/HaloMedianReconstruction.hpp"
+#include "core/estimator/joint_component/ContributorReconstruction.hpp"
 #include "core/estimator/GroupingStage.hpp"
 #include "core/estimator/joint_component/PostFitPeeling.hpp"
 #include "support/JointPostprocessingTestHelpers.hpp"
@@ -112,26 +112,14 @@ JointAnalysisResult PurePeelingSnapshot(const JointProblem & problem,const Model
     component.state=JointState{{1.0,0.0},{1.0},{0.0},{0.0},0.0};
     result.components.push_back(component);
     result.assembled_state=component.state;
-    JointHaloMedianSnapshot medians;
-    medians.joint_run_id="pure-peeling-run";
-    medians.valid_target_count=1;
-    medians.global_median={.5,.8,0.0};
-    if (problem.OriginalInput().atom_ids.size()>
-        problem.OriginalInput().selection_domain->output_indices.size())
-    {
-        JointHaloMedianReconstruction reconstruction;
-        reconstruction.halo_contributor_index=1;
-        reconstruction.atom_id="2";
-        reconstruction.amplitude=.5;
-        reconstruction.width=.8;
-        reconstruction.charge=0.0;
-        reconstruction.source=HaloMedianSource::GeometryLocalFittingMedian;
-        reconstruction.donor_count=1;
-        reconstruction.joint_run_id="pure-peeling-run";
-        reconstruction.donor_atom_ids={"1"};
-        medians.halos.push_back(std::move(reconstruction));
-        result.halo_median_reconstruction=std::move(medians);
-    }
+    result.evidence.push_back({"global-width-calibration",JointCheckStatus::Passed,
+        JointEvidenceScope::AssembledGlobal,.65,2.6,"global-initial-stage-q50-k4; qualified-donors=1/1"});
+    result.evidence.push_back({"qualified-initial-stage-donor-coverage",JointCheckStatus::Passed,
+        JointEvidenceScope::AssembledGlobal,1.0,.95,"output-only-qualified-initial-stage-widths"});
+    result.target_evidence=JointTargetEvidence{};
+    result.target_evidence->original_rows=result.row_ids.size();
+    result.target_evidence->point_atoms.push_back({0,JointCheckStatus::Passed,JointCheckStatus::Passed,
+        "Adequate","Available",{},"test-qualified-point"});
     return result;
 }
 
@@ -372,13 +360,14 @@ MapFixture ReconstructionOnlyFixture()
 JointAnalysisResult QualifiedReconstructionSnapshot(const JointProblem & problem,const ModelObject & model)
 {
     auto result=PurePeelingSnapshot(problem,model);
-    result.halo_median_reconstruction.reset();
+    result.contributor_reconstruction.reset();
     result.initialization=TargetInitialization();
     result.search_completed=true;
     const auto targets=problem.OriginalInput().selection_domain->output_indices;
     result.components.front().atoms={targets.front()};
     result.components.front().state->ac={2.0,-.2};
     result.components.front().state->tau={.65};
+    result.components.front().state->log_tau={std::log(.65)};
     result.components.front().search_completed=true;
     result.components.front().stop_reason="converged";
     result.assembled_state=result.components.front().state;
@@ -393,12 +382,13 @@ JointAnalysisResult QualifiedReconstructionSnapshot(const JointProblem & problem
         component.target_runtime_convergence=JointCheckStatus::Passed;
         component.search_completed=true;
         component.stop_reason="converged";
-        component.state=JointState{{10.0,.4},{1.1},{0.0},{0.0},0.0};
+        component.state=JointState{{10.0,.4},{1.1},{std::log(1.1)},{0.0},0.0};
         result.components.push_back(std::move(component));
     }
     result.target_evidence.emplace();
     result.target_evidence->contract=std::string(JointTargetPointValidationContractVersion);
     result.target_evidence->original_rows=problem.OriginalInput().row_ids.size();
+    result.target_evidence->point_atoms.clear();
     for (const auto target:targets)
     {
         JointAtomPointValidation point;
@@ -410,10 +400,10 @@ JointAnalysisResult QualifiedReconstructionSnapshot(const JointProblem & problem
         point.reason="test-qualified-point";
         result.target_evidence->point_atoms.push_back(std::move(point));
     }
-    auto medians=core::detail::BuildHaloMedianReconstruction(
+    auto medians=core::detail::BuildContributorReconstruction(
         model,problem,result,"reconstruction-only-run");
     if (problem.OriginalInput().atom_ids.size()>targets.size())
-        result.halo_median_reconstruction=medians.TakeSnapshot();
+        result.contributor_reconstruction=medians.TakeSnapshot();
     return result;
 }
 
@@ -687,12 +677,13 @@ TEST(PureHaloSupportExclusionTest, PeelingIsInvariantToExtraContributorChemicalL
 
 TEST(PureHaloSupportExclusionTest, RejectsReconstructionMedianFromDifferentJointEndpoint)
 {
-    auto fixture=ReconstructionOnlyFixture();
+    auto fixture=BoundaryFixture();
     const auto problem=BuildJointProblem(fixture.map,fixture.model);
     auto snapshot=QualifiedReconstructionSnapshot(problem,fixture.model);
-    snapshot.halo_median_reconstruction=core::detail::BuildHaloMedianReconstruction(
+    snapshot.contributor_reconstruction=core::detail::BuildContributorReconstruction(
         fixture.model,problem,snapshot,"reconstruction-only-run").TakeSnapshot();
-    snapshot.halo_median_reconstruction->global_median[0]+=1.0;
+    ASSERT_FALSE(snapshot.contributor_reconstruction->replacements.empty());
+    snapshot.contributor_reconstruction->replacements.front().amplitude+=1.0;
     fixture.model.EditAnalysis().ApplyJointStageEstimates(
         data_internal::BuildJointStageEstimates(snapshot, "reconstruction-only-run"));
     const auto context=postprocessing_test::MakeJointPostprocessingContext(
@@ -705,17 +696,17 @@ TEST(PureHaloSupportExclusionTest, HaloSnapshotTransferKeepsDonorWorkspaceAlive)
     auto fixture=ReconstructionOnlyFixture();
     const auto problem=BuildJointProblem(fixture.map,fixture.model);
     const auto source=QualifiedReconstructionSnapshot(problem,fixture.model);
-    auto build=core::detail::BuildHaloMedianReconstruction(
+    auto build=core::detail::BuildContributorReconstruction(
         fixture.model,problem,source,"reconstruction-only-run");
     ASSERT_TRUE(build.snapshot);
     const auto expected=*build.snapshot;
-    const auto donor_count=build.target_donors.size();
+    const auto donor_count=build.donor_index->Donors().size();
 
     const auto transferred=build.TakeSnapshot();
 
     EXPECT_EQ(transferred,expected);
     EXPECT_FALSE(build.snapshot);
-    EXPECT_EQ(build.target_donors.size(),donor_count);
+    EXPECT_EQ(build.donor_index->Donors().size(),donor_count);
 }
 
 TEST(PureHaloSupportExclusionTest, PersistsVersionedDualDomainAndMedianProvenance)
@@ -737,24 +728,22 @@ TEST(PureHaloSupportExclusionTest, PersistsVersionedDualDomainAndMedianProvenanc
     solver.bcd_maximum_sweeps=300;
     solver.bcd_order="forward";
     solver.bcd_local_search=std::string(BcdBoundedLocalSearchName);
-    snapshot.evidence.push_back({"global-width-calibration",JointCheckStatus::Passed,
-        JointEvidenceScope::AssembledGlobal,.65,2.6,"global-initial-stage-q50-k4; qualified-donors=1/1"});
-    snapshot.evidence.push_back({"qualified-initial-stage-donor-coverage",JointCheckStatus::Passed,
-        JointEvidenceScope::AssembledGlobal,1.0,.95,"output-only-qualified-initial-stage-widths"});
+    snapshot.contributor_reconstruction=core::detail::BuildContributorReconstruction(
+        fixture.model,problem,snapshot,"pure-peeling-run").TakeSnapshot();
     const auto encoded=joint_result_io::Encode(snapshot);
-    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),26);
+    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),27);
     const auto encoded_root=boost::json::parse(encoded).as_object();
-    const auto & median_json=encoded_root.at("halo_median_reconstruction").as_object();
+    const auto & median_json=encoded_root.at("contributor_reconstruction").as_object();
     EXPECT_EQ(median_json.at("neighbor_count").as_int64(),4);
-    EXPECT_EQ(median_json.at("donor_policy").as_string(),GeometryLocalFittingMedianDonorPolicy);
-    const auto & halo_json=median_json.at("halos").as_array().front().as_object();
+    EXPECT_EQ(median_json.at("donor_policy").as_string(),ContributorReconstructionDonorPolicy);
+    const auto & halo_json=median_json.at("replacements").as_array().front().as_object();
     EXPECT_FALSE(halo_json.contains("group_key"));
     EXPECT_TRUE(halo_json.contains("donor_atom_ids"));
     const auto decoded=joint_result_io::Decode(encoded);
     EXPECT_EQ(decoded.parameterization_contract,JointBufferExpansionParameterizationContract);
     EXPECT_EQ(decoded.fitting_to_original_contributors,problem.FittingToOriginalContributors());
-    ASSERT_TRUE(decoded.halo_median_reconstruction);
-    EXPECT_EQ(decoded.halo_median_reconstruction->halos,snapshot.halo_median_reconstruction->halos);
+    ASSERT_TRUE(decoded.contributor_reconstruction);
+    EXPECT_EQ(decoded.contributor_reconstruction->replacements,snapshot.contributor_reconstruction->replacements);
 }
 
 TEST(PureHaloSupportExclusionTest, RunsFullPureWorkflowWithGeometryLocalHaloSources)
@@ -784,14 +773,16 @@ TEST(PureHaloSupportExclusionTest, RunsFullPureWorkflowWithGeometryLocalHaloSour
     ASSERT_NE(donor_coverage,result->evidence.end());
     ASSERT_TRUE(donor_coverage->value && donor_coverage->threshold);
     EXPECT_GE(*donor_coverage->value,*donor_coverage->threshold);
-    ASSERT_TRUE(result->halo_median_reconstruction);
-    EXPECT_EQ(result->halo_median_reconstruction->halos.size(),2u);
-    EXPECT_EQ(metrics.halo_median_valid_target_count,20u);
-    EXPECT_EQ(metrics.halo_median_geometry_local_halos,2u);
-    EXPECT_EQ(metrics.halo_median_unavailable_halos,0u);
-    for (const auto & halo_result:result->halo_median_reconstruction->halos)
+    ASSERT_TRUE(result->contributor_reconstruction);
+    EXPECT_EQ(result->contributor_reconstruction->replacements.size(),2u);
+    EXPECT_EQ(result->contributor_reconstruction->qualified_donor_count,20u);
+    EXPECT_EQ(std::count_if(result->contributor_reconstruction->replacements.begin(),
+        result->contributor_reconstruction->replacements.end(),
+        [](const auto & record){return record.role==FittingRole::ExternalHalo;}),2);
+    EXPECT_FALSE(HasUnavailableJointContributorReconstruction(*result));
+    for (const auto & halo_result:result->contributor_reconstruction->replacements)
     {
-        EXPECT_EQ(halo_result.source,HaloMedianSource::GeometryLocalFittingMedian);
+        EXPECT_EQ(halo_result.source,ReconstructionSource::GeometryLocalFittingMedian);
         EXPECT_EQ(halo_result.donor_count,4u);
         EXPECT_EQ(halo_result.donor_atom_ids,(std::vector<std::string>{"1","22","14","16"}));
     }
@@ -873,7 +864,7 @@ TEST(PureHaloSupportExclusionTest, RunsFullPureWorkflowWithGeometryLocalHaloSour
 
 TEST(PureHaloSupportExclusionTest, RunsPureWorkflowWithoutHalos)
 {
-    auto fixture=WorkflowFixture();
+    auto fixture=WorkflowFixture(true);
     fixture.model.SelectAllAtoms();
     FitOptions options;
     options.quiet_mode=true;
@@ -885,8 +876,8 @@ TEST(PureHaloSupportExclusionTest, RunsPureWorkflowWithoutHalos)
     ASSERT_TRUE(result);
     ASSERT_TRUE(result->selection_domain);
     EXPECT_EQ(result->selection_domain->output_indices.size(),result->atom_ids.size());
-    EXPECT_FALSE(result->halo_median_reconstruction);
-    EXPECT_EQ(metrics.halo_median_geometry_local_halos,0u);
+    ASSERT_TRUE(result->contributor_reconstruction);
+    EXPECT_TRUE(result->contributor_reconstruction->replacements.empty());
 }
 
 TEST(PureHaloSupportExclusionTest, ExtendedSearchQualifiesAssemblyAndFeedsEveryDownstreamStage)
@@ -931,8 +922,10 @@ TEST(PureHaloSupportExclusionTest, ExtendedSearchQualifiesAssemblyAndFeedsEveryD
     ASSERT_LE(maximum_sweeps,100u);
     ASSERT_TRUE(IsQualifiedJointAnalysisResult(*result));
     ASSERT_TRUE(result->assembled_state);
-    ASSERT_TRUE(result->halo_median_reconstruction);
-    EXPECT_EQ(metrics.halo_median_geometry_local_halos,2u);
+    ASSERT_TRUE(result->contributor_reconstruction);
+    EXPECT_EQ(std::count_if(result->contributor_reconstruction->replacements.begin(),
+        result->contributor_reconstruction->replacements.end(),
+        [](const auto & record){return record.role==FittingRole::ExternalHalo;}),2);
     for(int serial:{1,23})
     {
         const auto target=AtomLocalPotentialView::For(*fixture.model.FindAtomPtr(serial));
@@ -958,7 +951,7 @@ TEST(PureHaloSupportExclusionTest, SkipsDownstreamWhenJointQualificationFails)
     ASSERT_TRUE(result);
     EXPECT_FALSE(result->initialization.valid);
     ASSERT_FALSE(IsQualifiedJointAnalysisResult(*result));
-    EXPECT_FALSE(result->halo_median_reconstruction);
+    EXPECT_FALSE(result->contributor_reconstruction);
     const auto target=AtomLocalPotentialView::For(*fixture.model.FindAtomPtr(1));
     EXPECT_FALSE(target.GetPostFitPeeling());
     EXPECT_FALSE(target.GetPostJointLocalResult());
@@ -977,7 +970,7 @@ TEST(PureHaloSupportExclusionTest, ProductionWorkflowUsesBoundedPureExclusionAnd
     ASSERT_TRUE(result->selection_domain);
     EXPECT_EQ(result->selection_domain->contributor_policy,BufferExpansionContributorPolicy);
     EXPECT_FALSE(IsQualifiedJointAnalysisResult(*result));
-    EXPECT_FALSE(result->halo_median_reconstruction);
+    EXPECT_FALSE(result->contributor_reconstruction);
     const auto calibration=std::find_if(result->evidence.begin(),result->evidence.end(),[](const auto & check) {
         return check.name=="global-width-calibration";
     });
@@ -1085,14 +1078,26 @@ TEST(PureHaloSupportExclusionTest, GridSubtractionCoversOverlapsHalosChargesAndS
                 values[grid]+=ReferenceContribution(core::simulation::SupportSquare(map.GetGridPosition(grid),centers[atom]),points[atom]);
         map.SetMapValueArray(std::move(values));
         const auto problem=BuildJointProblem(map,model);
-        auto snapshot=QualifiedReconstructionSnapshot(problem,model);
-        for(std::size_t i=0;i<2;++i)
+        auto snapshot=PurePeelingSnapshot(problem,model);
+        snapshot.initialization.valid=true;
+        snapshot.search_completed=true;
+        snapshot.components.clear();
+        snapshot.target_evidence->point_atoms.clear();
+        for (const auto i:problem.FittingToOriginalContributors())
         {
-            snapshot.components[i].state->ac={points[i].GetAmplitude(),points[i].GetOffset()};
-            snapshot.components[i].state->tau={points[i].GetWidth()};
+            auto & component=snapshot.components.emplace_back();
+            component.id=std::to_string(i+1);
+            component.atoms={i};
+            component.runtime_convergence=component.target_runtime_convergence=JointCheckStatus::Passed;
+            const auto & p=points.at(i);
+            component.state=JointState{{p.GetAmplitude(),p.GetOffset()},{p.GetWidth()},
+                {std::log(p.GetWidth())},{0.0},0.0};
+            JointAtomPointValidation evidence{i,JointCheckStatus::Passed,JointCheckStatus::Passed,
+                "Adequate","Available",{},"analytic-grid-qualifying-endpoint"};
+            snapshot.target_evidence->point_atoms.push_back(evidence);
+            component.target_evidence.emplace().point_atoms.push_back(evidence);
         }
-        snapshot.halo_median_reconstruction.reset();
-        if(halos) snapshot.halo_median_reconstruction=core::detail::BuildHaloMedianReconstruction(
+        snapshot.contributor_reconstruction=core::detail::BuildContributorReconstruction(
             model,problem,snapshot,"grid-reference").TakeSnapshot();
         model.EditAnalysis().ApplyJointStageEstimates(
             data_internal::BuildJointStageEstimates(snapshot, "grid-reference"));
@@ -1127,9 +1132,18 @@ TEST(PureHaloSupportExclusionTest, GridSubtractionCoversOverlapsHalosChargesAndS
         }
         if(!halos)
         {
-            snapshot.components[1].state.reset();
-            model.EditAnalysis().ApplyJointStageEstimates(
-                data_internal::BuildJointStageEstimates(snapshot, "grid-reference"));
+            auto corrupted=snapshot;
+            corrupted.components[1].state.reset();
+            EXPECT_THROW(postprocessing_test::MakeJointPostprocessingContext(map,model,problem,corrupted)
+                .BuildPostFitPeelingBatch(std::vector<std::size_t>{0}),std::invalid_argument);
+
+            snapshot.contributor_reconstruction.reset();
+            for (auto & point:snapshot.target_evidence->point_atoms) point.local_conditioning="Warning";
+            snapshot.contributor_reconstruction=core::detail::BuildContributorReconstruction(
+                model,problem,snapshot,"grid-reference").TakeSnapshot();
+            snapshot.evidence.push_back({std::string(JointContributorReconstructionEvidenceName),
+                JointCheckStatus::Unavailable,JointEvidenceScope::AssembledGlobal,{},{},
+                std::string(NoQualifiedReconstructionDonors)});
             const auto incomplete=postprocessing_test::MakeJointPostprocessingContext(map,model,problem,snapshot)
                 .BuildPostFitPeelingBatch(std::vector<std::size_t>{0});
             EXPECT_TRUE(std::any_of(incomplete.front().second.samples.begin(),incomplete.front().second.samples.end(),
@@ -1617,9 +1631,9 @@ TEST(PureHaloSupportExclusionTest, TransferredHaloWorkspaceCannotHideForeignReco
     auto fixture=BoundaryFixture();
     const auto problem=BuildJointProblem(fixture.map,fixture.model);
     auto snapshot=QualifiedReconstructionSnapshot(problem,fixture.model);
-    auto workspace=core::detail::BuildHaloMedianReconstruction(fixture.model,problem,snapshot,"reconstruction-only-run");
-    snapshot.halo_median_reconstruction=workspace.TakeSnapshot();
-    snapshot.halo_median_reconstruction->halos.front().amplitude+=1.;
+    auto workspace=core::detail::BuildContributorReconstruction(fixture.model,problem,snapshot,"reconstruction-only-run");
+    snapshot.contributor_reconstruction=workspace.TakeSnapshot();
+    snapshot.contributor_reconstruction->replacements.front().amplitude+=1.;
     fixture.model.EditAnalysis().ApplyJointStageEstimates(
         data_internal::BuildJointStageEstimates(snapshot, "reconstruction-only-run"));
     const auto context=postprocessing_test::MakeJointPostprocessingContext(

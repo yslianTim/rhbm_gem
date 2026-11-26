@@ -495,7 +495,7 @@ rg::JointAnalysisResult CurrentJointExample(bool with_halo=true)
     component.first_order_stationarity_sweep=107;
     component.confirmed_stationarity_sweep=108;
     component.endpoint_certification_sweep=108;
-    component.state=rg::JointState{{2.123456789012345,-0.3},{0.5},{-0.7},{1e-14},0.012345678901234567};
+    component.state=rg::JointState{{2.123456789012345,-0.3},{0.5},{std::log(0.5)},{1e-14},0.012345678901234567};
     component.runtime_convergence=rg::JointCheckStatus::Failed;
     component.target_runtime_convergence=rg::JointCheckStatus::Failed;
     component.evidence.push_back({"active-set-lm-subproblems",rg::JointCheckStatus::Passed,
@@ -527,13 +527,13 @@ rg::JointAnalysisResult CurrentJointExample(bool with_halo=true)
 rg::JointAnalysisResult SavedJointExample() { return CurrentJointExample(); }
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV26RoundTripsUnqualifiedResult)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV27RoundTripsUnqualifiedResult)
 {
     namespace io=rg::joint_result_io;
     const auto result=CurrentJointExample();
     const auto encoded=io::Encode(result);
     const auto object=boost::json::parse(encoded).as_object();
-    EXPECT_EQ(boost::json::value_to<int>(object.at("schema_version")),26);
+    EXPECT_EQ(boost::json::value_to<int>(object.at("schema_version")),27);
     for(const auto key:{"fixed_halos","layout","legacy_global_rank_evidence","ranks"})
         EXPECT_FALSE(object.contains(key));
     EXPECT_FALSE(object.at("costs").as_object().contains("search_reference_seconds"));
@@ -557,12 +557,12 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV26RoundTripsUnqualifiedResult
     EXPECT_EQ(decoded.metadata.solver->bcd_local_search,rg::BcdBoundedLocalSearchName);
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV26RejectsOtherVersionsAndRetiredFields)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV27RejectsOtherVersionsAndRetiredFields)
 {
     namespace io=rg::joint_result_io;
     const auto encoded=io::Encode(CurrentJointExample());
     const auto current=boost::json::parse(encoded).as_object();
-    for(const int version:{2,3,18,19,20,21,22,23,24,25,99})
+    for(const int version:{2,3,18,19,20,21,22,23,24,25,26,99})
     {
         auto unsupported=current;
         unsupported["schema_version"]=version;
@@ -585,7 +585,7 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV26RejectsOtherVersionsAndReti
     EXPECT_THROW(io::Decode(boost::json::serialize(retired)),std::invalid_argument);
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV26RejectsRetiredWidthCalibrationPolicy)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV27RejectsRetiredWidthCalibrationPolicy)
 {
     namespace io=rg::joint_result_io;
     auto current=boost::json::parse(io::Encode(CurrentJointExample())).as_object();
@@ -598,7 +598,7 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV26RejectsRetiredWidthCalibrat
     EXPECT_THROW(io::Decode(boost::json::serialize(current)),std::invalid_argument);
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV26UsesTauAndInitialStageKeys)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV27UsesTauAndInitialStageKeys)
 {
     namespace io=rg::joint_result_io;
     auto result=CurrentJointExample();
@@ -668,7 +668,7 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV26UsesTauAndInitialStageKeys)
     EXPECT_THROW(io::Decode(boost::json::serialize(old_units)),std::invalid_argument);
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV26RoundTripsQualifiedTargetWithoutHalo)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV27RoundTripsQualifiedTargetWithoutHalo)
 {
     namespace io=rg::joint_result_io;
     auto result=CurrentJointExample(false);
@@ -691,10 +691,10 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV26RoundTripsQualifiedTargetWi
     ASSERT_TRUE(rg::IsQualifiedJointAnalysisResult(result));
     const auto decoded=io::Decode(io::Encode(result));
     EXPECT_TRUE(rg::IsQualifiedJointAnalysisResult(decoded));
-    EXPECT_FALSE(decoded.halo_median_reconstruction);
+    EXPECT_FALSE(decoded.contributor_reconstruction);
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV26RoundTripsGeometryLocalHaloMedian)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV27RoundTripsGeometryLocalHaloMedian)
 {
     namespace io=rg::joint_result_io;
     auto result=CurrentJointExample();
@@ -714,32 +714,73 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV26RoundTripsGeometryLocalHalo
     result.target_evidence=result.components.front().target_evidence;
     result.target_evidence->original_rows=2;
     result.target_evidence->checks.front().scope=rg::JointEvidenceScope::AssembledGlobal;
-    rg::JointHaloMedianSnapshot snapshot;
+    rg::JointContributorReconstructionSnapshot snapshot;
     snapshot.joint_run_id="deterministic-run";
-    snapshot.global_median={2.123456789012345,0.5,-0.3};
-    snapshot.valid_target_count=1;
-    rg::JointHaloMedianReconstruction halo;
-    halo.halo_contributor_index=1;
+    snapshot.qualified_donor_count=1;
+    rg::JointContributorReplacement halo;
+    halo.contributor_index=1;
     halo.atom_id="2";
+    halo.role=rg::FittingRole::ExternalHalo;
+    halo.rejection_reasons=rg::ExternalHaloReconstruction;
     halo.amplitude=2.123456789012345;
     halo.width=0.5;
     halo.charge=-0.3;
-    halo.source=rg::HaloMedianSource::GeometryLocalFittingMedian;
+    halo.source=rg::ReconstructionSource::GeometryLocalFittingMedian;
     halo.donor_count=1;
     halo.joint_run_id=snapshot.joint_run_id;
     halo.donor_atom_ids={"1"};
-    snapshot.halos.push_back(halo);
-    result.halo_median_reconstruction=snapshot;
+    snapshot.replacements.push_back(halo);
+    result.contributor_reconstruction=snapshot;
     const auto decoded=io::Decode(io::Encode(result));
-    ASSERT_TRUE(decoded.halo_median_reconstruction);
-    ASSERT_EQ(decoded.halo_median_reconstruction->halos.size(),1u);
-    EXPECT_EQ(decoded.halo_median_reconstruction->halos.front().source,
-        rg::HaloMedianSource::GeometryLocalFittingMedian);
-    EXPECT_EQ(decoded.halo_median_reconstruction->halos.front().donor_atom_ids,
+    ASSERT_TRUE(decoded.contributor_reconstruction);
+    ASSERT_EQ(decoded.contributor_reconstruction->replacements.size(),1u);
+    EXPECT_EQ(decoded.contributor_reconstruction->replacements.front().source,
+        rg::ReconstructionSource::GeometryLocalFittingMedian);
+    EXPECT_EQ(decoded.contributor_reconstruction->replacements.front().donor_atom_ids,
         std::vector<std::string>{"1"});
+    auto tampered=result;
+    auto & stored=tampered.contributor_reconstruction->replacements.front();
+    stored.amplitude+=0.01;
+    EXPECT_THROW(io::Encode(tampered),std::invalid_argument);
+    stored=halo;
+    stored.role=rg::FittingRole::BufferTarget;
+    EXPECT_THROW(io::Encode(tampered),std::invalid_argument);
+    stored=halo;
+    stored.joint_run_id="other-run";
+    EXPECT_THROW(io::Encode(tampered),std::invalid_argument);
+    stored=halo;
+    stored.donor_atom_ids={"1","1"};
+    EXPECT_THROW(io::Encode(tampered),std::invalid_argument);
+    stored=halo;
+    tampered.contributor_reconstruction->contract="geometry-local-fitting-median-v1";
+    EXPECT_THROW(io::Encode(tampered),std::invalid_argument);
+
+    result.target_evidence->point_atoms.front().local_conditioning="Warning";
+    result.evidence.push_back({std::string(rg::JointContributorReconstructionEvidenceName),
+        rg::JointCheckStatus::Unavailable,rg::JointEvidenceScope::AssembledGlobal,{},{},
+        std::string(rg::NoQualifiedReconstructionDonors)});
+    auto & unavailable=*result.contributor_reconstruction;
+    unavailable.qualified_donor_count=0;
+    unavailable.replacements.clear();
+    for (std::size_t i=0;i<result.atom_ids.size();++i)
+    {
+        rg::JointContributorReplacement entry;
+        entry.atom_id=result.atom_ids[i];
+        entry.contributor_index=i;
+        entry.role=result.selection_domain->RoleOf(i);
+        entry.rejection_reasons=i ? rg::ExternalHaloReconstruction : rg::ConditioningNotAdequateReconstruction;
+        entry.source=rg::ReconstructionSource::Unavailable;
+        entry.joint_run_id=unavailable.joint_run_id;
+        unavailable.replacements.push_back(entry);
+    }
+    const auto round_trip=io::Decode(io::Encode(result));
+    EXPECT_TRUE(rg::IsQualifiedJointAnalysisResult(round_trip));
+    EXPECT_TRUE(rg::HasUnavailableJointContributorReconstruction(round_trip));
+    EXPECT_EQ(round_trip.contributor_reconstruction,result.contributor_reconstruction);
+
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV26PreservesUnavailableAndNullableDiagnostics)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV27PreservesUnavailableAndNullableDiagnostics)
 {
     namespace io=rg::joint_result_io;
     auto unavailable=CurrentJointExample();
@@ -757,13 +798,6 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV26PreservesUnavailableAndNull
     EXPECT_FALSE(decoded.initialization.valid);
     EXPECT_EQ(decoded.runtime_convergence,rg::JointCheckStatus::Unavailable);
     EXPECT_FALSE(decoded.objective);
-
-    auto halo_unavailable=CurrentJointExample();
-    halo_unavailable.evidence.push_back({std::string(rg::JointHaloMedianReconstructionEvidenceName),
-        rg::JointCheckStatus::Unavailable,rg::JointEvidenceScope::AssembledGlobal,{}, {},
-        "halo-median-no-valid-targets"});
-    const auto halo_round_trip=io::Decode(io::Encode(halo_unavailable));
-    EXPECT_TRUE(rg::HasUnavailableJointHaloMedianReconstruction(halo_round_trip));
 
     auto nullable=CurrentJointExample();
     rg::JointInitializationAtom nullable_atom;
@@ -786,7 +820,7 @@ TEST(DataObjectPersistenceTest, JointCurrentSchemaV26PreservesUnavailableAndNull
     EXPECT_FALSE(round_trip.initialization.atoms.front().initial_stage_recovery);
 }
 
-TEST(DataObjectPersistenceTest, JointCurrentSchemaV26RejectsRetiredDiagnosticsAndOldTargetContract)
+TEST(DataObjectPersistenceTest, JointCurrentSchemaV27RejectsRetiredDiagnosticsAndOldTargetContract)
 {
     namespace io=rg::joint_result_io;
     const auto current=boost::json::parse(io::Encode(CurrentJointExample())).as_object();
@@ -1122,7 +1156,7 @@ TEST(DataObjectPersistenceTest, UncertifiedCandidateDiagnosticsRoundTripWithoutE
     component.candidate_diagnostic=candidate;
 
     const auto json=boost::json::parse(io::Encode(record));
-    EXPECT_EQ(json.at("schema_version").as_int64(),26);
+    EXPECT_EQ(json.at("schema_version").as_int64(),27);
     const auto & saved_candidate=json.at("components").as_array()[0].at("candidate_diagnostic");
     EXPECT_EQ(saved_candidate.at("candidate_status").as_string(),"uncertified");
     EXPECT_EQ(saved_candidate.at("convergence_criteria_id").as_string(),"practical-v2");
@@ -1309,13 +1343,13 @@ TEST(DataObjectPersistenceTest, JointSelectionMetadataValidationAndCsvRoles)
     std::getline(csv,line);
     EXPECT_EQ(line.find("RegularCertificate"),std::string::npos);
     const auto column_count=std::count(line.begin(),line.end(),',');
-    EXPECT_TRUE(line.ends_with(",SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,PointQuality"));
+    EXPECT_TRUE(line.ends_with(",SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,PointQuality,ReconstructionSource,ReconstructionA,ReconstructionTau,ReconstructionC"));
     std::getline(csv,line);
     EXPECT_EQ(std::count(line.begin(),line.end(),','),column_count);
-    EXPECT_TRUE(line.ends_with(",output-target,JointEstimated,\"\",failed,Unavailable"));
+    EXPECT_TRUE(line.ends_with(",output-target,JointEstimated,\"\",failed,Unavailable,,,,"));
     std::getline(csv,line);
     EXPECT_EQ(std::count(line.begin(),line.end(),','),column_count);
-    EXPECT_TRUE(line.ends_with(",external-halo,HaloReconstructionUnavailable,\"\",not-run,NotApplicable"));
+    EXPECT_TRUE(line.ends_with(",external-halo,HaloReconstructionUnavailable,\"\",not-run,NotApplicable,,,,"));
     auto raw=saved; raw.selection_domain.reset();
     EXPECT_THROW(rg::WriteJointAnalysisResult(raw,dir.path()/"raw.json",dir.path()/"raw.csv"),std::invalid_argument);
 }
@@ -1347,7 +1381,7 @@ TEST(DataObjectPersistenceTest, JointNeutralRoundTripPreservesCurrentJointAndSta
     EXPECT_FALSE(data_test::HasTable(dir.path()/"result.sqlite","model_atom_local_potential"));
 }
 
-TEST(DataObjectPersistenceTest, StageResultJsonV10OnlyAcceptsCurrentRoundTrip)
+TEST(DataObjectPersistenceTest, StageResultJsonV11OnlyAcceptsCurrentRoundTrip)
 {
     auto model=data_test::MakeModelWithBond();
     model->SelectAllAtoms();
@@ -1357,7 +1391,7 @@ TEST(DataObjectPersistenceTest, StageResultJsonV10OnlyAcceptsCurrentRoundTrip)
     initial.source.fixed_from_initial_stage=true;
     editor.SetAtomInitialStageEstimate(*model->FindAtomPtr(1),initial);
     const auto encoded=rg::stage_result_io::Encode(*model);
-    EXPECT_EQ(boost::json::parse(encoded).at("version").as_int64(),10);
+    EXPECT_EQ(boost::json::parse(encoded).at("version").as_int64(),11);
 
     auto restored=data_test::MakeModelWithBond();
     restored->SelectAllAtoms();
@@ -1367,7 +1401,7 @@ TEST(DataObjectPersistenceTest, StageResultJsonV10OnlyAcceptsCurrentRoundTrip)
     EXPECT_TRUE(rg::AtomLocalPotentialView::For(*restored->FindAtomPtr(1))
         .GetInitialStageEstimate().source.fixed_from_initial_stage);
 
-    for(const int version:{1,2,3,4,5,6,7,8,9,11})
+    for(const int version:{1,2,3,4,5,6,7,8,9,10,12})
     {
         auto old=boost::json::parse(encoded).as_object();
         old["version"]=version;
@@ -1452,7 +1486,7 @@ TEST(DataObjectPersistenceTest, CanonicalNativeDiagnosticsAndMissingStatesRoundT
     EXPECT_DOUBLE_EQ(loaded->GetAnalysisView().GetAtomAlphaG(group),.87);
     EXPECT_FALSE(actual.fit_result); ASSERT_TRUE(actual.diagnostics); EXPECT_EQ(actual.diagnostics->iterations.iterations,17);
     EXPECT_EQ(actual.diagnostics->refinement->relative_coordinate_difference,fit.refinement->relative_coordinate_difference);
-    const auto document=boost::json::parse(expected).as_object(); EXPECT_EQ(document.at("version").as_int64(),10);
+    const auto document=boost::json::parse(expected).as_object(); EXPECT_EQ(document.at("version").as_int64(),11);
     EXPECT_FALSE(loaded->GetAnalysisView().GetJointResult());
 }
 

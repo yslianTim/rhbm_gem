@@ -24,7 +24,16 @@ rhbm_gem::core::JointFitResult FitBoundedJointComponentsForTesting(
         throw std::invalid_argument("Bounded Joint test fit requires a finite positive Width upper bound.");
     runtime::BcdExecutionPolicy policy;
     policy.width_bounds.upper=std::log(maximum_width);
-    return runtime::FitBcdComponents(problem,initial_widths,policy);
+    auto result=runtime::FitBcdComponents(problem,initial_widths,policy);
+    if (result.search_completed || result.assembled_state)
+    {
+        result.evidence.push_back({"global-width-calibration",rhbm_gem::JointCheckStatus::Passed,
+            rhbm_gem::JointEvidenceScope::AssembledGlobal,maximum_width/4,maximum_width,
+            "global-initial-stage-q50-k4; test-adapter-bound"});
+        result.evidence.push_back({"qualified-initial-stage-donor-coverage",rhbm_gem::JointCheckStatus::Passed,
+            rhbm_gem::JointEvidenceScope::AssembledGlobal,1.,.95,"output-only-qualified-initial-stage-widths"});
+    }
+    return result;
 }
 ComponentPartition BuildPartition(const Domain & d,const std::vector<std::string> & ids) {return runtime::Partition(d,ids);}
 Eigen::VectorXd Select(const Eigen::VectorXd & v,const std::vector<Eigen::Index> & indices)

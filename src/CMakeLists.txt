@@ -42,7 +42,7 @@ target_sources(rhbm_gem PRIVATE
     core/estimator/PotentialFittingWorkflow.cpp
     core/estimator/InitialStage.cpp
     core/estimator/GroupingStage.cpp
-    core/estimator/joint_component/HaloMedianReconstruction.cpp
+    core/estimator/joint_component/ContributorReconstruction.cpp
     core/estimator/joint_component/PostFitPeeling.cpp
     core/estimator/gaussian_fit/PreparedLocalGaussianFit.cpp
     core/sampling/MapSampler.cpp

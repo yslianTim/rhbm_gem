@@ -138,8 +138,13 @@ ModelAnalysisEditor::ModelAnalysisEditor(ModelObject & model_object) :
 
 void ModelAnalysisEditor::ApplyJointResult(JointAnalysisResult result, const std::string & run_id)
 {
+    if (result.contributor_reconstruction && result.contributor_reconstruction->joint_run_id!=run_id)
+        throw std::invalid_argument("Joint stage and contributor reconstruction run identities differ.");
+    if (result.contributor_reconstruction || HasUnavailableJointContributorReconstruction(result))
+        core::detail::ValidateSavedContributorReconstruction(result);
     ApplyJointStageEstimates(data_internal::BuildJointStageEstimates(result,run_id));
-    SetJointResult(std::move(result));
+    ClearJointResult();
+    ModelAnalysisData::Of(m_model_object).joint_result=std::move(result);
 }
 
 void ModelAnalysisEditor::BindJointMapObservations(const MapObject & map)
@@ -149,6 +154,8 @@ void ModelAnalysisEditor::BindJointMapObservations(const MapObject & map)
 
 void ModelAnalysisEditor::SetJointResult(JointAnalysisResult result)
 {
+    if (result.contributor_reconstruction || HasUnavailableJointContributorReconstruction(result))
+        core::detail::ValidateSavedContributorReconstruction(result);
     ClearJointResult();
     ModelAnalysisData::Of(m_model_object).joint_result=std::move(result);
 }

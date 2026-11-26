@@ -26,21 +26,23 @@ void WriteJointAnalysisResult(const JointAnalysisResult & result,
         csv_file.exceptions(std::ios::failbit|std::ios::badbit);
         json_file.open(json_path); csv_file.open(csv_path);
         json_file << json << '\n';
-        csv_file << "AtomID,ComponentID,A,tau,C,StateAvailable,SearchCompleted,StopReason,RuntimeConvergence,SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,PointQuality\n"
+        csv_file << "AtomID,ComponentID,A,tau,C,StateAvailable,SearchCompleted,StopReason,RuntimeConvergence,SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,PointQuality,ReconstructionSource,ReconstructionA,ReconstructionTau,ReconstructionC\n"
             << std::setprecision(std::numeric_limits<double>::max_digits10);
 
         std::vector<std::pair<const JointAnalysisComponent *,std::size_t>> mapping(result.atom_ids.size());
         for(const auto & component:result.components)
             for(std::size_t i=0;i<component.atoms.size();++i) mapping[component.atoms[i]]={&component,i};
-        std::vector<const JointHaloMedianReconstruction *> median_halos(result.atom_ids.size());
-        if(result.halo_median_reconstruction)
-            for(const auto & halo:result.halo_median_reconstruction->halos)
-                median_halos.at(halo.halo_contributor_index)=&halo;
+        std::vector<const JointContributorReplacement *> reconstructions(result.atom_ids.size());
+        if(result.contributor_reconstruction)
+            for(const auto & halo:result.contributor_reconstruction->replacements)
+                reconstructions.at(halo.contributor_index)=&halo;
 
         for(std::size_t atom=0;atom<result.atom_ids.size();++atom)
         {
             const auto [component,component_index]=mapping[atom];
-            const auto * median_halo=median_halos[atom];
+            const auto * replacement=reconstructions[atom];
+            const auto * median_halo=replacement && replacement->role==FittingRole::ExternalHalo &&
+                replacement->source==ReconstructionSource::GeometryLocalFittingMedian ? replacement : nullptr;
             const auto role=result.selection_domain->RoleOf(atom);
             const bool target=IsFittingTarget(role);
             const char * selection_role=role==FittingRole::OutputTarget ? "output-target" :
@@ -90,7 +92,13 @@ void WriteJointAnalysisResult(const JointAnalysisResult & result,
                 << ',' << joint_result_io::StatusText(runtime_convergence)
                 << ',' << selection_role << ',' << parameterization
                 << ',' << CsvText("") << ',' << joint_result_io::StatusText(target_convergence)
-                << ',' << (target ? point_quality : "NotApplicable") << '\n';
+                << ',' << (target ? point_quality : "NotApplicable");
+            if (replacement && replacement->source==ReconstructionSource::GeometryLocalFittingMedian)
+                csv_file << ",geometry-local-fitting-median," << replacement->amplitude << ','
+                    << replacement->width << ',' << replacement->charge;
+            else
+                csv_file << (replacement ? ",unavailable,,," : ",,,,");
+            csv_file << '\n';
         }
         json_file.close(); csv_file.close();
     }

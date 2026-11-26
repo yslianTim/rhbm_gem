@@ -2,7 +2,7 @@
 #include "core/estimator/InitialStage.hpp"
 #include "core/estimator/GroupingStage.hpp"
 #include "core/estimator/gaussian_fit/PreparedLocalGaussianFit.hpp"
-#include "core/estimator/joint_component/HaloMedianReconstruction.hpp"
+#include "core/estimator/joint_component/ContributorReconstruction.hpp"
 #include "core/estimator/joint_component/JointComponentEstimator.hpp"
 #include "core/estimator/joint_component/JointCliProgressReporter.hpp"
 #include "core/estimator/joint_component/PostFitPeeling.hpp"
@@ -267,40 +267,39 @@ bool RunJointStagePostprocessing(
         model.EditAnalysis().SetJointResult(std::move(snapshot));
         return false;
     }
-    bool halo_reconstruction_unavailable{};
-    std::optional<HaloMedianBuildResult> halo_median_build;
-    const auto & original=problem.OriginalInput();
-    const auto external_halos=original.atom_ids.size()-original.selection_domain->FittingCount();
-    const bool original_has_halos=external_halos!=0;
-    try
+    auto reconstruction=BuildContributorReconstruction(model,problem,snapshot,joint_run_id);
+    const auto & audit=reconstruction.audit;
+    snapshot.contributor_reconstruction=reconstruction.TakeSnapshot();
+    if (audit.unavailable)
     {
-        halo_median_build=BuildHaloMedianReconstruction(model,problem,snapshot,joint_run_id);
-        if (original_has_halos)
-            snapshot.halo_median_reconstruction=halo_median_build->TakeSnapshot();
-        postprocessing_metrics.halo_median_valid_target_count=halo_median_build->audit.valid_target_count;
-        postprocessing_metrics.halo_median_geometry_local_halos=halo_median_build->audit.geometry_local_halos;
+        snapshot.evidence.push_back({std::string(JointContributorReconstructionEvidenceName),
+            JointCheckStatus::Unavailable,JointEvidenceScope::AssembledGlobal,{}, {},
+            std::string(NoQualifiedReconstructionDonors)});
+        LogJointWarning("[Joint] Contributor reconstruction unavailable: no qualified donors.");
     }
-    catch (const std::invalid_argument & error)
+    if (!options.quiet_mode)
     {
-        if (std::string_view(error.what()) != "halo-median-no-valid-targets") throw;
-        if (original_has_halos)
-        {
-            postprocessing_metrics.halo_median_unavailable_halos=external_halos;
-            snapshot.evidence.push_back({std::string(JointHaloMedianReconstructionEvidenceName),
-                JointCheckStatus::Unavailable,JointEvidenceScope::AssembledGlobal,{}, {},error.what()});
-            halo_reconstruction_unavailable=true;
-            LogJointWarning("[Joint] Halo median reconstruction unavailable: " + std::string(error.what()));
-        }
+        std::ostringstream message;
+        message << "[Joint] Contributor reconstruction | donors=" << audit.qualified_donor_count
+            << " | replaced_outputs=" << audit.replaced_outputs << " | replaced_buffers=" << audit.replaced_buffers
+            << " | external_halos=" << audit.reconstructed_halos << " | unavailable=" << audit.unavailable
+            << " | lower_bound=" << audit.lower_bound << " | upper_bound=" << audit.upper_bound
+            << " | conditioning_rejected=" << audit.conditioning_rejected
+            << " | overlapping_rejections=" << audit.overlapping_rejections
+            << " | collection=" << audit.collection_seconds << "s | index=" << audit.index_seconds
+            << "s | query=" << audit.query_seconds << 's';
+        LogJointInfo(message.str());
     }
     model.EditAnalysis().ApplyJointResult(std::move(snapshot), joint_run_id);
     model.EditAnalysis().BindJointMapObservations(map);
     const auto & joint_snapshot = *model.GetAnalysisView().GetJointResult();
+    reconstruction.published_snapshot=&joint_snapshot;
     bool qscore_published{};
     try
     {
         JointPostprocessingMetrics qscore_metrics;
         auto results=BuildPostJointQScores(
-            map,model,problem,joint_snapshot,halo_median_build ? &*halo_median_build : nullptr,qscore_metrics);
+            map,model,problem,joint_snapshot,&reconstruction,qscore_metrics);
         model.EditAnalysis().ApplyPostJointQScoresBatch(std::move(results));
         postprocessing_metrics.qscore_targets=qscore_metrics.qscore_targets;
         postprocessing_metrics.qscore_available=qscore_metrics.qscore_available;
@@ -338,18 +337,18 @@ bool RunJointStagePostprocessing(
             << " | estimated_payload_bytes=" << postprocessing_metrics.estimated_qscore_peak_bytes;
         LogJointInfo(message.str());
     }
-    if (halo_reconstruction_unavailable) return false;
+    if (audit.unavailable) return false;
     auto phase_start = std::chrono::steady_clock::now();
     auto contributor_universe=BuildJointPeelingContributorUniverse(model,problem,joint_snapshot);
     const JointPostprocessingContext postprocessing(map, model, problem, joint_snapshot,
-        &postprocessing_metrics,halo_median_build ? &*halo_median_build : nullptr,
+        &postprocessing_metrics,&reconstruction,
         std::move(contributor_universe));
     postprocessing_metrics.context_construction_seconds = std::chrono::duration<double>(
         std::chrono::steady_clock::now() - phase_start).count();
     postprocessing_metrics.rss_after_context_bytes = joint_component::CurrentRssBytes();
     phase_start = std::chrono::steady_clock::now();
     auto peeling_updates = postprocessing.BuildPostFitPeelingBatch(
-        std::span<const std::size_t>(original.selection_domain->output_indices));
+        std::span<const std::size_t>(joint_snapshot.selection_domain->output_indices));
     model.EditAnalysis().ApplyPostFitPeelingsBatch(std::move(peeling_updates));
     if (postprocessing_metrics.missing_contributor_samples)
     {
@@ -455,14 +454,9 @@ void CompletePotentialFittingWorkflow(
     if (!options.quiet_mode) LogJointInfo("[GroupingStage] Fitting groups from Post-Joint Local results.");
     RunGroupingStage(model, options, &postprocessing_metrics);
     postprocessing_metrics.rss_after_group_bytes = joint_component::CurrentRssBytes();
+    record_postprocessing_time();
     if (!options.quiet_mode)
     {
-        std::ostringstream message;
-        message << "[Joint] Halo reconstruction | donors="
-            << postprocessing_metrics.halo_median_valid_target_count
-            << " | reconstructed=" << postprocessing_metrics.halo_median_geometry_local_halos
-            << " | unavailable=" << postprocessing_metrics.halo_median_unavailable_halos;
-        LogJointInfo(message.str());
         std::ostringstream tail_message;
         tail_message << "[Joint] Peeling Tail | targets="
             << postprocessing_metrics.tail_target_count
@@ -485,10 +479,10 @@ void CompletePotentialFittingWorkflow(
             tail_detail << " | " << reason << '=' << count;
         LogJointDebug(tail_detail.str());
         LogJointDebug("[Joint] Original-grid Peeling workspace="+
-            std::to_string(postprocessing_metrics.estimated_peeling_workspace_bytes)+" bytes");
+            std::to_string(postprocessing_metrics.estimated_peeling_workspace_bytes)+" bytes | elapsed="+std::to_string(postprocessing_metrics.peeling_seconds)+"s");
+        LogJointDebug("[Joint] Postprocessing elapsed="+std::to_string(postprocessing_metrics.total_postprocessing_seconds)+"s");
+        LogJointInfo("[Joint] Completed.");
     }
-    record_postprocessing_time();
-    if (!options.quiet_mode) LogJointInfo("[Joint] Completed.");
 }
 
 } // namespace rhbm_gem::core::detail

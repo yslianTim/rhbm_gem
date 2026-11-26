@@ -30,8 +30,6 @@ WidthBoundKkt CalculateWidthBoundKkt(const Vector & eta,const Vector & gradient,
     if(!bounds.IsValid() || eta.size()==0 || eta.size()!=gradient.size() ||
         !eta.allFinite() || !gradient.allFinite()) return out;
     const double upper=*bounds.upper;
-    const double tolerance=WidthBounds::RoundoffTolerance(upper);
-    const double lower_tolerance=bounds.lower ? WidthBounds::RoundoffTolerance(*bounds.lower) : 0.0;
     out.feasible=true;
     out.projected=0.0;
     for(Eigen::Index i=0;i<eta.size();++i)
@@ -48,16 +46,13 @@ WidthBoundKkt CalculateWidthBoundKkt(const Vector & eta,const Vector & gradient,
             out.complementarity=std::max(out.complementarity,std::abs(multiplier*slack));
         };
         double projected=std::min(eta(i)-gradient(i),upper);
-        const double upper_slack=upper-eta(i);
-        const double lower_slack=bounds.lower ? eta(i)-*bounds.lower : std::numeric_limits<double>::infinity();
-        const bool lower_active=lower_slack<=lower_tolerance &&
-            (upper_slack>tolerance || lower_slack<upper_slack);
-        out.feasible &= bounds.ContainsWithRoundoff(eta(i));
-        boundary(upper_slack,upper_slack<=tolerance && !lower_active,gradient(i),out.active_upper);
+        const auto assessment=bounds.Assess(eta(i));
+        out.feasible &= assessment.feasible;
+        boundary(assessment.upper_slack,assessment.active==WidthBoundaryStatus::UpperBound,gradient(i),out.active_upper);
         if(bounds.lower)
         {
             projected=std::max(projected,*bounds.lower);
-            boundary(lower_slack,lower_active,-gradient(i),out.active_lower);
+            boundary(assessment.lower_slack,assessment.active==WidthBoundaryStatus::LowerBound,-gradient(i),out.active_lower);
         }
         out.projected=std::max(out.projected,std::abs(eta(i)-projected));
     }

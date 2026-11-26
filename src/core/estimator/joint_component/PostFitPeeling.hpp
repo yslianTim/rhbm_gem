@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 namespace rhbm_gem::core::detail {
-struct HaloMedianBuildResult;
+struct ContributorReconstructionBuildResult;
 
 std::vector<PostJointGridObservation> CollectPostJointGridObservations(
     const MapObject &, const JointProblemInput &, std::size_t target,
@@ -40,9 +40,6 @@ struct JointPostprocessingMetrics
     std::size_t qscore_contributions{}, qscore_halos{}, qscore_extra_halos{}, qscore_unavailable_halos{};
     std::size_t estimated_qscore_peak_bytes{};
     double qscore_seconds{};
-    std::size_t halo_median_valid_target_count{};
-    std::size_t halo_median_geometry_local_halos{};
-    std::size_t halo_median_unavailable_halos{};
     std::size_t estimated_peeling_workspace_bytes{};
     std::size_t grid_peeling_sample_count{};
     std::size_t available_peeling_sample_count{};
@@ -97,13 +94,13 @@ struct PostJointLocalSamples
 };
 
 // Borrows one immutable Joint run and owns compact lookups shared by its targets.
-// The geometry, model endpoints, problem input, snapshot, and optional Halo donor
+// The geometry, model endpoints, problem input, snapshot, and optional contributor reconstruction
 // workspace must outlive this context and remain unchanged until postprocessing completes.
 class JointPostprocessingContext
 {
 public:
     JointPostprocessingContext(const MapObject &, const ModelObject &, const JointProblem &,
-        const JointAnalysisResult &, JointPostprocessingMetrics *, const HaloMedianBuildResult *,
+        const JointAnalysisResult &, JointPostprocessingMetrics *, const ContributorReconstructionBuildResult *,
         JointPeelingContributorUniverse);
 
     std::vector<std::pair<int, PostFitPeelingResult>> BuildPostFitPeelingBatch(
@@ -117,7 +114,7 @@ private:
     const JointProblem & m_problem;
     const JointAnalysisResult & m_snapshot;
     JointPostprocessingMetrics * m_metrics;
-    const HaloMedianBuildResult * m_halo_medians;
+    const ContributorReconstructionBuildResult * m_reconstruction;
     JointPeelingContributorUniverse m_contributors;
 };
 

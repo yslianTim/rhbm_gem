@@ -99,6 +99,16 @@ DiagnosticAtomIndex<Blocks> BuildDiagnosticAtomIndex(std::size_t atom_count,cons
     return index;
 }
 }
+bool ValidJointPointParameters(double amplitude,double tau,double charge,double log_tau)
+{
+    if(!std::isfinite(amplitude) || amplitude<0 || !std::isfinite(charge) ||
+        !std::isfinite(tau) || !(tau>0) || !std::isfinite(log_tau))
+        return false;
+    const double exp_tau=std::exp(log_tau);
+    return std::isfinite(exp_tau) && exp_tau>0 &&
+        std::abs(exp_tau-tau)<=8*std::numeric_limits<double>::epsilon()*tau;
+}
+
 JointTargetEvidence AssessTargetPointState(const JointProblem & problem,const JointParameterLayout & layout,
     const std::optional<JointState> & state,JointCheckStatus convergence,
     const std::vector<JointBlockConditioning> & conditioning,
@@ -127,14 +137,8 @@ JointTargetEvidence AssessTargetPointState(const JointProblem & problem,const Jo
     mark_missing_membership(conditioning_index,conditioning);
     const auto parameter_validity=[&](std::size_t index) {
         if(!dimensions) return JointCheckStatus::Unavailable;
-        const double amplitude=state->ac[2*index],tau=state->tau[index],log_tau=state->log_tau[index];
-        if(!std::isfinite(amplitude) || amplitude<0 || !std::isfinite(state->ac[2*index+1]) ||
-            !std::isfinite(tau) || !(tau>0) || !std::isfinite(log_tau))
-            return JointCheckStatus::Failed;
-        const double exp_tau=std::exp(log_tau);
-        return std::isfinite(exp_tau) && exp_tau>0 &&
-            std::abs(exp_tau-tau)<=8*std::numeric_limits<double>::epsilon()*tau ?
-                JointCheckStatus::Passed : JointCheckStatus::Failed;
+        return ValidJointPointParameters(state->ac[2*index],state->tau[index],state->ac[2*index+1],
+            state->log_tau[index]) ? JointCheckStatus::Passed : JointCheckStatus::Failed;
     };
     const auto local_status=[&](std::size_t atom,std::vector<std::string> & block_ids,bool & mapping_invalid) {
         bool matched=false,unavailable=false,not_assessed=false,adequate=true;

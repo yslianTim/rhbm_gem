@@ -1,6 +1,8 @@
 #include "core/classifier/UmapEmbeddingOutput.hpp"
 #include "core/classifier/UmapEmbeddingFeatures.hpp"
 #include "core/classifier/UmapSpotCategories.hpp"
+#include "data/io/detail/PersistenceSchema.hpp"
+#include <rhbm_gem/utils/domain/JointEstimationTypes.hpp>
 
 #include <rhbm_gem/utils/domain/FilePathHelper.hpp>
 #include <rhbm_gem/utils/domain/Logger.hpp>
@@ -98,7 +100,10 @@ bool WriteEmbedding(
         { "estimator", "joint-components" },
         { "features", features },
         { "second_umap_features", second_umap_features },
-        { "peeling_mode", "original-grid-v1" },
+        { "peeling_mode", PostFitPeelingContract },
+        { "contributor_reconstruction_contract", ContributorReconstructionContractVersion },
+        { "contributor_reconstruction_donor_policy", ContributorReconstructionDonorPolicy },
+        { "sqlite_schema_version", persistence_schema::SQLite },
         { "peeling_ratio_definition", PeelingRatioDefinition },
         { "peeling_ratio_range", boost::json::array{ 0, 1 } },
         { "peeling_ratio_regions", boost::json::object{

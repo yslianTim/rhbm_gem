@@ -42,11 +42,16 @@ void ExpectOracle(Fixture & f)
             if (square>6.25) continue;
             GaussianModel3D point{0,1,0};
             const auto view=AtomLocalPotentialView::For(*atom);
-            if (view.IsAvailable() && view.HasJointStageModel()) point=view.GetJointStageModel();
+            const auto & replacements=f.snapshot.contributor_reconstruction->replacements;
+            const auto replacement=std::find_if(replacements.begin(),replacements.end(),[&](const auto & record) {
+                return record.atom_id==std::to_string(atom->GetSerialID());
+            });
+            if (replacement!=replacements.end())
+                point=GaussianModel3D{replacement->amplitude,replacement->width,replacement->charge};
+            else if (view.IsAvailable() && view.HasJointStageModel()) point=view.GetJointStageModel();
             else
             {
-                const GeometryLocalTargetDonorIndex index(f.halos.target_donors);
-                const auto median=GeometryLocalFittingMedian(index.Query(atom->GetPositionRef()));
+                const auto median=GeometryLocalFittingMedian(f.halos.donor_index->Query(atom->GetPositionRef()));
                 point=GaussianModel3D{median[0],median[1],median[2]};
             }
             response-=Response(point,std::sqrt(square));
@@ -92,6 +97,25 @@ TEST(PostJointQScoreTest, OverlappingGaussianAndChargeUseOnePeeledDataset)
     }
 }
 
+TEST(PostJointQScoreTest, ReplacesFittingNeighborWithoutChangingItsOwnJointReference)
+{
+    auto f=Make({{{0,0,0},{2,.6,.1}},{{1.2,0,0},{2.3,.55,-.3}}});
+    const auto original=f.results.front().second.scores;
+    ASSERT_TRUE(original);
+    const auto accepted=AtomLocalPotentialView::For(*f.model->FindAtomPtr(2)).GetJointStageModel().ToVector();
+    f.snapshot.contributor_reconstruction.reset();
+    f.snapshot.target_evidence->point_atoms.at(1).local_conditioning="Warning";
+    f.halos=BuildContributorReconstruction(*f.model,*f.problem,f.snapshot,"qscore-test-run");
+    f.snapshot.contributor_reconstruction=f.halos.TakeSnapshot();
+    f.model->EditAnalysis().ApplyJointResult(f.snapshot,"qscore-test-run");
+    f.Calculate();
+    ASSERT_TRUE(f.results.front().second.scores);
+    EXPECT_NE(f.results.front().second.scores->standard,original->standard);
+    EXPECT_EQ(f.results.front().second.halo_count,0u);
+    EXPECT_EQ(AtomLocalPotentialView::For(*f.model->FindAtomPtr(2)).GetJointStageModel().ToVector(),accepted);
+    ExpectOracle(f);
+}
+
 TEST(PostJointQScoreTest, ChargeReferenceIsKernelRatherThanConstantOffset)
 {
     auto f=Make({{{0,0,0},{2,.6,.8}}});
@@ -132,11 +156,14 @@ TEST(PostJointQScoreTest, ExtraDomainHaloUsesQualifiedLocalDonorsWithoutChanging
     const auto & extra=f.results.front().second.extra_halos;
     ASSERT_EQ(extra.size(),1u); EXPECT_EQ(extra.front().atom_id,2);
     EXPECT_EQ(extra.front().donor_atom_ids,std::vector<std::string>{"1"});
-    EXPECT_FALSE(f.snapshot.halo_median_reconstruction);
+    EXPECT_TRUE(f.snapshot.contributor_reconstruction->replacements.empty());
     EXPECT_FALSE(AtomLocalPotentialView::For(*f.model->FindAtomPtr(2)).IsAvailable());
     ExpectOracle(f);
-    auto stale=f.halos;
-    stale.target_donors.front().point[2]+=1;
+    ContributorReconstructionBuildResult stale;
+    auto donors=f.halos.donor_index->Donors();
+    donors.front().point[2]+=1;
+    stale.donor_index=std::make_unique<ReconstructionDonorIndex>(std::move(donors));
+    stale.published_snapshot=&f.snapshot;
     const auto missing=BuildPostJointQScores(*f.map,*f.model,*f.problem,f.snapshot,&stale,f.metrics);
     EXPECT_FALSE(missing.front().second.scores);
     EXPECT_EQ(missing.front().second.reason,"contributor-unavailable");
@@ -158,6 +185,7 @@ TEST(PostJointQScoreTest, MissingInvalidAndBoundaryDataHaveExplicitReasons)
     auto invalid_snapshot=f.snapshot;
     invalid_snapshot.components.front().state->ac[2]=std::numeric_limits<double>::max();
     invalid_snapshot.components.front().state->tau[1]=.01;
+    invalid_snapshot.components.front().state->log_tau[1]=std::log(.01);
     f.model->EditAnalysis().ApplyJointResult(invalid_snapshot,"qscore-test-run");
     const auto results=BuildPostJointQScores(*f.map,*f.model,*f.problem,invalid_snapshot,&f.halos,f.metrics);
     EXPECT_FALSE(results.front().second.scores);

@@ -25,12 +25,13 @@ struct Fixture
     std::unique_ptr<MapObject> map;
     std::unique_ptr<JointProblem> problem;
     JointAnalysisResult snapshot;
-    HaloMedianBuildResult halos;
+    ContributorReconstructionBuildResult halos;
     JointPostprocessingMetrics metrics;
     std::vector<std::pair<int,PostJointQScoreResult>> results;
     void Calculate()
     {
         metrics={};
+        halos.published_snapshot=&snapshot;
         results=BuildPostJointQScores(*map,*model,*problem,snapshot,&halos,metrics);
     }
 };
@@ -76,16 +77,10 @@ inline Fixture Make(std::vector<Atom> specs={Atom{}},bool coarse_x=false,bool bo
         widths.push_back(specs.at(static_cast<std::size_t>(std::stoi(id)-1)).point.GetWidth());
     f.snapshot=CaptureJointAnalysisResult(joint_component_test::matched::joint_component::FitBoundedJointComponentsForTesting(*f.problem,widths,2.0));
     if (!IsQualifiedJointAnalysisResult(f.snapshot)) throw std::runtime_error("Synthetic QScore endpoint not qualified.");
-    // The bounded test adapter bypasses production donor-count calibration;
-    // persist its explicit 2 A bound using the ordinary provenance contract.
-    f.snapshot.evidence.push_back({"global-width-calibration",JointCheckStatus::Passed,
-        JointEvidenceScope::AssembledGlobal,.5,2.,"global-initial-stage-q50-k4; test-adapter-bound"});
-    f.snapshot.evidence.push_back({"qualified-initial-stage-donor-coverage",JointCheckStatus::Passed,
-        JointEvidenceScope::AssembledGlobal,1.,.95,"output-only-qualified-initial-stage-widths"});
     f.snapshot.metadata.grid_size=f.map->GetGridSize(); f.snapshot.metadata.grid_spacing=f.map->GetGridSpacing();
     f.snapshot.metadata.origin=f.map->GetOrigin();
-    f.halos=BuildHaloMedianReconstruction(*f.model,*f.problem,f.snapshot,"qscore-test-run");
-    if (!f.halos.snapshot->halos.empty()) f.snapshot.halo_median_reconstruction=*f.halos.snapshot;
+    f.halos=BuildContributorReconstruction(*f.model,*f.problem,f.snapshot,"qscore-test-run");
+    f.snapshot.contributor_reconstruction=f.halos.TakeSnapshot();
     f.model->EditAnalysis().ApplyJointResult(f.snapshot,"qscore-test-run");
     f.model->EditAnalysis().BindJointMapObservations(*f.map);
     for (const auto * atom:f.model->GetSelectedAtoms())

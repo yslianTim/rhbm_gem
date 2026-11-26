@@ -23,6 +23,8 @@ namespace rhbm_gem::core::classifier {
 namespace {
 
 constexpr double kInverseMadFactor{ 1.0 / 1.482602218505602 };
+constexpr std::size_t kFirstColumns=4;
+constexpr std::size_t kSecondColumns=7;
 
 std::optional<PreparedUmapInput> PrepareFirstColumns(
     std::span<const double> first, std::string & error, std::span<const double> second = {})
@@ -54,6 +56,7 @@ TEST(UmapEmbeddingFeaturesTest, FiltersRequiredFeaturesAndUsesMadScalingInRowOrd
         std::array{ 50.0, 5.0, 0.0, missing, 10.0, 2.0, 3.0 },
         std::array{ 3.0, 8.0, 1.0, 3.0, 10.0, 2.0, 3.0 },
         std::array{ 5.0, 8.0, 2.0, 6.0, 10.0, 2.0, 3.0 },
+        std::array{ 1.0, 8.0, 3.0, 9.0, 10.0, 2.0, 3.0 },
     };
     std::vector<std::unique_ptr<AtomObject>> atoms;
     std::vector<LocalFittingFeatureRow> rows;
@@ -73,7 +76,7 @@ TEST(UmapEmbeddingFeaturesTest, FiltersRequiredFeaturesAndUsesMadScalingInRowOrd
     }
     rows[1].tail_peeling_ratio_unavailable_reason = "fixture-tail-missing";
     auto atom_without_features{ std::make_unique<AtomObject>() };
-    atom_without_features->SetSerialID(5);
+    atom_without_features->SetSerialID(6);
     atom_without_features->SetElement(Element::OXYGEN);
     atoms.push_back(std::move(atom_without_features));
     const ModelObject model{ std::move(atoms) };
@@ -82,23 +85,24 @@ TEST(UmapEmbeddingFeaturesTest, FiltersRequiredFeaturesAndUsesMadScalingInRowOrd
     const auto prepared{ BuildAndStandardizeInput(model, std::move(rows), "fixture", 15, error) };
     ASSERT_TRUE(prepared) << error;
     EXPECT_EQ(prepared->effective_neighbors, 2);
-    EXPECT_EQ(prepared->excluded_rows, 1u);
-    ASSERT_EQ(prepared->exclusions.size(), 1u);
+    EXPECT_EQ(prepared->excluded_rows, 2u);
+    ASSERT_EQ(prepared->exclusions.size(), 2u);
+    EXPECT_EQ(prepared->exclusions.at("unavailable: signal peeling ratio"), 1u);
     EXPECT_EQ(prepared->exclusions.at("unavailable: tail peeling ratio (fixture-tail-missing)"), 1u);
     EXPECT_EQ(prepared->constant_features, (std::vector<std::string_view>{ "distance to closest neighbor" }));
     EXPECT_EQ(GetUmapFeatureNames(), (std::vector<std::string_view>{
-        "neighbor distance sum in 2A", "distance to closest neighbor", "tail peeling ratio" }));
+        "neighbor distance sum in 2A", "distance to closest neighbor", "signal peeling ratio", "tail peeling ratio" }));
 
     ASSERT_EQ(prepared->feature_rows.size(), 3u);
     EXPECT_EQ(prepared->elements, (std::vector<Element>{ Element::CARBON, Element::CARBON, Element::CARBON }));
-    EXPECT_EQ(prepared->feature_rows[0].serial_id, 1);
-    EXPECT_EQ(prepared->feature_rows[1].serial_id, 3);
-    EXPECT_EQ(prepared->feature_rows[2].serial_id, 4);
-    EXPECT_TRUE(std::isnan(prepared->feature_rows.front().features[2]));
+    EXPECT_EQ(prepared->feature_rows[0].serial_id, 3);
+    EXPECT_EQ(prepared->feature_rows[1].serial_id, 4);
+    EXPECT_EQ(prepared->feature_rows[2].serial_id, 5);
+    EXPECT_DOUBLE_EQ(prepared->feature_rows.front().features[2],1.0);
 
     const auto z{ kInverseMadFactor };
-    const std::array expected{ -z, 0.0, z, 0.0, 0.0, -z, z, 0.0, 0.0 };
-    EXPECT_EQ(prepared->features.column_count, 3u);
+    const std::array expected{ 0.0, 0.0, -z, -z, z, 0.0, 0.0, 0.0, -z, 0.0, z, z };
+    EXPECT_EQ(prepared->features.column_count, kFirstColumns);
     ASSERT_EQ(prepared->features.values.size(), expected.size());
     for (std::size_t index = 0; index < expected.size(); ++index)
     {
@@ -119,7 +123,7 @@ TEST(UmapEmbeddingFeaturesTest, StandardizesFirstStageOverTheFiniteDoubleRange)
     for (std::size_t row = 0; row < rows.size(); ++row)
     {
         rows[row].serial_id = static_cast<int>(row + 1);
-        rows[row].features = { opposite_extremes[row], adjacent_extremes[row], 0.0,
+        rows[row].features = { opposite_extremes[row], adjacent_extremes[row], subnormals[row],
             subnormals[row], 0.0, 0.0, 0.0 };
         auto atom{ std::make_unique<AtomObject>() };
         atom->SetSerialID(rows[row].serial_id);
@@ -131,7 +135,7 @@ TEST(UmapEmbeddingFeaturesTest, StandardizesFirstStageOverTheFiniteDoubleRange)
     ASSERT_TRUE(prepared) << error;
     EXPECT_TRUE(prepared->constant_features.empty());
     const auto z{ kInverseMadFactor };
-    const std::array expected{ -z, -z, -z, 0.0, 0.0, 0.0, z, z, z };
+    const std::array expected{ -z, -z, -z, -z, 0.0, 0.0, 0.0, 0.0, z, z, z, z };
     ASSERT_EQ(prepared->features.values.size(), expected.size());
     for (std::size_t index = 0; index < expected.size(); ++index)
         EXPECT_NEAR(prepared->features.values[index], expected[index], 1e-14);
@@ -146,12 +150,12 @@ TEST(UmapEmbeddingFeaturesTest, UsesPositiveDeviationMedianWhenMostValuesRepeat)
     EXPECT_EQ(prepared->features.zero_mad_fallback_features,
         (std::vector<std::string_view>{ "neighbor distance sum in 2A" }));
     EXPECT_EQ(prepared->constant_features, (std::vector<std::string_view>{
-        "distance to closest neighbor", "tail peeling ratio" }));
+        "distance to closest neighbor", "signal peeling ratio", "tail peeling ratio" }));
     for (std::size_t row = 0; row < inputs.size(); ++row)
     {
         EXPECT_DOUBLE_EQ(prepared->feature_rows[row].features[0], inputs[row]);
-        EXPECT_NEAR(prepared->features.values[row * 3], inputs[row] * kInverseMadFactor / 2, 1e-15);
-        EXPECT_DOUBLE_EQ(prepared->features.values[row * 3 + 2], 0.0);
+        EXPECT_NEAR(prepared->features.values[row * kFirstColumns], inputs[row] * kInverseMadFactor / 2, 1e-15);
+        EXPECT_DOUBLE_EQ(prepared->features.values[row * kFirstColumns + 2], 0.0);
     }
 }
 
@@ -177,7 +181,7 @@ TEST(UmapEmbeddingFeaturesTest, AppliesZeroMadFallbackToBoundedTailRatios)
     for (std::size_t i = 0; i < ratios.size(); ++i)
     {
         EXPECT_EQ(prepared->feature_rows[i].features[3], ratios[i]);
-        EXPECT_NEAR(prepared->features.values[i * 3 + 2],
+        EXPECT_NEAR(prepared->features.values[i * kFirstColumns + 3],
             (ratios[i] - 0.25) * kInverseMadFactor / 0.3125, 1e-15);
     }
 }
@@ -193,8 +197,8 @@ TEST(UmapEmbeddingFeaturesTest, UsesEvenMidpointsAndIsInvariantToRepresentableAf
     const std::array<std::size_t, 4> order{ 3, 0, 2, 1 };
     for (std::size_t row = 0; row < centered.size(); ++row)
     {
-        EXPECT_NEAR(base->features.values[row * 3], centered[row] * kInverseMadFactor / 1.5, 1e-15);
-        EXPECT_DOUBLE_EQ(permuted->features.values[row * 3], base->features.values[order[row] * 3]);
+        EXPECT_NEAR(base->features.values[row * kFirstColumns], centered[row] * kInverseMadFactor / 1.5, 1e-15);
+        EXPECT_DOUBLE_EQ(permuted->features.values[row * kFirstColumns], base->features.values[order[row] * kFirstColumns]);
     }
 }
 
@@ -209,10 +213,10 @@ TEST(UmapEmbeddingFeaturesTest, IncreasingOneFiniteOutlierPreservesOtherStandard
     ASSERT_TRUE(larger) << error;
     for (std::size_t row = 0; row + 1 < values.size(); ++row)
     {
-        EXPECT_NEAR(base->features.values[row * 3], (values[row] - 5.5) * kInverseMadFactor / 2.5, 1e-15);
-        EXPECT_DOUBLE_EQ(larger->features.values[row * 3], base->features.values[row * 3]);
+        EXPECT_NEAR(base->features.values[row * kFirstColumns], (values[row] - 5.5) * kInverseMadFactor / 2.5, 1e-15);
+        EXPECT_DOUBLE_EQ(larger->features.values[row * kFirstColumns], base->features.values[row * kFirstColumns]);
     }
-    EXPECT_DOUBLE_EQ(larger->features.values[27], (values.back() - 5.5) * kInverseMadFactor / 2.5);
+    EXPECT_DOUBLE_EQ(larger->features.values[9 * kFirstColumns], (values.back() - 5.5) * kInverseMadFactor / 2.5);
 }
 
 TEST(UmapEmbeddingFeaturesTest, PreservesHalfUlpCentersAndMixedNormalAndSubnormalValues)
@@ -228,8 +232,8 @@ TEST(UmapEmbeddingFeaturesTest, PreservesHalfUlpCentersAndMixedNormalAndSubnorma
     const std::array expected{ -1.5, -0.5, normal / smallest - 1.5, 0.5 };
     for (std::size_t row = 0; row < expected.size(); ++row)
     {
-        EXPECT_DOUBLE_EQ(prepared->features.values[row * 3], (row % 2 == 0 ? -1 : 1) * kInverseMadFactor);
-        EXPECT_DOUBLE_EQ(prepared->features.values[row * 3 + 1], expected[row] * kInverseMadFactor);
+        EXPECT_DOUBLE_EQ(prepared->features.values[row * kFirstColumns], (row % 2 == 0 ? -1 : 1) * kInverseMadFactor);
+        EXPECT_DOUBLE_EQ(prepared->features.values[row * kFirstColumns + 1], expected[row] * kInverseMadFactor);
     }
 
     const auto opposite{ PrepareFirstColumns(std::array{ -largest, largest, largest }, error) };
@@ -258,11 +262,11 @@ TEST(UmapEmbeddingFeaturesTest, CertifiesSafeLargeDistancesAndRejectsUnsafeSpans
     std::string error;
     const auto safe{ PrepareFirstColumns(safe_wide, error) };
     ASSERT_TRUE(safe) << error;
-    EXPECT_DOUBLE_EQ(safe->features.values[9], (safe_wide.back() - 0.5) * kInverseMadFactor);
+    EXPECT_DOUBLE_EQ(safe->features.values[3 * kFirstColumns], (safe_wide.back() - 0.5) * kInverseMadFactor);
 
     const auto tiny_mad{ PrepareFirstColumns(std::array{ 0.0, smallest, 2 * smallest, 1e-171 }, error) };
     ASSERT_TRUE(tiny_mad) << error;
-    EXPECT_DOUBLE_EQ(tiny_mad->features.values[9], (1e-171 / smallest) * kInverseMadFactor);
+    EXPECT_DOUBLE_EQ(tiny_mad->features.values[3 * kFirstColumns], (1e-171 / smallest) * kInverseMadFactor);
 
     EXPECT_FALSE(PrepareFirstColumns(safe_wide, error, safe_wide));
     EXPECT_NE(error.find("cannot certify squared distances (bounding-box squared diagonal"), std::string::npos);
@@ -336,8 +340,8 @@ TEST(UmapEmbeddingFeaturesTest, ImputesAndStandardizesSelectedColumnsInAtomRowOr
         rows[point].features = source_values[point];
 
     EXPECT_EQ(GetSecondUmapFeatureNames(), (std::vector<std::string_view>{
-        "amplitude joint median of bin", "width joint median of bin", "offset joint median of bin",
-        "amplitude joint", "width joint", "offset joint" }));
+        "neighbor distance sum in 2A median of bin", "distance to closest neighbor median of bin",
+        "signal peeling ratio median of bin", "tail peeling ratio median of bin", "amplitude joint", "width joint", "offset joint" }));
 
     UmapBinning bins;
     bins.scale = { { -2.0, 1.0 }, 10.0, 1.0 };
@@ -349,22 +353,23 @@ TEST(UmapEmbeddingFeaturesTest, ImputesAndStandardizesSelectedColumnsInAtomRowOr
     bins.point_bin_numbers = { 1, 1, 1, 3, 2, 2 };
     PopulateUmapBinFeatureMedians(rows, bins);
     const auto features{ BuildSecondUmapFeatures(rows, bins, "fixture") };
-    ASSERT_EQ(features.column_count, 6u);
+    ASSERT_EQ(features.column_count, kSecondColumns);
     ASSERT_EQ(features.values.size(), rows.size() * features.column_count);
 
-    // The median-of-bin amplitude fill is 2 because the first bin contributes three rows.
+    // Signal's missing bin takes the median of the finite atom rows.
     const std::array imputed_columns{
-        std::array{ 2.0, 2.0, 2.0, 8.0, 2.0, 2.0 },
-        std::array{ 4.0, 4.0, 4.0, 10.0, 4.0, 4.0 },
-        std::array{ -2.0, -2.0, -2.0, 8.0, 3.0, 3.0 },
+        std::array{ 2.0, 2.0, 2.0, 6.0, 9.0, 9.0 },
+        std::array{ 98.0, 98.0, 98.0, 96.0, 94.5, 94.5 },
+        std::array{ 2.0, 2.0, 2.0, 2.0, 8.0, 8.0 },
+        std::array{ 13.0, 13.0, 13.0, 17.0, 21.0, 21.0 },
         std::array{ 0.0, 2.0, 4.0, 8.0, 3.0, 3.0 },
         std::array{ 2.0, 4.0, 6.0, 10.0, 4.0, 4.0 },
         std::array{ -4.0, -2.0, 0.0, 8.0, 2.0, 4.0 },
     };
-    const std::array centers{ 2.0, 4.0, 0.5, 3.0, 4.0, 1.0 };
-    const std::array mad_or_positive_median{ 6.0, 6.0, 2.5, 1.0, 1.0, 3.0 };
+    const std::array centers{ 4.0, 97.0, 2.0, 15.0, 3.0, 4.0, 1.0 };
+    const std::array mad_or_positive_median{ 2.0, 1.0, 6.0, 2.0, 1.0, 1.0, 3.0 };
     EXPECT_EQ(features.zero_mad_fallback_features, (std::vector<std::string_view>{
-        "amplitude joint median of bin", "width joint median of bin" }));
+        "signal peeling ratio median of bin" }));
     for (std::size_t column = 0; column < features.column_count; ++column)
     {
         for (std::size_t point = 0; point < rows.size(); ++point)
@@ -403,25 +408,25 @@ TEST(UmapEmbeddingFeaturesTest, RequiresVariationInAtLeastOneMedianOrAtomColumn)
     };
     PopulateUmapBinFeatureMedians(rows, bins);
     const auto constant{ BuildSecondUmapFeatures(rows, bins, "fixture") };
-    ASSERT_EQ(constant.column_count, 6u);
+    ASSERT_EQ(constant.column_count, kSecondColumns);
     EXPECT_TRUE(constant.values.empty());
 
-    bins.bins.at({ 1, 0 }).feature_medians[5] = 11.0;
+    bins.bins.at({ 1, 0 }).feature_medians[1] = 11.0;
     const auto median_variation{ BuildSecondUmapFeatures(rows, bins, "fixture") };
-    ASSERT_EQ(median_variation.values.size(), 18u);
-    EXPECT_NEAR(median_variation.values[6 + 1], kInverseMadFactor, 1e-14);
+    ASSERT_EQ(median_variation.values.size(), 3 * kSecondColumns);
+    EXPECT_NEAR(median_variation.values[kSecondColumns + 1], kInverseMadFactor, 1e-14);
 
     rows[0].features[6] = -1.0;
     rows[2].features[6] = 1.0;
     PopulateUmapBinFeatureMedians(rows, bins);
     const auto atom_variation{ BuildSecondUmapFeatures(rows, bins, "fixture") };
-    ASSERT_EQ(atom_variation.values.size(), 18u);
-    EXPECT_NEAR(atom_variation.values[5], -kInverseMadFactor, 1e-14);
+    ASSERT_EQ(atom_variation.values.size(), 3 * kSecondColumns);
+    EXPECT_NEAR(atom_variation.values[6], -kInverseMadFactor, 1e-14);
 
-    for (std::size_t index = 0; index < 18; ++index)
+    for (std::size_t index = 0; index < 3 * kSecondColumns; ++index)
     {
-        if (index % 6 != 1) EXPECT_DOUBLE_EQ(median_variation.values[index], 0.0);
-        if (index % 6 != 5) EXPECT_DOUBLE_EQ(atom_variation.values[index], 0.0);
+        if (index % kSecondColumns != 1) EXPECT_DOUBLE_EQ(median_variation.values[index], 0.0);
+        if (index % kSecondColumns != 6) EXPECT_DOUBLE_EQ(atom_variation.values[index], 0.0);
     }
 
     for (auto & row : rows) row.features.fill(missing);
@@ -432,8 +437,8 @@ TEST(UmapEmbeddingFeaturesTest, RequiresVariationInAtLeastOneMedianOrAtomColumn)
 TEST(UmapEmbeddingFeaturesTest, StandardizesAdjacentFloatingPointValues)
 {
     std::vector<LocalFittingFeatureRow> rows(8);
-    for (auto & row : rows) row.features[6] = 1.0;
-    rows.back().features[6] = std::nextafter(1.0, 2.0);
+    for (auto & row : rows) row.features[2] = row.features[6] = 1.0;
+    rows.back().features[2] = rows.back().features[6] = std::nextafter(1.0, 2.0);
     UmapBinning bins;
     bins.bins = {
         { { 0, 0 }, { { 0, 1, 2, 3, 4, 5, 6 }, 1 } },
@@ -441,13 +446,13 @@ TEST(UmapEmbeddingFeaturesTest, StandardizesAdjacentFloatingPointValues)
     };
     PopulateUmapBinFeatureMedians(rows, bins);
     const auto features{ BuildSecondUmapFeatures(rows, bins, "fixture") };
-    ASSERT_EQ(features.column_count, 6u);
+    ASSERT_EQ(features.column_count, kSecondColumns);
     ASSERT_EQ(features.values.size(), rows.size() * features.column_count);
     for (std::size_t row = 0; row < rows.size(); ++row)
     {
         const double expected{ row == 7 ? kInverseMadFactor : 0.0 };
         EXPECT_NEAR(features.values[row * features.column_count + 2], expected, 1e-14);
-        EXPECT_NEAR(features.values[row * features.column_count + 5], expected, 1e-14);
+        EXPECT_NEAR(features.values[row * features.column_count + 6], expected, 1e-14);
     }
 }
 
@@ -466,19 +471,19 @@ TEST(UmapEmbeddingFeaturesTest, StandardizesSecondStageWithoutOverflowOrUnderflo
     rows.back().features[6] = largest;
 
     const auto features{ BuildSecondUmapFeatures(rows, {}, "fixture") };
-    ASSERT_EQ(features.column_count, 6u);
+    ASSERT_EQ(features.column_count, kSecondColumns);
     ASSERT_EQ(features.values.size(), rows.size() * features.column_count);
     const double amplitude_scale{ 1.482602218505602 * std::midpoint(smaller, outlier) };
-    EXPECT_NEAR(features.values[outlier_row * features.column_count + 3], outlier / amplitude_scale, 1e-14);
-    EXPECT_NEAR(features.values[features.column_count + 3], smaller / amplitude_scale, 1e-30);
-    EXPECT_NEAR(features.values[4], kInverseMadFactor, 1e-14);
-    EXPECT_NEAR(features.values[5], -kInverseMadFactor, 1e-14);
+    EXPECT_NEAR(features.values[outlier_row * features.column_count + 4], outlier / amplitude_scale, 1e-14);
+    EXPECT_NEAR(features.values[features.column_count + 4], smaller / amplitude_scale, 1e-30);
+    EXPECT_NEAR(features.values[5], kInverseMadFactor, 1e-14);
+    EXPECT_NEAR(features.values[6], -kInverseMadFactor, 1e-14);
     EXPECT_NEAR(features.values.back(), kInverseMadFactor, 1e-14);
     EXPECT_EQ(features.zero_mad_fallback_features, (std::vector<std::string_view>{
         "amplitude joint", "width joint", "offset joint" }));
     for (std::size_t row = 0; row < row_count; ++row)
     {
-        for (std::size_t column = 0; column < 3; ++column)
+        for (std::size_t column = 0; column < 4; ++column)
             EXPECT_DOUBLE_EQ(features.values[row * features.column_count + column], 0.0);
     }
 }

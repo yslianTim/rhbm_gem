@@ -265,9 +265,9 @@ TEST(BufferExpansionTest, CertifiedBufferSurvivesWorkflowAndSQLiteRoundTrip)
         EXPECT_TRUE(std::any_of(result->evidence.begin(),result->evidence.end(),[name](const auto & check) {
             return check.name==name && check.status==JointCheckStatus::Passed;
         }));
-    ASSERT_TRUE(result->halo_median_reconstruction);
-    ASSERT_EQ(result->halo_median_reconstruction->halos.size(),1u);
-    const auto & halo=result->halo_median_reconstruction->halos.front();
+    ASSERT_TRUE(result->contributor_reconstruction);
+    ASSERT_EQ(result->contributor_reconstruction->replacements.size(),1u);
+    const auto & halo=result->contributor_reconstruction->replacements.front();
     EXPECT_EQ(halo.atom_id,"15");
     EXPECT_NE(std::find(halo.donor_atom_ids.begin(),halo.donor_atom_ids.end(),"20"),halo.donor_atom_ids.end());
 

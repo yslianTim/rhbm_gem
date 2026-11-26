@@ -253,7 +253,7 @@ def assert_joint_workflow() -> None:
         export.output_dir = root
         assert m.RunCommand(export).succeeded
         saved = json.loads((root / "joint_result_model.json").read_text())
-        assert saved["schema_version"] == 26
+        assert saved["schema_version"] == 27
         assert saved["selection_domain"]["output_indices"] == list(range(25))
         assert saved["selection_domain"]["buffer_indices"] == []
         assert saved["atom_ids"] == [str(index) for index in range(1, 26)]
@@ -269,8 +269,8 @@ def assert_joint_workflow() -> None:
         assert saved["parameterization_contract"] == "fixed-output-domain-buffer-expansion-v1"
         assert saved["assembled_state"] is not None
         assert "fixed_halos" not in saved
-        if saved["halo_median_reconstruction"] is not None:
-            assert saved["halo_median_reconstruction"]["halos"] == []
+        if saved["contributor_reconstruction"] is not None:
+            assert saved["contributor_reconstruction"]["replacements"] == []
         assert saved["components"]
         assert saved["components"][0]["state"] is not None
         assert saved["components"][0]["stop_reason"] == "block-stationary"

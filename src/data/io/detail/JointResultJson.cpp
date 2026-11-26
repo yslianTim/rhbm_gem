@@ -2,6 +2,7 @@
 #include "PersistenceSchema.hpp"
 #include "core/estimator/joint_component/ConvergenceCriteria.hpp"
 #include "core/estimator/joint_component/WidthBounds.hpp"
+#include "core/estimator/joint_component/ContributorReconstruction.hpp"
 #include <boost/json.hpp>
 #include <rhbm_gem/utils/hrl/RHBMTypes.hpp>
 #include <algorithm>
@@ -51,16 +52,19 @@ JointEvidenceScope Scope(const Object & o)
     if(s=="assembled-global") return JointEvidenceScope::AssembledGlobal;
     throw std::invalid_argument("Invalid saved joint evidence scope: "+s);
 }
-const char * HaloMedianSourceText(HaloMedianSource source)
+const char * ReconstructionSourceText(ReconstructionSource source)
 {
-    if(source==HaloMedianSource::GeometryLocalFittingMedian) return "geometry-local-fitting-median";
-    throw std::invalid_argument("Invalid current Halo median source.");
+    if(source==ReconstructionSource::GeometryLocalFittingMedian) return "geometry-local-fitting-median";
+    if(source==ReconstructionSource::Unavailable) return "unavailable";
+    throw std::invalid_argument("Invalid contributor replacement source.");
 }
-HaloMedianSource HaloMedianSourceValue(const j::value & value)
+ReconstructionSource ReconstructionSourceValue(const j::value & value)
 {
-    if(j::value_to<std::string>(value)=="geometry-local-fitting-median")
-        return HaloMedianSource::GeometryLocalFittingMedian;
-    throw std::invalid_argument("Invalid current Halo median source.");
+    const auto text=j::value_to<std::string>(value);
+    if(text=="unavailable") return ReconstructionSource::Unavailable;
+    if(text=="geometry-local-fitting-median")
+        return ReconstructionSource::GeometryLocalFittingMedian;
+    throw std::invalid_argument("Invalid contributor replacement source.");
 }
 j::value Number(std::optional<double> x)
 {
@@ -409,54 +413,65 @@ std::vector<JointBlockConditioning> ReadBlockConditioning(const j::value & value
     }
     return out;
 }
-j::value HaloMedianSnapshot(const std::optional<JointHaloMedianSnapshot> & value)
+j::value ContributorReconstructionSnapshot(const std::optional<JointContributorReconstructionSnapshot> & value)
 {
     if(!value) return nullptr;
-    const auto & snapshot=*value; j::array halos;
-    for(const auto & halo:snapshot.halos)
+    const auto & snapshot=*value;
+    j::array replacements;
+    for(const auto & replacement:snapshot.replacements)
     {
-        Object encoded{{"halo_contributor_index",halo.halo_contributor_index},
-            {"atom_id",halo.atom_id},{"amplitude",halo.amplitude},
-            {"width",halo.width},{"charge",halo.charge},{"source",HaloMedianSourceText(halo.source)},
-            {"donor_count",halo.donor_count},{"joint_run_id",halo.joint_run_id},
-            {"contract",halo.contract},{"donor_atom_ids",j::value_from(halo.donor_atom_ids)}};
-        halos.emplace_back(std::move(encoded));
+        const bool available=replacement.source==ReconstructionSource::GeometryLocalFittingMedian;
+        replacements.emplace_back(Object{{"contributor_index",replacement.contributor_index},
+            {"atom_id",replacement.atom_id},{"role",static_cast<int>(replacement.role)},
+            {"rejection_reasons",replacement.rejection_reasons},
+            {"amplitude",available ? Number(replacement.amplitude) : j::value(nullptr)},
+            {"width",available ? Number(replacement.width) : j::value(nullptr)},
+            {"charge",available ? Number(replacement.charge) : j::value(nullptr)},
+            {"source",ReconstructionSourceText(replacement.source)},
+            {"donor_count",replacement.donor_count},{"joint_run_id",replacement.joint_run_id},
+            {"contract",replacement.contract},{"donor_atom_ids",j::value_from(replacement.donor_atom_ids)}});
     }
-    Object encoded{{"contract",snapshot.contract},{"joint_run_id",snapshot.joint_run_id},
-        {"global_median",j::value_from(snapshot.global_median)},
-        {"valid_target_count",snapshot.valid_target_count},{"halos",std::move(halos)},
+    return Object{{"contract",snapshot.contract},{"joint_run_id",snapshot.joint_run_id},
+        {"qualified_donor_count",snapshot.qualified_donor_count},{"replacements",std::move(replacements)},
         {"neighbor_count",snapshot.neighbor_count},{"donor_policy",snapshot.donor_policy}};
-    return encoded;
 }
-std::optional<JointHaloMedianSnapshot> ReadHaloMedianSnapshot(const j::value & value)
+
+std::optional<JointContributorReconstructionSnapshot> ReadContributorReconstructionSnapshot(const j::value & value)
 {
     if(value.is_null()) return std::nullopt;
-    const auto & object=value.as_object(); JointHaloMedianSnapshot snapshot;
-    RequireOnlyKeys(object,{"contract","joint_run_id","global_median","valid_target_count","halos",
-        "neighbor_count","donor_policy"},"unknown current Halo median field");
+    const auto & object=value.as_object();
+    JointContributorReconstructionSnapshot snapshot;
+    RequireOnlyKeys(object,{"contract","joint_run_id","qualified_donor_count","replacements",
+        "neighbor_count","donor_policy"},"unknown contributor reconstruction field");
     snapshot.contract=Read<std::string>(object,"contract");
     snapshot.joint_run_id=Read<std::string>(object,"joint_run_id");
-    snapshot.global_median=Read<std::array<double,3>>(object,"global_median");
-    snapshot.valid_target_count=Read<std::size_t>(object,"valid_target_count");
+    snapshot.qualified_donor_count=Read<std::size_t>(object,"qualified_donor_count");
     snapshot.neighbor_count=Read<std::size_t>(object,"neighbor_count");
     snapshot.donor_policy=Read<std::string>(object,"donor_policy");
-    for(const auto & item:object.at("halos").as_array())
+    for(const auto & item:object.at("replacements").as_array())
     {
-        const auto & halo=item.as_object();
-        RequireOnlyKeys(halo,{"halo_contributor_index","atom_id","amplitude","width","charge","source",
-            "donor_count","joint_run_id","contract","donor_atom_ids"},"unknown current Halo median point field");
-        JointHaloMedianReconstruction decoded;
-        decoded.halo_contributor_index=Read<std::size_t>(halo,"halo_contributor_index");
-        decoded.atom_id=Read<std::string>(halo,"atom_id");
-        decoded.amplitude=Read<double>(halo,"amplitude");
-        decoded.width=Read<double>(halo,"width");
-        decoded.charge=Read<double>(halo,"charge");
-        decoded.source=HaloMedianSourceValue(halo.at("source"));
-        decoded.donor_count=Read<std::size_t>(halo,"donor_count");
-        decoded.joint_run_id=Read<std::string>(halo,"joint_run_id");
-        decoded.contract=Read<std::string>(halo,"contract");
-        decoded.donor_atom_ids=Read<std::vector<std::string>>(halo,"donor_atom_ids");
-        snapshot.halos.push_back(std::move(decoded));
+        const auto & record=item.as_object();
+        RequireOnlyKeys(record,{"contributor_index","atom_id","role","rejection_reasons","amplitude","width","charge",
+            "source","donor_count","joint_run_id","contract","donor_atom_ids"},"unknown contributor replacement field");
+        JointContributorReplacement decoded;
+        decoded.contributor_index=Read<std::size_t>(record,"contributor_index");
+        decoded.atom_id=Read<std::string>(record,"atom_id");
+        decoded.role=static_cast<FittingRole>(Read<int>(record,"role"));
+        decoded.rejection_reasons=Read<unsigned>(record,"rejection_reasons");
+        decoded.source=ReconstructionSourceValue(record.at("source"));
+        if(decoded.source==ReconstructionSource::GeometryLocalFittingMedian)
+        {
+            decoded.amplitude=Read<double>(record,"amplitude");
+            decoded.width=Read<double>(record,"width");
+            decoded.charge=Read<double>(record,"charge");
+        }
+        else if(!record.at("amplitude").is_null() || !record.at("width").is_null() || !record.at("charge").is_null())
+            throw std::invalid_argument("Unavailable contributor replacement contains parameters.");
+        decoded.donor_count=Read<std::size_t>(record,"donor_count");
+        decoded.joint_run_id=Read<std::string>(record,"joint_run_id");
+        decoded.contract=Read<std::string>(record,"contract");
+        decoded.donor_atom_ids=Read<std::vector<std::string>>(record,"donor_atom_ids");
+        snapshot.replacements.push_back(std::move(decoded));
     }
     return snapshot;
 }
@@ -868,49 +883,6 @@ void Validate(const JointAnalysisResult & x)
     Require(!(x.runtime_convergence==JointCheckStatus::Passed) ||
         (x.initialization.valid && x.assembled_state && x.objective),
         "passed convergence evidence is missing its assembled state");
-    const bool has_halos=atoms>targets.size();
-    if(x.halo_median_reconstruction)
-    {
-        const auto & snapshot=*x.halo_median_reconstruction;
-        Require(snapshot.valid_target_count<=targets.size(),"Halo median valid target count");
-        Require(has_halos && snapshot.contract==HaloMedianReconstructionContractVersion &&
-            snapshot.neighbor_count==GeometryLocalFittingMedianNeighborCount &&
-            snapshot.donor_policy==GeometryLocalFittingMedianDonorPolicy,
-            "invalid geometry-local Halo median contract");
-        Require(!snapshot.joint_run_id.empty() && snapshot.valid_target_count>0,
-            "invalid Halo median snapshot identity");
-        for(double value:snapshot.global_median) Require(std::isfinite(value),"nonfinite Halo median global value");
-        Require(snapshot.global_median[0]>=0 && snapshot.global_median[1]>0,
-            "invalid Halo median global value");
-        Require(snapshot.halos.size()==atoms-targets.size(),"Halo median coverage");
-        std::size_t previous{}; bool first=true;
-        for(const auto & halo:snapshot.halos)
-        {
-            Require(halo.halo_contributor_index<atoms && (first || previous<halo.halo_contributor_index) &&
-                x.atom_ids[halo.halo_contributor_index]==halo.atom_id &&
-                !std::binary_search(targets.begin(),targets.end(),halo.halo_contributor_index),
-                "Halo median atom mapping");
-            Require(halo.joint_run_id==snapshot.joint_run_id && halo.donor_count>0 &&
-                halo.donor_count<=std::min(snapshot.neighbor_count,snapshot.valid_target_count) &&
-                halo.donor_count==halo.donor_atom_ids.size(),"Halo median donor provenance");
-            Require(halo.contract==HaloMedianReconstructionContractVersion &&
-            halo.source==HaloMedianSource::GeometryLocalFittingMedian,
-            "Halo median source contract");
-            std::set<std::string> donors;
-            for(const auto & donor_id:halo.donor_atom_ids)
-                Require(!donor_id.empty() && donors.insert(donor_id).second &&
-                    std::any_of(targets.begin(),targets.end(),[&](const auto index) {
-                        return x.atom_ids[index]==donor_id;
-                    }),"Halo median donor identity");
-            Require(std::isfinite(halo.amplitude) && halo.amplitude>=0 &&
-                std::isfinite(halo.width) && halo.width>0 && std::isfinite(halo.charge),
-                "invalid Halo median parameters");
-            previous=halo.halo_contributor_index; first=false;
-        }
-    }
-    else if(has_halos)
-        Require(!IsQualifiedJointAnalysisResult(x) || HasUnavailableJointHaloMedianReconstruction(x),
-            "qualified Halo result lacks reconstruction or unavailable evidence");
     std::set<std::size_t> used_atoms,used_rows;
     std::set<std::string> components;
     bool certified_buffer_state{};
@@ -977,6 +949,7 @@ void Validate(const JointAnalysisResult & x)
         Require(used_atoms.contains(selection.buffer_indices.front()),"missing Buffer component");
     if(!selection.buffer_indices.empty() && x.assembled_state)
         Require(certified_buffer_state,"assembled Buffer parameters lack a certified component");
+    core::detail::ValidateSavedContributorReconstruction(x);
 }
 }
 std::string Encode(const JointAnalysisResult & x)
@@ -1024,7 +997,7 @@ std::string Encode(const JointAnalysisResult & x)
         {"fitting_row_ids",j::value_from(x.fitting_row_ids)},
         {"fitting_to_original_contributors",j::value_from(x.fitting_to_original_contributors)},
         {"fitting_to_original_rows",j::value_from(x.fitting_to_original_rows)},
-        {"halo_median_reconstruction",HaloMedianSnapshot(x.halo_median_reconstruction)}};
+        {"contributor_reconstruction",ContributorReconstructionSnapshot(x.contributor_reconstruction)}};
     return j::serialize(out);
 }
 JointAnalysisResult DecodeCurrent(const Object & o)
@@ -1034,7 +1007,7 @@ JointAnalysisResult DecodeCurrent(const Object & o)
         "fitting_to_original_contributors","fitting_to_original_rows","initialization","costs","components",
         "assembled_state","objective","available_row_mask","evidence","search_completed","observation_scale",
         "runtime_convergence","target_evidence","target_runtime_convergence",
-        "halo_median_reconstruction"},"unknown current Joint result field");
+        "contributor_reconstruction"},"unknown current Joint result field");
     const auto & metadata=o.at("metadata").as_object();
     RequireOnlyKeys(metadata,{"model_path","map_path","grid_size","grid_spacing","origin","simulation",
         "map_normalization","model_sha256","map_sha256","software","solver","units"},
@@ -1132,7 +1105,7 @@ JointAnalysisResult DecodeCurrent(const Object & o)
     x.runtime_convergence=Status(o.at("runtime_convergence"));
     x.target_evidence=ReadTarget(o.at("target_evidence"));
     x.target_runtime_convergence=Status(o.at("target_runtime_convergence"));
-    x.halo_median_reconstruction=ReadHaloMedianSnapshot(o.at("halo_median_reconstruction"));
+    x.contributor_reconstruction=ReadContributorReconstructionSnapshot(o.at("contributor_reconstruction"));
     Validate(x);
     return x;
 }
@@ -1141,7 +1114,7 @@ JointAnalysisResult Decode(std::string_view text)
     j::parse_options options; options.numbers=j::number_precision::precise;
     const auto parsed=j::parse(text,{},options); const auto & o=parsed.as_object();
     const int version=Read<int>(o,"schema_version");
-    Require(version==persistence_schema::JointResultJson,"unsupported Joint result schema version");
+    Require(version==persistence_schema::JointResultJson,"unsupported Joint result schema version; rerun potential_analysis");
     return DecodeCurrent(o);
 }
 }

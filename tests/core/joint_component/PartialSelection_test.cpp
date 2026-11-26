@@ -25,7 +25,7 @@
 #include "support/CommandTestHelpers.hpp"
 #include "data/detail/JointStageAdapter.hpp"
 #include "data/detail/PostJointLocalValidation.hpp"
-#include "core/estimator/joint_component/HaloMedianReconstruction.hpp"
+#include "core/estimator/joint_component/ContributorReconstruction.hpp"
 #include "core/estimator/PotentialFittingWorkflow.hpp"
 #include "core/estimator/joint_component/PostFitPeeling.hpp"
 #include "core/sampling/MapInterpolation.hpp"
@@ -272,7 +272,7 @@ TEST(JointComponentPartialSelectionTest, InitializationPreservesTargetHistoryAnd
         EXPECT_EQ(*fit.prediction,*prediction_before);
     EXPECT_EQ(saved.fitting_to_original_contributors,fit.problem->FittingToOriginalContributors());
     EXPECT_EQ(saved.fitting_to_original_rows,fit.problem->FittingToOriginalRows());
-    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),26);
+    EXPECT_EQ(boost::json::parse(encoded).at("schema_version").as_int64(),27);
     const auto decoded=rhbm_gem::joint_result_io::Decode(encoded);
     ASSERT_TRUE(decoded.selection_domain); EXPECT_EQ(decoded.selection_domain->output_indices,(std::vector<std::size_t>{0}));
     ASSERT_TRUE(decoded.selection_domain->buffer_expansion);
@@ -363,7 +363,7 @@ TEST(JointComponentPartialSelectionTest, CopyAndMoveCapturePreserveComponentPers
         auto copied_fit=source;
         auto moved_fit=source;
         for(auto * value:{&copied_fit,&moved_fit})
-            value->evidence.push_back({std::string(rhbm_gem::JointHaloMedianReconstructionEvidenceName),
+            value->evidence.push_back({"capture-move-copy-evidence",
                 rhbm_gem::JointCheckStatus::Unavailable,rhbm_gem::JointEvidenceScope::AssembledGlobal,
                 {},{},"halo-median-reconstruction-unavailable"});
         const auto copied=core::CaptureJointAnalysisResult(copied_fit);
@@ -717,7 +717,7 @@ TEST(JointComponentPartialSelectionTest, PostFitPeelingUsesOriginalGridAndPreser
         << " components=" << fit.components.size()
         << (fit.components.empty() ? std::string{} : ", stop="+fit.components.front().stop_reason);
     auto snapshot=core::CaptureJointAnalysisResult(fit);
-    snapshot.halo_median_reconstruction=core::detail::BuildHaloMedianReconstruction(
+    snapshot.contributor_reconstruction=core::detail::BuildContributorReconstruction(
         *f.model,problem,snapshot,"peeling-test").TakeSnapshot();
     ASSERT_TRUE(snapshot.components.front().state);
     f.model->EditAnalysis().ApplyJointStageEstimates(
@@ -735,8 +735,8 @@ TEST(JointComponentPartialSelectionTest, PostFitPeelingUsesOriginalGridAndPreser
     const auto outputs = postprocessing_test::BuildPostFitPeelingSamples(*f.map, *f.model, problem,std::nullopt,&snapshot);
     const auto & output = outputs.at(1);
     ASSERT_FALSE(output.samples.empty());
-    ASSERT_TRUE(snapshot.halo_median_reconstruction);
-    const auto & median=snapshot.halo_median_reconstruction->halos.front();
+    ASSERT_TRUE(snapshot.contributor_reconstruction);
+    const auto & median=snapshot.contributor_reconstruction->replacements.front();
     const rhbm_gem::GaussianModel3D neighbor{median.amplitude,median.width,median.charge};
     for(const auto & sample:output.samples)
     {
@@ -775,7 +775,7 @@ TEST(JointComponentPartialSelectionTest, ExcludedFitRowsRemainInOriginalPeelingD
     ASSERT_TRUE(fit.assembled_state) << fit.initialization.reason;
     ASSERT_EQ(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
     auto snapshot=core::CaptureJointAnalysisResult(fit);
-    snapshot.halo_median_reconstruction=core::detail::BuildHaloMedianReconstruction(
+    snapshot.contributor_reconstruction=core::detail::BuildContributorReconstruction(
         *f.model,problem,snapshot,"original-peeling-domain").TakeSnapshot();
     f.model->EditAnalysis().ApplyJointResult(snapshot,"original-peeling-domain");
     const SamplingPointList points{{1.5,{1.5,0.0,0.0},true}};
@@ -801,7 +801,7 @@ TEST(JointComponentPartialSelectionTest, PeelingIgnoresContributorsOutsideActual
     ASSERT_TRUE(fit.assembled_state) << fit.initialization.reason;
     ASSERT_EQ(fit.RuntimeConvergence(),rhbm_gem::JointCheckStatus::Passed);
     auto snapshot=core::CaptureJointAnalysisResult(fit);
-    snapshot.halo_median_reconstruction=core::detail::BuildHaloMedianReconstruction(
+    snapshot.contributor_reconstruction=core::detail::BuildContributorReconstruction(
         *f.model,problem,snapshot,"distant-halo-peeling").TakeSnapshot();
     f.model->EditAnalysis().ApplyJointStageEstimates(
         rhbm_gem::data_internal::BuildJointStageEstimates(snapshot, "distant-halo-peeling"));
@@ -1372,7 +1372,7 @@ TEST(JointComponentPartialSelectionTest, TargetOnlyPostprocessingRetainsFullCont
         << " components=" << fit.components.size()
         << (fit.components.empty() ? std::string{} : ", stop="+fit.components.front().stop_reason);
     auto snapshot = core::CaptureJointAnalysisResult(fit);
-    snapshot.halo_median_reconstruction=core::detail::BuildHaloMedianReconstruction(
+    snapshot.contributor_reconstruction=core::detail::BuildContributorReconstruction(
         *f.model,problem,snapshot,"output-scope").TakeSnapshot();
     f.model->EditAnalysis().ApplyJointStageEstimates(
         rhbm_gem::data_internal::BuildJointStageEstimates(snapshot, "output-scope"));

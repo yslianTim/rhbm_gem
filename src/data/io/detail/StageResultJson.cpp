@@ -401,7 +401,7 @@ void Decode(ModelObject & model, const std::string & text)
     j::parse_options parse_options; parse_options.numbers=j::number_precision::precise;
     const auto document=j::parse(text,{},parse_options); const auto & root=document.as_object();
     if(Read<int>(root,"version")!=persistence_schema::StageResultJson)
-        throw std::invalid_argument("Unsupported Stage result schema version.");
+        throw std::invalid_argument("Unsupported Stage result schema version. Rerun potential_analysis.");
     auto & data=ModelAnalysisData::Of(model); std::set<int> seen;
     for(const auto & value:root.at("atoms").as_array())
     {
@@ -495,9 +495,9 @@ void Validate(const ModelObject & model)
             if (!joint_run_id) joint_run_id=s.source.run_id;
             else if (*joint_run_id != s.source.run_id)
                 throw std::invalid_argument("Mixed Joint run identities.");
-            if (joint_snapshot && joint_snapshot->halo_median_reconstruction &&
-                s.source.run_id != joint_snapshot->halo_median_reconstruction->joint_run_id)
-                throw std::invalid_argument("Joint stage and Halo median run identities differ.");
+            if (joint_snapshot && joint_snapshot->contributor_reconstruction &&
+                s.source.run_id != joint_snapshot->contributor_reconstruction->joint_run_id)
+                throw std::invalid_argument("Joint stage and contributor reconstruction run identities differ.");
         }
         const bool formal_joint_point = s.point && s.convergence == JointCheckStatus::Passed;
         if (unqualified_joint && s.source.method == EstimateMethod::JointComponents &&
@@ -508,12 +508,6 @@ void Validate(const ModelObject & model)
         if(e->PostFitPeeling())
         {
             if(!joint_snapshot) throw std::invalid_argument("Original-grid peeling requires its Joint snapshot.");
-            if(joint_snapshot->selection_domain &&
-                joint_snapshot->atom_ids.size()>joint_snapshot->selection_domain->FittingCount() &&
-                !joint_snapshot->halo_median_reconstruction &&
-                std::any_of(e->PostFitPeeling()->samples.begin(),e->PostFitPeeling()->samples.end(),
-                    [](const auto & sample){return sample.response.has_value();}))
-                throw std::invalid_argument("Available grid peeling requires Halo reconstruction provenance.");
             const auto position=model.FindAtomPtr(id)->GetPosition();
             const auto reason=data_internal::ValidatePostFitPeelingResult(*e->PostFitPeeling(),s,joint_snapshot,&position);
             if(!reason.empty()) throw std::invalid_argument(reason);

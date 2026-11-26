@@ -240,11 +240,11 @@ bool ExecutePreparedRequest(
         outcome = CommandOutcome::JointNotConverged;
         Logger::Log(LogLevel::Warning,"Joint fitting did not converge; diagnostic result was saved (CLI exit 3).");
     }
-    else if (HasUnavailableJointHaloMedianReconstruction(fit))
+    else if (HasUnavailableJointContributorReconstruction(fit))
     {
         outcome = CommandOutcome::JointDownstreamUnavailable;
         Logger::Log(LogLevel::Warning,
-            "Joint fitting qualified but Halo median reconstruction was unavailable; "
+            "Joint fitting qualified but contributor reconstruction was unavailable; "
             "diagnostic result was saved (CLI exit 4).");
     }
     else

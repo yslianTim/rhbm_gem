@@ -204,10 +204,8 @@ PeelingRatioAssessment AtomLocalPotentialView::AssessLocalFittingPeelingRatio(Pe
         const auto & snapshot = ModelAnalysisData::Of(*m_atom_object->m_owner_model).joint_result;
         if (snapshot && !IsQualifiedJointAnalysisResult(*snapshot))
             assessment.reason = "joint-qualification-failed";
-        else if (snapshot && snapshot->selection_domain &&
-            snapshot->selection_domain->FittingCount() < snapshot->atom_ids.size() &&
-            !snapshot->halo_median_reconstruction)
-            assessment.reason = "halo-median-reconstruction-unavailable";
+        else if (snapshot && HasUnavailableJointContributorReconstruction(*snapshot))
+            assessment.reason = "contributor-reconstruction-unavailable";
         else
             assessment.reason = joint_unqualified ? "joint-qualification-failed" : "missing-peeling-result";
         return assessment;

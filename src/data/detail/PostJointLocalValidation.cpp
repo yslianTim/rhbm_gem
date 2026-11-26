@@ -53,9 +53,15 @@ std::string ValidatePostFitPeelingResult(const PostFitPeelingResult & peeling,
     const LocalStageEstimate & joint, const JointAnalysisResult * snapshot,
     const std::array<double,3> * target_position)
 {
-    if (peeling.mode!="original-grid-v1" || !SameSource(peeling.source,joint.source) ||
+    if (peeling.mode!=PostFitPeelingContract || !SameSource(peeling.source,joint.source) ||
         joint.source.method!=EstimateMethod::JointComponents || joint.source.role!=FittingRole::OutputTarget)
         return "Post-Joint grid source/contract mismatch.";
+    if (snapshot && snapshot->contributor_reconstruction &&
+        snapshot->contributor_reconstruction->joint_run_id!=peeling.source.run_id)
+        return "Peeling contributor reconstruction run mismatch.";
+    if (snapshot && HasUnavailableJointContributorReconstruction(*snapshot) &&
+        std::any_of(peeling.samples.begin(),peeling.samples.end(),[](const auto & sample){return sample.response.has_value();}))
+        return "Available peeling requires contributor reconstruction.";
     std::set<std::size_t> grids;
     std::optional<std::size_t> previous;
     for (const auto & sample:peeling.samples)

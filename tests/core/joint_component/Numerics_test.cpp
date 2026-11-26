@@ -1255,3 +1255,35 @@ TEST(JointComponentNumericsTest, WidthBoundKktUsesOppositeSignsAtTheTwoFaces)
     EXPECT_FALSE(kkt.feasible);
     EXPECT_NEAR(kkt.violation,1e-8,1e-12);
 }
+
+TEST(JointComponentNumericsTest, WidthClassificationSharesKktFacesAndRoundoff)
+{
+    using Boundary=n::WidthBoundaryStatus;
+    const n::WidthBounds bounds{1.0,-1.0};
+    const auto tolerance=n::WidthBounds::RoundoffTolerance(1.0);
+    EXPECT_EQ(bounds.Classify(-1.0),Boundary::LowerBound);
+    EXPECT_EQ(bounds.Classify(1.0),Boundary::UpperBound);
+    EXPECT_EQ(bounds.Classify(-1.0-tolerance),Boundary::LowerBound);
+    EXPECT_EQ(bounds.Classify(1.0+tolerance),Boundary::UpperBound);
+    EXPECT_EQ(bounds.Classify(-1.0+2*tolerance),Boundary::Interior);
+    EXPECT_EQ(bounds.Classify(1.0-2*tolerance),Boundary::Interior);
+    EXPECT_EQ(bounds.Classify(1.0+2*tolerance),Boundary::Unavailable);
+    EXPECT_EQ(bounds.Classify(std::numeric_limits<double>::quiet_NaN()),Boundary::Unavailable);
+    EXPECT_EQ((n::WidthBounds{1.0,1.0}).Classify(1.0),Boundary::Unavailable);
+    EXPECT_EQ((n::WidthBounds{1.0,{}}).Classify(-100.0),Boundary::Interior);
+
+    const n::WidthBounds narrow{tolerance,0.0};
+    Vector eta(3),gradient(3);
+    eta<<0.0,tolerance/2,tolerance;
+    gradient<<2.0,-3.0,-4.0;
+    EXPECT_EQ(narrow.Classify(eta(0)),Boundary::LowerBound);
+    EXPECT_EQ(narrow.Classify(eta(1)),Boundary::UpperBound);
+    EXPECT_EQ(narrow.Classify(eta(2)),Boundary::UpperBound);
+    const auto kkt=n::CalculateWidthBoundKkt(eta,gradient,narrow);
+    EXPECT_TRUE(kkt.feasible);
+    EXPECT_EQ(kkt.active_lower,1u);
+    EXPECT_EQ(kkt.active_upper,2u);
+    EXPECT_DOUBLE_EQ(kkt.multiplier,4.0);
+    EXPECT_DOUBLE_EQ(kkt.complementarity,3.0*tolerance/2);
+    EXPECT_DOUBLE_EQ(kkt.projected,tolerance/2);
+}

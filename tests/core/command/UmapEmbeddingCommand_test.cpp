@@ -16,7 +16,7 @@
 #include "data/detail/JointStageAdapter.hpp"
 #include "core/estimator/joint_component/Numerics.hpp"
 #include <rhbm_gem/data/object/MapObject.hpp>
-#include "core/estimator/joint_component/HaloMedianReconstruction.hpp"
+#include "core/estimator/joint_component/ContributorReconstruction.hpp"
 #include "support/JointPostprocessingTestHelpers.hpp"
 #include "core/classifier/LocalFittingFeatures.hpp"
 #include "core/classifier/UmapEmbeddingAlgorithm.hpp"
@@ -510,8 +510,8 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
     EXPECT_TRUE(metadata.at("first_umap_zero_mad_fallback_features").as_array().empty());
     EXPECT_TRUE(metadata.at("second_umap_zero_mad_fallback_features").is_array());
     EXPECT_EQ(metadata.at("second_umap_features").as_array(), (boost::json::array{
-        "amplitude joint median of bin", "width joint median of bin", "offset joint median of bin",
-        "amplitude joint", "width joint", "offset joint" }));
+        "neighbor distance sum in 2A median of bin", "distance to closest neighbor median of bin",
+        "signal peeling ratio median of bin", "tail peeling ratio median of bin", "amplitude joint", "width joint", "offset joint" }));
     EXPECT_FALSE(metadata.as_object().contains("spatial_feature_normalization"));
     const auto & column_semantics{ metadata.at("column_semantics").as_object() };
     EXPECT_EQ(column_semantics.size(), 5u);
@@ -962,11 +962,11 @@ TEST(UmapEmbeddingCommandTest, RejectsAllConstantSelectedFeatures)
     EXPECT_TRUE(HasIssue(
         result,
         "-k,--model-key",
-        "All 3 selected UMAP feature columns are constant"));
+        "All 4 selected UMAP feature columns are constant"));
     EXPECT_EQ(command_test::CountFilesWithExtension(output_dir, ".csv"), 0u);
 }
 
-TEST(UmapEmbeddingCommandTest, ReportsFirstFallbackAndReplacesSecondOutputWhenJointColumnsAreConstant)
+TEST(UmapEmbeddingCommandTest, ReportsFirstFallbackAndEmbedsVaryingBinFeaturesWithConstantJointParameters)
 {
     command_test::ScopedTempDir temp_dir{ "umap_embedding_second_constant" };
     const auto database{ temp_dir.path() / "analysis.sqlite" };
@@ -987,14 +987,16 @@ TEST(UmapEmbeddingCommandTest, ReportsFirstFallbackAndReplacesSecondOutputWhenJo
     const auto rows{ ReadLines(output) };
     ASSERT_EQ(rows.size(), 10u);
     for (std::size_t row = 1; row < rows.size(); ++row)
-        EXPECT_TRUE(rows[row].ends_with(",,"));
-    EXPECT_EQ(ReadLines(second_summary).size(), 1u);
-    EXPECT_FALSE(std::filesystem::exists(output_dir / "umap_embedding_model_second_umap.pdf"));
-    EXPECT_FALSE(std::filesystem::exists(output_dir / "umap_embedding_model_second_umap_mean_shift.pdf"));
+        EXPECT_FALSE(rows[row].ends_with(",,"));
+    EXPECT_GT(ReadLines(second_summary).size(), 1u);
+#ifdef HAVE_ROOT
+    EXPECT_TRUE(std::filesystem::exists(output_dir / "umap_embedding_model_second_umap.pdf"));
+    EXPECT_TRUE(std::filesystem::exists(output_dir / "umap_embedding_model_second_umap_mean_shift.pdf"));
+#endif
     const auto metadata{ boost::json::parse(ReadLines(output.string() + ".metadata.json").at(0)) };
     EXPECT_EQ(metadata.at("first_umap_zero_mad_fallback_features").as_array(),
         (boost::json::array{ "neighbor distance sum in 2A" }));
-    EXPECT_TRUE(metadata.at("second_umap_zero_mad_fallback_features").as_array().empty());
+    EXPECT_FALSE(metadata.at("second_umap_zero_mad_fallback_features").as_array().empty());
 }
 
 TEST(UmapEmbeddingCommandTest, RejectsInvalidOptions)
@@ -1341,12 +1343,15 @@ TEST(UmapEmbeddingCommandTest, ExcludesMissingRequiredFeaturesAndAllowsMissingAn
         EXPECT_TRUE(RunCommand(request).succeeded);
         EXPECT_TRUE(std::filesystem::exists(request.output_dir/"umap_embedding_model.csv.metadata.json"));
         const auto rows = ReadLines(request.output_dir/"umap_embedding_model.csv");
-        ASSERT_EQ(rows.size(), scenario == 1 ? 8u : 9u);
+        ASSERT_EQ(rows.size(), scenario == 0 ? 9u : 8u);
         if (scenario == 2)
         {
-            const auto first_row = SplitFields(rows.at(1));
-            EXPECT_TRUE(first_row.at(5).empty());
-            EXPECT_FALSE(first_row.at(6).empty());
+            for (std::size_t i=1;i<rows.size();++i)
+            {
+                const auto fields=SplitFields(rows[i]);
+                EXPECT_FALSE(fields.at(5).empty());
+                EXPECT_FALSE(fields.at(6).empty());
+            }
         }
     }
 }
@@ -1415,7 +1420,7 @@ TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNo
     const auto problem=JointProblem(std::move(fitting)).WithReconstructionDomain(
         std::move(original),fitting_to_original_contributors,std::move(fitting_to_original_rows));
     auto snapshot=CaptureJointAnalysisResult(FitJointComponentsInitialized(problem,initialization));
-    snapshot.halo_median_reconstruction=rg::core::detail::BuildHaloMedianReconstruction(
+    snapshot.contributor_reconstruction=rg::core::detail::BuildContributorReconstruction(
         *model,problem,snapshot,"saved-joint-umap").TakeSnapshot();
     snapshot.metadata.grid_size={100,21,21};
     snapshot.metadata.grid_spacing={.25,.25,.25};
@@ -1467,7 +1472,7 @@ TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNo
     const auto metadata_lines=ReadLines(request.output_dir/"umap_embedding_model.csv.metadata.json");
     const auto metadata=boost::json::parse(metadata_lines.at(0));
     EXPECT_EQ(metadata.at("estimator").as_string(),"joint-components");
-    EXPECT_EQ(metadata.at("peeling_mode").as_string(),"original-grid-v1");
+    EXPECT_EQ(metadata.at("peeling_mode").as_string(),"original-grid-v2");
     EXPECT_EQ(metadata.at("peeling_ratio_definition").as_string(), "l1-component-occupancy-v1");
     EXPECT_EQ(metadata.at("peeling_ratio_range").as_array(), (boost::json::array{0, 1}));
     const auto & regions = metadata.at("peeling_ratio_regions").as_object();
@@ -1483,7 +1488,7 @@ TEST(UmapEmbeddingCommandTest, SavedJointTargetsEmbedWithCoverageExclusionsAndNo
     EXPECT_FALSE(map_normalization.at("applied").as_bool());
     EXPECT_DOUBLE_EQ(map_normalization.at("divisor").as_double(), 1.0);
     EXPECT_EQ(metadata.at("included_rows").as_int64(),20);
-    EXPECT_EQ(metadata.at("features").as_array().size(),3);
+    EXPECT_EQ(metadata.at("features").as_array().size(),4);
     EXPECT_FALSE(metadata.at("exclusions").as_object().empty());
     EXPECT_EQ(metadata.at("exclusions").as_object().at(
         "unavailable: tail peeling ratio (peeling-coverage-incomplete:outside-joint-domain)").as_int64(),1);

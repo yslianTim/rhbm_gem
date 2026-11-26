@@ -129,6 +129,18 @@ from a deficient undamped free subproblem. The trust feasibility allowance is
 relative to the radius (`64 * epsilon * Delta`). A failed bounded solve
 reports its reason without replacing accepted state.
 
+## Projected Width Boundaries
+
+For a bound at log width `eta_bound`, Width KKT and contributor eligibility
+share the tolerance `64 * epsilon * max(1, abs(eta_bound))`. Slack is
+`eta - eta_min` at the lower bound and `eta_max - eta` at the upper bound.
+Feasibility permits roundoff at each applicable bound. If both active
+tolerances overlap, the closer bound is active, with an exact tie assigned
+to the upper bound. A geometry-free fit can have an upper bound alone.
+Each Fitting Target is classified from its accepted `log_tau`. The block's
+active count remains a summary. The KKT calculation retains projected
+gradient, multipliers and complementarity for certification.
+
 ## Compact spectra and Local Conditioning
 
 Eigen is the production numerical backend. `CompactSvd` uses JacobiSVD when

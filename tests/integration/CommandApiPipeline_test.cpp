@@ -93,7 +93,7 @@ void ExpectJointNumericalResultPreserved(
     auto comparable_before=before;
     comparable_before.metadata=after.metadata;
     comparable_before.costs=after.costs;
-    comparable_before.halo_median_reconstruction=after.halo_median_reconstruction;
+    comparable_before.contributor_reconstruction=after.contributor_reconstruction;
     ASSERT_EQ(comparable_before.components.size(),after.components.size());
     for(std::size_t i=0;i<after.components.size();++i)
         comparable_before.components[i].local_conditioning_seconds=after.components[i].local_conditioning_seconds;
@@ -327,7 +327,7 @@ TEST(CommandApiPipelineTest, JointPersistsSmallSelectionCalibrationFailureAndExp
     const auto & saved=*loaded->GetAnalysisView().GetJointResult();
     const auto expected_outcome = !saved.initialization.valid ? rgc::CommandOutcome::JointInitializationFailed :
         !rg::IsQualifiedJointAnalysisResult(saved) ? rgc::CommandOutcome::JointNotConverged :
-        rg::HasUnavailableJointHaloMedianReconstruction(saved) ? rgc::CommandOutcome::JointDownstreamUnavailable :
+        rg::HasUnavailableJointContributorReconstruction(saved) ? rgc::CommandOutcome::JointDownstreamUnavailable :
         rgc::CommandOutcome::JointQualified;
     EXPECT_EQ(api_result.outcome,expected_outcome);
     ASSERT_TRUE(saved.metadata.map_normalization); ASSERT_TRUE(saved.metadata.software);
@@ -425,7 +425,7 @@ TEST(CommandApiPipelineTest, JointPersistsSmallSelectionCalibrationFailureAndExp
     const auto & cli_fit=*cli_model->GetAnalysisView().GetJointResult();
     const int expected_cli_status=!cli_fit.initialization.valid ? 2 :
         !rg::IsQualifiedJointAnalysisResult(cli_fit) ? 3 :
-        rg::HasUnavailableJointHaloMedianReconstruction(cli_fit) ? 4 : 0;
+        rg::HasUnavailableJointContributorReconstruction(cli_fit) ? 4 : 0;
     EXPECT_EQ(cli_status,expected_cli_status);
     std::filesystem::remove(map_path);
     std::filesystem::remove(request.model_file_path);
@@ -461,7 +461,8 @@ TEST(CommandApiPipelineTest, JointPersistsSmallSelectionCalibrationFailureAndExp
     loaded=repository.LoadModel(request.saved_key_tag);
     {
         const auto missing_snapshot=*loaded->GetAnalysisView().GetJointResult();
-        rg::ModelObject missing_model(*loaded); missing_model.EditAnalysis().Clear(); missing_model.EditAnalysis().ApplyJointResult(missing_snapshot,"imported-joint");
+        rg::ModelObject missing_model(*loaded); missing_model.EditAnalysis().Clear(); missing_model.EditAnalysis().ApplyJointResult(missing_snapshot,
+            missing_snapshot.contributor_reconstruction ? missing_snapshot.contributor_reconstruction->joint_run_id : "imported-joint");
         repository.SaveModel(missing_model,"missing");
         display.model_key_tag_list={"missing"}; display.painter_choice=rgc::PainterType::ATOM; display.reference_model_groups.clear();
         EXPECT_TRUE(rgc::RunCommand(display).succeeded);
@@ -547,8 +548,12 @@ TEST(CommandApiPipelineTest, JointFailureAndUnavailableOutcomesPersistThroughApi
             EXPECT_EQ(rg::IsQualifiedJointAnalysisResult(*snapshot),qualified);
             if(qualified)
             {
-                EXPECT_TRUE(rg::HasUnavailableJointHaloMedianReconstruction(*snapshot));
-                EXPECT_FALSE(snapshot->halo_median_reconstruction);
+                EXPECT_TRUE(rg::HasUnavailableJointContributorReconstruction(*snapshot));
+                ASSERT_TRUE(snapshot->contributor_reconstruction);
+                EXPECT_EQ(snapshot->contributor_reconstruction->qualified_donor_count,0u);
+                ASSERT_EQ(snapshot->contributor_reconstruction->replacements.size(),snapshot->atom_ids.size());
+                for (const auto & replacement:snapshot->contributor_reconstruction->replacements)
+                    EXPECT_EQ(replacement.source,rg::ReconstructionSource::Unavailable);
             }
             else
             {
@@ -644,6 +649,7 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
         "--select-chain","A","--verbose","4"});
     const auto joint_log=testing::internal::GetCapturedStdout();
     ASSERT_EQ(cli_status,0) << joint_log;
+    EXPECT_NE(joint_log.find("Contributor reconstruction | donors=26"),std::string::npos);
     EXPECT_NE(joint_log.find("Original-grid Peeling workspace="),std::string::npos);
     EXPECT_NE(joint_log.find("Peeling Tail diagnostics | ratio_definition=l1-component-occupancy-v1 | ratio_available=25"),
         std::string::npos);
@@ -670,7 +676,8 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
     ASSERT_TRUE(rg::IsQualifiedJointAnalysisResult(stored));
     ASSERT_TRUE(stored.selection_domain);
     EXPECT_EQ(stored.selection_domain->contributor_policy,"buffer-expansion-external-halo-exclusion-v1");
-    EXPECT_FALSE(stored.halo_median_reconstruction);
+    ASSERT_TRUE(stored.contributor_reconstruction);
+    EXPECT_TRUE(stored.contributor_reconstruction->replacements.empty());
     EXPECT_EQ(stored.selection_domain->output_indices.size(),25u);
     ASSERT_EQ(stored.atom_ids.size(),26u);
     ASSERT_EQ(stored.selection_domain->buffer_indices.size(),1u);
@@ -807,7 +814,7 @@ TEST(CommandApiPipelineTest, ProductionBoundedJointDefaultPersistsReloadsAndFeed
     const std::string metadata_text{std::istreambuf_iterator<char>{metadata_file},std::istreambuf_iterator<char>{}};
     const auto metadata=boost::json::parse(metadata_text);
     EXPECT_EQ(metadata.at("estimator").as_string(),"joint-components");
-    EXPECT_EQ(metadata.at("peeling_mode").as_string(),"original-grid-v1");
+    EXPECT_EQ(metadata.at("peeling_mode").as_string(),"original-grid-v2");
     EXPECT_EQ(metadata.at("included_rows").as_int64(),static_cast<std::int64_t>(embedded_row_count));
 
     ASSERT_TRUE(rgc::RunCommand(umap).succeeded);

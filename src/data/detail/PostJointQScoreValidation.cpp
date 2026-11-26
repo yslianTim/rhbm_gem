@@ -22,20 +22,7 @@ PostJointQScoreValidation::PostJointQScoreValidation(const ModelObject & model):
     if (!m_snapshot) return;
     m_expected=BuildJointStageEstimates(*m_snapshot,"");
     m_contributors.insert(m_snapshot->atom_ids.begin(),m_snapshot->atom_ids.end());
-    if (m_snapshot->target_evidence)
-        for (const auto & point:m_snapshot->target_evidence->point_atoms)
-            if (point.component_convergence==JointCheckStatus::Passed &&
-                point.parameter_validity==JointCheckStatus::Passed && point.local_conditioning=="Adequate")
-                m_donors.insert(m_snapshot->atom_ids.at(point.atom));
-    for (const auto & id:m_donors)
-    {
-        const auto & endpoint=m_expected.at(std::stoi(id));
-        if (!endpoint.point) continue;
-        const auto & point=*endpoint.point;
-        m_donor_records.push_back({0,id,model.FindAtomPtr(std::stoi(id))->GetPositionRef(),
-            {point.GetAmplitude(),point.GetWidth(),point.GetOffset()}});
-    }
-    m_donor_index.emplace(m_donor_records);
+
 }
 std::string PostJointQScoreValidation::Validate(const PostJointQScoreResult & q,
     const AtomObject & atom,const LocalStageEstimate & stage) const
@@ -73,23 +60,19 @@ std::string PostJointQScoreValidation::Validate(const PostJointQScoreResult & q,
             if (!std::isfinite(value) || value < -1.0-1.0e-12 || value > 1.0+1.0e-12)
                 return "Invalid QScore correlation.";
     }
-    if (q.halo_count>q.extra_halos.size())
-    {
-        const auto & halo=m_snapshot->halo_median_reconstruction;
-        if (!halo)
-        {
-            if (q.scores || !q.missing_contributor_count)
-                return "QScore missing saved Halo provenance.";
-        }
-        else if (halo->joint_run_id!=q.source.run_id || halo->contract!=HaloMedianReconstructionContractVersion ||
-            halo->donor_policy!=GeometryLocalFittingMedianDonorPolicy)
-            return "QScore saved Halo provenance mismatch.";
-    }
+    const auto & reconstruction=m_snapshot->contributor_reconstruction;
+    if (reconstruction && reconstruction->joint_run_id!=q.source.run_id)
+        return "QScore contributor reconstruction run mismatch.";
+    if (q.halo_count>q.extra_halos.size() && !reconstruction &&
+        (q.scores || !q.missing_contributor_count))
+        return "QScore missing saved External Halo provenance.";
+    if (!q.extra_halos.empty() && !m_donor_index)
+        m_donor_index.emplace(core::detail::CollectQualifiedReconstructionDonors(m_model,*m_snapshot));
     int previous{};
     for (const auto & halo:q.extra_halos)
     {
         if (halo.atom_id<=previous || m_contributors.contains(std::to_string(halo.atom_id)) ||
-            halo.donor_atom_ids.size()!=std::min(GeometryLocalFittingMedianNeighborCount,m_donors.size()) ||
+            halo.donor_atom_ids.size()!=std::min(GeometryLocalFittingMedianNeighborCount,m_donor_index->Donors().size()) ||
             halo.donor_atom_ids.empty()) return "Invalid QScore extra Halo coverage.";
         previous=halo.atom_id;
         const AtomObject * object=nullptr;

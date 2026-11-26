@@ -1,7 +1,7 @@
 #pragma once
 
 #include <rhbm_gem/data/object/PostJointQScoreResult.hpp>
-#include "core/estimator/joint_component/HaloMedianReconstruction.hpp"
+#include "core/estimator/joint_component/ContributorReconstruction.hpp"
 #include <map>
 #include <set>
 
@@ -16,9 +16,8 @@ class PostJointQScoreValidation
     const ModelObject & m_model;
     const JointAnalysisResult * m_snapshot;
     std::map<int,LocalStageEstimate> m_expected;
-    std::set<std::string> m_donors, m_contributors;
-    std::vector<core::detail::HaloMedianTargetDonor> m_donor_records;
-    std::optional<core::detail::GeometryLocalTargetDonorIndex> m_donor_index;
+    std::set<std::string> m_contributors;
+    mutable std::optional<core::detail::ReconstructionDonorIndex> m_donor_index;
     mutable std::map<int,std::vector<std::string>> m_extra_donor_ids;
 public:
     explicit PostJointQScoreValidation(const ModelObject &);

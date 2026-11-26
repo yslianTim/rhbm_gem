@@ -1,3 +1,4 @@
+#include "core/estimator/joint_component/ContributorReconstruction.hpp"
 #include "ModelObjectStorage.hpp"
 
 #include "SQLiteWrapper.hpp"
@@ -835,6 +836,7 @@ void ValidateJointAtoms(const ModelObject & model, const JointAnalysisResult & r
         if (selected!=outputs)
             throw std::invalid_argument("Joint Output roles do not match the saved model selection.");
     }
+    core::detail::ValidateSavedContributorReconstruction(result,&model);
 }
 
 void SaveJointResult(SQLiteWrapper & database, const std::string & json, const std::string & key_tag)

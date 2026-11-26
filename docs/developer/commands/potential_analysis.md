@@ -53,8 +53,8 @@ Expected result contract:
 - `result.outcome` is `JointInitializationFailed` when the saved initialization is invalid,
   `JointNotConverged` when fitting did not qualify (including unavailable
   calibration after valid initialization), `JointDownstreamUnavailable` when
-  Joint qualified but Halo reconstruction is unavailable, or `JointQualified`
-  when Joint qualifies and Halo reconstruction does not block downstream work
+  Joint qualified but contributor reconstruction is unavailable, or `JointQualified`
+  when Joint qualifies and contributor reconstruction does not block downstream work
 - `result.issues` reports public validation diagnostics as option/message pairs
 
 The CLI uses the following exit codes:
@@ -65,7 +65,7 @@ The CLI uses the following exit codes:
 | 1 | Execution or persistence failure |
 | 2 | Joint initialization failure was saved |
 | 3 | Joint numerical non-convergence was saved |
-| 4 | Joint qualified, but downstream Halo reconstruction was unavailable |
+| 4 | Joint qualified, but downstream contributor reconstruction was unavailable |
 
 Thus an automation can distinguish saved diagnostics and unavailable downstream
 outputs from a qualified Joint estimate without treating every saved file as a
@@ -101,7 +101,7 @@ The anonymous-namespace `NormalizeAndValidateRequest(...)` phase handles field v
 - excludes hydrogen from all potential-fitting targets, neighbor masks and
   contributor sets
 - calibrates the Target width bound and runs the Joint solver and endpoint checks
-- reconstructs Halo profiles and runs Original-grid peeling, Post-Joint Local
+- reconstructs neighbor profiles and runs Original-grid peeling, Post-Joint Local
   fitting, and Group Fitting when downstream inputs qualify
 - persists the prepared model through `DataRepository::SaveModel(...)`
 - writes to the repository using `request.saved_key_tag` as the persisted key
@@ -187,7 +187,7 @@ rhbm_gem::core::PotentialAnalysisRequest request;
 request.model_file_path = "model.cif";
 request.map_file_path = "map.mrc";
 request.selected_chain_ids = {"A"};
-request.database_path = "joint.sqlite"; // SQLite schema v26
+request.database_path = "joint.sqlite"; // SQLite schema v27
 request.saved_key_tag = "example";
 auto completed = rhbm_gem::core::RunCommand(request);
 ```
@@ -202,3 +202,17 @@ convergence and point-quality columns.
 The [data I/O architecture](../architecture/dataobject-io-architecture.md)
 defines which database and JSON versions the persistence entrypoints accept.
 Joint workflow test groups are indexed in the [test guide](../../../tests/README.md#joint-component-regression).
+
+
+## Saved reconstruction
+
+The qualified Joint point is used for a neighbor contribution only when its
+accepted width is interior and its Local Conditioning is Adequate. External
+Halos and Fitting Targets that fail either quality check use the separate
+A/tau/C medians of up to four nearest qualified original Joint points.
+Own-charge correction and each QScore Joint reference use the Output
+Target's original Joint estimate. A required replacement with zero donors is
+recorded as unavailable, with CLI exit 4 and the Joint endpoint preserved.
+Saved Original-grid pairs reflect this reconstruction and retain the L1
+Component Occupancy ratio definition used by `umap_embedding`. SQLite v27
+requires a fresh analysis for databases from previous schemas.

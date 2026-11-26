@@ -61,11 +61,11 @@ def main() -> int:
         assert not list(collision.glob("joint_*")), "Collision must fail before writing any result"
         saved = json.loads((root / "joint_result_example.json").read_text())
         with sqlite3.connect(database) as connection:
-            assert connection.execute("PRAGMA user_version").fetchone()[0] == 26
+            assert connection.execute("PRAGMA user_version").fetchone()[0] == 27
             payload = connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='example'").fetchone()[0]
             changed = json.loads(connection.execute("SELECT result_json FROM model_joint_result WHERE key_tag='changed'").fetchone()[0])
             stages = json.loads(connection.execute("SELECT result_json FROM model_stage_result WHERE key_tag='example'").fetchone()[0])
-            assert stages["version"] == 10
+            assert stages["version"] == 11
             assert len(stages["atoms"]) == 25
             assert all(set(atom) == {"id", "initial", "joint", "initial_native", "raw",
                                      "geometry", "peeling", "post_joint_local", "post_joint_qscore", "posterior"}
@@ -76,13 +76,13 @@ def main() -> int:
             assert all(atom["joint"]["source"]["method"] == 3 for atom in stages["atoms"])
             for atom in stages["atoms"]:
                 if atom["joint"]["source"]["role"] == 1:  # Output Target
-                    assert atom["peeling"]["mode"] == "original-grid-v1"
+                    assert atom["peeling"]["mode"] == "original-grid-v2"
                 else:
                     assert atom["peeling"] is None
                     assert atom["post_joint_local"] is None
             assert connection.execute("SELECT COUNT(*) FROM sqlite_master WHERE name IN ('model_atom_local_potential','model_atom_posterior','model_atom_group_potential')").fetchone()[0] == 0
         assert saved == json.loads(payload)
-        assert saved["schema_version"] == 26
+        assert saved["schema_version"] == 27
         assert saved["metadata"]["units"]["contract"] == "joint-kernel-map-units-v2"
         assert saved["metadata"]["units"]["tau"] == "angstrom"
         assert "B" not in saved["metadata"]["units"]
@@ -112,12 +112,12 @@ def main() -> int:
         assert saved["selection_domain"]["contributor_policy"] == "buffer-expansion-external-halo-exclusion-v1"
         assert saved["atom_ids"] == [str(index) for index in range(1, 26)]
         assert "fixed_halos" not in saved
-        if saved["halo_median_reconstruction"] is not None:
-            assert saved["halo_median_reconstruction"]["halos"] == []
+        if saved["contributor_reconstruction"] is not None:
+            assert saved["contributor_reconstruction"]["replacements"] == []
         assert saved["initialization"]["data_scope"] == "contributor-local-sampling-may-read-outside-target-domain"
         csv_lines = (root / "joint_atoms_example.csv").read_text().splitlines()
         assert not (root / "joint_atoms_example.contributions.csv").exists()
-        assert csv_lines[0].endswith(",SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,PointQuality")
+        assert csv_lines[0].endswith(",SelectionRole,Parameterization,ContributionGroupID,TargetRuntimeConvergence,PointQuality,ReconstructionSource,ReconstructionA,ReconstructionTau,ReconstructionC")
         csv_rows = {row["SelectionRole"]: row for row in csv.DictReader(csv_lines)}
         assert csv_rows["output-target"]["Parameterization"] == "JointEstimated"
         assert csv_rows["output-target"]["StateAvailable"] == "1"
@@ -165,7 +165,7 @@ def main() -> int:
             rejected = subprocess.run([executable, "umap_embedding", "-d", str(database), "--model-key", "example"],
                                       capture_output=True, text=True)
             assert rejected.returncode != 0
-            assert "All 3 selected UMAP feature columns are constant" in rejected.stdout + rejected.stderr, (
+            assert "All 4 selected UMAP feature columns are constant" in rejected.stdout + rejected.stderr, (
                 rejected.stdout + rejected.stderr)
     return 0
 

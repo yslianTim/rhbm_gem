@@ -65,11 +65,12 @@ struct JointAnalysisResult
     JointCheckStatus runtime_convergence{JointCheckStatus::Unavailable};
     std::optional<JointTargetEvidence> target_evidence;
     JointCheckStatus target_runtime_convergence{JointCheckStatus::NotRun};
-    std::optional<JointHaloMedianSnapshot> halo_median_reconstruction;
+    std::optional<JointContributorReconstructionSnapshot> contributor_reconstruction;
 };
 
-inline constexpr std::string_view JointHaloMedianReconstructionEvidenceName =
-    "halo-median-reconstruction";
+inline constexpr std::string_view JointContributorReconstructionEvidenceName =
+    "contributor-reconstruction";
+inline constexpr std::string_view NoQualifiedReconstructionDonors = "no-qualified-reconstruction-donors";
 
 inline bool IsQualifiedJointAnalysisResult(const JointAnalysisResult & result)
 {
@@ -78,10 +79,10 @@ inline bool IsQualifiedJointAnalysisResult(const JointAnalysisResult & result)
         result.target_runtime_convergence == JointCheckStatus::Passed;
 }
 
-inline bool HasUnavailableJointHaloMedianReconstruction(const JointAnalysisResult & result)
+inline bool HasUnavailableJointContributorReconstruction(const JointAnalysisResult & result)
 {
     for (const auto & check : result.evidence)
-        if (check.name == JointHaloMedianReconstructionEvidenceName &&
+        if (check.name == JointContributorReconstructionEvidenceName &&
             check.status == JointCheckStatus::Unavailable && !check.reason.empty())
             return true;
     return false;

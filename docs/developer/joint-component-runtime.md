@@ -97,6 +97,11 @@ seeds are projected into the interval. The original initialization and
 InitialStage evidence are retained. An invalid or unavailable required bound
 prevents Joint search. A saved lower-bound fit records the spacing, floor,
 seed projections and final active-face counts in the Joint evidence.
+After endpoint certification, [contributor reconstruction](joint-stage-integration.md#contributor-reconstruction)
+uses the same Width boundary assessment on each accepted log width and
+requires Adequate Local Conditioning for direct reconstruction and donation.
+Joint prediction, objective evaluation, verification and replay continue
+using the accepted Joint state.
 
 ## Gauss–Seidel BCD
 

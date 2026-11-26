@@ -134,7 +134,7 @@ TEST(UmapEmbeddingOutputTest, CountsElementRatiosInSecondMeanShiftBins)
     std::string metadata_line;
     ASSERT_TRUE(std::getline(metadata_file, metadata_line));
     EXPECT_EQ(boost::json::parse(metadata_line).at("second_umap_zero_mad_fallback_features").as_array(),
-        (boost::json::array{ "amplitude joint median of bin", "amplitude joint" }));
+        (boost::json::array{ "amplitude joint" }));
     std::ifstream bins{ second_summary };
     std::string line;
     ASSERT_TRUE(std::getline(bins, line));

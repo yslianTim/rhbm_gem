@@ -38,7 +38,7 @@ struct ContributorModel
 
 std::vector<std::pair<int, PostJointQScoreResult>> BuildPostJointQScores(
     const MapObject & map, const ModelObject & model, const JointProblem & problem,
-    const JointAnalysisResult & snapshot, const HaloMedianBuildResult * halo_build,
+    const JointAnalysisResult & snapshot, const ContributorReconstructionBuildResult * reconstruction,
     JointPostprocessingMetrics & metrics)
 {
     const auto start=std::chrono::steady_clock::now();
@@ -62,78 +62,65 @@ std::vector<std::pair<int, PostJointQScoreResult>> BuildPostJointQScores(
     const auto run=AtomLocalPotentialView::For(*first).GetJointStageEstimate().source.run_id;
     if (run.empty()) throw std::invalid_argument("QScore requires Joint run identity.");
     const auto expected=data_internal::BuildJointStageEstimates(snapshot,run);
-    const auto rebuilt_donors=halo_build ? std::vector<HaloMedianTargetDonor>{} :
-        QualifiedJointFittingDonors(model,problem,snapshot);
-    const auto & donors=halo_build ? halo_build->target_donors : rebuilt_donors;
-    std::set<std::size_t> qualified_donors;
-    if (snapshot.target_evidence)
-        for (const auto & point:snapshot.target_evidence->point_atoms)
-            if (point.component_convergence==JointCheckStatus::Passed &&
-                point.parameter_validity==JointCheckStatus::Passed && point.local_conditioning=="Adequate")
-                qualified_donors.insert(point.atom);
-    bool donors_valid=donors.size()==qualified_donors.size();
-    std::set<std::size_t> seen_donors;
+    std::optional<ContributorReconstructionBuildResult> rebuilt;
+    if (!reconstruction || reconstruction->published_snapshot!=&snapshot)
+        rebuilt=BuildContributorReconstruction(model,problem,snapshot,run);
+    const auto & workspace=rebuilt ? *rebuilt : *reconstruction;
+    const auto & donor_index=*workspace.donor_index;
+    const auto & donors=donor_index.Donors();
+    bool donors_valid=true;
     for (const auto & donor:donors)
     {
-        const auto found=expected.find(std::stoi(donor.atom_id));
         const auto * atom=model.FindAtomPtr(std::stoi(donor.atom_id));
-        const auto local=AtomLocalPotentialView::For(*atom);
-        if (!qualified_donors.contains(donor.contributor_index) ||
-            !seen_donors.insert(donor.contributor_index).second ||
-            snapshot.atom_ids.at(donor.contributor_index)!=donor.atom_id || found==expected.end() ||
-            !found->second.point || donor.position!=atom->GetPositionRef() ||
-            donor.point!=std::array{found->second.point->GetAmplitude(),found->second.point->GetWidth(),
-                found->second.point->GetOffset()} || !local.IsAvailable() ||
-            !SameEndpoint(local.GetJointStageEstimate(),found->second)) donors_valid=false;
+        const auto view=AtomLocalPotentialView::For(*atom);
+        const auto & endpoint=expected.at(atom->GetSerialID());
+        if (!endpoint.point || donor.position!=atom->GetPositionRef() ||
+            donor.point!=std::array{endpoint.point->GetAmplitude(),endpoint.point->GetWidth(),endpoint.point->GetOffset()} ||
+            !view.IsAvailable() || !SameEndpoint(view.GetJointStageEstimate(),endpoint))
+            donors_valid=false;
     }
-    // One donor index for all requested Halos, including extra-domain coverage.
-    const GeometryLocalTargetDonorIndex donor_index(donors);
-    std::map<int,const JointHaloMedianReconstruction *> saved_halos;
-    if (snapshot.halo_median_reconstruction)
+    std::map<int,const JointContributorReplacement *> replacements;
+    if (snapshot.contributor_reconstruction)
     {
-        const auto & saved=*snapshot.halo_median_reconstruction;
-        if (saved.joint_run_id!=run || saved.contract!=HaloMedianReconstructionContractVersion ||
-            saved.donor_policy!=GeometryLocalFittingMedianDonorPolicy ||
-            saved.neighbor_count!=GeometryLocalFittingMedianNeighborCount || saved.valid_target_count!=donors.size())
-            throw std::invalid_argument("QScore Halo provenance mismatch.");
-        for (const auto & halo:saved.halos) saved_halos.emplace(std::stoi(halo.atom_id),&halo);
+        const auto & saved=*snapshot.contributor_reconstruction;
+        if (saved.joint_run_id!=run)
+            throw std::invalid_argument("QScore contributor reconstruction run mismatch.");
+        for (const auto & replacement:saved.replacements)
+            replacements.emplace(std::stoi(replacement.atom_id),&replacement);
     }
+    else if (workspace.audit.qualified_donor_count!=snapshot.atom_ids.size())
+        throw std::invalid_argument("QScore is missing Joint contributor reconstruction.");
     std::map<int,ContributorModel> cache;
     const auto contributor_model=[&](const AtomObject & atom) -> const ContributorModel & {
         const int id=atom.GetSerialID();
         if (const auto found=cache.find(id);found!=cache.end()) return found->second;
         auto & result=cache[id];
         const auto endpoint=expected.find(id);
-        if (endpoint!=expected.end() && IsFittingTarget(endpoint->second.source.role))
+        result.halo=endpoint==expected.end() || endpoint->second.source.role==FittingRole::ExternalHalo;
+        if (!result.halo)
         {
             const auto view=AtomLocalPotentialView::For(atom);
-            if (view.IsAvailable() && SameEndpoint(view.GetJointStageEstimate(),endpoint->second))
-                result.point=endpoint->second.point;
-            return result;
+            if (!view.IsAvailable() || !SameEndpoint(view.GetJointStageEstimate(),endpoint->second))
+                return result;
         }
-        result.halo=true;
-        if (!donors_valid) return result;
-        const auto nearest=donor_index.Query(atom.GetPositionRef());
-        if (nearest.empty()) return result;
-        const auto median=GeometryLocalFittingMedian(nearest);
-        std::vector<std::string> ids;
-        for (const auto * donor:nearest) ids.push_back(donor->atom_id);
-        if (const auto saved=saved_halos.find(id);saved!=saved_halos.end())
+        if (const auto saved=replacements.find(id);saved!=replacements.end())
         {
-            const auto & halo=*saved->second;
-            if (halo.joint_run_id!=run || halo.contract!=HaloMedianReconstructionContractVersion ||
-                halo.source!=HaloMedianSource::GeometryLocalFittingMedian || halo.donor_atom_ids!=ids ||
-                halo.donor_count!=ids.size() ||
-                std::array{halo.amplitude,halo.width,halo.charge}!=median)
-                throw std::invalid_argument("QScore saved Halo representative mismatch.");
-            result.point=GaussianModel3D{halo.amplitude,halo.width,halo.charge};
+            const auto & replacement=*saved->second;
+            if (donors_valid && replacement.source==ReconstructionSource::GeometryLocalFittingMedian)
+                result.point=GaussianModel3D{replacement.amplitude,replacement.width,replacement.charge};
         }
-        else if (endpoint==expected.end())
+        else if (!result.halo)
+            result.point=endpoint->second.point;
+        else if (endpoint==expected.end() && donors_valid)
         {
-            result.point=GaussianModel3D{median[0],median[1],median[2]};
-            result.extra_donors=std::move(ids);
+            const auto nearest=donor_index.Query(atom.GetPositionRef());
+            if (!nearest.empty())
+            {
+                const auto median=GeometryLocalFittingMedian(nearest);
+                result.point=GaussianModel3D{median[0],median[1],median[2]};
+                for (const auto * donor:nearest) result.extra_donors.push_back(donor->atom_id);
+            }
         }
-        // A recorded Halo without its saved reconstruction is unavailable.
         return result;
     };
     std::vector<std::pair<int,PostJointQScoreResult>> results;
@@ -247,7 +234,7 @@ std::vector<std::pair<int, PostJointQScoreResult>> BuildPostJointQScores(
     metrics.estimated_qscore_peak_bytes+=dynamic_payload+
         cache.size()*(sizeof(decltype(cache)::value_type)+3*sizeof(void *))+
         expected.size()*(sizeof(decltype(expected)::value_type)+3*sizeof(void *))+
-        donors.size()*(sizeof(HaloMedianTargetDonor)+8*sizeof(void *))+
+        donors.size()*(sizeof(ReconstructionDonor)+8*sizeof(void *))+
         results.capacity()*sizeof(decltype(results)::value_type);
     metrics.qscore_seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();
     return results;

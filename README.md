@@ -32,7 +32,7 @@ Browse runnable examples and helper assets in [`resources/README.md`](/resources
 Potential Analysis uses the Joint Component Estimator (JCE). Buffer Expansion
 can fit one additional atom to recover core observations in the fixed Output
 domain. The user's selection determines the analysis population. Results use
-**SQLite v26**. The repository accepts only the current database schema.
+**SQLite v27**. The repository accepts only the current database schema.
 
 ```sh
 RHBM-GEM potential_analysis -a model.cif -m map.mrc -d joint.sqlite -k example
@@ -42,17 +42,19 @@ RHBM-GEM result_dump --printer joint -d joint.sqlite -k example -o results
 Joint output contains A/tau/C, component availability and runtime convergence.
 The C++/Python `CommandResult.succeeded` field reports whether execution
 completed and the result was saved. Its `outcome` distinguishes initialization
-failure, an unqualified fit, unavailable Halo reconstruction, and a qualified
+failure, an unqualified fit, unavailable contributor reconstruction, and a qualified
 fit. CLI exit codes are `1` for execution or saving failure, `2` when Joint
 initialization failed after saving diagnostics, `3` when Joint fitting
-did not qualify after saving diagnostics, `4` when Joint qualified but Halo
+did not qualify after saving diagnostics, `4` when Joint qualified but contributor
 reconstruction was unavailable, and `0` for a qualified Joint fit. See the
 [joint workflow contract](docs/developer/commands/potential_analysis.md#joint-component-workflow)
 for options and JSON/CSV output. JointStage stores the fitted endpoints. Plots, comparisons, Gaussian/outlier dumps and UMAP use the
 available saved data; missing uncertainty or peeling coverage is never replaced
-with zero. Qualified Output and Buffer A/tau/C points provide geometry-local kNN-4 Halo
-medians for downstream peeling. The current formats are Joint JSON schema 26
-and Stage JSON version 10. See [Joint Stage Integration](docs/developer/joint-stage-integration.md).
+with zero. Fitting Targets with interior widths and Adequate Local Conditioning
+supply direct neighbor profiles and donate original Joint points. Other qualified
+Fitting Targets and External Halos use the componentwise median of up to four
+nearest donors. Joint JSON uses schema 27 and Stage JSON uses version 11.
+See [Joint Stage Integration](docs/developer/joint-stage-integration.md).
 
 ## License, Citation, and Third-Party Notices
 

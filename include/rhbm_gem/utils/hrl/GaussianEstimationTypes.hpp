@@ -59,10 +59,12 @@ struct PeelingSampleEstimate
     PostJointGridObservation observation;
 };
 
+inline constexpr char PostFitPeelingContract[] = "original-grid-v2";
+
 struct PostFitPeelingResult
 {
     EstimateSource source;
-    std::string mode{ "original-grid-v1" };
+    std::string mode{ PostFitPeelingContract };
     std::size_t neighbor_count{};
     // Original-grid observations within 2 A, sorted by Original row identity.
     std::vector<PeelingSampleEstimate> samples;

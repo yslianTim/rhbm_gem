@@ -324,7 +324,10 @@ TEST(JointProgressTest, BoundedSyntheticFitUsesBcdContract)
         problem,initial,2.2);
     auto policy=joint::BcdExecutionPolicy{};
     policy.width_bounds.upper=std::log(2.2);
-    const auto expected=joint::FitBcdComponents(problem,initial,policy);
+    auto expected=joint::FitBcdComponents(problem,initial,policy);
+    for (const auto & check:actual.evidence)
+        if (check.name=="global-width-calibration" || check.name=="qualified-initial-stage-donor-coverage")
+            expected.evidence.push_back(check);
 
     EXPECT_EQ(actual.solver_provenance.search_method, "gauss-seidel-bcd");
     EXPECT_EQ(actual.solver_provenance.bcd_core_atoms, 12u);

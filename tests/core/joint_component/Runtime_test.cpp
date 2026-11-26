@@ -6,6 +6,7 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/data/object/MapObject.hpp>
 #include "core/estimator/joint_component/Problem.hpp"
+#include "core/estimator/joint_component/ContributorReconstruction.hpp"
 #include "core/estimator/joint_component/GaussSeidelBcd.hpp"
 #include "core/command/detail/SimulationGeometry.hpp"
 #include "core/command/detail/MapSimulation.hpp"
@@ -419,6 +420,19 @@ TEST(JointComponentRuntimeTest, MedianWidthBoundProjectsAndCertifiesAllComponent
             n::PracticalJointConvergenceCriteria.global_eta_gradient);
     }
     auto saved_box=core::CaptureJointAnalysisResult(box);
+    std::vector<std::unique_ptr<AtomObject>> atoms;
+    for (const auto & id:saved_box.atom_ids)
+    {
+        auto atom=std::make_unique<AtomObject>();
+        atom->SetSerialID(std::stoi(id));
+        atom->SetElement(Element::CARBON);
+        atoms.push_back(std::move(atom));
+    }
+    const ModelObject model(std::move(atoms));
+    saved_box.contributor_reconstruction=core::detail::BuildContributorReconstruction(
+        model,problem,saved_box,"bounded-persistence").TakeSnapshot();
+    saved_box.evidence.push_back({std::string(JointContributorReconstructionEvidenceName),
+        JointCheckStatus::Unavailable,JointEvidenceScope::AssembledGlobal,{},{},std::string(NoQualifiedReconstructionDonors)});
     const auto round_trip=rhbm_gem::joint_result_io::Decode(rhbm_gem::joint_result_io::Encode(saved_box));
     EXPECT_EQ(round_trip.assembled_state->log_tau,box.assembled_state->log_tau);
     saved_box.assembled_state->tau[0]=std::nextafter(std::exp(box.assembled_state->log_tau[0]),0.0);

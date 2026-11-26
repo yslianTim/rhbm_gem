@@ -29,7 +29,7 @@ inline rhbm_gem::PostJointGridObservation MakeGridObservation(
 inline JointPostprocessingContext MakeJointPostprocessingContext(
     const MapObject & geometry, const ModelObject & model, const JointProblem & problem,
     const JointAnalysisResult & snapshot, JointPostprocessingMetrics * metrics = nullptr,
-    const rhbm_gem::core::detail::HaloMedianBuildResult * halo_medians = nullptr)
+    const rhbm_gem::core::detail::ContributorReconstructionBuildResult * halo_medians = nullptr)
 {
     return JointPostprocessingContext(geometry,model,problem,snapshot,metrics,halo_medians,
         rhbm_gem::core::detail::BuildJointPeelingContributorUniverse(model,problem,snapshot));

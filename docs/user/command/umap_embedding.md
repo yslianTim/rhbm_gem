@@ -30,19 +30,19 @@ Both modes still support CSV, metadata JSON, and bin summaries when UMAP is enab
 ## SQLite Model Contract
 
 The database must already exist, be a regular file, and use a supported SQLite
-schema (v26 only). `--model-key` must identify exactly one
+schema (v27 only). Rerun `potential_analysis` into a new database for earlier schemas. `--model-key` must identify exactly one
 model saved by `potential_analysis`; the command neither enumerates nor combines
 models.
 
-UMAP uses the selected Output Targets. At least three rows must have all three
-required features: neighbor distance sum, closest-neighbor distance and tail
-peeling ratio. Missing required values exclude the row with a reported reason;
+UMAP uses the selected Output Targets. At least three rows must have all four required features. These are
+neighbor distance sum, closest-neighbor distance, Signal peeling ratio and
+Tail peeling ratio. Missing required values exclude the row with a reported reason;
 fewer than three remaining rows fails the command. Missing ancillary values are
 written as empty CSV fields. Empty regions, incomplete Original-grid coverage,
 and zero total component magnitude yield an unavailable ratio.
 
 The adjacent `.csv.metadata.json` records estimator, feature names, peeling mode,
-map normalization (null when unknown), standardization, included/excluded row
+contributor reconstruction contract, donor policy, SQLite schema, map normalization (null when unknown), standardization, included/excluded row
 counts and exclusions by reason. Its `column_semantics`
 field identifies the two raw ratio columns and describes `amplitude joint`
 as Gaussian amplitude A, `width joint` as the
@@ -100,12 +100,11 @@ peeled magnitude. Over-peeling severity cannot be inferred from the ratio alone.
 Each region requires every Original-grid observation to have a valid,
 finite raw/peeled pair from the same Joint run. Empty regions, missing
 responses, or two zero component magnitudes yield an unavailable value.
-The command reports missing required Tail values in the metadata exclusions
-and writes a missing Signal value as an empty field on retained rows.
-Qualified Output and Buffer points supply geometry-local Halo reconstruction.
+The command reports missing required Signal or Tail values in metadata exclusions.
+The saved pairs reflect the contributor reconstruction applied by
+`potential_analysis`. The embedding command derives ratios from those pairs.
 Atom labels remain available for CSV and plot annotations.
 
-Existing v26 SQLite models with Original-grid pairs can be used directly.
 Both commands compute from the same binary64 pairs; a neighbor contribution
 that rounded away when forming the peeled value cannot be recovered from
 those pairs. The metadata field `peeling_ratio_definition` identifies
@@ -115,15 +114,15 @@ produced. The same CSV column names now carry the raw occupancy ratios
 identified by this metadata. The MAD scaling recorded in `standardization`
 applies to selected UMAP inputs. The [0, 1] bound applies to the raw ratios.
 
-`amplitude joint`, `width joint`, and `offset joint` read the saved `Second.point`.
+`amplitude joint`, `width joint`, and `offset joint` read the original accepted `joint.point` from Stage JSON.
 These are Joint A/tau/C values with tau in angstroms. Post-Joint Local and
 Group Fitting results occupy separate records.
 
-Rows are ordered by atom serial ID. The current build passes these three features
-to UMAP:
+Rows are ordered by atom serial ID. The current build passes four features to the first UMAP.
 
-- neighbor distance sum in 2A;
-- distance to closest neighbor;
+- neighbor distance sum in 2A
+- distance to closest neighbor
+- signal peeling ratio
 - tail peeling ratio.
 
 To change the first embedding's inputs, edit `include_in_umap` in
@@ -265,19 +264,19 @@ same statistics for the three Joint parameters A, tau, and C.
 `bin number` identifies the summary row. The geometric bin center and bin
 number are excluded from the second feature matrix.
 
-The second embedding defines ten candidate columns in this order. The six
+The second embedding defines ten candidate columns in this order. The seven
 enabled columns appear in the feature matrix and `second_umap_features`
 metadata in the same order.
 
 | Candidate | Source | Local feature index | Enabled |
 | --- | --- | --- | --- |
-| `neighbor distance sum in 2A median of bin` | First bin median | 0 | No |
-| `distance to closest neighbor median of bin` | First bin median | 1 | No |
-| `signal peeling ratio median of bin` | First bin median | 2 | No |
-| `tail peeling ratio median of bin` | First bin median | 3 | No |
-| `amplitude joint median of bin` | First bin median | 4 | Yes |
-| `width joint median of bin` | First bin median | 5 | Yes |
-| `offset joint median of bin` | First bin median | 6 | Yes |
+| `neighbor distance sum in 2A median of bin` | First bin median | 0 | Yes |
+| `distance to closest neighbor median of bin` | First bin median | 1 | Yes |
+| `signal peeling ratio median of bin` | First bin median | 2 | Yes |
+| `tail peeling ratio median of bin` | First bin median | 3 | Yes |
+| `amplitude joint median of bin` | First bin median | 4 | No |
+| `width joint median of bin` | First bin median | 5 | No |
+| `offset joint median of bin` | First bin median | 6 | No |
 | `amplitude joint` | Atom | 4 | Yes |
 | `width joint` | Atom | 5 | Yes |
 | `offset joint` | Atom | 6 | Yes |

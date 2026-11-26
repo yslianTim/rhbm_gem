@@ -1390,7 +1390,7 @@ TEST_F(PeelingRatioTest, InvalidGridPairsAndProvenanceAreRejectedByEditor)
     EXPECT_FALSE(view.GetPostFitPeeling());
 }
 
-TEST_F(PeelingRatioTest, MissingPeelingReportsJointAndHaloReasonsWithoutInterpolatedFallback)
+TEST_F(PeelingRatioTest, MissingPeelingReportsJointFailureWithoutInterpolatedFallback)
 {
     auto editor = model->EditAnalysis();
     editor.SetAtomLocalSamplingEntries(atom, {LocalPotentialSample{4.0, SamplingPoint{1.5}}});
@@ -1398,17 +1398,6 @@ TEST_F(PeelingRatioTest, MissingPeelingReportsJointAndHaloReasonsWithoutInterpol
     auto assessment = view.AssessLocalFittingPeelingRatio(tail);
     EXPECT_EQ(assessment.total_samples, 0u);
     EXPECT_EQ(assessment.reason, "missing-peeling-result");
-    EXPECT_FALSE(assessment.ratio);
-
-    rg::JointAnalysisResult snapshot;
-    snapshot.initialization.valid = true;
-    snapshot.search_completed = true;
-    snapshot.runtime_convergence = snapshot.target_runtime_convergence = rg::JointCheckStatus::Passed;
-    snapshot.atom_ids = {std::to_string(atom.GetSerialID()), "halo"};
-    snapshot.selection_domain.emplace().output_indices = {0};
-    editor.SetJointResult(std::move(snapshot));
-    assessment = view.AssessLocalFittingPeelingRatio(tail);
-    EXPECT_EQ(assessment.reason, "halo-median-reconstruction-unavailable");
     EXPECT_FALSE(assessment.ratio);
 
     auto joint = view.GetJointStageEstimate();
