@@ -1,14 +1,18 @@
 #include <gtest/gtest.h>
+#include <boost/math/quadrature/gauss.hpp>
 
 #include "core/classifier/UmapEmbeddingFeatures.hpp"
 
 #include <rhbm_gem/data/object/AtomObject.hpp>
 #include <rhbm_gem/data/object/ModelObject.hpp>
+#include <rhbm_gem/utils/math/GaussianModel3D.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <numbers>
 #include <numeric>
 #include <optional>
 #include <span>
@@ -24,7 +28,7 @@ namespace {
 
 constexpr double kInverseMadFactor{ 1.0 / 1.482602218505602 };
 constexpr std::size_t kFirstColumns=4;
-constexpr std::size_t kSecondColumns=7;
+constexpr std::size_t kSecondColumns=10;
 
 std::optional<PreparedUmapInput> PrepareFirstColumns(
     std::span<const double> first, std::string & error, std::span<const double> second = {})
@@ -52,11 +56,11 @@ TEST(UmapEmbeddingFeaturesTest, FiltersRequiredFeaturesAndUsesMadScalingInRowOrd
 {
     constexpr auto missing{ std::numeric_limits<double>::quiet_NaN() };
     const std::array feature_values{
-        std::array{ 1.0, 8.0, missing, 9.0, 10.0, 2.0, 3.0 },
-        std::array{ 50.0, 5.0, 0.0, missing, 10.0, 2.0, 3.0 },
-        std::array{ 3.0, 8.0, 1.0, 3.0, 10.0, 2.0, 3.0 },
-        std::array{ 5.0, 8.0, 2.0, 6.0, 10.0, 2.0, 3.0 },
-        std::array{ 1.0, 8.0, 3.0, 9.0, 10.0, 2.0, 3.0 },
+        std::array{ 1.0, 8.0, missing, 9.0, 10.0, 2.0, 3.0, 3.0, 2.0, -1.0 },
+        std::array{ 50.0, 5.0, 0.0, missing, 10.0, 2.0, 3.0, 3.0, 2.0, -1.0 },
+        std::array{ 3.0, 8.0, 1.0, 3.0, 10.0, 2.0, 3.0, missing, 2.0, -1.0 },
+        std::array{ 5.0, 8.0, 2.0, 6.0, 10.0, 2.0, 3.0, -3.0, missing, -2.0 },
+        std::array{ 1.0, 8.0, 3.0, 9.0, 10.0, 2.0, 3.0, 3.0, 2.0, missing },
     };
     std::vector<std::unique_ptr<AtomObject>> atoms;
     std::vector<LocalFittingFeatureRow> rows;
@@ -284,15 +288,15 @@ TEST(UmapEmbeddingFeaturesTest, ComputesIndependentFiniteFeatureMediansPerBin)
     constexpr auto inf{ std::numeric_limits<double>::infinity() };
     constexpr auto large{ std::numeric_limits<double>::max() };
     const std::array source_values{
-        std::array{ 3.0, 0.0, -3.0, inf, 5.0, missing, -6.0 },
-        std::array{ 1.0, 0.0, missing, -2.0, -2.0, 0.0, missing },
-        std::array{ 3.0, 0.0, inf, -4.0, -2.0, -inf, inf },
-        std::array{ 3.0, 0.0, 6.0, 0.0, 0.0, 5.0, -inf },
-        std::array{ 9.0, missing, -6.0, 2.0, inf, 1.0, missing },
-        std::array{ missing, -inf, -inf, 4.0, missing, missing, missing },
-        std::array{ -large, -2.0, 0.0, missing, large, -4.0, -2.0 },
-        std::array{ large, -4.0, -1.0, 4.0, large / 2.0, 0.0, 2.0 },
-        std::array{ inf, 7.0, 5.0, 0.0, -inf, 7.0, 2.0 },
+        std::array{ 3.0, 0.0, -3.0, inf, 5.0, missing, -6.0, -4.0, missing, -5.0 },
+        std::array{ 1.0, 0.0, missing, -2.0, -2.0, 0.0, missing, missing, 3.0, -4.0 },
+        std::array{ 3.0, 0.0, inf, -4.0, -2.0, -inf, inf, inf, 1.0, -2.0 },
+        std::array{ 3.0, 0.0, 6.0, 0.0, 0.0, 5.0, -inf, -1.0, inf, 4.0 },
+        std::array{ 9.0, missing, -6.0, 2.0, inf, 1.0, missing, -5.0, 2.0, -inf },
+        std::array{ missing, -inf, -inf, 4.0, missing, missing, missing, 3.0, missing, missing },
+        std::array{ -large, -2.0, 0.0, missing, large, -4.0, -2.0, -large, 1.0, -8.0 },
+        std::array{ large, -4.0, -1.0, 4.0, large / 2.0, 0.0, 2.0, large, missing, -2.0 },
+        std::array{ inf, 7.0, 5.0, 0.0, -inf, 7.0, 2.0, missing, inf, -0.5 },
     };
     std::vector<LocalFittingFeatureRow> rows(source_values.size());
     for (std::size_t point = 0; point < rows.size(); ++point)
@@ -308,19 +312,19 @@ TEST(UmapEmbeddingFeaturesTest, ComputesIndependentFiniteFeatureMediansPerBin)
 
     using Medians = std::array<std::optional<double>, kLocalFittingFeatureCount>;
     EXPECT_EQ(bins.bins.at({ 0, 0 }).feature_medians,
-        (Medians{ 3.0, 0.0, -3.0, std::nullopt, 5.0, std::nullopt, -6.0 }));
+        (Medians{ 3.0, 0.0, -3.0, std::nullopt, 5.0, std::nullopt, -6.0, -4.0, std::nullopt, -5.0 }));
     EXPECT_EQ(bins.bins.at({ 0, 1 }).feature_medians,
-        (Medians{ 3.0, 0.0, 0.0, 0.0, -2.0, 1.0, std::nullopt }));
+        (Medians{ 3.0, 0.0, 0.0, 0.0, -2.0, 1.0, std::nullopt, -1.0, 2.0, -2.0 }));
     EXPECT_EQ(bins.bins.at({ 1, 0 }).feature_medians,
-        (Medians{ 0.0, -3.0, -0.5, 4.0, 0.75 * large, -2.0, 0.0 }));
+        (Medians{ 0.0, -3.0, -0.5, 4.0, 0.75 * large, -2.0, 0.0, 0.0, 1.0, -5.0 }));
     EXPECT_EQ(bins.bins.at({ 1, 1 }).feature_medians,
-        (Medians{ std::nullopt, 7.0, 5.0, 0.0, std::nullopt, 7.0, 2.0 }));
+        (Medians{ std::nullopt, 7.0, 5.0, 0.0, std::nullopt, 7.0, 2.0, std::nullopt, std::nullopt, -0.5 }));
 
     rows[0].features[0] = missing;
     rows[0].features[3] = -1.0;
     PopulateUmapBinFeatureMedians(rows, bins);
     EXPECT_EQ(bins.bins.at({ 0, 0 }).feature_medians,
-        (Medians{ std::nullopt, 0.0, -3.0, -1.0, 5.0, std::nullopt, -6.0 }));
+        (Medians{ std::nullopt, 0.0, -3.0, -1.0, 5.0, std::nullopt, -6.0, -4.0, std::nullopt, -5.0 }));
 }
 
 TEST(UmapEmbeddingFeaturesTest, ImputesAndStandardizesSelectedColumnsInAtomRowOrder)
@@ -328,12 +332,12 @@ TEST(UmapEmbeddingFeaturesTest, ImputesAndStandardizesSelectedColumnsInAtomRowOr
     constexpr auto missing{ std::numeric_limits<double>::quiet_NaN() };
     constexpr auto inf{ std::numeric_limits<double>::infinity() };
     const std::array source_values{
-        std::array{ 0.0, 99.0, 0.0, 11.0, 0.0, 2.0, -4.0 },
-        std::array{ 2.0, 98.0, 2.0, 13.0, 2.0, 4.0, -2.0 },
-        std::array{ 4.0, 97.0, 6.0, 15.0, 4.0, 6.0, 0.0 },
-        std::array{ 6.0, 96.0, missing, 17.0, 8.0, 10.0, 8.0 },
-        std::array{ 8.0, 95.0, 8.0, 20.0, missing, 4.0, 2.0 },
-        std::array{ 10.0, 94.0, inf, 22.0, inf, 4.0, 4.0 },
+        std::array{ 0.0, 99.0, 0.0, 11.0, 0.0, 2.0, -4.0, -5.0, 1.0, -12.0 },
+        std::array{ 2.0, 98.0, 2.0, 13.0, 2.0, 4.0, -2.0, -3.0, 2.0, -8.0 },
+        std::array{ 4.0, 97.0, 6.0, 15.0, 4.0, 6.0, 0.0, missing, missing, -4.0 },
+        std::array{ 6.0, 96.0, missing, 17.0, 8.0, 10.0, 8.0, 9.0, -inf, 4.0 },
+        std::array{ 8.0, 95.0, 8.0, 20.0, missing, 4.0, 2.0, 1.0, 5.0, missing },
+        std::array{ 10.0, 94.0, inf, 22.0, inf, 4.0, 4.0, inf, 4.0, 0.0 },
     };
     std::vector<LocalFittingFeatureRow> rows(source_values.size());
     for (std::size_t point = 0; point < rows.size(); ++point)
@@ -341,7 +345,8 @@ TEST(UmapEmbeddingFeaturesTest, ImputesAndStandardizesSelectedColumnsInAtomRowOr
 
     EXPECT_EQ(GetSecondUmapFeatureNames(), (std::vector<std::string_view>{
         "neighbor distance sum in 2A median of bin", "distance to closest neighbor median of bin",
-        "signal peeling ratio median of bin", "tail peeling ratio median of bin", "amplitude joint", "width joint", "offset joint" }));
+        "signal peeling ratio median of bin", "tail peeling ratio median of bin", "amplitude joint", "width joint", "offset joint",
+        "joint model center height", "joint signal gaussian integral", "joint signal charge integral" }));
 
     UmapBinning bins;
     bins.scale = { { -2.0, 1.0 }, 10.0, 1.0 };
@@ -365,9 +370,12 @@ TEST(UmapEmbeddingFeaturesTest, ImputesAndStandardizesSelectedColumnsInAtomRowOr
         std::array{ 0.0, 2.0, 4.0, 8.0, 3.0, 3.0 },
         std::array{ 2.0, 4.0, 6.0, 10.0, 4.0, 4.0 },
         std::array{ -4.0, -2.0, 0.0, 8.0, 2.0, 4.0 },
+        std::array{ -5.0, -3.0, -1.0, 9.0, 1.0, -1.0 },
+        std::array{ 1.0, 2.0, 3.0, 3.0, 5.0, 4.0 },
+        std::array{ -12.0, -8.0, -4.0, 4.0, -4.0, 0.0 },
     };
-    const std::array centers{ 4.0, 97.0, 2.0, 15.0, 3.0, 4.0, 1.0 };
-    const std::array mad_or_positive_median{ 2.0, 1.0, 6.0, 2.0, 1.0, 1.0, 3.0 };
+    const std::array centers{ 4.0, 97.0, 2.0, 15.0, 3.0, 4.0, 1.0, -1.0, 3.0, -4.0 };
+    const std::array mad_or_positive_median{ 2.0, 1.0, 6.0, 2.0, 1.0, 1.0, 3.0, 2.0, 1.0, 4.0 };
     EXPECT_EQ(features.zero_mad_fallback_features, (std::vector<std::string_view>{
         "signal peeling ratio median of bin" }));
     for (std::size_t column = 0; column < features.column_count; ++column)
@@ -394,6 +402,13 @@ TEST(UmapEmbeddingFeaturesTest, ImputesAndStandardizesSelectedColumnsInAtomRowOr
     for (const auto & [index, bin] : bins.bins)
         relocated.bins[{ 9 - index[0], 3 - index[1] }] = bin;
     EXPECT_EQ(BuildSecondUmapFeatures(rows, relocated, "fixture").values, features.values);
+
+    for (auto & row : rows) row.features[8] = missing;
+    PopulateUmapBinFeatureMedians(rows, bins);
+    const auto missing_gaussian{ BuildSecondUmapFeatures(rows, bins, "fixture") };
+    ASSERT_EQ(missing_gaussian.values.size(), features.values.size());
+    for (std::size_t index = 0; index < features.values.size(); ++index)
+        EXPECT_EQ(missing_gaussian.values[index], index % kSecondColumns == 8 ? 0.0 : features.values[index]);
 }
 
 TEST(UmapEmbeddingFeaturesTest, RequiresVariationInAtLeastOneMedianOrAtomColumn)
@@ -478,7 +493,7 @@ TEST(UmapEmbeddingFeaturesTest, StandardizesSecondStageWithoutOverflowOrUnderflo
     EXPECT_NEAR(features.values[features.column_count + 4], smaller / amplitude_scale, 1e-30);
     EXPECT_NEAR(features.values[5], kInverseMadFactor, 1e-14);
     EXPECT_NEAR(features.values[6], -kInverseMadFactor, 1e-14);
-    EXPECT_NEAR(features.values.back(), kInverseMadFactor, 1e-14);
+    EXPECT_NEAR(features.values[(row_count - 1) * features.column_count + 6], kInverseMadFactor, 1e-14);
     EXPECT_EQ(features.zero_mad_fallback_features, (std::vector<std::string_view>{
         "amplitude joint", "width joint", "offset joint" }));
     for (std::size_t row = 0; row < row_count; ++row)
@@ -504,6 +519,116 @@ TEST(UmapEmbeddingFeaturesTest, SecondUmapRejectsUnsafeDistancesInsteadOfSkippin
         EXPECT_NE(std::string_view{ error.what() }.find(
             "Second UMAP Euclidean distance safety for model key 'second-fixture', column 'amplitude joint'"),
             std::string_view::npos);
+    }
+}
+
+TEST(UmapEmbeddingFeaturesTest, ModelResponseMatchesCenterAndIndependentSphericalQuadrature)
+{
+    using Gauss = boost::math::quadrature::gauss<long double, 30>;
+    constexpr auto pi{ std::numbers::pi_v<long double> };
+    constexpr double amplitude{ 5.25 }, charge{ 0.625 };
+    const double narrow_boundary{ 1.0 / 64.0 };
+    const std::array widths{
+        0.001, std::nextafter(narrow_boundary, 0.0), narrow_boundary,
+        std::nextafter(narrow_boundary, 1.0), 0.1, 0.75, std::nextafter(1.0, 0.0),
+        1.0, std::nextafter(1.0, 2.0), 1.25, 2.0, 100.0, 1e8
+    };
+    double previous_gaussian{ amplitude }, previous_charge{ 2 * std::numbers::pi * charge };
+    double previous_gaussian_center{ std::numeric_limits<double>::infinity() };
+    for (const double width : widths)
+    {
+        SCOPED_TRACE(testing::Message() << std::hexfloat << width);
+        const GaussianModel3D model{ amplitude, width, charge };
+        const auto positive{ EvaluateJointModelResponseFeatures(model) };
+        const auto negative{ EvaluateJointModelResponseFeatures({ amplitude, width, -charge }) };
+        const auto gaussian_only{ EvaluateJointModelResponseFeatures({ amplitude, width, 0.0 }) };
+        const auto charge_only{ EvaluateJointModelResponseFeatures({ 0.0, width, -charge }) };
+        // Gaussian uses r/tau, so the integrand remains resolved for narrow profiles.
+        // The standardized tail beyond 12 is smaller than 6e-31 of the total.
+        const long double gaussian_reference{ amplitude * std::sqrt(2 / pi) *
+            Gauss::integrate([](long double t) { return t * t * std::exp(-t * t / 2); },
+                0, std::min(12.L, 1.L / width)) };
+        const auto charge_density = [width](long double r)
+        {
+            return r * std::erf(r / (std::numbers::sqrt2_v<long double> * width));
+        };
+        const long double split{ std::min(1.L, 12.L * width) };
+        long double charge_reference{ Gauss::integrate(charge_density, 0, split) };
+        if (split < 1) charge_reference += Gauss::integrate(charge_density, split, 1);
+        charge_reference *= 4 * pi * charge;
+        EXPECT_NEAR(positive.gaussian_integral / gaussian_reference, 1, 3e-15);
+        EXPECT_NEAR(positive.charge_integral / charge_reference, 1, 3e-15);
+        EXPECT_NEAR(positive.center_height / model.ResponseAtDistance(0.0), 1, 3e-15);
+        EXPECT_NEAR(negative.center_height, GaussianModel3D(amplitude, width, -charge).ResponseAtDistance(0.0),
+            3e-15 * positive.center_height);
+        EXPECT_LE(positive.gaussian_integral, previous_gaussian * (1 + 3e-15));
+        EXPECT_LE(positive.charge_integral, previous_charge * (1 + 3e-15));
+        EXPECT_LE(gaussian_only.center_height, previous_gaussian_center);
+        EXPECT_GE(positive.gaussian_integral, 0.0);
+        EXPECT_LE(positive.gaussian_integral, amplitude);
+        EXPECT_GT(positive.charge_integral, 0.0);
+        EXPECT_LE(positive.charge_integral, 2 * std::numbers::pi * charge);
+        EXPECT_EQ(negative.charge_integral, -positive.charge_integral);
+        EXPECT_EQ(gaussian_only.charge_integral, 0.0);
+        EXPECT_EQ(charge_only.gaussian_integral, 0.0);
+        EXPECT_LT(charge_only.center_height, 0.0);
+        previous_gaussian = positive.gaussian_integral;
+        previous_charge = positive.charge_integral;
+        previous_gaussian_center = gaussian_only.center_height;
+    }
+}
+
+TEST(UmapEmbeddingFeaturesTest, ModelResponsePreservesFiniteResultsAcrossBinary64Extremes)
+{
+    constexpr auto largest{ std::numeric_limits<double>::max() };
+    constexpr auto smallest{ std::numeric_limits<double>::denorm_min() };
+    const auto zero{ EvaluateJointModelResponseFeatures({ 0.0, smallest, 0.0 }) };
+    EXPECT_EQ(zero.center_height, 0.0);
+    EXPECT_EQ(zero.gaussian_integral, 0.0);
+    EXPECT_EQ(zero.charge_integral, 0.0);
+    const auto narrow{ EvaluateJointModelResponseFeatures({ smallest, smallest, -smallest }) };
+    EXPECT_TRUE(std::isnan(narrow.center_height));
+    EXPECT_EQ(narrow.gaussian_integral, smallest);
+    EXPECT_EQ(narrow.charge_integral, -6 * smallest);
+    EXPECT_DOUBLE_EQ(EvaluateJointModelResponseFeatures({ 0.0, smallest, -smallest }).center_height,
+        -0.7978845608028654);
+    const auto broad{ EvaluateJointModelResponseFeatures({ largest, 1e200, -largest }) };
+    EXPECT_NEAR(broad.gaussian_integral / 4.7811719912264837e-293, 1.0, 3e-15);
+    EXPECT_NEAR(broad.charge_integral / -6.0081979212745614e108, 1.0, 3e-15);
+    const auto widest{ EvaluateJointModelResponseFeatures({ largest, largest, -largest }) };
+    EXPECT_DOUBLE_EQ(widest.center_height, -0.7978845608028654);
+    EXPECT_DOUBLE_EQ(widest.charge_integral, -3.342171032841334);
+    EXPECT_EQ(widest.gaussian_integral, 0.0);
+    EXPECT_TRUE(std::signbit(EvaluateJointModelResponseFeatures({ 0.0, largest, -smallest }).charge_integral));
+
+    // 150-digit decimal reference from the exact binary64 inputs. The two
+    // center terms have magnitudes near 1.6e323, but their difference is finite.
+    constexpr double width{ 0x1p-50 };
+    constexpr double amplitude{ 0x1.921fb54442d17p+927 };
+    const auto cancelled{ EvaluateJointModelResponseFeatures({ amplitude, width, -largest }) };
+    EXPECT_NEAR(cancelled.center_height / -1.1194319030544551e307, 1.0, 1e-15);
+    EXPECT_EQ(cancelled.gaussian_integral, amplitude);
+    EXPECT_TRUE(std::isnan(cancelled.charge_integral));
+    const auto opposite{ EvaluateJointModelResponseFeatures({
+        std::nextafter(amplitude, largest), width, -largest }) };
+    EXPECT_NEAR(opposite.center_height / 1.1634095654741897e307, 1.0, 1e-15);
+}
+
+TEST(UmapEmbeddingFeaturesTest, ModelResponseRejectsInvalidJointParameters)
+{
+    constexpr auto inf{ std::numeric_limits<double>::infinity() };
+    constexpr auto nan{ std::numeric_limits<double>::quiet_NaN() };
+    for (const auto & point : std::array{
+        GaussianModel3D{ -1.0, 1.0, 0.0 }, GaussianModel3D{ inf, 1.0, 0.0 },
+        GaussianModel3D{ nan, 1.0, 0.0 }, GaussianModel3D{ 1.0, 0.0, 0.0 },
+        GaussianModel3D{ 1.0, -1.0, 0.0 }, GaussianModel3D{ 1.0, inf, 0.0 },
+        GaussianModel3D{ 1.0, nan, 0.0 }, GaussianModel3D{ 1.0, 1.0, -inf },
+        GaussianModel3D{ 1.0, 1.0, nan } })
+    {
+        const auto response{ EvaluateJointModelResponseFeatures(point) };
+        EXPECT_TRUE(std::isnan(response.center_height));
+        EXPECT_TRUE(std::isnan(response.gaussian_integral));
+        EXPECT_TRUE(std::isnan(response.charge_integral));
     }
 }
 

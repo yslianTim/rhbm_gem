@@ -6,7 +6,7 @@
 
 namespace rhbm_gem::core::classifier {
 
-inline constexpr std::size_t kLocalFittingFeatureCount{ 7 };
+inline constexpr std::size_t kLocalFittingFeatureCount{ 10 };
 
 inline constexpr std::array<std::string_view, kLocalFittingFeatureCount>
     kLocalFittingFeatureNames{
@@ -17,6 +17,9 @@ inline constexpr std::array<std::string_view, kLocalFittingFeatureCount>
         "amplitude joint",
         "width joint",
         "offset joint",
+        "joint model center height",
+        "joint signal gaussian integral",
+        "joint signal charge integral",
     };
 
 } // namespace rhbm_gem::core::classifier

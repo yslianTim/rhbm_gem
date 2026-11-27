@@ -36,6 +36,9 @@ constexpr std::array<UmapFeatureDefinition, kLocalFittingFeatureCount>
         UmapFeatureDefinition{ kLocalFittingFeatureNames[4], false },
         UmapFeatureDefinition{ kLocalFittingFeatureNames[5], false },
         UmapFeatureDefinition{ kLocalFittingFeatureNames[6], false },
+        UmapFeatureDefinition{ kLocalFittingFeatureNames[7], false },
+        UmapFeatureDefinition{ kLocalFittingFeatureNames[8], false },
+        UmapFeatureDefinition{ kLocalFittingFeatureNames[9], false },
     };
 constexpr std::size_t kInputFeatureCount{ kFeatureDefinitions.size() };
 constexpr std::size_t kSelectedFeatureCount{ static_cast<std::size_t>(std::count_if(
@@ -65,9 +68,15 @@ constexpr std::array kSecondUmapFeatureDefinitions{
     SecondUmapFeatureDefinition{ "amplitude joint median of bin", SecondUmapFeatureSource::BinMedian, 4, false },
     SecondUmapFeatureDefinition{ "width joint median of bin", SecondUmapFeatureSource::BinMedian, 5, false },
     SecondUmapFeatureDefinition{ "offset joint median of bin", SecondUmapFeatureSource::BinMedian, 6, false },
+    SecondUmapFeatureDefinition{ "joint model center height median of bin", SecondUmapFeatureSource::BinMedian, 7, false },
+    SecondUmapFeatureDefinition{ "joint signal gaussian integral median of bin", SecondUmapFeatureSource::BinMedian, 8, false },
+    SecondUmapFeatureDefinition{ "joint signal charge integral median of bin", SecondUmapFeatureSource::BinMedian, 9, false },
     SecondUmapFeatureDefinition{ kLocalFittingFeatureNames[4], SecondUmapFeatureSource::Atom, 4, true },
     SecondUmapFeatureDefinition{ kLocalFittingFeatureNames[5], SecondUmapFeatureSource::Atom, 5, true },
     SecondUmapFeatureDefinition{ kLocalFittingFeatureNames[6], SecondUmapFeatureSource::Atom, 6, true },
+    SecondUmapFeatureDefinition{ kLocalFittingFeatureNames[7], SecondUmapFeatureSource::Atom, 7, true },
+    SecondUmapFeatureDefinition{ kLocalFittingFeatureNames[8], SecondUmapFeatureSource::Atom, 8, true },
+    SecondUmapFeatureDefinition{ kLocalFittingFeatureNames[9], SecondUmapFeatureSource::Atom, 9, true },
 };
 constexpr std::size_t kSecondSelectedFeatureCount{ static_cast<std::size_t>(std::count_if(
     kSecondUmapFeatureDefinitions.begin(),

@@ -497,9 +497,11 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
         "serial id,residue,spot,"
         "neighbor distance sum in 2A,distance to closest neighbor,"
         "signal peeling ratio,tail peeling ratio,"
-        "amplitude joint,width joint,offset joint,umap x,umap y,mean shift x,mean shift y,"
+        "amplitude joint,width joint,offset joint,"
+        "joint model center height,joint signal gaussian integral,joint signal charge integral,"
+        "umap x,umap y,mean shift x,mean shift y,"
         "bin number,second umap x,second umap y");
-    EXPECT_EQ(kOutputColumnCount, 17u);
+    EXPECT_EQ(kOutputColumnCount, 20u);
     const auto metadata_lines{ ReadLines(output_path.string() + ".metadata.json") };
     const auto metadata{ boost::json::parse(metadata_lines.at(0)) };
     EXPECT_EQ(metadata.at("standardization").as_string(), "mad-robust-scaling");
@@ -509,12 +511,24 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
         { "zero_mad_policy", "nonzero-deviation-median" }, { "constant_feature_policy", "zero" } }));
     EXPECT_TRUE(metadata.at("first_umap_zero_mad_fallback_features").as_array().empty());
     EXPECT_TRUE(metadata.at("second_umap_zero_mad_fallback_features").is_array());
+    EXPECT_EQ(metadata.at("local_fitting_features").as_array(), (boost::json::array{
+        "neighbor distance sum in 2A", "distance to closest neighbor", "signal peeling ratio", "tail peeling ratio",
+        "amplitude joint", "width joint", "offset joint",
+        "joint model center height", "joint signal gaussian integral", "joint signal charge integral" }));
+    EXPECT_EQ(metadata.at("local_fitting_feature_values").as_string(), "raw");
+    EXPECT_EQ(metadata.at("features").as_array(), (boost::json::array{
+        "neighbor distance sum in 2A", "distance to closest neighbor", "signal peeling ratio", "tail peeling ratio" }));
     EXPECT_EQ(metadata.at("second_umap_features").as_array(), (boost::json::array{
         "neighbor distance sum in 2A median of bin", "distance to closest neighbor median of bin",
-        "signal peeling ratio median of bin", "tail peeling ratio median of bin", "amplitude joint", "width joint", "offset joint" }));
+        "signal peeling ratio median of bin", "tail peeling ratio median of bin", "amplitude joint", "width joint", "offset joint",
+        "joint model center height", "joint signal gaussian integral", "joint signal charge integral" }));
+    const auto & response_metadata{ metadata.at("model_response_features").as_object() };
+    EXPECT_EQ(response_metadata.at("parameter_source").as_string(), "original accepted joint.point");
+    EXPECT_EQ(response_metadata.at("signal_radius_angstrom").as_double(), 1.0);
+    EXPECT_EQ(response_metadata.at("integral_measure").as_string(), "spherical volume (4*pi*r^2 dr)");
     EXPECT_FALSE(metadata.as_object().contains("spatial_feature_normalization"));
     const auto & column_semantics{ metadata.at("column_semantics").as_object() };
-    EXPECT_EQ(column_semantics.size(), 5u);
+    EXPECT_EQ(column_semantics.size(), 8u);
     EXPECT_EQ(column_semantics.at("signal peeling ratio").as_string(), "Signal L1 Component Occupancy Peeling Ratio");
     EXPECT_EQ(column_semantics.at("tail peeling ratio").as_string(), "Tail L1 Component Occupancy Peeling Ratio");
     EXPECT_EQ(column_semantics.at("amplitude joint").as_string(),
@@ -523,6 +537,12 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
         "Joint shared Gaussian/charge-kernel width tau");
     EXPECT_EQ(column_semantics.at("offset joint").as_string(),
         "Joint charge-kernel coefficient C");
+    EXPECT_NE(column_semantics.at("joint model center height").as_string().find("r=0"),
+        std::string_view::npos);
+    EXPECT_NE(column_semantics.at("joint signal gaussian integral").as_string().find("amplitude A"),
+        std::string_view::npos);
+    EXPECT_NE(column_semantics.at("joint signal charge integral").as_string().find("signed coefficient C"),
+        std::string_view::npos);
     EXPECT_FALSE(column_semantics.contains("amplitude 2nd"));
     EXPECT_FALSE(column_semantics.contains("width 2nd"));
     EXPECT_FALSE(column_semantics.contains("offset 2nd"));
@@ -546,9 +566,12 @@ TEST(UmapEmbeddingCommandTest, LoadsSavedAnalysisWithoutLocalFittingCsv)
     EXPECT_DOUBLE_EQ(std::stod(first_fields[3]), 2.25);
     rg::DataRepository repository{ database_path };
     const auto saved_model = repository.LoadModel(model_key);
-    const auto expected_amplitude = rg::AtomLocalPotentialView::For(*saved_model->FindAtomPtr(1))
-        .GetJointStageModel().GetAmplitude();
-    EXPECT_DOUBLE_EQ(std::stod(first_fields[7]), expected_amplitude);
+    const auto & expected_point = rg::AtomLocalPotentialView::For(*saved_model->FindAtomPtr(1))
+        .GetJointStageModel();
+    EXPECT_DOUBLE_EQ(std::stod(first_fields[7]), expected_point.GetAmplitude());
+    EXPECT_NEAR(std::stod(first_fields[10]), expected_point.ResponseAtDistance(0.0), 1e-15);
+    EXPECT_GT(std::stod(first_fields[11]), 0.0);
+    EXPECT_LT(std::stod(first_fields[12]), 0.0);
     EXPECT_GT(first_fields[7].size(), 6u);
 
     FeatureModelOptions geometry_options;
@@ -722,6 +745,8 @@ TEST(UmapEmbeddingCommandTest, ClassifiesUnconfiguredSpotsAsOtherInRootPlot)
         }
         constexpr std::string_view bin_header{
             "bin number,bin x,bin y,point count,amplitude joint median,width joint median,offset joint median,"
+            "joint model center height median of bin,joint signal gaussian integral median of bin,"
+            "joint signal charge integral median of bin,"
             "spot class count,1st dominate spot,1st dominate spot count,1st dominate spot count ratio,"
             "2nd dominate spot,2nd dominate spot count,2nd dominate spot count ratio,"
             "3rd dominate spot,3rd dominate spot count,3rd dominate spot count ratio"
@@ -753,7 +778,7 @@ TEST(UmapEmbeddingCommandTest, ClassifiesUnconfiguredSpotsAsOtherInRootPlot)
             for (const auto & [key, points] : expected_bins)
             {
                 const auto fields{ SplitFields(bin_lines[bin_line]) };
-                ASSERT_EQ(fields.size(), second ? 23u : 17u);
+                ASSERT_EQ(fields.size(), second ? 26u : 20u);
                 EXPECT_EQ(std::stoull(fields[0]), bin_line);
                 if (!second)
                 {
@@ -766,7 +791,7 @@ TEST(UmapEmbeddingCommandTest, ClassifiesUnconfiguredSpotsAsOtherInRootPlot)
                 EXPECT_EQ(std::stoll(fields[1]), key[0]);
                 EXPECT_EQ(std::stoll(fields[2]), key[1]);
                 EXPECT_EQ(std::stoull(fields[3]), points.size());
-                for (std::size_t feature = 0; feature < 3; ++feature)
+                for (std::size_t feature = 0; feature < 6; ++feature)
                 {
                     std::vector<double> values;
                     for (const auto point : points)
@@ -804,10 +829,10 @@ TEST(UmapEmbeddingCommandTest, ClassifiesUnconfiguredSpotsAsOtherInRootPlot)
                 {
                     return lhs.second > rhs.second;
                 });
-                EXPECT_EQ(std::stoull(fields[7]), ranking.size());
+                EXPECT_EQ(std::stoull(fields[10]), ranking.size());
                 for (std::size_t rank = 0; rank < 3; ++rank)
                 {
-                    const auto column{ 8 + 3 * rank };
+                    const auto column{ 11 + 3 * rank };
                     const auto expected{ rank < ranking.size() ? ranking[rank]
                         : std::pair<std::string, std::size_t>{} };
                     EXPECT_EQ(fields[column], expected.first);
@@ -823,8 +848,8 @@ TEST(UmapEmbeddingCommandTest, ClassifiesUnconfiguredSpotsAsOtherInRootPlot)
                         const auto element{ ratio_elements[ratio] };
                         const double count{ static_cast<double>(element_counts[element]) };
                         const auto umap_count{ umap_element_counts[element] };
-                        const double global_ratio{ std::stod(fields[20 + ratio]) };
-                        EXPECT_DOUBLE_EQ(std::stod(fields[17 + ratio]), count / point_count);
+                        const double global_ratio{ std::stod(fields[23 + ratio]) };
+                        EXPECT_DOUBLE_EQ(std::stod(fields[20 + ratio]), count / point_count);
                         EXPECT_DOUBLE_EQ(global_ratio,
                             umap_count == 0 ? 0.0 : count / static_cast<double>(umap_count));
                         global_ratio_sums[ratio] += global_ratio;

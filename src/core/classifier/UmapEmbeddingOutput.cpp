@@ -22,6 +22,9 @@ namespace rhbm_gem::core::classifier {
 
 namespace {
 
+constexpr std::size_t kFirstJointFeatureIndex{ 4 };
+constexpr std::size_t kFirstModelResponseFeatureIndex{ 7 };
+
 bool WriteEmbedding(
     const std::filesystem::path & output_path,
     const PreparedUmapInput & prepared,
@@ -63,6 +66,8 @@ bool WriteEmbedding(
         output << '\n';
     }
     output.close();
+    boost::json::array local_fitting_features;
+    for (const auto name : kLocalFittingFeatureNames) local_fitting_features.emplace_back(name);
     boost::json::array features;
     for (const auto name : GetUmapFeatureNames()) features.emplace_back(name);
     boost::json::array second_umap_features;
@@ -98,8 +103,14 @@ bool WriteEmbedding(
     std::ofstream metadata(output_path.string() + ".metadata.json");
     boost::json::object metadata_fields{
         { "estimator", "joint-components" },
+        { "local_fitting_features", std::move(local_fitting_features) },
+        { "local_fitting_feature_values", "raw" },
         { "features", features },
         { "second_umap_features", second_umap_features },
+        { "model_response_features", boost::json::object{
+            { "parameter_source", "original accepted joint.point" },
+            { "signal_radius_angstrom", GetPeelingRegionBounds(PeelingRegion::Signal).max_distance },
+            { "integral_measure", "spherical volume (4*pi*r^2 dr)" } } },
         { "peeling_mode", PostFitPeelingContract },
         { "contributor_reconstruction_contract", ContributorReconstructionContractVersion },
         { "contributor_reconstruction_donor_policy", ContributorReconstructionDonorPolicy },
@@ -115,7 +126,10 @@ bool WriteEmbedding(
             { kLocalFittingFeatureNames[3], "Tail L1 Component Occupancy Peeling Ratio" },
             { kLocalFittingFeatureNames[4], "Joint Gaussian amplitude A" },
             { kLocalFittingFeatureNames[5], "Joint shared Gaussian/charge-kernel width tau" },
-            { kLocalFittingFeatureNames[6], "Joint charge-kernel coefficient C" } } },
+            { kLocalFittingFeatureNames[6], "Joint charge-kernel coefficient C" },
+            { kLocalFittingFeatureNames[7], "Model response at r=0 with Gaussian amplitude A and signed charge-kernel coefficient C" },
+            { kLocalFittingFeatureNames[8], "Signal sphere Gaussian integral weighted by amplitude A" },
+            { kLocalFittingFeatureNames[9], "Signal sphere charge-kernel integral weighted by signed coefficient C" } } },
         { "standardization", "mad-robust-scaling" },
         { "standardization_parameters", boost::json::object{
             { "center", "median" },
@@ -158,8 +172,13 @@ bool WriteMeanShiftBins(
         error_message = "Failed to open UMAP mean shift bin output file '" + output_path.string() + "'.";
         return false;
     }
-    output << "bin number,bin x,bin y,point count,amplitude joint median,width joint median,offset joint median,"
-        "spot class count,1st dominate spot,1st dominate spot count,1st dominate spot count ratio,"
+    output << "bin number,bin x,bin y,point count";
+    for (std::size_t feature = kFirstJointFeatureIndex; feature < kLocalFittingFeatureCount; ++feature)
+    {
+        output << ',' << kLocalFittingFeatureNames[feature]
+            << (feature < kFirstModelResponseFeatureIndex ? " median" : " median of bin");
+    }
+    output << ",spot class count,1st dominate spot,1st dominate spot count,1st dominate spot count ratio,"
         "2nd dominate spot,2nd dominate spot count,2nd dominate spot count ratio,"
         "3rd dominate spot,3rd dominate spot count,3rd dominate spot count ratio";
     constexpr std::array ratio_elements{ Element::CARBON, Element::NITROGEN, Element::OXYGEN };
@@ -195,7 +214,7 @@ bool WriteMeanShiftBins(
             }
         }
         output << bin.number << ',' << index[0] << ',' << index[1] << ',' << bin.points.size();
-        for (const auto feature : { 4u, 5u, 6u })
+        for (std::size_t feature = kFirstJointFeatureIndex; feature < bin.feature_medians.size(); ++feature)
         {
             const auto & median{ bin.feature_medians[feature] };
             output << ',';

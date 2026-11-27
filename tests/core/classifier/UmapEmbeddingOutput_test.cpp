@@ -7,6 +7,7 @@
 #include "core/classifier/UmapEmbeddingPlot.hpp"
 #include "support/CommandTestHelpers.hpp"
 
+#include <algorithm>
 #include <array>
 #include <filesystem>
 #include <fstream>
@@ -36,6 +37,9 @@ TEST(UmapEmbeddingOutputTest, MissingSecondEmbeddingLeavesEmptyCoordinatesAndHea
         row.features[4] = std::numeric_limits<double>::quiet_NaN();
         row.features[5] = 4.0;
         row.features[6] = -2.0;
+        row.features[7] = -3.0;
+        row.features[8] = std::numeric_limits<double>::infinity();
+        row.features[9] = -0.5;
     }
     UmapEmbeddingResult first;
     first.coordinates = { -1.0, 1.0, 0.0, 0.0, 1.0, -1.0 };
@@ -52,10 +56,12 @@ TEST(UmapEmbeddingOutputTest, MissingSecondEmbeddingLeavesEmptyCoordinatesAndHea
     std::ifstream points{ output_path };
     std::string line;
     ASSERT_TRUE(std::getline(points, line));
+    EXPECT_EQ(std::count(line.begin(), line.end(), ','), 19);
     for (std::size_t point = 0; point < prepared.feature_rows.size(); ++point)
     {
         ASSERT_TRUE(std::getline(points, line));
         EXPECT_TRUE(line.ends_with(",,"));
+        EXPECT_NE(line.find(",,4,-2,-3,,-0.5,"), std::string::npos);
     }
     EXPECT_FALSE(std::getline(points, line));
 
@@ -64,13 +70,15 @@ TEST(UmapEmbeddingOutputTest, MissingSecondEmbeddingLeavesEmptyCoordinatesAndHea
     std::string first_header;
     ASSERT_TRUE(std::getline(first_bins, first_header));
     ASSERT_TRUE(std::getline(second_bins, line));
+    EXPECT_EQ(std::count(first_header.begin(), first_header.end(), ','), 19);
+    EXPECT_EQ(std::count(line.begin(), line.end(), ','), 25);
     EXPECT_EQ(line, first_header + ",local carbon ratio,local nitrogen ratio,local oxygen ratio"
         ",global carbon ratio,global nitrogen ratio,global oxygen ratio");
     EXPECT_FALSE(std::getline(second_bins, line));
     for (std::size_t bin = 0; bin < prepared.feature_rows.size(); ++bin)
     {
         ASSERT_TRUE(std::getline(first_bins, line));
-        EXPECT_TRUE(line.ends_with(",1,,4,-2,1,CA,1,1,,0,0,,0,0")) << line;
+        EXPECT_TRUE(line.ends_with(",1,,4,-2,-3,,-0.5,1,CA,1,1,,0,0,,0,0")) << line;
     }
     EXPECT_FALSE(std::getline(first_bins, line));
 
@@ -141,7 +149,7 @@ TEST(UmapEmbeddingOutputTest, CountsElementRatiosInSecondMeanShiftBins)
     ASSERT_TRUE(std::getline(bins, line));
     std::istringstream mixed_bin{ line };
     std::string field;
-    for (std::size_t column = 0; column < 17; ++column)
+    for (std::size_t column = 0; column < 20; ++column)
     {
         ASSERT_TRUE(std::getline(mixed_bin, field, ','));
     }

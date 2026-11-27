@@ -11,6 +11,7 @@
 namespace rhbm_gem {
 
 class ModelObject;
+class GaussianModel3D;
 
 } // namespace rhbm_gem
 
@@ -36,6 +37,15 @@ struct LocalFittingFeatureRow
     std::array<double, kLocalFittingFeatureCount> features{};
     std::string tail_peeling_ratio_unavailable_reason;
 };
+
+struct JointModelResponseFeatures
+{
+    double center_height;
+    double gaussian_integral;
+    double charge_integral;
+};
+
+JointModelResponseFeatures EvaluateJointModelResponseFeatures(const GaussianModel3D & point);
 
 std::string BuildLocalFittingCsvHeader();
 

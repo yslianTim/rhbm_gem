@@ -30,13 +30,14 @@ Both modes still support CSV, metadata JSON, and bin summaries when UMAP is enab
 ## SQLite Model Contract
 
 The database must already exist, be a regular file, and use a supported SQLite
-schema (v28 only). Rerun `potential_analysis` into a new database for earlier schemas. `--model-key` must identify exactly one
-model saved by `potential_analysis`; the command neither enumerates nor combines
-models.
+schema (v28 only). Existing v28 results can be used directly. For earlier
+schemas, rerun `potential_analysis` into a new database. `--model-key` selects
+one model saved by `potential_analysis`.
 
-UMAP uses the selected Output Targets. At least three rows must have all four required features. These are
-neighbor distance sum, closest-neighbor distance, Signal peeling ratio and
-Tail peeling ratio. Missing required values exclude the row with a reported reason;
+UMAP uses the selected Output Targets. At least three rows must have every
+enabled First UMAP feature. By default these are neighbor distance sum,
+closest-neighbor distance, Signal peeling ratio, and Tail peeling ratio.
+Missing required values exclude the row with a reported reason;
 fewer than three remaining rows fails the command. Missing ancillary values are
 written as empty CSV fields. Empty regions, incomplete Original-grid coverage,
 and zero total component magnitude yield an unavailable ratio.
@@ -47,18 +48,33 @@ counts and exclusions by reason. Its `column_semantics`
 field identifies the two raw ratio columns and describes `amplitude joint`
 as Gaussian amplitude A, `width joint` as the
 shared Gaussian/charge-kernel width tau, and `offset joint` as the charge-kernel
-coefficient C. The `standardization` field reports `mad-robust-scaling` for
-both embeddings. `standardization_parameters` records the center, scale,
+coefficient C. It also describes the three Joint model response columns.
+`local_fitting_features` lists the ten raw columns in CSV order, and
+`local_fitting_feature_values` records that their exported values are raw.
+`features` and `second_umap_features` list the selected inputs in matrix order.
+`model_response_features` records the Joint point source, Signal radius in
+angstroms, and spherical volume measure. The `standardization` field reports
+`mad-robust-scaling` for both embeddings. `standardization_parameters` records the center, scale,
 normal-consistency factor, and policies for zero MAD and constant columns.
 `first_umap_zero_mad_fallback_features` and
 `second_umap_zero_mad_fallback_features` list the columns that used the
 nonzero-deviation median in each run.
 
-For each selected atom, the command reconstructs these 7 local-fitting features:
+For each selected atom, the command reconstructs ten local-fitting features.
+All ten are First UMAP candidates in the following order.
 
-```text
-neighbor distance sum in 2A,distance to closest neighbor,signal peeling ratio,tail peeling ratio,amplitude joint,width joint,offset joint
-```
+| Index | Atom feature | Enabled by default |
+| --- | --- | --- |
+| 0 | `neighbor distance sum in 2A` | Yes |
+| 1 | `distance to closest neighbor` | Yes |
+| 2 | `signal peeling ratio` | Yes |
+| 3 | `tail peeling ratio` | Yes |
+| 4 | `amplitude joint` | No |
+| 5 | `width joint` | No |
+| 6 | `offset joint` | No |
+| 7 | `joint model center height` | No |
+| 8 | `joint signal gaussian integral` | No |
+| 9 | `joint signal charge integral` | No |
 
 `neighbor distance sum in 2A` sums the Euclidean distances to non-hydrogen
 atoms in the owning model within an inclusive 2 Å radius, including unselected
@@ -117,21 +133,42 @@ produced. The same CSV column names now carry the raw occupancy ratios
 identified by this metadata. The MAD scaling recorded in `standardization`
 applies to selected UMAP inputs. The [0, 1] bound applies to the raw ratios.
 
-`amplitude joint`, `width joint`, and `offset joint` read the original accepted `joint.point` from Stage JSON.
-These are Joint A/tau/C values with tau in angstroms. Post-Joint Local and
-Group Fitting results occupy separate records.
+`amplitude joint`, `width joint`, and `offset joint` read the original
+accepted `joint.point` from Stage JSON. A is the Gaussian amplitude, τ is the
+shared width in angstroms, and C is the signed charge-kernel coefficient.
+The three response features use that same point. An accepted point at a width
+boundary or with a Local Conditioning Warning remains eligible.
 
-Rows are ordered by atom serial ID. The current build passes four features to the first UMAP.
+The model is $f(r)=A G(r;\tau)+C K(r;\tau)$ with a normalized 3D Gaussian $G$
+and $K(r;\tau)=\operatorname{erf}(r/(\sqrt{2}\tau))/r$. Both integrals use
+the Signal radius $R_s=1.0$ Å and the spherical volume measure $4\pi r^2\,dr$.
 
-- neighbor distance sum in 2A
-- distance to closest neighbor
-- signal peeling ratio
-- tail peeling ratio.
+- `joint model center height` is the signed response at $r=0$.
+
+  $$ H_0 = \frac{A}{(2\pi)^{3/2}\tau^3} + \sqrt{\frac{2}{\pi}}\frac{C}{\tau}. $$
+
+- `joint signal gaussian integral` includes A and lies in $[0,A]$.
+
+  $$ I_G = A\left[\operatorname{erf}\!\left(\frac{R_s}{\sqrt{2}\tau}\right)
+  -\sqrt{\frac{2}{\pi}}\frac{R_s}{\tau}e^{-R_s^2/(2\tau^2)}\right]. $$
+
+- `joint signal charge integral` includes C and preserves its sign. It measures
+  integrated charge-kernel response within the Signal sphere. Interpreting it as
+  physical charge, electron count, or occupancy would require a separate model.
+
+  $$ I_C = 2\pi C\left[(R_s^2-\tau^2)\operatorname{erf}\!\left(\frac{R_s}{\sqrt{2}\tau}\right)
+  +\sqrt{\frac{2}{\pi}}R_s\tau e^{-R_s^2/(2\tau^2)}\right]. $$
+
+A missing or invalid Joint point leaves all three response features unavailable.
+A response outside the finite double range leaves its own field unavailable.
+An underflowing response can round to zero. The three quantities are derived
+from A, τ, and C and affect distances when selected for a standardized matrix.
 
 To change the first embedding's inputs, edit `include_in_umap` in
 `kFeatureDefinitions` in `src/core/classifier/UmapEmbeddingFeatures.cpp` and
-rebuild with at least one feature enabled. The remaining features stay in the CSV
-and are omitted from the first embedding.
+rebuild with at least one feature enabled. Enabled columns are required for
+row retention. Feature reconstruction, bin statistics, and CSV output include
+all ten features regardless of the switches. Rows are ordered by atom serial ID.
 Input rows are not filtered by spot or residue name. Selected Joint Targets with
 all required features are retained; rows with missing required features are
 excluded as described above. Spot and residue names remain available for plot
@@ -200,7 +237,7 @@ large standardized distances. CSV feature values come directly from the
 original reconstructed rows and are written with round-trip-safe precision,
 as are the UMAP coordinates.
 
-The per-atom CSV has 17 columns in order: `serial id,residue,spot`, the seven
+The per-atom CSV has 20 columns in order: `serial id,residue,spot`, the ten
 reconstructed features, `umap x,umap y`, `mean shift x,mean shift y`, then
 `bin number,second umap x,second umap y`. Its name is
 `<folder>/umap_embedding_<sanitized-model-key>.csv`. ASCII letters, digits,
@@ -248,7 +285,10 @@ width would underflow. For large finite axis spans, the radius can still be
 computed by scaling the spans before taking their hypotenuse. Non-finite
 coordinates or axis spans that exceed the finite range fail the command.
 
-Each row records `point count`, the three Joint parameter medians, and
+The first summary has 20 columns. After `point count` it records the three Joint
+parameter medians, then `joint model center height median of bin`,
+`joint signal gaussian integral median of bin`, and
+`joint signal charge integral median of bin`. The remaining columns start with
 `spot class count`. Each median uses the finite values for its column. An even
 sample count uses the average of the two middle values, and a column with no
 finite values is blank. The spot classes match the plot legend and include all
@@ -258,16 +298,16 @@ Absent ranks have a blank name and zero count and ratio.
 
 ### Second UMAP
 
-After the first binning, the command computes a median for each of the seven
+After the first binning, the command computes a median for each of the ten
 local-fitting features once per occupied bin. Each feature uses its own finite
 values, excluding NaN and both infinities. An even sample count uses the midpoint
 of the two middle values. A feature with no finite values has a missing median.
 Each atom inherits the medians of its first bin. The first bin summary uses the
-same statistics for the three Joint parameters A, tau, and C.
+same statistics for the three Joint parameters and the three model responses.
 `bin number` identifies the summary row. The geometric bin center and bin
 number are excluded from the second feature matrix.
 
-The second embedding defines ten candidate columns in this order. The seven
+The second embedding defines sixteen candidate columns in this order. The ten
 enabled columns appear in the feature matrix and `second_umap_features`
 metadata in the same order.
 
@@ -280,9 +320,15 @@ metadata in the same order.
 | `amplitude joint median of bin` | First bin median | 4 | No |
 | `width joint median of bin` | First bin median | 5 | No |
 | `offset joint median of bin` | First bin median | 6 | No |
+| `joint model center height median of bin` | First bin median | 7 | No |
+| `joint signal gaussian integral median of bin` | First bin median | 8 | No |
+| `joint signal charge integral median of bin` | First bin median | 9 | No |
 | `amplitude joint` | Atom | 4 | Yes |
 | `width joint` | Atom | 5 | Yes |
 | `offset joint` | Atom | 6 | Yes |
+| `joint model center height` | Atom | 7 | Yes |
+| `joint signal gaussian integral` | Atom | 8 | Yes |
+| `joint signal charge integral` | Atom | 9 | Yes |
 
 To select a subset, edit `include_in_umap` in `kSecondUmapFeatureDefinitions` in
 `src/core/classifier/UmapEmbeddingFeatures.cpp` and rebuild with at least one
@@ -293,14 +339,15 @@ the median of the finite atom rows, then applies the shared MAD scaler to
 the full column. A bin contributes its median once per atom to both
 imputation and scaling. An entirely missing column is filled with zeros
 and reported in a warning. The per-atom CSV and bin summaries use the
-original Joint parameters and the bin medians before imputation.
+raw feature values and the bin medians before imputation.
 
 Both UMAP runs use the same request settings. The command then applies
 mean shift to the second embedding. The updated coordinates are used for the
 fourth scatter plot and binned by the same rules. Feature medians are computed
 once for each of the second embedding's bins. The command writes
 `umap_embedding_<sanitized-model-key>_second_umap_mean_shift_bins.csv` with the
-17 columns of the first summary followed by six ratio columns in this order.
+20 columns of the first summary followed by six ratio columns in this order,
+for 26 columns total.
 
 ```text
 local carbon ratio,local nitrogen ratio,local oxygen ratio,global carbon ratio,global nitrogen ratio,global oxygen ratio

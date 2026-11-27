@@ -5,9 +5,15 @@
 #include <rhbm_gem/data/object/ModelObject.hpp>
 #include <rhbm_gem/utils/algorithm/KDTreeAlgorithm.hpp>
 #include <rhbm_gem/utils/domain/ChemicalDataHelper.hpp>
+#include <rhbm_gem/utils/hrl/GaussianEstimationTypes.hpp>
 #include <rhbm_gem/utils/math/ArrayHelper.hpp>
+#include <rhbm_gem/utils/math/GaussianModel3D.hpp>
+
+#include <boost/math/constants/constants.hpp>
+#include <boost/multiprecision/cpp_bin_float.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <limits>
 #include <optional>
@@ -18,12 +24,84 @@ namespace rhbm_gem::core::classifier {
 
 namespace {
 
+using Wide = boost::multiprecision::cpp_bin_float_quad;
+constexpr double kMissingFeature{ std::numeric_limits<double>::quiet_NaN() };
+
 double OptionalFeatureValue(const std::optional<double> & value)
 {
-    return value.value_or(std::numeric_limits<double>::quiet_NaN());
+    return value.value_or(kMissingFeature);
+}
+
+double NarrowFeatureValue(const Wide & value)
+{
+    if (abs(value) > std::numeric_limits<double>::max()) return kMissingFeature;
+    const auto narrowed{ static_cast<double>(value) };
+    return value < 0 ? std::copysign(narrowed, -1.0) : narrowed;
 }
 
 } // namespace
+
+JointModelResponseFeatures EvaluateJointModelResponseFeatures(const GaussianModel3D & point)
+{
+    const double amplitude{ point.GetAmplitude() };
+    const double width{ point.GetWidth() };
+    const double charge{ point.GetOffset() };
+    if (!std::isfinite(amplitude) || amplitude < 0.0 ||
+        !std::isfinite(width) || width <= 0.0 || !std::isfinite(charge))
+    {
+        return { kMissingFeature, kMissingFeature, kMissingFeature };
+    }
+
+    constexpr double radius{ GetPeelingRegionBounds(PeelingRegion::Signal).max_distance };
+    using boost::math::constants::pi;
+    using boost::math::constants::root_two;
+    using boost::math::constants::root_two_div_pi;
+    static const Wide four_pi{ 4 * pi<Wide>() };
+    const Wide inverse_width{ Wide{1} / width };
+    // Factor out the charge basis. The wide exponent and significand preserve
+    // cancellation even when either separate center contribution exceeds double.
+    const Wide center{ root_two_div_pi<Wide>() * inverse_width *
+        (Wide{amplitude} * inverse_width * inverse_width / four_pi + charge) };
+
+    Wide gaussian_mass, charge_volume;
+    if (width >= radius)
+    {
+        const Wide x{ radius * inverse_width };
+        const double y{ -0.5 * static_cast<double>(x * x) };
+        double gaussian_sum{}, charge_sum{};
+        // Integrate the exp and erf series term by term. For x <= 1 the
+        // first omitted term is bounded by (1/2)^15 / (15! * 33) in each sum.
+        for (int n = 14; n >= 0; --n)
+        {
+            const double step{ y / (n + 1) };
+            gaussian_sum = 1.0 / (2 * n + 3) + step * gaussian_sum;
+            charge_sum = 1.0 / ((2 * n + 1) * (2 * n + 3)) + step * charge_sum;
+        }
+        gaussian_mass = root_two_div_pi<Wide>() * x * x * x * gaussian_sum;
+        charge_volume = four_pi * root_two_div_pi<Wide>() * (radius * radius) * x * charge_sum;
+    }
+    else if (width <= radius / 64.0)
+    {
+        // At x >= 64 the omitted exponential tails are below binary64
+        // precision. The charge integral still has its algebraic width correction.
+        gaussian_mass = 1;
+        charge_volume = (four_pi / 2) * (radius * radius - Wide{width} * width);
+    }
+    else
+    {
+        const double x{ radius / width };
+        const double erf{ std::erf(x / root_two<double>()) };
+        const double exponential{ root_two_div_pi<double>() * std::exp(-0.5 * x * x) };
+        gaussian_mass = erf - x * exponential;
+        charge_volume = (four_pi / 2) *
+            ((radius * radius - width * width) * erf + radius * width * exponential);
+    }
+    return {
+        NarrowFeatureValue(center),
+        NarrowFeatureValue(gaussian_mass * amplitude),
+        NarrowFeatureValue(charge_volume * charge),
+    };
+}
 
 std::string BuildLocalFittingCsvHeader()
 {
@@ -110,6 +188,8 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(const ModelObje
             neighbor_distance_sum += distance;
         }
 
+        const auto response{ point ? EvaluateJointModelResponseFeatures(*point) :
+            JointModelResponseFeatures{ missing, missing, missing } };
         LocalFittingFeatureRow row;
         row.serial_id = atom->GetSerialID();
         row.residue = ChemicalDataHelper::GetLabel(atom->GetResidue());
@@ -122,6 +202,9 @@ std::vector<LocalFittingFeatureRow> BuildLocalFittingFeatureRows(const ModelObje
             point ? point->GetAmplitude() : missing,
             point ? point->GetWidth() : missing,
             point ? point->GetOffset() : missing,
+            response.center_height,
+            response.gaussian_integral,
+            response.charge_integral,
         };
         row.tail_peeling_ratio_unavailable_reason = std::move(tail_assessment.reason);
         rows.emplace_back(std::move(row));
